@@ -37,11 +37,7 @@ fn presence(inv: &Invoice, out: &mut Vec<Issue>) {
         ));
     }
     if !present(&inv.currency) {
-        out.push(Issue::hard(
-            "BR-05",
-            "currency",
-            i18n::missing("la devise"),
-        ));
+        out.push(Issue::hard("BR-05", "currency", i18n::missing("la devise")));
     }
 
     // Vendeur (BR-06, BR-08, BR-09).

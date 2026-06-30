@@ -13,8 +13,11 @@ le Factur-X et gère l'e-reporting DGFiP.
 
 ## Statut
 
-🚧 Conception / amorçage. Le plan de construction complet pour l'agent IA se trouve dans
-[`AGENT_PLAN.md`](./AGENT_PLAN.md).
+🚧 En construction par phases (cf. [`AGENT_PLAN.md`](./AGENT_PLAN.md) §11).
+
+- ✅ **Phase 0 — Bootstrap** : Cargo workspace, CI (fmt + clippy + build + test), licence MIT, specs déposées dans `docs/`.
+- ✅ **Phase 1 — Cœur de validation** : `crates/facture-core` (modèle `Invoice`, règles EN 16931 + FR, rapport, messages FR, tests).
+- ⏭️ **Phase 2** : WASM + add-in Excel (à venir — revue demandée avant de démarrer, cf. §14).
 
 ## Positionnement légal
 
@@ -31,10 +34,18 @@ d'interopérabilité DGFiP à notre charge.
 
 Voir [`AGENT_PLAN.md`](./AGENT_PLAN.md) pour le détail complet.
 
-## Démarrage (à venir)
+## Démarrage
 
-Le squelette de code sera généré selon les phases décrites dans le plan. Commencer par les
-Phases 0 et 1 (cœur de validation Rust).
+Prérequis : Rust stable (cf. `rust-toolchain.toml`).
+
+```bash
+cargo build --workspace      # compile le cœur de validation
+cargo test  --workspace      # 18 tests (règles EN 16931 + FR, calculs, formats)
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+Le cœur (`crates/facture-core`) expose `validate(&Invoice) -> ValidationReport` et
+`validate_json(&str) -> Result<String, _>` (point d'entrée partagé WASM/backend des phases suivantes).
 
 ## Licence
 

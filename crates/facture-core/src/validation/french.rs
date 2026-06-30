@@ -10,13 +10,7 @@ pub(crate) fn check(inv: &Invoice, out: &mut Vec<Issue>) {
     check_party(&inv.buyer, "buyer", "de l'acheteur", false, out);
 }
 
-fn check_party(
-    party: &Party,
-    prefix: &str,
-    party_fr: &str,
-    is_seller: bool,
-    out: &mut Vec<Issue>,
-) {
+fn check_party(party: &Party, prefix: &str, party_fr: &str, is_seller: bool, out: &mut Vec<Issue>) {
     // Mention légale FR : le vendeur doit porter un SIREN ou un SIRET (BR/FR-MENTIONS-ID).
     if is_seller && !present(&party.siren) && !present(&party.siret) {
         out.push(Issue::hard(
@@ -27,7 +21,12 @@ fn check_party(
     }
 
     // SIREN : 9 chiffres + Luhn.
-    if let Some(siren) = party.siren.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(siren) = party
+        .siren
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         let digits = strip_spaces(siren);
         if digits.len() != 9 || !is_all_digits(&digits) || !luhn_valid(&digits) {
             out.push(Issue::hard(
@@ -39,7 +38,12 @@ fn check_party(
     }
 
     // SIRET : 14 chiffres + Luhn.
-    if let Some(siret) = party.siret.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(siret) = party
+        .siret
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         let digits = strip_spaces(siret);
         if digits.len() != 14 || !is_all_digits(&digits) || !luhn_valid(&digits) {
             out.push(Issue::hard(
@@ -52,7 +56,12 @@ fn check_party(
 
     // TVA intracommunautaire FR : FR + clé(2) + SIREN(9), clé = (12 + 3·(SIREN mod 97)) mod 97.
     // On ne contrôle que les numéros FR (un VAT étranger valide ne doit pas être signalé).
-    if let Some(vat) = party.vat_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(vat) = party
+        .vat_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         if is_fr_vat(vat) && !fr_vat_valid(vat) {
             out.push(Issue::hard(
                 "FR-TVA-KEY",
@@ -130,4 +139,43 @@ pub(crate) fn fr_vat_valid(vat: &str) -> bool {
         return actual == expected;
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn luhn_accepts_valid_siren_and_siret() {
+        assert!(luhn_valid("732829320")); // SIREN valide
+        assert!(luhn_valid("73282932000074")); // SIRET valide
+        assert!(luhn_valid("303265045"));
+    }
+
+    #[test]
+    fn luhn_rejects_invalid_and_non_digit() {
+        assert!(!luhn_valid("732829321")); // dernier chiffre cassé
+        assert!(!luhn_valid("12345678X")); // non numérique
+    }
+
+    #[test]
+    fn fr_vat_accepts_valid_number() {
+        assert!(fr_vat_valid("FR40303265045"));
+        assert!(fr_vat_valid("FR 40 303 265 045")); // espaces tolérés
+        assert!(fr_vat_valid("FR44732829320"));
+    }
+
+    #[test]
+    fn fr_vat_rejects_wrong_key_or_siren() {
+        assert!(!fr_vat_valid("FR41303265045")); // clé erronée (40 attendu)
+        assert!(!fr_vat_valid("FR40303265046")); // SIREN cassé
+        assert!(!fr_vat_valid("FR4030326504")); // trop court
+    }
+
+    #[test]
+    fn is_fr_vat_detects_prefix() {
+        assert!(is_fr_vat("FR40303265045"));
+        assert!(is_fr_vat(" fr40303265045 "));
+        assert!(!is_fr_vat("DE123456789"));
+    }
 }

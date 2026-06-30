@@ -64,8 +64,7 @@ fn totals(inv: &Invoice, out: &mut Vec<Issue>) {
 
     // BR-CO-14 : BT-110 = Σ BT-117 (TVA par catégorie). (Seulement si la ventilation est fournie.)
     if let Some(bt110) = t.tax_amount {
-        if !inv.vat_breakdown.is_empty()
-            && inv.vat_breakdown.iter().all(|b| b.tax_amount.is_some())
+        if !inv.vat_breakdown.is_empty() && inv.vat_breakdown.iter().all(|b| b.tax_amount.is_some())
         {
             let sum: Decimal = inv.vat_breakdown.iter().filter_map(|b| b.tax_amount).sum();
             if !money_eq(sum, bt110) {
@@ -124,10 +123,22 @@ fn totals(inv: &Invoice, out: &mut Vec<Issue>) {
 fn decimals(inv: &Invoice, out: &mut Vec<Issue>) {
     let t = &inv.totals;
     let checks: [(Option<Decimal>, &str, &str); 5] = [
-        (t.line_extension_amount, "totals.line_extension_amount", "La somme des montants de ligne"),
-        (t.tax_exclusive_amount, "totals.tax_exclusive_amount", "Le total HT"),
+        (
+            t.line_extension_amount,
+            "totals.line_extension_amount",
+            "La somme des montants de ligne",
+        ),
+        (
+            t.tax_exclusive_amount,
+            "totals.tax_exclusive_amount",
+            "Le total HT",
+        ),
         (t.tax_amount, "totals.tax_amount", "Le total de TVA"),
-        (t.tax_inclusive_amount, "totals.tax_inclusive_amount", "Le total TTC"),
+        (
+            t.tax_inclusive_amount,
+            "totals.tax_inclusive_amount",
+            "Le total TTC",
+        ),
         (t.payable_amount, "totals.payable_amount", "Le net à payer"),
     ];
     for (value, field, label) in checks {

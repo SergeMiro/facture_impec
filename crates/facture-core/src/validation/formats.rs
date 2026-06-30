@@ -23,7 +23,12 @@ pub(crate) fn check(inv: &Invoice, out: &mut Vec<Issue>) {
     }
 
     // Devise : 3 lettres ASCII.
-    if let Some(cur) = inv.currency.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(cur) = inv
+        .currency
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         if !is_iso4217_shape(cur) {
             out.push(Issue::hard(
                 "FF-CURRENCY-FORMAT",
@@ -35,7 +40,12 @@ pub(crate) fn check(inv: &Invoice, out: &mut Vec<Issue>) {
 
     // IBAN (si fourni).
     if let Some(payment) = &inv.payment {
-        if let Some(iban) = payment.iban.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(iban) = payment
+            .iban
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             if !iban_valid(iban) {
                 out.push(Issue::hard("FR-IBAN", "payment.iban", i18n::iban_invalid()));
             }
@@ -102,7 +112,10 @@ pub(crate) fn iban_valid(iban: &str) -> bool {
         return false;
     }
     // Les deux premiers caractères doivent être un code pays (lettres).
-    if !cleaned.as_bytes()[..2].iter().all(|b| b.is_ascii_alphabetic()) {
+    if !cleaned.as_bytes()[..2]
+        .iter()
+        .all(|b| b.is_ascii_alphabetic())
+    {
         return false;
     }
 
@@ -126,4 +139,43 @@ pub(crate) fn iban_valid(iban: &str) -> bool {
         }
     }
     remainder == 1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn iban_accepts_valid() {
+        assert!(iban_valid("FR1420041010050500013M02606")); // exemple FR canonique (lettre M)
+        assert!(iban_valid("DE89 3704 0044 0532 0130 00")); // espaces tolérés
+    }
+
+    #[test]
+    fn iban_rejects_invalid() {
+        assert!(!iban_valid("FR1420041010050500013M02607")); // dernier chiffre cassé (valide: ...606)
+        assert!(!iban_valid("FR14")); // trop court
+        assert!(!iban_valid("1420041010050500013M02606")); // pas de code pays
+    }
+
+    #[test]
+    fn date_parses_valid_and_leap_year() {
+        assert_eq!(parse_iso_date("2026-09-01"), Some((2026, 9, 1)));
+        assert_eq!(parse_iso_date("2024-02-29"), Some((2024, 2, 29))); // bissextile
+    }
+
+    #[test]
+    fn date_rejects_invalid() {
+        assert!(parse_iso_date("2026-13-01").is_none()); // mois 13
+        assert!(parse_iso_date("2025-02-29").is_none()); // 2025 non bissextile
+        assert!(parse_iso_date("2026-9-1").is_none()); // non zéro-paddé
+        assert!(parse_iso_date("01/09/2026").is_none()); // mauvais séparateur
+    }
+
+    #[test]
+    fn currency_shape() {
+        assert!(is_iso4217_shape("EUR"));
+        assert!(!is_iso4217_shape("EU"));
+        assert!(!is_iso4217_shape("EU1"));
+    }
 }
