@@ -1,0 +1,20 @@
+[package]
+name = "facture-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Cœur de validation Facture Impec : modèle Invoice + règles EN 16931 + règles FR + rapport + i18n."
+
+[lints.clippy]
+all = "warn"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+rust_decimal.workspace = true
+
+[dev-dependencies]
+rust_decimal_macros.workspace = true
