@@ -1,0 +1,23 @@
+{
+  "name": "facture-impec-addin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Facture Impec — task pane Office (Excel) + démo de validation, Next.js.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "wasm": "cd ../crates/facture-wasm && wasm-pack build --target web --release --out-dir pkg && cp pkg/facture_wasm.js ../../addin/src/wasm/ && cp pkg/facture_wasm.d.ts ../../addin/src/wasm/ && cp pkg/facture_wasm_bg.wasm ../../addin/src/wasm/"
+  },
+  "dependencies": {
+    "next": "^15.5.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.6.0"
+  }
+}

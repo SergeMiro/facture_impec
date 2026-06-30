@@ -124,6 +124,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "facture-wasm"
+version = "0.1.0"
+dependencies = [
+ "facture-core",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

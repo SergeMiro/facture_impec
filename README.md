@@ -17,7 +17,18 @@ le Factur-X et gère l'e-reporting DGFiP.
 
 - ✅ **Phase 0 — Bootstrap** : Cargo workspace, CI (fmt + clippy + build + test), licence MIT, specs déposées dans `docs/`.
 - ✅ **Phase 1 — Cœur de validation** : `crates/facture-core` (modèle `Invoice`, règles EN 16931 + FR, rapport, messages FR, tests).
-- ⏭️ **Phase 2** : WASM + add-in Excel (à venir — revue demandée avant de démarrer, cf. §14).
+- ✅ **Phase 2 — WASM + add-in** : `crates/facture-wasm` (wasm-bindgen) + `addin/` (Next.js : démo de validation + task pane Office, `manifest.xml`).
+- ⏭️ **Phase 3** : backend Axum + intégration PDP B2Brouter (sandbox).
+
+### 🔎 Démo en ligne
+
+- **Banc d'essai** (validation dans le navigateur, sans Excel) : <https://facture-impec.vercel.app/>
+- **Task pane Office** : <https://facture-impec.vercel.app/taskpane>
+- **Manifeste à sideloader dans Excel** : <https://facture-impec.vercel.app/manifest.xml>
+  (Excel sur le web → Insertion → Compléments → Charger mon complément → `manifest.xml`).
+
+Le même moteur Rust (compilé en WASM) valide la facture côté navigateur ; la démo montre le
+surlignage rouge/jaune et la modale *Corriger / Envoyer quand même* (§6.4/6.5).
 
 ## Positionnement légal
 

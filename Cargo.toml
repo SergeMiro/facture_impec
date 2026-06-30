@@ -2,9 +2,9 @@
 resolver = "2"
 members = [
     "crates/facture-core",
-    # Ajoutés dans les phases ultérieures (cf. AGENT_PLAN.md §11) :
-    #   "crates/facture-wasm"     — Phase 2 (wasm-bindgen)
-    #   "crates/facture-backend"  — Phase 3 (Axum)
+    "crates/facture-wasm",
+    # Ajouté en Phase 3 (cf. AGENT_PLAN.md §11) :
+    #   "crates/facture-backend"  — Axum
 ]
 
 [workspace.package]
