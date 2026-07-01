@@ -72,3 +72,44 @@ pour récupérer l'OpenAPI à jour (les champs ci-dessous sont indicatifs, à co
 - [ ] Récupérer le fichier OpenAPI (JSON/YAML) et le versionner dans `docs/` ou `crates/facture-backend/`.
 
 > Réponses async : opérations bulk renvoient `202 Accepted` + URL de polling ; dédup par digest SHA-256.
+
+---
+
+## Implémentation Phase 3 (`crates/facture-backend`)
+
+Le backend Axum encapsule la PDP derrière le trait **`PdpProvider`** (`src/pdp/mod.rs`) :
+
+```rust
+async fn send(&self, invoice: &Invoice) -> Result<SendResult, PdpError>;
+async fn status(&self, id: &str)         -> Result<StatusResult, PdpError>;
+```
+
+Deux implémentations :
+- **`MockProvider`** (`pdp/mock.rs`) — par défaut si aucune clé n'est configurée : accepte toute facture
+  déjà valide et renvoie un id `SIM-<numéro>` (`simulated: true`). Permet de tester le flux de bout en bout.
+- **`B2BrouterProvider`** (`pdp/b2brouter.rs`) — actif dès que `B2BROUTER_API_KEY` + `B2BROUTER_ACCOUNT_ID`
+  sont présents. En-têtes `X-B2B-API-Key` / `X-B2B-API-Version`.
+
+`/api/send` **revalide d'abord** avec `facture-core` (defense in depth) et refuse en **422** si des
+erreurs dures subsistent — la clé PDP n'est jamais exposée au client.
+
+### Mapping Invoice → payload B2Brouter (à confirmer via OpenAPI)
+| Invoice (BT-)                | Payload B2Brouter (best-effort)                    |
+|-----------------------------|----------------------------------------------------|
+| `invoice_number` (BT-1)     | `invoice.number`                                   |
+| `issue_date` (BT-2)         | `invoice.date`                                      |
+| `due_date` (BT-9)           | `invoice.due_date`                                  |
+| `currency` (BT-5)           | `invoice.currency`                                  |
+| lignes                      | `invoice.invoice_lines_attributes[]` (`description`, `quantity`, `price`, `unit`, `tax_percent`, `tax_category`) |
+| ventilation TVA             | `invoice.taxes_attributes[]` (`name`, `percent`, `category`, `comment`=VATEX) |
+| acheteur                    | `invoice.contact` (`name`, `vat_number`, `country`) |
+| —                           | `invoice.send_after_import: true`                  |
+
+> ⚠️ Ce mapping et le chemin `POST /accounts/{id}/invoices` sont **provisoires** : recouper avec
+> l'OpenAPI courant avant la prod (cf. divergences ci-dessus). Le mapping est isolé dans
+> `B2BrouterProvider::map_invoice` (testé unitairement) pour être ajusté sans toucher au reste.
+
+### Passer de la simulation au réel
+1. Obtenir une clé sandbox B2Brouter + un `account_id` (à demander à B2Brouter — cf. « À CLARIFIER »).
+2. Déployer `facture-backend` (VPS) avec les variables d'env ci-dessus + `ALLOWED_ORIGIN`.
+3. Définir `BACKEND_URL` dans le projet Vercel → `/api/send` relaie vers le backend réel.

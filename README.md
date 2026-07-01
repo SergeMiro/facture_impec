@@ -18,7 +18,8 @@ le Factur-X et gère l'e-reporting DGFiP.
 - ✅ **Phase 0 — Bootstrap** : Cargo workspace, CI (fmt + clippy + build + test), licence MIT, specs déposées dans `docs/`.
 - ✅ **Phase 1 — Cœur de validation** : `crates/facture-core` (modèle `Invoice`, règles EN 16931 + FR, rapport, messages FR, tests).
 - ✅ **Phase 2 — WASM + add-in** : `crates/facture-wasm` (wasm-bindgen) + `addin/` (Next.js : démo de validation + task pane Office, `manifest.xml`).
-- ⏭️ **Phase 3** : backend Axum + intégration PDP B2Brouter (sandbox).
+- ✅ **Phase 3 — Backend + PDP** : `crates/facture-backend` (Axum) — revalidation serveur + trait `PdpProvider` (impl B2Brouter + simulation), routes `/api/validate`, `/api/send`, `/api/status/:id`. Bouton **Envoyer** câblé (mode simulation par défaut).
+- ⏭️ **Phase 4** : couche IA douce (avertissements jaunes).
 
 ### 🔎 Démo en ligne
 
@@ -57,6 +58,26 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Le cœur (`crates/facture-core`) expose `validate(&Invoice) -> ValidationReport` et
 `validate_json(&str) -> Result<String, _>` (point d'entrée partagé WASM/backend des phases suivantes).
+
+### Backend (Phase 3)
+
+```bash
+cargo run -p facture-backend          # écoute sur 0.0.0.0:8080 (mode simulation par défaut)
+# routes : GET /health · POST /api/validate · POST /api/send · GET /api/status/:id
+```
+
+**Envoi réel via B2Brouter** (sinon simulation) — variables d'environnement :
+
+```bash
+B2BROUTER_API_KEY=...        # clé sandbox/prod (jamais commitée)
+B2BROUTER_ACCOUNT_ID=...     # compte reseller de l'entreprise
+B2BROUTER_BASE_URL=https://api-staging.b2brouter.net   # (défaut : staging)
+B2BROUTER_API_VERSION=2.0
+ALLOWED_ORIGIN=https://facture-impec.vercel.app        # CORS (défaut : *)
+```
+
+Côté add-in Vercel, `/api/send` relaie vers ce backend si `BACKEND_URL` est défini (variable
+d'environnement Vercel) ; sinon il renvoie une réponse **simulée** pour la démo.
 
 ## Licence
 

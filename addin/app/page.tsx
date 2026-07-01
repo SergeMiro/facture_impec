@@ -62,10 +62,27 @@ export default function DemoPage() {
     setInvoice(s.build());
   }
 
-  function send() {
+  async function send() {
     setModal(false);
-    setToast("Simulation : l'envoi à la plateforme agréée (B2Brouter) arrive en Phase 3.");
-    setTimeout(() => setToast(null), 4200);
+    setToast("Envoi en cours…");
+    try {
+      const r = await fetch("/api/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(invoice),
+      });
+      const body = await r.json();
+      if (!r.ok) {
+        setToast(`Envoi refusé (${r.status}) : ${body.message ?? "erreur"}`);
+      } else if (body.simulated) {
+        setToast(`✓ Simulation : facture acceptée (id ${body.id}). Configurez B2Brouter pour un envoi réel.`);
+      } else {
+        setToast(`✓ Envoyée via ${body.provider} — statut : ${body.status} (id ${body.id}).`);
+      }
+    } catch {
+      setToast("Erreur réseau lors de l'envoi.");
+    }
+    setTimeout(() => setToast(null), 5500);
   }
 
   const hard = report?.issues.filter((i) => i.severity === "hard").length ?? 0;

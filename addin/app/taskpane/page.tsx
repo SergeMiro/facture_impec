@@ -13,6 +13,8 @@ export default function TaskPane() {
   const [report, setReport] = useState<ValidationReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
+  const [invoiceCache, setInvoiceCache] = useState<unknown>(null);
 
   useEffect(() => {
     let settled = false;
@@ -57,10 +59,24 @@ export default function TaskPane() {
   const onInsert = () => run(insertTemplate);
   const onValidate = () =>
     run(async () => {
+      setSent(null);
       const invoice = await readInvoice();
+      setInvoiceCache(invoice);
       const r = await validateInvoice(invoice);
       setReport(r);
       await highlightCells(r);
+    });
+  const onSend = () =>
+    run(async () => {
+      const r = await fetch("/api/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(invoiceCache),
+      });
+      const body = await r.json();
+      if (!r.ok) setSent(`Envoi refusé : ${body.message ?? r.status}`);
+      else if (body.simulated) setSent(`✓ Simulation : acceptée (id ${body.id}).`);
+      else setSent(`✓ Envoyée (${body.provider}) — ${body.status} (id ${body.id}).`);
     });
 
   const hard = report?.issues.filter((i) => i.severity === "hard").length ?? 0;
@@ -129,6 +145,21 @@ export default function TaskPane() {
                   : "Facture conforme — prête à envoyer"}
               </p>
               <IssuePanel report={report} />
+              <div className="actions" style={{ marginTop: 14 }}>
+                <button
+                  className="btn primary"
+                  onClick={onSend}
+                  disabled={busy || !report.is_sendable}
+                  title={
+                    report.is_sendable
+                      ? undefined
+                      : "Corrigez les erreurs en rouge avant d'envoyer."
+                  }
+                >
+                  Envoyer
+                </button>
+                {sent && <span className="hint">{sent}</span>}
+              </div>
             </section>
           )}
         </>
