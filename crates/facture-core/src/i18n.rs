@@ -202,6 +202,27 @@ pub fn currency_format(found: &str) -> String {
     format!("La devise « {found} » est invalide (code ISO 4217 à 3 lettres attendu, ex. EUR).")
 }
 
+// ── Couche douce (avertissements jaunes) ─────────────────────────────────────
+
+pub fn soft_date_logic() -> String {
+    "La date d'échéance est antérieure à la date d'émission.".to_string()
+}
+
+pub fn soft_currency(currency: &str) -> String {
+    format!("Devise étrangère ({currency}) : inhabituel pour une facture domestique — à vérifier.")
+}
+
+pub fn soft_vat_rate(rate: Decimal) -> String {
+    format!(
+        "Le taux de TVA ({}) ne correspond pas à un taux français usuel (0 / 2,1 / 5,5 / 10 / 20 %).",
+        fmt_pct(rate)
+    )
+}
+
+pub fn soft_round_amount(line_no: usize) -> String {
+    format!("Ligne {line_no} : montant forfaitaire très rond — à vérifier.")
+}
+
 // ── Contrôle de calcul de ligne (FF-) ────────────────────────────────────────
 
 pub fn line_calc(line_no: usize, declared: Decimal, expected: Decimal) -> String {

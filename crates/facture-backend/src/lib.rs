@@ -6,6 +6,7 @@
 //!   pour ne pas se verrouiller sur un fournisseur.
 //! - Garde secrète la clé API PDP (jamais exposée au client).
 
+pub mod ai;
 pub mod config;
 pub mod pdp;
 pub mod routes;

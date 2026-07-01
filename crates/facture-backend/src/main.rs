@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use facture_backend::ai::{mistral::MistralChecker, AiChecker, DisabledChecker};
 use facture_backend::config::Config;
 use facture_backend::pdp::{b2brouter::B2BrouterProvider, mock::MockProvider, PdpProvider};
 use facture_backend::routes::{router, AppState};
@@ -35,7 +36,18 @@ async fn main() {
         }
     };
 
-    let app = router(AppState { provider }, &cfg.allowed_origin);
+    let ai: Arc<dyn AiChecker> = match &cfg.ai {
+        Some(a) => {
+            tracing::info!("IA : Mistral ({})", a.model);
+            Arc::new(MistralChecker::new(a.api_key.clone(), a.model.clone()))
+        }
+        None => {
+            tracing::info!("IA : désactivée (aucune clé Mistral)");
+            Arc::new(DisabledChecker)
+        }
+    };
+
+    let app = router(AppState { provider, ai }, &cfg.allowed_origin);
 
     let listener = tokio::net::TcpListener::bind(&cfg.bind_addr)
         .await

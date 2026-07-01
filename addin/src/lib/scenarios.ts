@@ -104,4 +104,16 @@ export const SCENARIOS: Scenario[] = [
       return inv;
     },
   },
+  {
+    id: "soft",
+    label: "Avertissements (IA)",
+    description: "Devise USD, échéance avant émission, taux inhabituel — jaune, non bloquant.",
+    build: () => {
+      const inv = validInvoice();
+      inv.currency = "USD"; // AI-CURRENCY
+      inv.due_date = "2026-08-15"; // avant l'émission → AI-DATE-LOGIC
+      inv.lines[0].vat_rate = "7"; // hors taux usuels → AI-VAT-RATE
+      return inv;
+    },
+  },
 ];

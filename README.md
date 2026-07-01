@@ -19,7 +19,8 @@ le Factur-X et gère l'e-reporting DGFiP.
 - ✅ **Phase 1 — Cœur de validation** : `crates/facture-core` (modèle `Invoice`, règles EN 16931 + FR, rapport, messages FR, tests).
 - ✅ **Phase 2 — WASM + add-in** : `crates/facture-wasm` (wasm-bindgen) + `addin/` (Next.js : démo de validation + task pane Office, `manifest.xml`).
 - ✅ **Phase 3 — Backend + PDP** : `crates/facture-backend` (Axum) — revalidation serveur + trait `PdpProvider` (impl B2Brouter + simulation), routes `/api/validate`, `/api/send`, `/api/status/:id`. Bouton **Envoyer** câblé (mode simulation par défaut).
-- ⏭️ **Phase 4** : couche IA douce (avertissements jaunes).
+- ✅ **Phase 4 — Couche IA douce** : heuristiques déterministes locales (WASM, RGPD-safe) + couche LLM Mistral (backend, `/api/ai-check`, garde-fous, désactivable). Avertissements **jaunes** non bloquants intégrés au rapport et à la modale.
+- ⏭️ **Phase 5** : import OCR/PDF → Invoice.
 
 ### 🔎 Démo en ligne
 

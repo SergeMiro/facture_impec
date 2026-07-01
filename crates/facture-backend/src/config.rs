@@ -8,6 +8,8 @@ pub struct Config {
     pub allowed_origin: String,
     /// Présent si une clé B2Brouter est configurée ; sinon on tombe sur le MockProvider.
     pub b2b: Option<B2bConfig>,
+    /// Présent si l'analyse IA est activée (clé Mistral) ; sinon couche LLM désactivée.
+    pub ai: Option<AiConfig>,
 }
 
 pub struct B2bConfig {
@@ -15,6 +17,11 @@ pub struct B2bConfig {
     pub api_key: String,
     pub api_version: String,
     pub account_id: String,
+}
+
+pub struct AiConfig {
+    pub api_key: String,
+    pub model: String,
 }
 
 impl Config {
@@ -36,10 +43,23 @@ impl Config {
             None
         };
 
+        // IA active si une clé Mistral est fournie et AI_ENABLED != "false".
+        let mistral_key = env::var("MISTRAL_API_KEY").unwrap_or_default();
+        let ai_flag = env::var("AI_ENABLED").unwrap_or_else(|_| "true".into());
+        let ai = if !mistral_key.is_empty() && ai_flag != "false" {
+            Some(AiConfig {
+                api_key: mistral_key,
+                model: env::var("MISTRAL_MODEL").unwrap_or_else(|_| "mistral-small-latest".into()),
+            })
+        } else {
+            None
+        };
+
         Config {
             bind_addr,
             allowed_origin,
             b2b,
+            ai,
         }
     }
 }

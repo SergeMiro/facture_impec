@@ -13,11 +13,13 @@ use facture_core::{validate, Invoice};
 use serde_json::json;
 use tower_http::cors::{Any, CorsLayer};
 
+use crate::ai::AiChecker;
 use crate::pdp::PdpProvider;
 
 #[derive(Clone)]
 pub struct AppState {
     pub provider: Arc<dyn PdpProvider>,
+    pub ai: Arc<dyn AiChecker>,
 }
 
 pub fn router(state: AppState, allowed_origin: &str) -> Router {
@@ -26,6 +28,7 @@ pub fn router(state: AppState, allowed_origin: &str) -> Router {
         .route("/api/validate", post(validate_handler))
         .route("/api/send", post(send_handler))
         .route("/api/status/:id", get(status_handler))
+        .route("/api/ai-check", post(ai_check_handler))
         .layer(build_cors(allowed_origin))
         .with_state(state)
 }
@@ -77,6 +80,15 @@ async fn send_handler(
         )
             .into_response(),
     }
+}
+
+/// Couche IA douce : renvoie des avertissements jaunes (jamais bloquant).
+async fn ai_check_handler(
+    State(state): State<AppState>,
+    Json(invoice): Json<Invoice>,
+) -> impl IntoResponse {
+    let warnings = state.ai.check(&invoice).await;
+    Json(json!({ "enabled": state.ai.enabled(), "warnings": warnings }))
 }
 
 async fn status_handler(

@@ -281,3 +281,29 @@ fn validate_json_roundtrip() {
     assert!(report.is_sendable);
     assert!(report.issues.is_empty());
 }
+
+#[test]
+fn soft_warnings_are_non_blocking() {
+    let mut inv = valid_invoice();
+    inv.currency = Some("USD".into()); // AI-CURRENCY
+    inv.due_date = Some("2026-08-01".into()); // antérieure à l'émission → AI-DATE-LOGIC
+
+    let report = validate(&inv);
+    let codes: Vec<&str> = report.issues.iter().map(|i| i.code.as_str()).collect();
+    assert!(codes.contains(&"AI-CURRENCY"));
+    assert!(codes.contains(&"AI-DATE-LOGIC"));
+    // Que des avertissements doux → la facture reste envoyable.
+    assert!(report.is_sendable);
+    assert!(report
+        .issues
+        .iter()
+        .all(|i| i.severity == facture_core::Severity::SoftWarning));
+}
+
+#[test]
+fn unusual_vat_rate_warns_without_blocking() {
+    let mut inv = valid_invoice();
+    inv.lines[0].vat_rate = Some(dec!(7)); // hors taux FR usuels
+    assert!(has(&inv, "AI-VAT-RATE"));
+    assert!(validate(&inv).is_sendable);
+}

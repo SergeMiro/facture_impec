@@ -7,6 +7,7 @@ mod amounts;
 mod en16931;
 mod formats;
 mod french;
+mod soft;
 
 use crate::model::Invoice;
 use crate::report::{Issue, ValidationReport};
@@ -20,6 +21,7 @@ pub fn validate(invoice: &Invoice) -> ValidationReport {
     french::check(invoice, &mut issues);
     formats::check(invoice, &mut issues);
     amounts::check(invoice, &mut issues);
+    soft::check(invoice, &mut issues);
 
     // Renseigner cell_ref depuis la cartographie fournie par l'add-in (Phase 2).
     if !invoice.cells.is_empty() {

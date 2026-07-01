@@ -62,6 +62,29 @@ export default function DemoPage() {
     setInvoice(s.build());
   }
 
+  async function openValidation() {
+    if (!report) return;
+    let merged = report;
+    try {
+      const res = await fetch("/api/ai-check", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(invoice),
+      });
+      if (res.ok) {
+        const j = await res.json();
+        const extra: Issue[] = (j.warnings ?? []).filter(
+          (w: Issue) => !merged.issues.some((i) => i.code === w.code && i.field === w.field)
+        );
+        if (extra.length) merged = { ...merged, issues: [...merged.issues, ...extra] };
+      }
+    } catch {
+      /* IA indisponible → on conserve le rapport local (WASM). */
+    }
+    setReport(merged);
+    setModal(true);
+  }
+
   async function send() {
     setModal(false);
     setToast("Envoi en cours…");
@@ -192,10 +215,10 @@ export default function DemoPage() {
             </span>
           </div>
           <div className="actions" style={{ marginTop: 14 }}>
-            <button className="btn primary" onClick={() => setModal(true)} disabled={!report}>
+            <button className="btn primary" onClick={openValidation} disabled={!report}>
               Valider
             </button>
-            <span className="hint">Ouvre le rapport et les options d'envoi.</span>
+            <span className="hint">Analyse (local + IA) puis options d'envoi.</span>
           </div>
         </section>
       </div>

@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use facture_backend::ai::DisabledChecker;
 use facture_backend::pdp::mock::MockProvider;
 use facture_backend::routes::{router, AppState};
 use http_body_util::BodyExt;
@@ -13,6 +14,7 @@ fn app() -> axum::Router {
     router(
         AppState {
             provider: Arc::new(MockProvider),
+            ai: Arc::new(DisabledChecker),
         },
         "*",
     )
@@ -92,6 +94,14 @@ async fn send_valid_returns_simulated_id() {
     assert_eq!(body["simulated"], true);
     assert_eq!(body["status"], "accepted");
     assert!(body["id"].as_str().unwrap().starts_with("SIM-"));
+}
+
+#[tokio::test]
+async fn ai_check_disabled_returns_empty() {
+    let (status, body) = post_json("/api/ai-check", valid_invoice_json()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["enabled"], false);
+    assert_eq!(body["warnings"].as_array().unwrap().len(), 0);
 }
 
 #[tokio::test]
