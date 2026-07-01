@@ -1,0 +1,211 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import type { ValidationReport } from "@/lib/types";
+import { validateInvoice } from "@/lib/validator";
+import { insertTemplate, readInvoice, highlightCells, writeInvoice } from "@/lib/excelBridge";
+import IssuePanel from "@/components/IssuePanel";
+
+type HostState = "loading" | "excel" | "browser";
+
+export default function TaskPane() {
+  const [host, setHost] = useState<HostState>("loading");
+  const [report, setReport] = useState<ValidationReport | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
+  const [invoiceCache, setInvoiceCache] = useState<unknown>(null);
+
+  useEffect(() => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) setHost("browser");
+    }, 3000);
+
+    const s = document.createElement("script");
+    s.src = "https://appsforoffice.microsoft.com/lib/1/hosted/office.js";
+    s.onload = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const O = (window as any).Office;
+      if (!O?.onReady) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      O.onReady((info: any) => {
+        settled = true;
+        clearTimeout(timer);
+        setHost(info?.host ? "excel" : "browser");
+      });
+    };
+    s.onerror = () => {
+      settled = true;
+      clearTimeout(timer);
+      setHost("browser");
+    };
+    document.body.appendChild(s);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const run = useCallback(async (fn: () => Promise<void>) => {
+    setErr(null);
+    setBusy(true);
+    try {
+      await fn();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const onInsert = () => run(insertTemplate);
+  const onValidate = () =>
+    run(async () => {
+      setSent(null);
+      const invoice = await readInvoice();
+      setInvoiceCache(invoice);
+      const r = await validateInvoice(invoice);
+      setReport(r);
+      await highlightCells(r);
+    });
+  const onImportPdf = (file: File) =>
+    run(async () => {
+      setSent(null);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let bin = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+      }
+      const r = await fetch("/api/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          content_base64: btoa(bin),
+          content_type: file.type || "application/pdf",
+        }),
+      });
+      const body = await r.json();
+      if (!r.ok) {
+        throw new Error(body.message ?? `Import échoué (${r.status})`);
+      }
+      await writeInvoice(body.invoice);
+      const invoice = await readInvoice();
+      setInvoiceCache(invoice);
+      const rep = await validateInvoice(invoice);
+      setReport(rep);
+      await highlightCells(rep);
+    });
+
+  const onSend = () =>
+    run(async () => {
+      const r = await fetch("/api/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(invoiceCache),
+      });
+      const body = await r.json();
+      if (!r.ok) setSent(`Envoi refusé : ${body.message ?? r.status}`);
+      else if (body.simulated) setSent(`✓ Simulation : acceptée (id ${body.id}).`);
+      else setSent(`✓ Envoyée (${body.provider}) — ${body.status} (id ${body.id}).`);
+    });
+
+  const hard = report?.issues.filter((i) => i.severity === "hard").length ?? 0;
+  const soft = report?.issues.filter((i) => i.severity === "soft").length ?? 0;
+
+  return (
+    <main className="wrap taskpane">
+      <header className="app">
+        <div>
+          <h1>Facture Impec</h1>
+          <p>Validez votre facture sans quitter Excel.</p>
+        </div>
+      </header>
+
+      {host === "loading" && <div className="notice">Connexion à Excel…</div>}
+
+      {host === "browser" && (
+        <div className="notice">
+          <p>
+            Ce panneau est conçu pour s'exécuter <b>dans Excel</b> (sideload du manifeste).
+            Ouvert dans un navigateur classique, il n'a pas accès à la feuille.
+          </p>
+          <p style={{ marginTop: 8 }}>
+            👉 Pour tester le moteur de validation tout de suite, utilisez la{" "}
+            <a href="/">démo interactive</a>.
+          </p>
+          <p style={{ marginTop: 8 }}>
+            Pour le tester dans Excel : Excel sur le web → <span className="kbd">Insertion</span> →{" "}
+            <span className="kbd">Compléments</span> → <span className="kbd">Charger mon complément</span>{" "}
+            → choisir <span className="kbd">manifest.xml</span>.
+          </p>
+        </div>
+      )}
+
+      {host === "excel" && (
+        <>
+          <section className="panel">
+            <h2>Actions</h2>
+            <div className="actions">
+              <button className="btn" onClick={onInsert} disabled={busy}>
+                Insérer le modèle
+              </button>
+              <button className="btn primary" onClick={onValidate} disabled={busy}>
+                Valider
+              </button>
+              <label className="btn" style={{ cursor: "pointer" }}>
+                Importer depuis PDF
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onImportPdf(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+            <p className="hint" style={{ marginTop: 8 }}>
+              « Insérer le modèle » remplit une feuille « Facture » avec des plages nommées, puis
+              « Valider » lit les cellules, signale les erreurs et les surligne.
+            </p>
+            {err && <p className="status bad" style={{ marginTop: 8 }}><span className="dot" /> {err}</p>}
+          </section>
+
+          {report && (
+            <section className="panel">
+              <h2>Rapport</h2>
+              <p
+                className={`status ${hard > 0 ? "bad" : soft > 0 ? "warn" : "ok"}`}
+                style={{ marginBottom: 10 }}
+              >
+                <span className="dot" />
+                {hard > 0
+                  ? `${hard} erreur(s) bloquante(s)`
+                  : soft > 0
+                  ? `${soft} avertissement(s)`
+                  : "Facture conforme — prête à envoyer"}
+              </p>
+              <IssuePanel report={report} />
+              <div className="actions" style={{ marginTop: 14 }}>
+                <button
+                  className="btn primary"
+                  onClick={onSend}
+                  disabled={busy || !report.is_sendable}
+                  title={
+                    report.is_sendable
+                      ? undefined
+                      : "Corrigez les erreurs en rouge avant d'envoyer."
+                  }
+                >
+                  Envoyer
+                </button>
+                {sent && <span className="hint">{sent}</span>}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+    </main>
+  );
+}

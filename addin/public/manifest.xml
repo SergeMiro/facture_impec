@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+  xsi:type="TaskPaneApp">
+
+  <Id>b9f0a1c2-3d4e-5f60-8a1b-2c3d4e5f6071</Id>
+  <Version>0.1.0.0</Version>
+  <ProviderName>Facture Impec</ProviderName>
+  <DefaultLocale>fr-FR</DefaultLocale>
+  <DisplayName DefaultValue="Facture Impec" />
+  <Description DefaultValue="Assistant de pré-vol pour la facturation électronique française (EN 16931) : valide la facture dans Excel avant l'envoi à une plateforme agréée." />
+  <IconUrl DefaultValue="https://facture-impec.vercel.app/assets/icon-32.png" />
+  <HighResolutionIconUrl DefaultValue="https://facture-impec.vercel.app/assets/icon-80.png" />
+  <SupportUrl DefaultValue="https://facture-impec.vercel.app/" />
+
+  <Hosts>
+    <Host Name="Workbook" />
+  </Hosts>
+
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://facture-impec.vercel.app/taskpane" />
+  </DefaultSettings>
+
+  <Permissions>ReadWriteDocument</Permissions>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Workbook">
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="GetStarted.Title" />
+            <Description resid="GetStarted.Description" />
+            <LearnMoreUrl resid="GetStarted.LearnMoreUrl" />
+          </GetStarted>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="FactureImpec.Group">
+                <Label resid="Group.Label" />
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16" />
+                  <bt:Image size="32" resid="Icon.32" />
+                  <bt:Image size="80" resid="Icon.80" />
+                </Icon>
+                <Control xsi:type="Button" id="FactureImpec.OpenButton">
+                  <Label resid="OpenButton.Label" />
+                  <Supertip>
+                    <Title resid="OpenButton.Label" />
+                    <Description resid="OpenButton.Tooltip" />
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16" />
+                    <bt:Image size="32" resid="Icon.32" />
+                    <bt:Image size="80" resid="Icon.80" />
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>FactureImpecTaskpane</TaskpaneId>
+                    <SourceLocation resid="Taskpane.Url" />
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16" DefaultValue="https://facture-impec.vercel.app/assets/icon-16.png" />
+        <bt:Image id="Icon.32" DefaultValue="https://facture-impec.vercel.app/assets/icon-32.png" />
+        <bt:Image id="Icon.80" DefaultValue="https://facture-impec.vercel.app/assets/icon-80.png" />
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://facture-impec.vercel.app/taskpane" />
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://facture-impec.vercel.app/" />
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="Group.Label" DefaultValue="Facture Impec" />
+        <bt:String id="OpenButton.Label" DefaultValue="Valider la facture" />
+        <bt:String id="GetStarted.Title" DefaultValue="Facture Impec est prêt" />
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="OpenButton.Tooltip" DefaultValue="Ouvrir le panneau de validation Facture Impec." />
+        <bt:String id="GetStarted.Description" DefaultValue="Ouvrez le panneau Facture Impec depuis l'onglet Accueil pour valider votre facture." />
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>

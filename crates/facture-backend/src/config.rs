@@ -1,0 +1,70 @@
+//! Configuration via variables d'environnement. Les secrets ne sont jamais commités.
+
+use std::env;
+
+pub struct Config {
+    pub bind_addr: String,
+    /// Origine autorisée pour le CORS ("*" pour tout autoriser en démo).
+    pub allowed_origin: String,
+    /// Présent si une clé B2Brouter est configurée ; sinon on tombe sur le MockProvider.
+    pub b2b: Option<B2bConfig>,
+    /// Présent si l'analyse IA est activée (clé Mistral) ; sinon couche LLM désactivée.
+    pub ai: Option<AiConfig>,
+    /// Jeton attendu (Bearer) sur les routes mutantes ; `None` = ouvert (dev uniquement).
+    pub auth_token: Option<String>,
+}
+
+pub struct B2bConfig {
+    pub base_url: String,
+    pub api_key: String,
+    pub api_version: String,
+    pub account_id: String,
+}
+
+pub struct AiConfig {
+    pub api_key: String,
+    pub model: String,
+}
+
+impl Config {
+    pub fn from_env() -> Self {
+        let bind_addr = env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".into());
+        let allowed_origin = env::var("ALLOWED_ORIGIN").unwrap_or_else(|_| "*".into());
+
+        let api_key = env::var("B2BROUTER_API_KEY").unwrap_or_default();
+        let account_id = env::var("B2BROUTER_ACCOUNT_ID").unwrap_or_default();
+        let b2b = if !api_key.is_empty() && !account_id.is_empty() {
+            Some(B2bConfig {
+                base_url: env::var("B2BROUTER_BASE_URL")
+                    .unwrap_or_else(|_| "https://api-staging.b2brouter.net".into()),
+                api_key,
+                api_version: env::var("B2BROUTER_API_VERSION").unwrap_or_else(|_| "2.0".into()),
+                account_id,
+            })
+        } else {
+            None
+        };
+
+        // IA active si une clé Mistral est fournie et AI_ENABLED != "false".
+        let mistral_key = env::var("MISTRAL_API_KEY").unwrap_or_default();
+        let ai_flag = env::var("AI_ENABLED").unwrap_or_else(|_| "true".into());
+        let ai = if !mistral_key.is_empty() && ai_flag != "false" {
+            Some(AiConfig {
+                api_key: mistral_key,
+                model: env::var("MISTRAL_MODEL").unwrap_or_else(|_| "mistral-small-latest".into()),
+            })
+        } else {
+            None
+        };
+
+        let auth_token = env::var("APP_TOKEN").ok().filter(|t| !t.is_empty());
+
+        Config {
+            bind_addr,
+            allowed_origin,
+            b2b,
+            ai,
+            auth_token,
+        }
+    }
+}

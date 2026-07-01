@@ -1,0 +1,32 @@
+[package]
+name = "facture-backend"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Backend Axum de Facture Impec : revalidation serveur + envoi via une Plateforme Agréée (PdpProvider / B2Brouter)."
+
+[dependencies]
+facture-core = { path = "../facture-core" }
+serde.workspace = true
+serde_json.workspace = true
+rust_decimal.workspace = true
+axum = "0.7"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+async-trait = "0.1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+pdf-extract = "0.7"
+regex = "1"
+base64 = "0.22"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+base64 = "0.22"
+async-trait = "0.1"
