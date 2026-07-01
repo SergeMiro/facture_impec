@@ -44,7 +44,9 @@ pub trait PdpProvider: Send + Sync {
     /// Nom lisible du fournisseur.
     fn name(&self) -> &'static str;
     /// Envoie une facture (déjà revalidée côté serveur).
-    async fn send(&self, invoice: &Invoice) -> Result<SendResult, PdpError>;
+    ///
+    /// `account` : compte cible côté plateforme (modèle reseller multi-tenant) ; `None` = compte par défaut.
+    async fn send(&self, invoice: &Invoice, account: Option<&str>) -> Result<SendResult, PdpError>;
     /// Récupère l'état d'une facture précédemment envoyée.
     async fn status(&self, id: &str) -> Result<StatusResult, PdpError>;
 }

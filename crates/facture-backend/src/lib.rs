@@ -11,3 +11,4 @@ pub mod config;
 pub mod ocr;
 pub mod pdp;
 pub mod routes;
+pub mod util;

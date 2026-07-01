@@ -17,9 +17,11 @@ export async function POST(req: NextRequest) {
   const backend = process.env.BACKEND_URL;
   if (backend) {
     try {
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      if (process.env.BACKEND_TOKEN) headers.authorization = `Bearer ${process.env.BACKEND_TOKEN}`;
       const r = await fetch(`${backend.replace(/\/$/, "")}/api/ai-check`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers,
         body: JSON.stringify(invoice),
       });
       return NextResponse.json(await r.json(), { status: r.status });

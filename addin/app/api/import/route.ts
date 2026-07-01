@@ -20,9 +20,11 @@ export async function POST(req: NextRequest) {
   }
   const body = await req.text();
   try {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (process.env.BACKEND_TOKEN) headers.authorization = `Bearer ${process.env.BACKEND_TOKEN}`;
     const r = await fetch(`${backend.replace(/\/$/, "")}/api/import`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body,
     });
     return NextResponse.json(await r.json(), { status: r.status });

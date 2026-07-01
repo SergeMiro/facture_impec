@@ -1,23 +1,55 @@
 //! Tests d'intégration des routes (via `tower::ServiceExt::oneshot`, sans ouvrir de socket).
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use facture_backend::ai::DisabledChecker;
 use facture_backend::pdp::mock::MockProvider;
+use facture_backend::pdp::{PdpError, PdpProvider, SendResult, StatusResult};
 use facture_backend::routes::{router, AppState};
+use facture_core::Invoice;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
 fn app() -> axum::Router {
     router(
-        AppState {
-            provider: Arc::new(MockProvider),
-            ai: Arc::new(DisabledChecker),
-        },
+        AppState::new(Arc::new(MockProvider), Arc::new(DisabledChecker), None),
         "*",
     )
+}
+
+/// Fournisseur de test qui compte ses envois (pour prouver l'idempotence).
+struct CountingProvider {
+    count: Arc<AtomicUsize>,
+}
+
+#[async_trait::async_trait]
+impl PdpProvider for CountingProvider {
+    fn name(&self) -> &'static str {
+        "count"
+    }
+    async fn send(
+        &self,
+        invoice: &Invoice,
+        _account: Option<&str>,
+    ) -> Result<SendResult, PdpError> {
+        self.count.fetch_add(1, Ordering::SeqCst);
+        Ok(SendResult {
+            id: format!("ID-{}", invoice.invoice_number.as_deref().unwrap_or("x")),
+            status: "accepted".into(),
+            provider: "count".into(),
+            simulated: false,
+        })
+    }
+    async fn status(&self, id: &str) -> Result<StatusResult, PdpError> {
+        Ok(StatusResult {
+            id: id.to_string(),
+            status: "accepted".into(),
+            provider: "count".into(),
+        })
+    }
 }
 
 fn valid_invoice_json() -> String {
@@ -134,4 +166,79 @@ async fn send_invalid_is_refused() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(body["error"], "validation");
     assert_eq!(body["report"]["is_sendable"], false);
+}
+
+#[tokio::test]
+async fn protected_routes_require_token() {
+    let app = router(
+        AppState::new(
+            Arc::new(MockProvider),
+            Arc::new(DisabledChecker),
+            Some("secret".into()),
+        ),
+        "*",
+    );
+
+    // Sans jeton → 401.
+    let no_token = Request::builder()
+        .method("POST")
+        .uri("/api/send")
+        .header("content-type", "application/json")
+        .body(Body::from(valid_invoice_json()))
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(no_token).await.unwrap().status(),
+        StatusCode::UNAUTHORIZED
+    );
+
+    // Avec le bon jeton → 200.
+    let with_token = Request::builder()
+        .method("POST")
+        .uri("/api/send")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer secret")
+        .body(Body::from(valid_invoice_json()))
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(with_token).await.unwrap().status(),
+        StatusCode::OK
+    );
+
+    // /health reste ouvert.
+    let health = Request::builder()
+        .uri("/health")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(app.oneshot(health).await.unwrap().status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn send_is_idempotent() {
+    let count = Arc::new(AtomicUsize::new(0));
+    let app = router(
+        AppState::new(
+            Arc::new(CountingProvider {
+                count: count.clone(),
+            }),
+            Arc::new(DisabledChecker),
+            None,
+        ),
+        "*",
+    );
+
+    for _ in 0..2 {
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/send")
+            .header("content-type", "application/json")
+            .body(Body::from(valid_invoice_json()))
+            .unwrap();
+        assert_eq!(
+            app.clone().oneshot(req).await.unwrap().status(),
+            StatusCode::OK
+        );
+    }
+
+    // Même facture (même numéro) → un seul envoi réel.
+    assert_eq!(count.load(Ordering::SeqCst), 1);
 }

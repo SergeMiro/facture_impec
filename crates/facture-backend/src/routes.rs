@@ -1,18 +1,20 @@
 //! Routes HTTP : santé, revalidation, envoi, statut.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use axum::{
-    extract::{Path, State},
-    http::{HeaderValue, StatusCode},
-    response::IntoResponse,
+    extract::{Path, Request, State},
+    http::{header::AUTHORIZATION, HeaderMap, HeaderValue, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
 use base64::{engine::general_purpose::STANDARD, Engine};
 use facture_core::{validate, Invoice};
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::ai::AiChecker;
@@ -23,18 +25,66 @@ use crate::pdp::PdpProvider;
 pub struct AppState {
     pub provider: Arc<dyn PdpProvider>,
     pub ai: Arc<dyn AiChecker>,
+    /// Jeton Bearer attendu sur les routes mutantes ; `None` = ouvert (dev).
+    pub auth_token: Option<String>,
+    /// Cache d'idempotence des envois (mémoire ; en prod : store persistant). Clé → résultat.
+    pub idem: Arc<Mutex<HashMap<String, Value>>>,
+}
+
+impl AppState {
+    /// Construit un état avec un cache d'idempotence vide.
+    pub fn new(
+        provider: Arc<dyn PdpProvider>,
+        ai: Arc<dyn AiChecker>,
+        auth_token: Option<String>,
+    ) -> Self {
+        Self {
+            provider,
+            ai,
+            auth_token,
+            idem: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
 }
 
 pub fn router(state: AppState, allowed_origin: &str) -> Router {
-    Router::new()
-        .route("/health", get(health))
-        .route("/api/validate", post(validate_handler))
+    // Routes mutantes / sortantes : protégées par jeton (si configuré).
+    let protected = Router::new()
         .route("/api/send", post(send_handler))
         .route("/api/status/:id", get(status_handler))
         .route("/api/ai-check", post(ai_check_handler))
         .route("/api/import", post(import_handler))
+        .route_layer(middleware::from_fn_with_state(state.clone(), require_auth));
+
+    // Routes ouvertes : santé et revalidation (pures, sans secret ni effet de bord).
+    let open = Router::new()
+        .route("/health", get(health))
+        .route("/api/validate", post(validate_handler));
+
+    Router::new()
+        .merge(protected)
+        .merge(open)
         .layer(build_cors(allowed_origin))
         .with_state(state)
+}
+
+/// Middleware : exige `Authorization: Bearer <APP_TOKEN>` si un jeton est configuré.
+async fn require_auth(
+    State(state): State<AppState>,
+    req: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    if let Some(expected) = &state.auth_token {
+        let provided = req
+            .headers()
+            .get(AUTHORIZATION)
+            .and_then(|h| h.to_str().ok());
+        let ok = provided == Some(format!("Bearer {expected}").as_str());
+        if !ok {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    }
+    Ok(next.run(req).await)
 }
 
 fn build_cors(allowed_origin: &str) -> CorsLayer {
@@ -59,8 +109,11 @@ async fn validate_handler(Json(invoice): Json<Invoice>) -> impl IntoResponse {
 }
 
 /// Revalide puis envoie via la plateforme agréée. Refuse (422) si des erreurs dures subsistent.
+/// Idempotent : une même clé (`Idempotency-Key` ou numéro de facture) ne réémet pas.
+/// Multi-tenant : en-tête `X-Account-Id` pour cibler un compte reseller.
 async fn send_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(invoice): Json<Invoice>,
 ) -> impl IntoResponse {
     let report = validate(&invoice);
@@ -76,14 +129,48 @@ async fn send_handler(
             .into_response();
     }
 
-    match state.provider.send(&invoice).await {
-        Ok(result) => (StatusCode::OK, Json(json!(result))).into_response(),
+    let idem_key = header_str(&headers, "idempotency-key")
+        .map(str::to_string)
+        .or_else(|| invoice.invoice_number.clone());
+
+    // Rejeu idempotent : renvoyer le résultat déjà mémorisé sans réémettre.
+    if let Some(key) = &idem_key {
+        if let Ok(map) = state.idem.lock() {
+            if let Some(cached) = map.get(key) {
+                let mut body = cached.clone();
+                if let Some(obj) = body.as_object_mut() {
+                    obj.insert("idempotent_replay".into(), Value::Bool(true));
+                }
+                return (StatusCode::OK, Json(body)).into_response();
+            }
+        }
+    }
+
+    let account = header_str(&headers, "x-account-id");
+    match state.provider.send(&invoice, account).await {
+        Ok(result) => {
+            let value = json!(result);
+            if let Some(key) = idem_key {
+                if let Ok(mut map) = state.idem.lock() {
+                    map.insert(key, value.clone());
+                }
+            }
+            (StatusCode::OK, Json(value)).into_response()
+        }
         Err(e) => (
             StatusCode::BAD_GATEWAY,
             Json(json!({ "error": "pdp", "message": e.to_string() })),
         )
             .into_response(),
     }
+}
+
+fn header_str<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
+    headers
+        .get(name)
+        .and_then(|h| h.to_str().ok())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
 }
 
 #[derive(Deserialize)]

@@ -47,7 +47,14 @@ async fn main() {
         }
     };
 
-    let app = router(AppState { provider, ai }, &cfg.allowed_origin);
+    if cfg.auth_token.is_some() {
+        tracing::info!("Auth : jeton Bearer requis sur les routes mutantes");
+    } else {
+        tracing::warn!("Auth : aucun APP_TOKEN → routes ouvertes (dev uniquement)");
+    }
+
+    let state = AppState::new(provider, ai, cfg.auth_token);
+    let app = router(state, &cfg.allowed_origin);
 
     let listener = tokio::net::TcpListener::bind(&cfg.bind_addr)
         .await

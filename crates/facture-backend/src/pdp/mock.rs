@@ -14,7 +14,11 @@ impl PdpProvider for MockProvider {
         "simulation"
     }
 
-    async fn send(&self, invoice: &Invoice) -> Result<SendResult, PdpError> {
+    async fn send(
+        &self,
+        invoice: &Invoice,
+        _account: Option<&str>,
+    ) -> Result<SendResult, PdpError> {
         let num = invoice.invoice_number.as_deref().unwrap_or("SANS-NUMERO");
         Ok(SendResult {
             id: format!("SIM-{num}"),

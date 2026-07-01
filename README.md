@@ -21,7 +21,7 @@ le Factur-X et gère l'e-reporting DGFiP.
 - ✅ **Phase 3 — Backend + PDP** : `crates/facture-backend` (Axum) — revalidation serveur + trait `PdpProvider` (impl B2Brouter + simulation), routes `/api/validate`, `/api/send`, `/api/status/:id`. Bouton **Envoyer** câblé (mode simulation par défaut).
 - ✅ **Phase 4 — Couche IA douce** : heuristiques déterministes locales (WASM, RGPD-safe) + couche LLM Mistral (backend, `/api/ai-check`, garde-fous, désactivable). Avertissements **jaunes** non bloquants intégrés au rapport et à la modale.
 - ✅ **Phase 5 — Import** : `crates/facture-backend/src/ocr` (extraction PDF via `pdf-extract` + structuration heuristique) + route `/api/import`. Banc d'essai : import de **texte** structuré **localement** (client, RGPD). Task pane : « Importer depuis PDF » (via backend).
-- ⏭️ **Phase 6** : durcissement (RGPD, sécurité, retries/idempotence, multi-tenant, packaging AppSource).
+- ✅ **Phase 6 — Durcissement** : auth par jeton (`APP_TOKEN`), idempotence des envois, retries réseau, multi-tenant (`X-Account-Id`), `Dockerfile`, doc [`DEPLOIEMENT.md`](./docs/DEPLOIEMENT.md) (sécurité, RGPD, AppSource, Word hors périmètre). **MVP fonctionnel.**
 
 ### 🔎 Démo en ligne
 

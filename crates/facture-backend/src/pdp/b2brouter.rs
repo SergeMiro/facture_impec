@@ -95,19 +95,23 @@ impl PdpProvider for B2BrouterProvider {
         "b2brouter"
     }
 
-    async fn send(&self, invoice: &Invoice) -> Result<SendResult, PdpError> {
-        let url = format!("{}/accounts/{}/invoices", self.base_url, self.account_id);
+    async fn send(&self, invoice: &Invoice, account: Option<&str>) -> Result<SendResult, PdpError> {
+        // Modèle reseller : compte cible = override par requête, sinon compte configuré.
+        let account_id = account.unwrap_or(&self.account_id);
+        let url = format!("{}/accounts/{}/invoices", self.base_url, account_id);
         let payload = self.map_invoice(invoice);
 
-        let resp = self
-            .client
-            .post(&url)
-            .header("X-B2B-API-Key", &self.api_key)
-            .header("X-B2B-API-Version", &self.api_version)
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| PdpError::Http(e.to_string()))?;
+        // Réessaie les erreurs réseau transitoires (backoff linéaire).
+        let resp = crate::util::retry(3, std::time::Duration::from_millis(200), || {
+            self.client
+                .post(&url)
+                .header("X-B2B-API-Key", &self.api_key)
+                .header("X-B2B-API-Version", &self.api_version)
+                .json(&payload)
+                .send()
+        })
+        .await
+        .map_err(|e| PdpError::Http(e.to_string()))?;
 
         let status = resp.status();
         let body: Value = resp
@@ -138,14 +142,15 @@ impl PdpProvider for B2BrouterProvider {
             "{}/accounts/{}/invoices/{}",
             self.base_url, self.account_id, id
         );
-        let resp = self
-            .client
-            .get(&url)
-            .header("X-B2B-API-Key", &self.api_key)
-            .header("X-B2B-API-Version", &self.api_version)
-            .send()
-            .await
-            .map_err(|e| PdpError::Http(e.to_string()))?;
+        let resp = crate::util::retry(3, std::time::Duration::from_millis(200), || {
+            self.client
+                .get(&url)
+                .header("X-B2B-API-Key", &self.api_key)
+                .header("X-B2B-API-Version", &self.api_version)
+                .send()
+        })
+        .await
+        .map_err(|e| PdpError::Http(e.to_string()))?;
 
         let status = resp.status();
         let body: Value = resp

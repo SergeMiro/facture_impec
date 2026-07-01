@@ -10,6 +10,8 @@ pub struct Config {
     pub b2b: Option<B2bConfig>,
     /// Présent si l'analyse IA est activée (clé Mistral) ; sinon couche LLM désactivée.
     pub ai: Option<AiConfig>,
+    /// Jeton attendu (Bearer) sur les routes mutantes ; `None` = ouvert (dev uniquement).
+    pub auth_token: Option<String>,
 }
 
 pub struct B2bConfig {
@@ -55,11 +57,14 @@ impl Config {
             None
         };
 
+        let auth_token = env::var("APP_TOKEN").ok().filter(|t| !t.is_empty());
+
         Config {
             bind_addr,
             allowed_origin,
             b2b,
             ai,
+            auth_token,
         }
     }
 }
