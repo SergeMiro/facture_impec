@@ -125,10 +125,13 @@ fn detect_currency(text: &str) -> Option<String> {
 
 /// Cherche le premier montant qui suit l'un des libellés donnés.
 fn find_amount(text: &str, labels: &[&str]) -> Option<Decimal> {
+    // On indexe et on découpe la MÊME chaîne (`lower`) : les libellés sont ASCII, donc
+    // `pos + label.len()` tombe sur une frontière de caractère de `lower` (pas de panique sur
+    // texte non-ASCII). Les montants ne contiennent que chiffres/séparateurs, insensibles à la casse.
     let lower = text.to_lowercase();
     for label in labels {
         if let Some(pos) = lower.find(label) {
-            let after = &text[pos + label.len()..];
+            let after = &lower[pos + label.len()..];
             if let Some(amount) = first_amount(after) {
                 return Some(amount);
             }

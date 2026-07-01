@@ -18,6 +18,15 @@ async fn main() {
 
     let cfg = Config::from_env();
 
+    // Sécurité (durcissement) : ne jamais exposer /api/send (envoi réel = coût + effet légal)
+    // sans authentification. Si une PDP réelle est configurée, un APP_TOKEN est obligatoire.
+    if cfg.b2b.is_some() && cfg.auth_token.is_none() {
+        panic!(
+            "APP_TOKEN est obligatoire lorsque B2Brouter est configuré : la route /api/send \
+             ne doit pas être ouverte sans jeton Bearer. Définissez la variable APP_TOKEN."
+        );
+    }
+
     let provider: Arc<dyn PdpProvider> = match &cfg.b2b {
         Some(b) => {
             tracing::info!("PDP : B2Brouter ({})", b.base_url);
