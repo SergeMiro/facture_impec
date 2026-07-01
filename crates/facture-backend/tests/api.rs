@@ -97,6 +97,25 @@ async fn send_valid_returns_simulated_id() {
 }
 
 #[tokio::test]
+async fn import_text_structures_invoice() {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let text =
+        "FACTURE n° F-2026-042\nDate : 01/09/2026\nSIRET 73282932000074\nTotal TTC : 120,00 €";
+    let body = serde_json::json!({
+        "content_base64": STANDARD.encode(text),
+        "content_type": "text/plain",
+    })
+    .to_string();
+
+    let (status, resp) = post_json("/api/import", body).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(resp["invoice"]["invoice_number"], "F-2026-042");
+    assert_eq!(resp["invoice"]["seller"]["siret"], "73282932000074");
+    // Sans lignes, la facture n'est pas encore envoyable : l'utilisateur complète.
+    assert_eq!(resp["report"]["is_sendable"], false);
+}
+
+#[tokio::test]
 async fn ai_check_disabled_returns_empty() {
     let (status, body) = post_json("/api/ai-check", valid_invoice_json()).await;
     assert_eq!(status, StatusCode::OK);

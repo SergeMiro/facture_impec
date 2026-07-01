@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Invoice, Issue, ValidationReport } from "@/lib/types";
 import { validateInvoice, wasmVersion } from "@/lib/validator";
 import { SCENARIOS, validInvoice } from "@/lib/scenarios";
+import { structureText } from "@/lib/importer";
 import { issuesByField } from "@/lib/ui";
 import ErrorModal from "@/components/ErrorModal";
 
@@ -14,6 +15,7 @@ export default function DemoPage() {
   const [modal, setModal] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [version, setVersion] = useState<string>("");
+  const [importText, setImportText] = useState("");
 
   useEffect(() => {
     wasmVersion().then(setVersion).catch(() => setVersion("?"));
@@ -60,6 +62,14 @@ export default function DemoPage() {
     if (!s) return;
     setActive(id);
     setInvoice(s.build());
+  }
+
+  function doImport() {
+    if (!importText.trim()) return;
+    setActive("import");
+    setInvoice(structureText(importText));
+    setToast("Facture importée localement — vérifiez et complétez les lignes.");
+    setTimeout(() => setToast(null), 4500);
   }
 
   async function openValidation() {
@@ -146,6 +156,35 @@ export default function DemoPage() {
               <span>{s.description}</span>
             </button>
           ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>Importer une facture (texte)</h2>
+        <p className="hint" style={{ marginTop: -4, marginBottom: 8 }}>
+          Collez le texte d'une facture (ou l'extraction d'un PDF). La structuration s'effectue
+          <b> localement</b> dans le navigateur — aucune donnée n'est envoyée. En-tête et totaux
+          sont remplis ; complétez les lignes. (L'import PDF direct passe par le backend.)
+        </p>
+        <textarea
+          value={importText}
+          onChange={(e) => setImportText(e.target.value)}
+          placeholder={"FACTURE n° F-2026-042\nDate : 01/09/2026\nSIRET 73282932000074\nTotal HT : 1 100,00 €\nTotal TVA : 220,00 €\nTotal TTC : 1 320,00 €"}
+          rows={5}
+          style={{
+            width: "100%",
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 13,
+            padding: 10,
+            border: "1px solid var(--line)",
+            borderRadius: 8,
+            resize: "vertical",
+          }}
+        />
+        <div className="actions" style={{ marginTop: 10 }}>
+          <button className="btn" onClick={doImport} disabled={!importText.trim()}>
+            Structurer et charger
+          </button>
         </div>
       </section>
 

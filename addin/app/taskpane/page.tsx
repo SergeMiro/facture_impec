@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ValidationReport } from "@/lib/types";
 import { validateInvoice } from "@/lib/validator";
-import { insertTemplate, readInvoice, highlightCells } from "@/lib/excelBridge";
+import { insertTemplate, readInvoice, highlightCells, writeInvoice } from "@/lib/excelBridge";
 import IssuePanel from "@/components/IssuePanel";
 
 type HostState = "loading" | "excel" | "browser";
@@ -66,6 +66,35 @@ export default function TaskPane() {
       setReport(r);
       await highlightCells(r);
     });
+  const onImportPdf = (file: File) =>
+    run(async () => {
+      setSent(null);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let bin = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+      }
+      const r = await fetch("/api/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          content_base64: btoa(bin),
+          content_type: file.type || "application/pdf",
+        }),
+      });
+      const body = await r.json();
+      if (!r.ok) {
+        throw new Error(body.message ?? `Import échoué (${r.status})`);
+      }
+      await writeInvoice(body.invoice);
+      const invoice = await readInvoice();
+      setInvoiceCache(invoice);
+      const rep = await validateInvoice(invoice);
+      setReport(rep);
+      await highlightCells(rep);
+    });
+
   const onSend = () =>
     run(async () => {
       const r = await fetch("/api/send", {
@@ -122,6 +151,19 @@ export default function TaskPane() {
               <button className="btn primary" onClick={onValidate} disabled={busy}>
                 Valider
               </button>
+              <label className="btn" style={{ cursor: "pointer" }}>
+                Importer depuis PDF
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onImportPdf(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
             </div>
             <p className="hint" style={{ marginTop: 8 }}>
               « Insérer le modèle » remplit une feuille « Facture » avec des plages nommées, puis

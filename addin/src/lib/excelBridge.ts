@@ -84,6 +84,19 @@ function setNested(obj: any, path: string, value: string) {
   cur[parts[parts.length - 1]] = value === "" ? null : value;
 }
 
+function getNested(obj: any, path: string): unknown {
+  const parts = path.split(".").flatMap((seg) => {
+    const m = seg.match(/^([^[]+)(\[(\d+)\])?$/);
+    return m && m[3] !== undefined ? [m[1], Number(m[3])] : [seg];
+  });
+  let cur: any = obj;
+  for (const p of parts) {
+    if (cur === null || cur === undefined) return undefined;
+    cur = cur[p];
+  }
+  return cur;
+}
+
 function emptyInvoice(): Invoice {
   return { seller: {}, buyer: {}, lines: [], vat_breakdown: [], totals: {} } as Invoice;
 }
@@ -146,6 +159,19 @@ export async function highlightCells(report: ValidationReport): Promise<void> {
       if (!cell) continue;
       sheet.getRange(cell).format.fill.color =
         issue.severity === "hard" ? FILL_HARD : FILL_SOFT;
+    }
+    await ctx.sync();
+  });
+}
+
+/// Écrit une Invoice (issue de l'import) dans la feuille : crée le modèle puis remplit les cellules.
+export async function writeInvoice(invoice: Invoice): Promise<void> {
+  await insertTemplate();
+  await Excel.run(async (ctx: any) => {
+    const sheet = ctx.workbook.worksheets.getItem(SHEET);
+    for (const f of FIELDS) {
+      const v = getNested(invoice, f.path);
+      sheet.getRange(f.cell).values = [[v ?? ""]];
     }
     await ctx.sync();
   });

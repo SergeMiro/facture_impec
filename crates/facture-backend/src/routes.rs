@@ -9,11 +9,14 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use base64::{engine::general_purpose::STANDARD, Engine};
 use facture_core::{validate, Invoice};
+use serde::Deserialize;
 use serde_json::json;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::ai::AiChecker;
+use crate::ocr::{self, HeuristicExtractor, InvoiceExtractor};
 use crate::pdp::PdpProvider;
 
 #[derive(Clone)]
@@ -29,6 +32,7 @@ pub fn router(state: AppState, allowed_origin: &str) -> Router {
         .route("/api/send", post(send_handler))
         .route("/api/status/:id", get(status_handler))
         .route("/api/ai-check", post(ai_check_handler))
+        .route("/api/import", post(import_handler))
         .layer(build_cors(allowed_origin))
         .with_state(state)
 }
@@ -80,6 +84,62 @@ async fn send_handler(
         )
             .into_response(),
     }
+}
+
+#[derive(Deserialize)]
+struct ImportReq {
+    /// Contenu du fichier encodé en base64 (PDF ou texte).
+    content_base64: String,
+    /// Type MIME indicatif (ex. "application/pdf", "text/plain").
+    #[serde(default)]
+    content_type: Option<String>,
+}
+
+/// Import : décode le fichier, extrait le texte (PDF ou brut), structure en `Invoice`, revalide.
+async fn import_handler(Json(req): Json<ImportReq>) -> impl IntoResponse {
+    let bytes = match STANDARD.decode(req.content_base64.trim()) {
+        Ok(b) => b,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "base64", "message": "Contenu base64 invalide." })),
+            )
+                .into_response()
+        }
+    };
+
+    let is_pdf = req
+        .content_type
+        .as_deref()
+        .map(|c| c.contains("pdf"))
+        .unwrap_or(false)
+        || ocr::looks_like_pdf(&bytes);
+
+    let text = if is_pdf {
+        match ocr::pdf_to_text(&bytes) {
+            Ok(t) => t,
+            Err(e) => {
+                return (
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    Json(json!({ "error": "pdf", "message": e.to_string() })),
+                )
+                    .into_response()
+            }
+        }
+    } else {
+        String::from_utf8_lossy(&bytes).to_string()
+    };
+
+    let invoice = HeuristicExtractor.structure(&text);
+    let report = validate(&invoice);
+    let preview: String = text.chars().take(600).collect();
+
+    Json(json!({
+        "invoice": invoice,
+        "report": report,
+        "text_preview": preview,
+    }))
+    .into_response()
 }
 
 /// Couche IA douce : renvoie des avertissements jaunes (jamais bloquant).

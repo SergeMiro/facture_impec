@@ -12,6 +12,7 @@ description = "Backend Axum de Facture Impec : revalidation serveur + envoi via 
 facture-core = { path = "../facture-core" }
 serde.workspace = true
 serde_json.workspace = true
+rust_decimal.workspace = true
 axum = "0.7"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 tower-http = { version = "0.5", features = ["cors", "trace"] }
@@ -20,7 +21,11 @@ thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+pdf-extract = "0.7"
+regex = "1"
+base64 = "0.22"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+base64 = "0.22"
