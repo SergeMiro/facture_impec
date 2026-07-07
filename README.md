@@ -33,6 +33,80 @@ le Factur-X et gère l'e-reporting DGFiP.
 Le même moteur Rust (compilé en WASM) valide la facture côté navigateur ; la démo montre le
 surlignage rouge/jaune et la modale *Corriger / Envoyer quand même* (§6.4/6.5).
 
+## Tester le complément dans Excel
+
+Le complément est **déjà déployé** (task pane + manifeste servis depuis Vercel) : aucun serveur
+local à lancer. Tester en conditions réelles = **sideload** (chargement manuel) du manifeste.
+Pas besoin de publier sur AppSource pour cela.
+
+- **Manifeste à charger** : <https://facture-impec.vercel.app/manifest.xml> (téléchargez-le d'abord).
+- **Version** : `1.0.0.0` — validée par `office-addin-manifest validate` (*« The manifest is valid »*).
+- Excel ne fonctionne **pas sous Linux** : utilisez **Excel sur le web** (n'importe quel OS) ou
+  **Excel Desktop** sous Windows / macOS.
+
+### Option A — Excel sur le web (le plus simple)
+
+Nécessite un compte Microsoft 365 prenant en charge les compléments.
+
+1. Ouvrez <https://excel.office.com> → nouveau classeur vierge.
+2. Onglet **Insertion** → **Compléments** (*Add-ins*) → **Charger mon complément** (*Upload My Add-in*).
+3. Sélectionnez le fichier `manifest.xml` téléchargé → **Charger**.
+4. Onglet **Accueil** : le groupe **Facture Impec** apparaît → bouton **« Valider la facture »** ouvre le task pane.
+
+### Option B — Excel Desktop sous Windows (catalogue de dossier partagé)
+
+1. Créez un dossier, ex. `C:\office-addins`.
+2. Partagez-le en réseau : clic droit → **Propriétés** → **Partage** → **Partager…** → ajoutez votre
+   utilisateur. Notez le chemin **UNC** affiché, du type `\\NOM-PC\office-addins`.
+   ⚠️ Excel exige un chemin réseau `\\…`, un chemin local `C:\…` ne fonctionne **pas**.
+3. Copiez `manifest.xml` dans ce dossier.
+4. Excel → **Fichier** → **Options** → **Centre de gestion de la confidentialité** →
+   **Paramètres…** → **Catalogues de compléments approuvés** → collez le chemin UNC →
+   **Ajouter le catalogue** → cochez **Afficher dans le menu** → **OK**.
+5. **Redémarrez Excel** complètement.
+6. **Insertion** → flèche sous **Mes compléments** → onglet **Dossier partagé** (*Shared Folder*) →
+   **Facture Impec** → **Ajouter**.
+
+### Option C — Excel Desktop sous macOS
+
+Copiez `manifest.xml` dans le dossier de sideload puis redémarrez Excel :
+
+```
+~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/
+```
+
+Puis **Insertion** → **Mes compléments** → **Facture Impec**.
+
+### Ce que vous verrez (mode MVP)
+
+- Le task pane (fr-FR) se charge depuis la production Vercel.
+- La **validation EN 16931 / FR fonctionne réellement** (moteur Rust → WASM, côté client) :
+  surlignage **rouge** (erreurs bloquantes) et **jaune** (suspicions IA, non bloquantes).
+- L'**envoi** est en **mode simulation** (`/api/send` → SIM) faute de clé B2Brouter ;
+  la couche IA est **désactivée** (`/api/ai-check` → disabled) ; l'import PDF via backend renvoie
+  `501` (backend non déployé). Le parcours UX complet passe, mais **aucun envoi réel** vers une
+  plateforme payante n'a lieu.
+
+### Vérifier le manifeste avant de charger
+
+```bash
+npx --yes office-addin-manifest validate manifest.xml
+```
+
+### Dépannage (Windows)
+
+- **Le complément n'apparaît pas dans « Dossier partagé »** → le dossier n'est pas réellement
+  partagé (pas de chemin UNC `\\…`), ou Excel n'a pas été redémarré.
+- **Task pane blanc** → clic droit dans le panneau → **Inspecter** pour voir la console
+  (peu probable : la production répond `200`).
+- La découverte réseau doit être activée (réseau privé/professionnel).
+
+### Passer en envoi réel
+
+Voir [`docs/DEPLOIEMENT.md`](./docs/DEPLOIEMENT.md) : déployer `facture-backend` (Docker/VPS) avec
+`B2BROUTER_API_KEY` / `_ACCOUNT_ID` / `_BASE_URL`, puis définir `BACKEND_URL` (+ `BACKEND_TOKEN`)
+sur Vercel pour que `/api/send` relaie vers la plateforme agréée.
+
 ## Positionnement légal
 
 Facture Impec est une **Solution Compatible (SC) / Opérateur de Dématérialisation (OD)** — **pas**
