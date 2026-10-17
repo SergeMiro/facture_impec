@@ -1,0 +1,6 @@
+{
+  "app.title": "Facture Impec",
+  "app.tagline": "Vos factures électroniques, directement depuis Excel.",
+  "app.underConstruction": "Le complément est en cours de construction. Rien n'est envoyé pour l'instant.",
+  "banner.testMode": "Mode test : aucune facture n'est envoyée à une vraie plateforme."
+}

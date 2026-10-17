@@ -1,29 +1,25 @@
-# ── Rust / Cargo ───────────────────────────────────────────────
-debug/
-target/
-**/*.rs.bk
-*.pdb
-**/mutants.out*/
-
-# ── WASM build (Phase 2) ───────────────────────────────────────
-crates/facture-wasm/pkg/
-addin/src/core/wasm/
-
-# ── Node / Office Add-in (Phase 2) ─────────────────────────────
+# ── Node / pnpm / Turborepo ────────────────────────────────────
 node_modules/
-addin/dist/
-addin/.webpack/
+dist/
+coverage/
+.turbo/
+*.tsbuildinfo
 npm-debug.log*
-yarn-error.log*
+pnpm-debug.log*
 
-# ── Secrets / env (ne JAMAIS committer — cf. §12) ──────────────
+# ── Legacy Rust MVP (frozen in legacy/rust-mvp, see its README) ─
+target/
+legacy/rust-mvp/crates/facture-wasm/pkg/
+legacy/rust-mvp/addin/.next/
+
+# ── Secrets / env (never commit) ───────────────────────────────
 .env
 .env.*
 !.env.example
 *.pem
 *.key
 
-# ── Éditeurs / OS ──────────────────────────────────────────────
+# ── Editors / OS ───────────────────────────────────────────────
 .idea/
 .vscode/
 .DS_Store
