@@ -14,16 +14,58 @@ Each milestone restates its acceptance criteria before work starts and checks th
 | CI green on an empty test | ✅ locally | `pnpm verify`: biome ci clean, 8/8 typecheck, 8/8 test tasks (6 tests). GitHub Actions is disabled on the account, so CI cannot run there. |
 | `pnpm install && pnpm test && pnpm dev` works on a fresh machine following `RUNBOOK.md` | ✅ | 2026-10-17, clean `node:22` container (Node 22.23.3, pnpm 11.8.0 via corepack), no caches: install 59 packages, 8/8 test tasks green, `/health` of api and mock-pdp answer, add-in page served |
 
-## M1 — carry-over from M0
+## M1 — Core (started 2026-10-17)
 
-Every rule id of the Rust core must exist in `packages/core` with a passing and a failing fixture
-before `legacy/` is deleted:
+Plan §11: « `packages/core`: invoice model, rules (§7), CII + UBL builders, Factur-X PDF embedding,
+state machine, money math. Acceptance: 25 golden invoices round-trip; 60+ invalid fixtures each hit
+the expected rule id; coverage ≥ 90 % on core. »
 
-- EN 16931 presence: BR-02 BR-03 BR-04 BR-05 BR-06 BR-07 BR-08 BR-09 BR-10 BR-11 BR-12 BR-13 BR-14 BR-15 BR-16
-- EN 16931 calculation: BR-CO-10 BR-CO-13 BR-CO-14 BR-CO-15 BR-CO-16 BR-CO-17
-- VAT categories: BR-S-05 BR-Z-05 BR-E-05 BR-E-10 BR-AE-05 BR-AE-10
-- Decimals: BR-DEC (generic in Rust; split into the exact BR-DEC-* ids per BT)
-- French formats: FR-SIREN-LUHN FR-SIRET-LUHN FR-TVA-KEY FR-IBAN FR-MENTIONS-ID
-- Own checks: FF-CURRENCY-FORMAT FF-DATE-FORMAT FF-LINE-CALC
-- Soft heuristics (warnings): AI-DATE-LOGIC AI-CURRENCY AI-VAT-RATE AI-ROUND-AMOUNT — keep the
-  deterministic ones as `warning` rules under plan §7 "Sanity", renamed to `FF-` ids
+How each criterion is read here:
+
+- **Round-trip** = invoice model → XML → model gives back the same invoice, in CII and in UBL, and the
+  XML equals the committed expected file. The plan's `fixtures/golden/*.xlsx` input belongs to the
+  MappingAgent (M3); in M1 the golden input is the invoice model as JSON (logged in `DEFERRED.md`).
+- **Rules** follow `docs/research/FR_RULES.md` (sources checked 2026-10-17). Official ids where they
+  exist (BR-xx, BR-CO-xx, BR-FR-xx), `FF-` for our own checks. `docs/RULES.md` is generated from the
+  code and a test fails when it is out of date.
+- **Fixtures**: every rule has at least one failing case in `fixtures/invalid` and passes on at least
+  one golden invoice where it applies (plan §7 "Tests").
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Invoice model (EN 16931 semantic model, Zod) | | |
+| Money math in integer cents, no floats | | |
+| Rules of plan §7: EN 16931 BR / BR-CO / VAT categories / BR-CL, French rules, the 4 reform mentions, sanity | | |
+| `docs/RULES.md`: id, severity, message, fix hint, auto-fixable | | |
+| CII (Factur-X EN 16931 profile) and UBL 2.1 builders and parsers | | |
+| Factur-X PDF embedding | | |
+| State machine: exhaustive transition table, tested | | |
+| 25 golden invoices round-trip | | |
+| 60+ invalid fixtures, each hits its expected rule id | | |
+| Every rule has a failing and a passing fixture | | |
+| Generated XML passes the official CEN EN 16931 v1.3.16 and FNFE BR-FR v1.4.0.04 schematrons | | |
+| Coverage ≥ 90 % on `packages/core` | | |
+| Every Rust rule has an equivalent (table below), then `legacy/` is deleted | | |
+
+### Rust rules → TypeScript
+
+Carried over from M0. Renamed ids follow `FR_RULES.md`; the rule behind them is the same or stricter.
+
+| Rust id | TypeScript id | Note |
+|---|---|---|
+| BR-02 … BR-16 | same | |
+| BR-CO-10, 13, 14, 15, 16, 17 | same | |
+| BR-S-05, BR-Z-05, BR-E-05, BR-E-10, BR-AE-05, BR-AE-10 | same | |
+| BR-DEC (generic) | BR-FR-DEC-01 … 04 | amounts, quantities, unit prices, VAT rates |
+| FR-SIREN-LUHN | FF-SIREN-01 | |
+| FR-SIRET-LUHN | FF-SIRET-01 | warning, with the La Poste exception (FR_RULES Q5) |
+| FR-TVA-KEY | FF-VAT-02 | |
+| FR-IBAN | FF-IBAN-01 | |
+| FR-MENTIONS-ID (seller SIREN or SIRET) | BR-FR-10 | the seller SIREN is now mandatory on its own |
+| FF-CURRENCY-FORMAT | BR-CL-03 | checks the ISO 4217 list, not only the shape |
+| FF-DATE-FORMAT | FF-FMT-03 | |
+| FF-LINE-CALC | same | |
+| AI-DATE-LOGIC (warning) | BR-FR-CO-07 (error) | AFNOR makes due date ≥ issue date blocking |
+| AI-CURRENCY | FF-CUR-01 (warning) | |
+| AI-VAT-RATE | FF-RATE-02 (warning) | legal but unusual rates; illegal ones are BR-FR-16 |
+| AI-ROUND-AMOUNT | dropped | flags every legitimate flat fee of 1 000 €; no rule behind it |
