@@ -40,11 +40,13 @@ French message. Optional: `TRIAL_NOTIFY_TELEGRAM_BOT_TOKEN` + `TRIAL_NOTIFY_TELE
 Read new requests: Supabase table editor → `trial_requests` (newest first); set `status` to
 `contacted`, `active` or `declined` as you go.
 
-Deploy (the Vercel project is not linked to git; deploy from the CLI):
+Deploy (the Vercel project is not linked to git; deploy from the CLI). Build with Astro, whose Vercel
+adapter writes `apps/site/.vercel/output`; do not use `vercel build`, which applies the project's
+remote settings (still Next.js from the old MVP) and fails:
 
 ```bash
-cd apps/site && npx vercel build && npx vercel deploy --prebuilt          # preview URL
-npx vercel deploy --prebuilt --prod                                        # production, after review
+pnpm --filter @fi/site build && (cd apps/site && npx vercel deploy --prebuilt --yes)   # preview URL
+(cd apps/site && npx vercel deploy --prebuilt --prod --yes)                           # production, after review
 ```
 
 Before production: fill the publisher identity in `apps/site/src/content/site.ts` (`legal`) and set
