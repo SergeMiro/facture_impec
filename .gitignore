@@ -24,3 +24,7 @@ legacy/rust-mvp/addin/.next/
 .vscode/
 .DS_Store
 *~
+
+# Astro / Vercel build output (apps/site)
+.astro
+.vercel

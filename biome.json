@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!!legacy"]
+    "includes": ["**", "!!legacy", "!!packages/core/vendor"]
   },
   "formatter": {
     "indentStyle": "space",
@@ -25,5 +25,17 @@
         "noExplicitAny": "error"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/core/src/**", "!packages/core/src/**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noNodejsModules": "error"
+          }
+        }
+      }
+    }
+  ]
 }
