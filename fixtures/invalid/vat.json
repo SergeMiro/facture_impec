@@ -1,0 +1,773 @@
+{
+  "cases": [
+    {
+      "rule": "BR-S-01",
+      "base": "14-document-allowance-charge",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown": []
+      }
+    },
+    {
+      "rule": "BR-S-02",
+      "base": "14-document-allowance-charge",
+      "unset": ["seller.vatId"]
+    },
+    {
+      "rule": "BR-S-03",
+      "base": "14-document-allowance-charge",
+      "unset": ["seller.vatId"]
+    },
+    {
+      "rule": "BR-S-04",
+      "base": "14-document-allowance-charge",
+      "unset": ["seller.vatId"]
+    },
+    {
+      "rule": "BR-S-05",
+      "base": "14-document-allowance-charge",
+      "set": {
+        "lines[0].vat.rate": "0"
+      }
+    },
+    {
+      "rule": "BR-S-06",
+      "base": "14-document-allowance-charge",
+      "set": {
+        "allowances": [
+          {
+            "amount": 1000,
+            "reason": "Geste commercial",
+            "vatCategory": "S",
+            "vatRate": "0"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-S-07",
+      "base": "14-document-allowance-charge",
+      "set": {
+        "charges": [
+          {
+            "amount": 1000,
+            "reason": "Frais de dossier",
+            "vatCategory": "S",
+            "vatRate": "0"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-S-08",
+      "base": "14-document-allowance-charge",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxableAmount": 100
+      }
+    },
+    {
+      "rule": "BR-S-09",
+      "base": "14-document-allowance-charge",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxAmount": 100000
+      }
+    },
+    {
+      "rule": "BR-S-10",
+      "base": "14-document-allowance-charge",
+      "set": {
+        "vatExemptions": [
+          {
+            "category": "S",
+            "reason": "Exonération"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-Z-01",
+      "base": "09-zero-rated",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown": []
+      }
+    },
+    {
+      "rule": "BR-Z-02",
+      "base": "09-zero-rated",
+      "unset": ["seller.vatId"]
+    },
+    {
+      "rule": "BR-Z-03",
+      "base": "09-zero-rated",
+      "set": {
+        "allowances": [
+          {
+            "amount": 1000,
+            "reason": "Geste commercial",
+            "vatCategory": "Z",
+            "vatRate": "0"
+          }
+        ]
+      },
+      "unset": ["seller.vatId"]
+    },
+    {
+      "rule": "BR-Z-04",
+      "base": "09-zero-rated",
+      "set": {
+        "charges": [
+          {
+            "amount": 1000,
+            "reason": "Frais de dossier",
+            "vatCategory": "Z",
+            "vatRate": "0"
+          }
+        ]
+      },
+      "unset": ["seller.vatId"]
+    },
+    {
+      "rule": "BR-Z-05",
+      "base": "09-zero-rated",
+      "set": {
+        "lines[0].vat.rate": "20"
+      }
+    },
+    {
+      "rule": "BR-Z-06",
+      "base": "09-zero-rated",
+      "set": {
+        "allowances": [
+          {
+            "amount": 1000,
+            "reason": "Geste commercial",
+            "vatCategory": "Z",
+            "vatRate": "20"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-Z-07",
+      "base": "09-zero-rated",
+      "set": {
+        "charges": [
+          {
+            "amount": 1000,
+            "reason": "Frais de dossier",
+            "vatCategory": "Z",
+            "vatRate": "20"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-Z-08",
+      "base": "09-zero-rated",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxableAmount": 100
+      }
+    },
+    {
+      "rule": "BR-Z-09",
+      "base": "09-zero-rated",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxAmount": 100
+      }
+    },
+    {
+      "rule": "BR-Z-10",
+      "base": "09-zero-rated",
+      "set": {
+        "vatExemptions": [
+          {
+            "category": "Z",
+            "reason": "Exonération"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-E-01",
+      "base": "04-franchise-293b",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown": []
+      }
+    },
+    {
+      "rule": "BR-E-02",
+      "base": "04-franchise-293b",
+      "unset": ["seller.taxRegistrationId"]
+    },
+    {
+      "rule": "BR-E-03",
+      "base": "04-franchise-293b",
+      "set": {
+        "allowances": [
+          {
+            "amount": 1000,
+            "reason": "Geste commercial",
+            "vatCategory": "E",
+            "vatRate": "0"
+          }
+        ]
+      },
+      "unset": ["seller.taxRegistrationId"]
+    },
+    {
+      "rule": "BR-E-04",
+      "base": "04-franchise-293b",
+      "set": {
+        "charges": [
+          {
+            "amount": 1000,
+            "reason": "Frais de dossier",
+            "vatCategory": "E",
+            "vatRate": "0"
+          }
+        ]
+      },
+      "unset": ["seller.taxRegistrationId"]
+    },
+    {
+      "rule": "BR-E-05",
+      "base": "04-franchise-293b",
+      "set": {
+        "lines[0].vat.rate": "20"
+      }
+    },
+    {
+      "rule": "BR-E-06",
+      "base": "04-franchise-293b",
+      "set": {
+        "allowances": [
+          {
+            "amount": 1000,
+            "reason": "Geste commercial",
+            "vatCategory": "E",
+            "vatRate": "20"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-E-07",
+      "base": "04-franchise-293b",
+      "set": {
+        "charges": [
+          {
+            "amount": 1000,
+            "reason": "Frais de dossier",
+            "vatCategory": "E",
+            "vatRate": "20"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-E-08",
+      "base": "04-franchise-293b",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxableAmount": 100
+      }
+    },
+    {
+      "rule": "BR-E-09",
+      "base": "04-franchise-293b",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxAmount": 100
+      }
+    },
+    {
+      "rule": "BR-E-10",
+      "base": "04-franchise-293b",
+      "set": {
+        "vatExemptions": []
+      }
+    },
+    {
+      "rule": "BR-AE-01",
+      "base": "05-reverse-charge-construction",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown": []
+      }
+    },
+    {
+      "rule": "BR-AE-02",
+      "base": "05-reverse-charge-construction",
+      "unset": ["seller.vatId"]
+    },
+    {
+      "rule": "BR-AE-03",
+      "base": "05-reverse-charge-construction",
+      "set": {
+        "allowances": [
+          {
+            "amount": 1000,
+            "reason": "Geste commercial",
+            "vatCategory": "AE",
+            "vatRate": "0"
+          }
+        ]
+      },
+      "unset": ["seller.vatId"]
+    },
+    {
+      "rule": "BR-AE-04",
+      "base": "05-reverse-charge-construction",
+      "set": {
+        "charges": [
+          {
+            "amount": 1000,
+            "reason": "Frais de dossier",
+            "vatCategory": "AE",
+            "vatRate": "0"
+          }
+        ]
+      },
+      "unset": ["seller.vatId"]
+    },
+    {
+      "rule": "BR-AE-05",
+      "base": "05-reverse-charge-construction",
+      "set": {
+        "lines[0].vat.rate": "20"
+      }
+    },
+    {
+      "rule": "BR-AE-06",
+      "base": "05-reverse-charge-construction",
+      "set": {
+        "allowances": [
+          {
+            "amount": 1000,
+            "reason": "Geste commercial",
+            "vatCategory": "AE",
+            "vatRate": "20"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-AE-07",
+      "base": "05-reverse-charge-construction",
+      "set": {
+        "charges": [
+          {
+            "amount": 1000,
+            "reason": "Frais de dossier",
+            "vatCategory": "AE",
+            "vatRate": "20"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-AE-08",
+      "base": "05-reverse-charge-construction",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxableAmount": 100
+      }
+    },
+    {
+      "rule": "BR-AE-09",
+      "base": "05-reverse-charge-construction",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxAmount": 100
+      }
+    },
+    {
+      "rule": "BR-AE-10",
+      "base": "05-reverse-charge-construction",
+      "set": {
+        "vatExemptions": []
+      }
+    },
+    {
+      "rule": "BR-IC-01",
+      "base": "06-intra-eu-supply",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown": []
+      }
+    },
+    {
+      "rule": "BR-IC-02",
+      "base": "06-intra-eu-supply",
+      "unset": ["buyer.vatId"]
+    },
+    {
+      "rule": "BR-IC-03",
+      "base": "06-intra-eu-supply",
+      "set": {
+        "allowances": [
+          {
+            "amount": 1000,
+            "reason": "Geste commercial",
+            "vatCategory": "K",
+            "vatRate": "0"
+          }
+        ]
+      },
+      "unset": ["buyer.vatId"]
+    },
+    {
+      "rule": "BR-IC-04",
+      "base": "06-intra-eu-supply",
+      "set": {
+        "charges": [
+          {
+            "amount": 1000,
+            "reason": "Frais de dossier",
+            "vatCategory": "K",
+            "vatRate": "0"
+          }
+        ]
+      },
+      "unset": ["buyer.vatId"]
+    },
+    {
+      "rule": "BR-IC-05",
+      "base": "06-intra-eu-supply",
+      "set": {
+        "lines[0].vat.rate": "20"
+      }
+    },
+    {
+      "rule": "BR-IC-06",
+      "base": "06-intra-eu-supply",
+      "set": {
+        "allowances": [
+          {
+            "amount": 1000,
+            "reason": "Geste commercial",
+            "vatCategory": "K",
+            "vatRate": "20"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-IC-07",
+      "base": "06-intra-eu-supply",
+      "set": {
+        "charges": [
+          {
+            "amount": 1000,
+            "reason": "Frais de dossier",
+            "vatCategory": "K",
+            "vatRate": "20"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-IC-08",
+      "base": "06-intra-eu-supply",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxableAmount": 100
+      }
+    },
+    {
+      "rule": "BR-IC-09",
+      "base": "06-intra-eu-supply",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxAmount": 100
+      }
+    },
+    {
+      "rule": "BR-IC-10",
+      "base": "06-intra-eu-supply",
+      "set": {
+        "vatExemptions": []
+      }
+    },
+    {
+      "rule": "BR-G-01",
+      "base": "07-export-outside-eu",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown": []
+      }
+    },
+    {
+      "rule": "BR-G-02",
+      "base": "07-export-outside-eu",
+      "unset": ["seller.vatId"]
+    },
+    {
+      "rule": "BR-G-03",
+      "base": "07-export-outside-eu",
+      "set": {
+        "allowances": [
+          {
+            "amount": 1000,
+            "reason": "Geste commercial",
+            "vatCategory": "G",
+            "vatRate": "0"
+          }
+        ]
+      },
+      "unset": ["seller.vatId"]
+    },
+    {
+      "rule": "BR-G-04",
+      "base": "07-export-outside-eu",
+      "set": {
+        "charges": [
+          {
+            "amount": 1000,
+            "reason": "Frais de dossier",
+            "vatCategory": "G",
+            "vatRate": "0"
+          }
+        ]
+      },
+      "unset": ["seller.vatId"]
+    },
+    {
+      "rule": "BR-G-05",
+      "base": "07-export-outside-eu",
+      "set": {
+        "lines[0].vat.rate": "20"
+      }
+    },
+    {
+      "rule": "BR-G-06",
+      "base": "07-export-outside-eu",
+      "set": {
+        "allowances": [
+          {
+            "amount": 1000,
+            "reason": "Geste commercial",
+            "vatCategory": "G",
+            "vatRate": "20"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-G-07",
+      "base": "07-export-outside-eu",
+      "set": {
+        "charges": [
+          {
+            "amount": 1000,
+            "reason": "Frais de dossier",
+            "vatCategory": "G",
+            "vatRate": "20"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-G-08",
+      "base": "07-export-outside-eu",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxableAmount": 100
+      }
+    },
+    {
+      "rule": "BR-G-09",
+      "base": "07-export-outside-eu",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxAmount": 100
+      }
+    },
+    {
+      "rule": "BR-G-10",
+      "base": "07-export-outside-eu",
+      "set": {
+        "vatExemptions": []
+      }
+    },
+    {
+      "rule": "BR-O-01",
+      "base": "08-out-of-scope-association",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown": []
+      }
+    },
+    {
+      "rule": "BR-O-02",
+      "base": "08-out-of-scope-association",
+      "set": {
+        "buyer.vatId": "FR37200000008"
+      }
+    },
+    {
+      "rule": "BR-O-03",
+      "base": "08-out-of-scope-association",
+      "set": {
+        "allowances": [
+          {
+            "amount": 1000,
+            "reason": "Geste commercial",
+            "vatCategory": "O"
+          }
+        ],
+        "buyer.vatId": "FR37200000008"
+      }
+    },
+    {
+      "rule": "BR-O-04",
+      "base": "08-out-of-scope-association",
+      "set": {
+        "charges": [
+          {
+            "amount": 1000,
+            "reason": "Frais de dossier",
+            "vatCategory": "O"
+          }
+        ],
+        "buyer.vatId": "FR37200000008"
+      }
+    },
+    {
+      "rule": "BR-O-05",
+      "base": "08-out-of-scope-association",
+      "set": {
+        "lines[0].vat.rate": "0"
+      }
+    },
+    {
+      "rule": "BR-O-06",
+      "base": "08-out-of-scope-association",
+      "set": {
+        "allowances": [
+          {
+            "amount": 1000,
+            "reason": "Geste commercial",
+            "vatCategory": "O",
+            "vatRate": "0"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-O-07",
+      "base": "08-out-of-scope-association",
+      "set": {
+        "charges": [
+          {
+            "amount": 1000,
+            "reason": "Frais de dossier",
+            "vatCategory": "O",
+            "vatRate": "0"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-O-08",
+      "base": "08-out-of-scope-association",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxableAmount": 100
+      }
+    },
+    {
+      "rule": "BR-O-09",
+      "base": "08-out-of-scope-association",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxAmount": 100
+      }
+    },
+    {
+      "rule": "BR-O-10",
+      "base": "08-out-of-scope-association",
+      "set": {
+        "vatExemptions": []
+      }
+    },
+    {
+      "rule": "BR-IC-11",
+      "base": "06-intra-eu-supply",
+      "unset": ["delivery.date"]
+    },
+    {
+      "rule": "BR-IC-12",
+      "base": "06-intra-eu-supply",
+      "unset": ["delivery.address.country"]
+    },
+    {
+      "rule": "BR-O-11",
+      "base": "08-out-of-scope-association",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[1]": {
+          "category": "S",
+          "rate": "20",
+          "taxableAmount": 0,
+          "taxAmount": 0
+        }
+      }
+    },
+    {
+      "rule": "BR-O-12",
+      "base": "08-out-of-scope-association",
+      "set": {
+        "lines[1]": {
+          "id": "2",
+          "quantity": "1",
+          "unitCode": "C62",
+          "price": {
+            "net": "10.00"
+          },
+          "vat": {
+            "category": "S",
+            "rate": "20"
+          },
+          "item": {
+            "name": "Badge"
+          }
+        }
+      }
+    },
+    {
+      "rule": "BR-O-13",
+      "base": "08-out-of-scope-association",
+      "set": {
+        "allowances": [
+          {
+            "amount": 1000,
+            "reason": "Geste commercial",
+            "vatCategory": "S",
+            "vatRate": "20"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-O-14",
+      "base": "08-out-of-scope-association",
+      "set": {
+        "charges": [
+          {
+            "amount": 1000,
+            "reason": "Frais de dossier",
+            "vatCategory": "S",
+            "vatRate": "20"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "cases": [
+    {
+      "rule": "BR-CL-01",
+      "base": "01-services-standard-rate",
+      "set": {
+        "typeCode": "999"
+      }
+    },
+    {
+      "rule": "BR-CL-03",
+      "base": "01-services-standard-rate",
+      "set": {
+        "currency": "ZZZ"
+      }
+    },
+    {
+      "rule": "BR-CL-04",
+      "base": "01-services-standard-rate",
+      "set": {
+        "vatCurrency": "ZZZ",
+        "taxTotalAccountingCurrency": 27000
+      }
+    },
+    {
+      "rule": "BR-CL-08",
+      "base": "01-services-standard-rate",
+      "set": {
+        "notes[3]": {
+          "subjectCode": "NOPE",
+          "text": "Note libre"
+        }
+      }
+    },
+    {
+      "rule": "BR-CL-10",
+      "base": "01-services-standard-rate",
+      "set": {
+        "seller.ids[0].scheme": "9999"
+      }
+    },
+    {
+      "rule": "BR-CL-11",
+      "base": "01-services-standard-rate",
+      "set": {
+        "buyer.legalId.scheme": "9999"
+      }
+    },
+    {
+      "rule": "BR-CL-14",
+      "base": "01-services-standard-rate",
+      "set": {
+        "seller.address.country": "XX"
+      }
+    },
+    {
+      "rule": "BR-CL-15",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].item.originCountry": "XX"
+      }
+    },
+    {
+      "rule": "BR-CL-16",
+      "base": "01-services-standard-rate",
+      "set": {
+        "payment.meansCode": "999"
+      }
+    },
+    {
+      "rule": "BR-CL-17",
+      "base": "14-document-allowance-charge",
+      "set": {
+        "allowances[0].vatCategory": "X"
+      }
+    },
+    {
+      "rule": "BR-CL-18",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].vat.category": "X"
+      }
+    },
+    {
+      "rule": "BR-CL-19",
+      "base": "14-document-allowance-charge",
+      "set": {
+        "allowances[0].reasonCode": "999"
+      }
+    },
+    {
+      "rule": "BR-CL-20",
+      "base": "14-document-allowance-charge",
+      "set": {
+        "charges[0].reasonCode": "NOPE"
+      }
+    },
+    {
+      "rule": "BR-CL-21",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].item.standardId": {
+          "id": "1",
+          "scheme": "9999"
+        }
+      }
+    },
+    {
+      "rule": "BR-CL-22",
+      "base": "04-franchise-293b",
+      "set": {
+        "vatExemptions[0].code": "VATEX-FR-XX"
+      }
+    },
+    {
+      "rule": "BR-CL-23",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].unitCode": "ZZZ"
+      }
+    },
+    {
+      "rule": "BR-CL-25",
+      "base": "01-services-standard-rate",
+      "set": {
+        "seller.electronicAddress.scheme": "ZZZZ"
+      }
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "description": "Prix au cent avec prix brut et rabais unitaire.",
+  "draft": {
+    "processType": "B1",
+    "number": "F2026-0060",
+    "issueDate": "2026-10-15",
+    "typeCode": "380",
+    "currency": "EUR",
+    "dueDate": "2026-11-14",
+    "paymentTerms": "Paiement à 30 jours par virement.",
+    "notes": [
+      {
+        "subjectCode": "PMT",
+        "text": "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €."
+      },
+      {
+        "subjectCode": "PMD",
+        "text": "Pénalités de retard : trois fois le taux d'intérêt légal."
+      },
+      {
+        "subjectCode": "AAB",
+        "text": "Escompte pour paiement anticipé : néant."
+      }
+    ],
+    "seller": {
+      "name": "Atelier Dupont SARL",
+      "ids": [
+        {
+          "id": "10000000900017",
+          "scheme": "0009"
+        }
+      ],
+      "legalId": {
+        "id": "100000009",
+        "scheme": "0002"
+      },
+      "vatId": "FR88100000009",
+      "electronicAddress": {
+        "id": "100000009",
+        "scheme": "0225"
+      },
+      "address": {
+        "line1": "12 rue des Lilas",
+        "city": "Dijon",
+        "postCode": "21000",
+        "country": "FR"
+      }
+    },
+    "buyer": {
+      "name": "Boulangerie Martin SAS",
+      "legalId": {
+        "id": "200000008",
+        "scheme": "0002"
+      },
+      "vatId": "FR37200000008",
+      "electronicAddress": {
+        "id": "200000008",
+        "scheme": "0225"
+      },
+      "address": {
+        "line1": "3 place du Marché",
+        "city": "Beaune",
+        "postCode": "21200",
+        "country": "FR"
+      }
+    },
+    "delivery": {
+      "date": "2026-10-10"
+    },
+    "payment": {
+      "meansCode": "30",
+      "accounts": [
+        {
+          "iban": "FR7630006000011234567890189",
+          "name": "Atelier Dupont SARL"
+        }
+      ]
+    },
+    "lines": [
+      {
+        "id": "1",
+        "quantity": "2500",
+        "unitCode": "C62",
+        "price": {
+          "net": "12.50",
+          "gross": "15.00",
+          "discount": "2.50",
+          "baseQuantity": "100",
+          "baseUnitCode": "C62"
+        },
+        "vat": {
+          "category": "S",
+          "rate": "20"
+        },
+        "item": {
+          "name": "Sachet kraft 1 kg"
+        },
+        "nature": "goods"
+      }
+    ]
+  }
+}

@@ -1,0 +1,475 @@
+{
+  "cases": [
+    {
+      "rule": "FF-FMT-01",
+      "base": "01-services-standard-rate",
+      "set": {
+        "number": " F2026-0042"
+      }
+    },
+    {
+      "rule": "FF-FMT-02",
+      "base": "01-services-standard-rate",
+      "set": {
+        "buyer.vatId": "FR 37 200000008"
+      }
+    },
+    {
+      "rule": "FF-FMT-03",
+      "base": "01-services-standard-rate",
+      "set": {
+        "dueDate": "14/11/2026"
+      }
+    },
+    {
+      "rule": "FF-FMT-04",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].quantity": "trois"
+      }
+    },
+    {
+      "rule": "FF-RATE-01",
+      "base": "02-goods-two-rates",
+      "set": {
+        "lines[0].vat.rate": "5,5"
+      }
+    },
+    {
+      "rule": "BR-FR-01",
+      "base": "01-services-standard-rate",
+      "set": {
+        "number": "F2026-00000000000000000000000000000042"
+      }
+    },
+    {
+      "rule": "BR-FR-02",
+      "base": "01-services-standard-rate",
+      "set": {
+        "number": "F2026 0042"
+      }
+    },
+    {
+      "rule": "FF-ID-01",
+      "base": "01-services-standard-rate",
+      "set": {
+        "number": "FACTURE-2026-DIJON-000042"
+      }
+    },
+    {
+      "rule": "BR-FR-03",
+      "base": "01-services-standard-rate",
+      "set": {
+        "dueDate": "2126-11-14"
+      }
+    },
+    {
+      "rule": "BR-FR-CO-01",
+      "base": "01-services-standard-rate",
+      "set": {
+        "issueDate": "2026-10-18"
+      }
+    },
+    {
+      "rule": "BR-FR-04",
+      "base": "01-services-standard-rate",
+      "set": {
+        "typeCode": "383"
+      }
+    },
+    {
+      "rule": "BR-FR-CO-02",
+      "base": "01-services-standard-rate",
+      "context": {
+        "history": [
+          {
+            "number": "F2026-0042",
+            "issueDate": "2026-03-01",
+            "sellerSiren": "100000009"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "FF-NUM-01",
+      "base": "01-services-standard-rate",
+      "context": {
+        "history": [
+          {
+            "number": "F2026-0040",
+            "issueDate": "2026-10-01"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "FF-NUM-02",
+      "base": "01-services-standard-rate",
+      "context": {
+        "history": [
+          {
+            "number": "F2026-0041",
+            "issueDate": "2026-10-16"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-FR-05",
+      "base": "01-services-standard-rate",
+      "set": {
+        "notes": []
+      }
+    },
+    {
+      "rule": "BR-FR-06",
+      "base": "01-services-standard-rate",
+      "set": {
+        "notes[3]": {
+          "subjectCode": "PMT",
+          "text": "Indemnité forfaitaire : 40 €."
+        }
+      }
+    },
+    {
+      "rule": "FF-PMD-01",
+      "base": "01-services-standard-rate",
+      "set": {
+        "notes[1].text": "Pénalités de retard applicables."
+      }
+    },
+    {
+      "rule": "FF-DUE-01",
+      "base": "01-services-standard-rate",
+      "unset": ["dueDate"]
+    },
+    {
+      "rule": "BR-FR-CO-07",
+      "base": "01-services-standard-rate",
+      "set": {
+        "dueDate": "2026-10-01"
+      }
+    },
+    {
+      "rule": "FF-DUE-02",
+      "base": "01-services-standard-rate",
+      "set": {
+        "dueDate": "2027-01-31"
+      }
+    },
+    {
+      "rule": "FF-PO-01",
+      "base": "01-services-standard-rate",
+      "context": {
+        "buyer": {
+          "requiresPurchaseOrder": true
+        }
+      }
+    },
+    {
+      "rule": "FF-IBAN-01",
+      "base": "01-services-standard-rate",
+      "set": {
+        "payment.accounts[0].iban": "FR7630006000011234567890188"
+      }
+    },
+    {
+      "rule": "BR-FR-08",
+      "base": "01-services-standard-rate",
+      "unset": ["processType"]
+    },
+    {
+      "rule": "FF-CAT-01",
+      "base": "01-services-standard-rate",
+      "set": {
+        "processType": "B1"
+      }
+    },
+    {
+      "rule": "FF-DEB-01",
+      "base": "01-services-standard-rate",
+      "context": {
+        "seller": {
+          "vatOnDebits": true
+        }
+      }
+    },
+    {
+      "rule": "BR-FR-10",
+      "base": "01-services-standard-rate",
+      "set": {
+        "seller.legalId.id": "10000000"
+      }
+    },
+    {
+      "rule": "FF-SIREN-01",
+      "base": "01-services-standard-rate",
+      "set": {
+        "buyer.legalId.id": "200000009"
+      }
+    },
+    {
+      "rule": "BR-FR-11",
+      "base": "01-services-standard-rate",
+      "unset": ["buyer.legalId"]
+    },
+    {
+      "rule": "BR-FR-09",
+      "base": "01-services-standard-rate",
+      "set": {
+        "seller.ids[0].id": "20000000800012"
+      }
+    },
+    {
+      "rule": "FF-SIRET-01",
+      "base": "01-services-standard-rate",
+      "set": {
+        "seller.ids[0].id": "10000000900018"
+      }
+    },
+    {
+      "rule": "BR-FR-32",
+      "base": "01-services-standard-rate",
+      "set": {
+        "buyer.ids": [
+          {
+            "id": "12345",
+            "scheme": "0002"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-FR-CO-10",
+      "base": "01-services-standard-rate",
+      "set": {
+        "seller.ids[1]": {
+          "id": "ABC-12"
+        }
+      }
+    },
+    {
+      "rule": "BR-FR-13",
+      "base": "01-services-standard-rate",
+      "unset": ["seller.electronicAddress"]
+    },
+    {
+      "rule": "BR-FR-12",
+      "base": "01-services-standard-rate",
+      "unset": ["buyer.electronicAddress"]
+    },
+    {
+      "rule": "BR-FR-21",
+      "base": "01-services-standard-rate",
+      "set": {
+        "buyer.electronicAddress.id": "300000007"
+      }
+    },
+    {
+      "rule": "BR-FR-23",
+      "base": "01-services-standard-rate",
+      "set": {
+        "seller.electronicAddress.id": "100000009#compta"
+      }
+    },
+    {
+      "rule": "BR-FR-25",
+      "base": "07-export-outside-eu",
+      "set": {
+        "buyer.electronicAddress.id": "factures-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx@helvetia-trading.example"
+      }
+    },
+    {
+      "rule": "FF-VAT-01",
+      "base": "01-services-standard-rate",
+      "set": {
+        "buyer.vatId": "FR3720000000"
+      }
+    },
+    {
+      "rule": "FF-VAT-02",
+      "base": "01-services-standard-rate",
+      "set": {
+        "buyer.vatId": "FR38200000008"
+      }
+    },
+    {
+      "rule": "FF-VAT-03",
+      "base": "01-services-standard-rate",
+      "set": {
+        "buyer.vatId": "FR83300000007"
+      }
+    },
+    {
+      "rule": "BR-FR-15",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].vat.category": "L"
+      }
+    },
+    {
+      "rule": "BR-FR-16",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].vat.rate": "19"
+      }
+    },
+    {
+      "rule": "FF-RATE-02",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].vat.rate": "8.5"
+      }
+    },
+    {
+      "rule": "DGFIP-G1.41",
+      "base": "04-franchise-293b",
+      "unset": ["vatExemptions[0].reason"]
+    },
+    {
+      "rule": "BR-FR-CO-16",
+      "base": "04-franchise-293b",
+      "unset": ["seller.taxRegistrationId"]
+    },
+    {
+      "rule": "FF-TVA-01",
+      "base": "04-franchise-293b",
+      "set": {
+        "vatExemptions[0].reason": "TVA non applicable"
+      }
+    },
+    {
+      "rule": "FF-TVA-02",
+      "base": "05-reverse-charge-construction",
+      "set": {
+        "vatExemptions[0].reason": "Travaux sous-traités"
+      }
+    },
+    {
+      "rule": "FF-TVA-03",
+      "base": "06-intra-eu-supply",
+      "unset": ["vatExemptions[0].reason"]
+    },
+    {
+      "rule": "DGFIP-G2.32",
+      "base": "04-franchise-293b",
+      "set": {
+        "vatExemptions[0]": {
+          "category": "E",
+          "code": "VATEX-FR-CGI261-4",
+          "reason": "Exonération de TVA, article 261-4 du CGI"
+        }
+      }
+    },
+    {
+      "rule": "DGFIP-G6.21",
+      "base": "04-franchise-293b",
+      "set": {
+        "vatExemptions[0].code": "VATEX-FR-CNWVAT"
+      }
+    },
+    {
+      "rule": "BR-FR-CO-05",
+      "base": "10-credit-note",
+      "set": {
+        "precedingInvoices": []
+      }
+    },
+    {
+      "rule": "BR-FR-CO-04",
+      "base": "11-corrective-invoice",
+      "set": {
+        "precedingInvoices[1]": {
+          "number": "F2026-0040",
+          "issueDate": "2026-10-01"
+        }
+      }
+    },
+    {
+      "rule": "FF-CN-01",
+      "base": "10-credit-note",
+      "context": {
+        "history": [
+          {
+            "number": "F2026-0041",
+            "issueDate": "2026-10-14"
+          }
+        ]
+      }
+    },
+    {
+      "rule": "BR-FR-CO-03",
+      "base": "01-services-standard-rate",
+      "set": {
+        "typeCode": "262"
+      }
+    },
+    {
+      "rule": "BR-FR-CO-08",
+      "base": "12-down-payment",
+      "set": {
+        "processType": "S4"
+      }
+    },
+    {
+      "rule": "BR-FR-CO-09",
+      "base": "24-already-paid",
+      "unset": ["prepaid"]
+    },
+    {
+      "rule": "BR-FR-CO-12",
+      "base": "16-foreign-currency",
+      "unset": ["vatCurrency"]
+    },
+    {
+      "rule": "FF-CUR-01",
+      "base": "01-services-standard-rate",
+      "set": {
+        "currency": "USD"
+      }
+    },
+    {
+      "rule": "FF-QTY-01",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].quantity": "-3"
+      }
+    },
+    {
+      "rule": "BR-FR-CO-17",
+      "base": "01-services-standard-rate",
+      "unset": ["delivery"]
+    },
+    {
+      "rule": "BR-FR-14",
+      "base": "17-delivery-address",
+      "unset": ["delivery.address"]
+    },
+    {
+      "rule": "FF-DLV-01",
+      "base": "17-delivery-address",
+      "unset": ["delivery.address.city"]
+    },
+    {
+      "rule": "BR-FR-DEC-02",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].quantity": "3.00001"
+      }
+    },
+    {
+      "rule": "BR-FR-DEC-03",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].price.net": "450.0000001"
+      }
+    },
+    {
+      "rule": "BR-FR-DEC-04",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].vat.rate": "20.001"
+      }
+    }
+  ]
+}

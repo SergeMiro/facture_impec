@@ -1,0 +1,274 @@
+{
+  "description": "Douze lignes à trois taux avec des prix qui produisent des arrondis.",
+  "draft": {
+    "processType": "B1",
+    "number": "F2026-0062",
+    "issueDate": "2026-10-15",
+    "typeCode": "380",
+    "currency": "EUR",
+    "dueDate": "2026-11-14",
+    "paymentTerms": "Paiement à 30 jours par virement.",
+    "notes": [
+      {
+        "subjectCode": "PMT",
+        "text": "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €."
+      },
+      {
+        "subjectCode": "PMD",
+        "text": "Pénalités de retard : trois fois le taux d'intérêt légal."
+      },
+      {
+        "subjectCode": "AAB",
+        "text": "Escompte pour paiement anticipé : néant."
+      }
+    ],
+    "seller": {
+      "name": "Atelier Dupont SARL",
+      "ids": [
+        {
+          "id": "10000000900017",
+          "scheme": "0009"
+        }
+      ],
+      "legalId": {
+        "id": "100000009",
+        "scheme": "0002"
+      },
+      "vatId": "FR88100000009",
+      "electronicAddress": {
+        "id": "100000009",
+        "scheme": "0225"
+      },
+      "address": {
+        "line1": "12 rue des Lilas",
+        "city": "Dijon",
+        "postCode": "21000",
+        "country": "FR"
+      }
+    },
+    "buyer": {
+      "name": "Boulangerie Martin SAS",
+      "legalId": {
+        "id": "200000008",
+        "scheme": "0002"
+      },
+      "vatId": "FR37200000008",
+      "electronicAddress": {
+        "id": "200000008",
+        "scheme": "0225"
+      },
+      "address": {
+        "line1": "3 place du Marché",
+        "city": "Beaune",
+        "postCode": "21200",
+        "country": "FR"
+      }
+    },
+    "delivery": {
+      "date": "2026-10-10"
+    },
+    "payment": {
+      "meansCode": "30",
+      "accounts": [
+        {
+          "iban": "FR7630006000011234567890189",
+          "name": "Atelier Dupont SARL"
+        }
+      ]
+    },
+    "lines": [
+      {
+        "id": "1",
+        "quantity": "7",
+        "unitCode": "KGM",
+        "price": {
+          "net": "1.33"
+        },
+        "vat": {
+          "category": "S",
+          "rate": "5.5"
+        },
+        "item": {
+          "name": "Sucre en poudre"
+        },
+        "nature": "goods"
+      },
+      {
+        "id": "2",
+        "quantity": "3.75",
+        "unitCode": "KGM",
+        "price": {
+          "net": "11.07"
+        },
+        "vat": {
+          "category": "S",
+          "rate": "5.5"
+        },
+        "item": {
+          "name": "Beurre AOP"
+        },
+        "nature": "goods"
+      },
+      {
+        "id": "3",
+        "quantity": "180",
+        "unitCode": "H87",
+        "price": {
+          "net": "0.29"
+        },
+        "vat": {
+          "category": "S",
+          "rate": "5.5"
+        },
+        "item": {
+          "name": "Œufs plein air"
+        },
+        "nature": "goods"
+      },
+      {
+        "id": "4",
+        "quantity": "2.2",
+        "unitCode": "KGM",
+        "price": {
+          "net": "18.45"
+        },
+        "vat": {
+          "category": "S",
+          "rate": "5.5"
+        },
+        "item": {
+          "name": "Chocolat de couverture"
+        },
+        "nature": "goods"
+      },
+      {
+        "id": "5",
+        "quantity": "1",
+        "unitCode": "KGM",
+        "price": {
+          "net": "3.99"
+        },
+        "vat": {
+          "category": "S",
+          "rate": "5.5"
+        },
+        "item": {
+          "name": "Sel de Guérande"
+        },
+        "nature": "goods"
+      },
+      {
+        "id": "6",
+        "quantity": "17",
+        "unitCode": "H87",
+        "price": {
+          "net": "4.15"
+        },
+        "vat": {
+          "category": "S",
+          "rate": "10"
+        },
+        "item": {
+          "name": "Sandwich préparé"
+        },
+        "nature": "goods"
+      },
+      {
+        "id": "7",
+        "quantity": "33",
+        "unitCode": "H87",
+        "price": {
+          "net": "1.85"
+        },
+        "vat": {
+          "category": "S",
+          "rate": "10"
+        },
+        "item": {
+          "name": "Boisson chaude"
+        },
+        "nature": "goods"
+      },
+      {
+        "id": "8",
+        "quantity": "9",
+        "unitCode": "H87",
+        "price": {
+          "net": "12.90"
+        },
+        "vat": {
+          "category": "S",
+          "rate": "10"
+        },
+        "item": {
+          "name": "Formule déjeuner"
+        },
+        "nature": "goods"
+      },
+      {
+        "id": "9",
+        "quantity": "6",
+        "unitCode": "H87",
+        "price": {
+          "net": "7.49"
+        },
+        "vat": {
+          "category": "S",
+          "rate": "20"
+        },
+        "item": {
+          "name": "Sac isotherme"
+        },
+        "nature": "goods"
+      },
+      {
+        "id": "10",
+        "quantity": "2",
+        "unitCode": "H87",
+        "price": {
+          "net": "19.99"
+        },
+        "vat": {
+          "category": "S",
+          "rate": "20"
+        },
+        "item": {
+          "name": "Thermomètre sonde"
+        },
+        "nature": "goods"
+      },
+      {
+        "id": "11",
+        "quantity": "5",
+        "unitCode": "H87",
+        "price": {
+          "net": "8.33"
+        },
+        "vat": {
+          "category": "S",
+          "rate": "20"
+        },
+        "item": {
+          "name": "Film alimentaire 300 m"
+        },
+        "nature": "goods"
+      },
+      {
+        "id": "12",
+        "quantity": "11",
+        "unitCode": "H87",
+        "price": {
+          "net": "6.66"
+        },
+        "vat": {
+          "category": "S",
+          "rate": "20"
+        },
+        "item": {
+          "name": "Gants nitrile, boîte de 100"
+        },
+        "nature": "goods"
+      }
+    ]
+  }
+}

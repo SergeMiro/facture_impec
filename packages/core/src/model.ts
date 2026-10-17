@@ -1,6 +1,8 @@
 // Invoice model: the EN 16931 semantic model (BT-x / BG-x), restricted to what a French SME needs.
 // Zod checks the shape only. Whether a field is mandatory or well formed is a validation rule, so the
-// user gets a French message pointing at the cell instead of a schema error.
+// user gets a French message pointing at the cell instead of a schema error. That is why fields the
+// norm makes mandatory (totals, line amounts…) are optional here: an imported file may lack them.
+// computeInvoice() always fills them.
 import { z } from 'zod';
 
 const text = z.string();
@@ -42,12 +44,12 @@ export const Party = z.object({
 
 export const Note = z.object({ subjectCode: opt, text }); // BG-1: BT-21, BT-22
 
-export const PrecedingInvoice = z.object({ number: text, issueDate: opt }); // BG-3: BT-25, BT-26
+export const PrecedingInvoice = z.object({ number: opt, issueDate: opt }); // BG-3: BT-25, BT-26
 
 export const Period = z.object({ start: opt, end: opt }); // BG-14 / BG-26
 
 export const AllowanceCharge = z.object({
-  amount: Cents, // BT-92 / BT-99 / BT-136 / BT-141
+  amount: Cents.optional(), // BT-92 / BT-99 / BT-136 / BT-141
   baseAmount: Cents.optional(), // BT-93 / BT-100 / BT-137 / BT-142
   percentage: DecimalText.optional(), // BT-94 / BT-101 / BT-138 / BT-143
   vatCategory: opt, // BT-95 / BT-102 (document level only)
@@ -61,7 +63,7 @@ export const Line = z.object({
   note: opt, // BT-127
   quantity: DecimalText.optional(), // BT-129
   unitCode: opt, // BT-130, UN/ECE Rec 20/21
-  netAmount: Cents, // BT-131
+  netAmount: Cents.optional(), // BT-131
   orderLineRef: opt, // BT-132
   period: Period.optional(), // BG-26
   allowances: z.array(AllowanceCharge).default([]), // BG-27
@@ -87,25 +89,25 @@ export const Line = z.object({
 });
 
 export const VatBreakdown = z.object({
-  category: text, // BT-118
+  category: opt, // BT-118
   rate: DecimalText.optional(), // BT-119 (absent for category O)
-  taxableAmount: Cents, // BT-116
-  taxAmount: Cents, // BT-117
+  taxableAmount: Cents.optional(), // BT-116
+  taxAmount: Cents.optional(), // BT-117
   exemptionReason: opt, // BT-120
   exemptionCode: opt, // BT-121 (VATEX)
 });
 
 export const Totals = z.object({
-  lineTotal: Cents, // BT-106
+  lineTotal: Cents.optional(), // BT-106
   allowanceTotal: Cents.optional(), // BT-107
   chargeTotal: Cents.optional(), // BT-108
-  taxExclusive: Cents, // BT-109
+  taxExclusive: Cents.optional(), // BT-109
   taxTotal: Cents.optional(), // BT-110
   taxTotalAccountingCurrency: Cents.optional(), // BT-111
-  taxInclusive: Cents, // BT-112
+  taxInclusive: Cents.optional(), // BT-112
   prepaid: Cents.optional(), // BT-113
   rounding: Cents.optional(), // BT-114
-  payable: Cents, // BT-115
+  payable: Cents.optional(), // BT-115
 });
 
 export const Invoice = z.object({
@@ -117,7 +119,8 @@ export const Invoice = z.object({
   currency: opt, // BT-5
   vatCurrency: opt, // BT-6
   taxPointDate: DateText.optional(), // BT-7
-  vatDueDateCode: opt, // BT-8 (debits: 5 in CII, 3 in UBL; see FR_RULES Q1d)
+  /** BT-8 by meaning; the code depends on the syntax (VAT_DUE_CODES). 'invoice' = TVA sur les débits. */
+  vatDueOn: z.enum(['invoice', 'delivery', 'payment']).optional(),
   dueDate: DateText.optional(), // BT-9
   buyerReference: opt, // BT-10
   projectReference: opt, // BT-11
@@ -143,7 +146,7 @@ export const Invoice = z.object({
       meansText: opt, // BT-82
       remittanceInfo: opt, // BT-83
       accounts: z
-        .array(z.object({ iban: text, name: opt, bic: opt })) // BG-17: BT-84, BT-85, BT-86
+        .array(z.object({ iban: opt, name: opt, bic: opt })) // BG-17: BT-84, BT-85, BT-86
         .default([]),
     })
     .optional(),
@@ -174,7 +177,18 @@ export const InvoiceDraft = Invoice.omit({
   vatExemptions: z.array(z.object({ category: text, code: opt, reason: opt })).default([]),
   /** Amount already paid (BT-113). */
   prepaid: Cents.optional(),
+  /** VAT total in the VAT accounting currency (BT-111), when BT-6 differs from BT-5. */
+  taxTotalAccountingCurrency: Cents.optional(),
 });
 export type InvoiceDraft = z.input<typeof InvoiceDraft>;
+export type InvoiceInput = z.input<typeof Invoice>;
+
+/** BT-8 codes: UNTDID 2475 in CII, UNTDID 2005 in UBL (CEN code lists, FR_RULES Q1d). */
+export const VAT_DUE_CODES = {
+  invoice: { cii: '5', ubl: '3' },
+  delivery: { cii: '29', ubl: '35' },
+  payment: { cii: '72', ubl: '432' },
+} as const;
+export type VatDueOn = keyof typeof VAT_DUE_CODES;
 
 export const EN16931_SPECIFICATION = 'urn:cen.eu:en16931:2017';

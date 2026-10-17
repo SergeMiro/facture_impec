@@ -1,0 +1,408 @@
+{
+  "cases": [
+    {
+      "rule": "BR-01",
+      "base": "01-services-standard-rate",
+      "on": "invoice",
+      "unset": ["specificationId"]
+    },
+    {
+      "rule": "BR-02",
+      "base": "01-services-standard-rate",
+      "unset": ["number"]
+    },
+    {
+      "rule": "BR-03",
+      "base": "01-services-standard-rate",
+      "unset": ["issueDate"]
+    },
+    {
+      "rule": "BR-04",
+      "base": "01-services-standard-rate",
+      "unset": ["typeCode"]
+    },
+    {
+      "rule": "BR-05",
+      "base": "01-services-standard-rate",
+      "unset": ["currency"]
+    },
+    {
+      "rule": "BR-06",
+      "base": "01-services-standard-rate",
+      "unset": ["seller.name"]
+    },
+    {
+      "rule": "BR-07",
+      "base": "01-services-standard-rate",
+      "unset": ["buyer.name"]
+    },
+    {
+      "rule": "BR-08",
+      "base": "01-services-standard-rate",
+      "unset": ["seller.address"]
+    },
+    {
+      "rule": "BR-09",
+      "base": "01-services-standard-rate",
+      "unset": ["seller.address.country"]
+    },
+    {
+      "rule": "BR-10",
+      "base": "01-services-standard-rate",
+      "unset": ["buyer.address"]
+    },
+    {
+      "rule": "BR-11",
+      "base": "01-services-standard-rate",
+      "unset": ["buyer.address.country"]
+    },
+    {
+      "rule": "BR-12",
+      "base": "01-services-standard-rate",
+      "why": "an imported file without the total",
+      "on": "invoice",
+      "unset": ["totals.lineTotal"]
+    },
+    {
+      "rule": "BR-13",
+      "base": "01-services-standard-rate",
+      "why": "an imported file without the total",
+      "on": "invoice",
+      "unset": ["totals.taxExclusive"]
+    },
+    {
+      "rule": "BR-14",
+      "base": "01-services-standard-rate",
+      "why": "an imported file without the total",
+      "on": "invoice",
+      "unset": ["totals.taxInclusive"]
+    },
+    {
+      "rule": "BR-15",
+      "base": "01-services-standard-rate",
+      "why": "an imported file without the total",
+      "on": "invoice",
+      "unset": ["totals.payable"]
+    },
+    {
+      "rule": "BR-16",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines": []
+      }
+    },
+    {
+      "rule": "BR-21",
+      "base": "01-services-standard-rate",
+      "unset": ["lines[0].id"]
+    },
+    {
+      "rule": "BR-22",
+      "base": "01-services-standard-rate",
+      "unset": ["lines[0].quantity"]
+    },
+    {
+      "rule": "BR-23",
+      "base": "01-services-standard-rate",
+      "unset": ["lines[0].unitCode"]
+    },
+    {
+      "rule": "BR-24",
+      "base": "01-services-standard-rate",
+      "on": "invoice",
+      "unset": ["lines[0].netAmount"]
+    },
+    {
+      "rule": "BR-25",
+      "base": "01-services-standard-rate",
+      "unset": ["lines[0].item.name"]
+    },
+    {
+      "rule": "BR-26",
+      "base": "01-services-standard-rate",
+      "unset": ["lines[0].price.net"]
+    },
+    {
+      "rule": "BR-27",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].price.net": "-450.00"
+      }
+    },
+    {
+      "rule": "BR-28",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].price.gross": "-1"
+      }
+    },
+    {
+      "rule": "BR-29",
+      "base": "18-invoice-period",
+      "set": {
+        "invoicePeriod.end": "2026-08-31"
+      }
+    },
+    {
+      "rule": "BR-30",
+      "base": "19-line-periods",
+      "set": {
+        "lines[0].period.end": "2026-09-30"
+      }
+    },
+    {
+      "rule": "BR-31",
+      "base": "14-document-allowance-charge",
+      "unset": ["allowances[0].amount"]
+    },
+    {
+      "rule": "BR-32",
+      "base": "14-document-allowance-charge",
+      "unset": ["allowances[0].vatCategory"]
+    },
+    {
+      "rule": "BR-36",
+      "base": "14-document-allowance-charge",
+      "unset": ["charges[0].amount"]
+    },
+    {
+      "rule": "BR-37",
+      "base": "14-document-allowance-charge",
+      "unset": ["charges[0].vatCategory"]
+    },
+    {
+      "rule": "BR-33",
+      "base": "14-document-allowance-charge",
+      "unset": ["allowances[0].reason", "allowances[0].reasonCode"]
+    },
+    {
+      "rule": "BR-38",
+      "base": "14-document-allowance-charge",
+      "unset": ["charges[0].reason", "charges[0].reasonCode"]
+    },
+    {
+      "rule": "BR-41",
+      "base": "15-line-allowance-charge",
+      "unset": ["lines[0].allowances[0].amount"]
+    },
+    {
+      "rule": "BR-42",
+      "base": "15-line-allowance-charge",
+      "unset": ["lines[0].allowances[0].reason", "lines[0].allowances[0].reasonCode"]
+    },
+    {
+      "rule": "BR-43",
+      "base": "15-line-allowance-charge",
+      "unset": ["lines[0].charges[0].amount"]
+    },
+    {
+      "rule": "BR-44",
+      "base": "15-line-allowance-charge",
+      "unset": ["lines[0].charges[0].reason", "lines[0].charges[0].reasonCode"]
+    },
+    {
+      "rule": "BR-45",
+      "base": "01-services-standard-rate",
+      "on": "invoice",
+      "unset": ["vatBreakdown[0].taxableAmount"]
+    },
+    {
+      "rule": "BR-46",
+      "base": "01-services-standard-rate",
+      "on": "invoice",
+      "unset": ["vatBreakdown[0].taxAmount"]
+    },
+    {
+      "rule": "BR-47",
+      "base": "01-services-standard-rate",
+      "on": "invoice",
+      "unset": ["vatBreakdown[0].category"]
+    },
+    {
+      "rule": "BR-48",
+      "base": "01-services-standard-rate",
+      "on": "invoice",
+      "unset": ["vatBreakdown[0].rate"]
+    },
+    {
+      "rule": "BR-49",
+      "base": "01-services-standard-rate",
+      "unset": ["payment.meansCode"]
+    },
+    {
+      "rule": "BR-50",
+      "base": "01-services-standard-rate",
+      "unset": ["payment.accounts[0].iban"]
+    },
+    {
+      "rule": "BR-53",
+      "base": "16-foreign-currency",
+      "unset": ["taxTotalAccountingCurrency"]
+    },
+    {
+      "rule": "BR-55",
+      "base": "10-credit-note",
+      "unset": ["precedingInvoices[0].number"]
+    },
+    {
+      "rule": "BR-57",
+      "base": "17-delivery-address",
+      "unset": ["delivery.address.country"]
+    },
+    {
+      "rule": "BR-61",
+      "base": "01-services-standard-rate",
+      "set": {
+        "payment.accounts": []
+      }
+    },
+    {
+      "rule": "BR-62",
+      "base": "01-services-standard-rate",
+      "unset": ["seller.electronicAddress.scheme"]
+    },
+    {
+      "rule": "BR-63",
+      "base": "01-services-standard-rate",
+      "unset": ["buyer.electronicAddress.scheme"]
+    },
+    {
+      "rule": "BR-64",
+      "base": "01-services-standard-rate",
+      "set": {
+        "lines[0].item.standardId": {
+          "id": "03760000000017"
+        }
+      }
+    },
+    {
+      "rule": "BR-CO-03",
+      "base": "01-services-standard-rate",
+      "set": {
+        "taxPointDate": "2026-10-10",
+        "vatDueOn": "delivery"
+      }
+    },
+    {
+      "rule": "BR-CO-04",
+      "base": "01-services-standard-rate",
+      "unset": ["lines[0].vat.category"]
+    },
+    {
+      "rule": "BR-CO-09",
+      "base": "01-services-standard-rate",
+      "set": {
+        "buyer.vatId": "QQ123456789"
+      }
+    },
+    {
+      "rule": "BR-CO-10",
+      "base": "01-services-standard-rate",
+      "on": "invoice",
+      "set": {
+        "totals.lineTotal": 135001
+      }
+    },
+    {
+      "rule": "BR-CO-11",
+      "base": "14-document-allowance-charge",
+      "on": "invoice",
+      "set": {
+        "totals.allowanceTotal": 1
+      }
+    },
+    {
+      "rule": "BR-CO-12",
+      "base": "14-document-allowance-charge",
+      "on": "invoice",
+      "set": {
+        "totals.chargeTotal": 1
+      }
+    },
+    {
+      "rule": "BR-CO-13",
+      "base": "01-services-standard-rate",
+      "on": "invoice",
+      "set": {
+        "totals.taxExclusive": 1
+      }
+    },
+    {
+      "rule": "BR-CO-14",
+      "base": "01-services-standard-rate",
+      "on": "invoice",
+      "set": {
+        "totals.taxTotal": 1
+      }
+    },
+    {
+      "rule": "BR-CO-15",
+      "base": "01-services-standard-rate",
+      "on": "invoice",
+      "set": {
+        "totals.taxInclusive": 1
+      }
+    },
+    {
+      "rule": "BR-CO-16",
+      "base": "01-services-standard-rate",
+      "on": "invoice",
+      "set": {
+        "totals.payable": 1
+      }
+    },
+    {
+      "rule": "BR-CO-17",
+      "base": "01-services-standard-rate",
+      "why": "one euro off is already outside the tolerance",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxAmount": 26900
+      }
+    },
+    {
+      "rule": "BR-CO-17",
+      "base": "09-zero-rated",
+      "why": "rate 0: 0.50 does not round to zero",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown[0].taxAmount": 50
+      }
+    },
+    {
+      "rule": "BR-CO-18",
+      "base": "01-services-standard-rate",
+      "on": "invoice",
+      "set": {
+        "vatBreakdown": []
+      }
+    },
+    {
+      "rule": "BR-CO-19",
+      "base": "18-invoice-period",
+      "set": {
+        "invoicePeriod": {}
+      }
+    },
+    {
+      "rule": "BR-CO-20",
+      "base": "19-line-periods",
+      "set": {
+        "lines[0].period": {}
+      }
+    },
+    {
+      "rule": "BR-CO-26",
+      "base": "01-services-standard-rate",
+      "unset": ["seller.ids", "seller.legalId", "seller.vatId"]
+    },
+    {
+      "rule": "FF-LINE-CALC",
+      "base": "01-services-standard-rate",
+      "on": "invoice",
+      "set": {
+        "lines[0].netAmount": 135100
+      }
+    }
+  ]
+}
