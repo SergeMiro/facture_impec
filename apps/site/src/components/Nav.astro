@@ -1,0 +1,117 @@
+---
+import Logo from './Logo.astro';
+
+const links = [
+  { href: '/#fonctionnement', label: 'Fonctionnement' },
+  { href: '/#demo', label: 'Démo' },
+  { href: '/#ia', label: 'IA' },
+  { href: '/#tarifs', label: 'Tarifs' },
+  { href: '/presentation', label: 'Présentation' },
+];
+---
+
+<header
+  id="site-nav"
+  class="fixed inset-x-0 top-0 z-50 transition-[background-color,box-shadow,backdrop-filter] duration-300"
+  data-scrolled="false"
+>
+  <div class="container-page flex h-16 items-center justify-between gap-4">
+    <a href="/" aria-label="Facture Impec, accueil" class="nav-logo">
+      <span class="nav-logo-light"><Logo tone="light" /></span>
+      <span class="nav-logo-dark"><Logo tone="dark" /></span>
+    </a>
+    <nav aria-label="Navigation principale" class="hidden items-center gap-1 lg:flex">
+      {
+        links.map((l) => (
+          <a href={l.href} class="nav-link rounded-full px-3.5 py-2 text-sm font-medium text-white/80 transition hover:text-white">
+            {l.label}
+          </a>
+        ))
+      }
+    </nav>
+    <div class="flex items-center gap-2">
+      <a href="/#essai" class="btn btn-primary hidden !px-5 !py-2.5 text-sm sm:inline-flex">Essai gratuit</a>
+      <button
+        id="nav-toggle"
+        type="button"
+        class="nav-burger inline-flex h-10 w-10 items-center justify-center rounded-full text-white ring-1 ring-white/20 lg:hidden"
+        aria-expanded="false"
+        aria-controls="nav-panel"
+        aria-label="Ouvrir le menu"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+      </button>
+    </div>
+  </div>
+  <div id="nav-panel" class="hidden border-t border-leaf-900/10 bg-cream/95 backdrop-blur-xl lg:hidden">
+    <nav aria-label="Navigation mobile" class="container-page flex flex-col py-3">
+      {
+        links.map((l) => (
+          <a href={l.href} class="rounded-xl px-3 py-3 font-medium text-leaf-950 hover:bg-leaf-50">
+            {l.label}
+          </a>
+        ))
+      }
+      <a href="/#essai" class="btn btn-primary mt-2">Demander l’essai gratuit</a>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .nav-logo-dark {
+    display: none;
+  }
+  #site-nav[data-scrolled="true"],
+  #site-nav[data-open="true"] {
+    background: rgb(250 248 242 / 0.86);
+    backdrop-filter: blur(16px) saturate(1.4);
+    box-shadow: 0 1px 0 rgb(13 64 46 / 0.08);
+  }
+  #site-nav[data-scrolled="true"] .nav-link,
+  #site-nav[data-open="true"] .nav-link {
+    color: var(--color-muted);
+  }
+  #site-nav[data-scrolled="true"] .nav-link:hover {
+    color: var(--color-leaf-900);
+  }
+  #site-nav[data-scrolled="true"] .nav-logo-light,
+  #site-nav[data-open="true"] .nav-logo-light {
+    display: none;
+  }
+  #site-nav[data-scrolled="true"] .nav-logo-dark,
+  #site-nav[data-open="true"] .nav-logo-dark {
+    display: inline-flex;
+  }
+  #site-nav[data-scrolled="true"] .nav-burger,
+  #site-nav[data-open="true"] .nav-burger {
+    color: var(--color-leaf-900);
+    --tw-ring-color: rgb(13 64 46 / 0.15);
+  }
+</style>
+
+<script>
+  const nav = document.getElementById('site-nav');
+  const toggle = document.getElementById('nav-toggle');
+  const panel = document.getElementById('nav-panel');
+  // Pages without a dark hero start in the light state.
+  const alwaysLight = document.body.dataset.navLight === 'true';
+  const onScroll = () => {
+    if (nav) nav.dataset.scrolled = String(alwaysLight || window.scrollY > 24);
+  };
+  onScroll();
+  window.addEventListener('scroll', onScroll, { passive: true });
+  toggle?.addEventListener('click', () => {
+    const open = toggle.getAttribute('aria-expanded') !== 'true';
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.setAttribute('aria-label', open ? 'Fermer le menu' : 'Ouvrir le menu');
+    panel?.classList.toggle('hidden', !open);
+    if (nav) nav.dataset.open = String(open);
+  });
+  panel?.querySelectorAll('a').forEach((a) =>
+    a.addEventListener('click', () => {
+      panel.classList.add('hidden');
+      toggle?.setAttribute('aria-expanded', 'false');
+      if (nav) nav.dataset.open = 'false';
+    }),
+  );
+</script>

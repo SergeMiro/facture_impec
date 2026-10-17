@@ -1,0 +1,35 @@
+---
+import { features } from '../../content/site';
+import { Icon } from '../Icon';
+---
+
+<section id="fonctionnalites" class="bg-leaf-950 py-20 text-white sm:py-28">
+  <div class="container-page">
+    <div class="grid gap-6 lg:grid-cols-[1fr_1.2fr] lg:items-end">
+      <div>
+        <p class="eyebrow !text-leaf-300"><span class="h-px w-6 bg-leaf-400"></span>Fonctionnalités</p>
+        <h2 class="mt-4 text-4xl leading-tight font-medium sm:text-5xl">
+          Bien plus qu’un convertisseur. <span class="italic text-leaf-300">Un assistant.</span>
+        </h2>
+      </div>
+      <p class="text-lg leading-relaxed text-leaf-50/75">
+        La conformité n’est que le début. Facture Impec suit chaque facture jusqu’à l’encaissement,
+        prépare vos relances et protège vos achats, pour que la réforme vous fasse gagner du temps au
+        lieu d’en perdre.
+      </p>
+    </div>
+    <ul class="mt-14 grid gap-px overflow-hidden rounded-[1.5rem] bg-white/10 ring-1 ring-white/10 sm:grid-cols-2 lg:grid-cols-4">
+      {
+        features.map((f) => (
+          <li class="group bg-leaf-950 p-7 transition duration-300 hover:bg-[#073024]">
+            <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-leaf-400/12 text-leaf-300 ring-1 ring-leaf-300/20 transition group-hover:bg-leaf-400/20">
+              <Icon name={f.icon} size={22} />
+            </span>
+            <h3 class="mt-5 text-lg text-white">{f.title}</h3>
+            <p class="mt-2 text-[0.95rem] leading-relaxed text-leaf-50/65">{f.text}</p>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</section>

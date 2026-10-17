@@ -1,0 +1,24 @@
+---
+import Demo from '../islands/Demo';
+---
+
+<section id="demo" class="relative overflow-hidden py-20 sm:py-28">
+  <div class="absolute inset-x-0 top-0 -z-10 h-[32rem] bg-gradient-to-b from-leaf-50/70 to-transparent"></div>
+  <div class="container-page">
+    <div class="mx-auto max-w-2xl text-center">
+      <p class="eyebrow justify-center">Démo interactive</p>
+      <h2 class="mt-4 text-4xl font-medium text-leaf-950 sm:text-5xl">Essayez-le maintenant, sans rien installer.</h2>
+      <p class="mt-5 text-lg text-muted">
+        Cinq factures de mars, deux erreurs cachées. Vérifiez, corrigez en un clic, puis répétez tout
+        le parcours en mode test jusqu’au paiement.
+      </p>
+    </div>
+    <div class="mx-auto mt-12 max-w-5xl">
+      <Demo client:visible />
+    </div>
+    <p class="mx-auto mt-6 max-w-2xl text-center text-sm text-muted">
+      Démonstration simulée dans votre navigateur : aucune donnée n’est envoyée. Dans le complément,
+      les contrôles portent sur l’ensemble des règles EN 16931 et des mentions françaises.
+    </p>
+  </div>
+</section>

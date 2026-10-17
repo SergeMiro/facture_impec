@@ -1,0 +1,32 @@
+---
+import { plans, trialDays } from '../../content/site';
+import { Icon } from '../Icon';
+import Pricing from '../islands/Pricing';
+---
+
+<section id="tarifs" class="relative py-20 sm:py-28">
+  <div class="container-page">
+    <div class="mx-auto max-w-2xl text-center">
+      <p class="eyebrow justify-center">Tarifs</p>
+      <h2 class="mt-4 text-4xl font-medium text-leaf-950 sm:text-5xl">Un prix clair. Sans surprise.</h2>
+      <p class="mt-5 text-lg text-muted">
+        {trialDays} jours d’essai gratuit sur toutes les offres, sans carte bancaire. Le mode test est
+        illimité, l’IA est incluse.
+      </p>
+    </div>
+    <div class="mt-10">
+      <Pricing client:visible plans={plans} />
+    </div>
+    <div class="mx-auto mt-10 flex max-w-3xl flex-col items-center gap-3 text-center text-sm text-muted">
+      <p class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+        <span class="flex items-center gap-1.5"><Icon name="check" size={16} className="text-leaf-500" /> Sans engagement en mensuel</span>
+        <span class="flex items-center gap-1.5"><Icon name="check" size={16} className="text-leaf-500" /> Résiliable en un clic</span>
+        <span class="flex items-center gap-1.5"><Icon name="check" size={16} className="text-leaf-500" /> Vos données exportables à tout moment</span>
+      </p>
+      <p>
+        Tarifs de lancement, hors taxes. Abonnement annuel souscrit avant le 1er septembre 2027 : prix
+        garanti jusqu’au 31 août 2028.
+      </p>
+    </div>
+  </div>
+</section>

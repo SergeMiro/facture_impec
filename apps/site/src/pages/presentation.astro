@@ -1,0 +1,312 @@
+---
+import { Icon, type IconName } from '../components/Icon';
+import Logo from '../components/Logo.astro';
+import { deadlines, plans, providers, trialDays } from '../content/site';
+import Base from '../layouts/Base.astro';
+
+const steps: { icon: IconName; title: string; text: string }[] = [
+  { icon: 'sheet', title: 'Facturer', text: 'dans Excel, avec votre modèle' },
+  { icon: 'shield', title: 'Vérifier', text: 'règles EN 16931 et mentions françaises' },
+  { icon: 'send', title: 'Envoyer', text: 'en Factur-X, par une plateforme agréée' },
+  { icon: 'euro', title: 'Encaisser', text: 'statuts, relances, rapport hebdomadaire' },
+];
+const price = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
+---
+
+<Base
+  title="Présentation — Facture Impec"
+  description="Facture Impec en dix diapositives : la réforme, le produit, l’IA, la sécurité et les tarifs."
+  bare
+>
+  <div class="deck-bar fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
+    <a href="/" aria-label="Retour au site"><Logo tone="light" /></a>
+    <div class="flex items-center gap-2 text-sm">
+      <span id="deck-count" class="hidden rounded-full bg-white/10 px-3 py-1.5 font-medium text-white/80 tabular-nums sm:inline">1 / 10</span>
+      <button id="deck-fullscreen" type="button" class="hidden rounded-full bg-white/10 px-3.5 py-1.5 font-medium text-white ring-1 ring-white/15 transition hover:bg-white/20 sm:inline-block">Plein écran</button>
+      <button id="deck-print" type="button" class="rounded-full bg-white/10 px-3.5 py-1.5 font-medium text-white ring-1 ring-white/15 transition hover:bg-white/20">PDF</button>
+      <a href="/#essai" class="btn btn-primary !px-4 !py-1.5 text-sm">Essai gratuit</a>
+    </div>
+  </div>
+
+  <div id="deck" class="deck">
+    <!-- 1 -->
+    <section class="slide slide-dark">
+      <div class="slide-inner">
+        <p class="eyebrow !text-leaf-300">Présentation · {new Date().getFullYear()}</p>
+        <h1 class="mt-6 max-w-4xl text-5xl leading-[1.05] font-medium sm:text-7xl">
+          La facture électronique, <span class="italic text-leaf-300">directement depuis Excel.</span>
+        </h1>
+        <p class="mt-8 max-w-2xl text-xl text-leaf-50/75">
+          Facture Impec vérifie, convertit, envoie et suit vos factures jusqu’au paiement, sans changer
+          d’outil.
+        </p>
+        <p class="mt-14 text-sm text-leaf-100/50">Flèches ← → ou espace pour naviguer</p>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">01 · Le contexte</p>
+        <h2 class="mt-5 text-4xl font-medium text-leaf-950 sm:text-6xl">Une réforme, deux dates.</h2>
+        <div class="mt-12 grid gap-6 md:grid-cols-2">
+          <div class="card p-8">
+            <p class="font-display text-5xl text-leaf-500">{deadlines.reception.label}</p>
+            <p class="mt-4 text-xl text-leaf-950">Toutes les entreprises doivent pouvoir recevoir des factures électroniques.</p>
+            <p class="mt-2 text-muted">En vigueur.</p>
+          </div>
+          <div class="card p-8 ring-2 ring-leaf-400/60">
+            <p class="font-display text-5xl text-leaf-700">{deadlines.emission.label}</p>
+            <p class="mt-4 text-xl text-leaf-950">Les TPE et PME doivent émettre leurs factures au format électronique.</p>
+            <p class="mt-2 text-muted">Via une plateforme agréée, avec de nouvelles mentions obligatoires.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section class="slide slide-sand">
+      <div class="slide-inner">
+        <p class="eyebrow">02 · Le problème</p>
+        <h2 class="mt-5 max-w-4xl text-4xl font-medium text-leaf-950 sm:text-6xl">Beaucoup de petites entreprises facturent encore dans Excel.</h2>
+        <ul class="mt-12 grid gap-5 md:grid-cols-3">
+          <li class="card p-7"><p class="font-display text-2xl text-leaf-950">Un PDF par e-mail</p><p class="mt-2 text-muted">ne sera bientôt plus une facture valable.</p></li>
+          <li class="card p-7"><p class="font-display text-2xl text-leaf-950">Changer de logiciel</p><p class="mt-2 text-muted">coûte du temps, de l’argent et des habitudes.</p></li>
+          <li class="card p-7"><p class="font-display text-2xl text-leaf-950">Une facture rejetée</p><p class="mt-2 text-muted">c’est un paiement qui arrive en retard.</p></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">03 · La solution</p>
+        <h2 class="mt-5 text-4xl font-medium text-leaf-950 sm:text-6xl">Un complément Excel. Quatre gestes.</h2>
+        <ol class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {
+            steps.map((s, i) => (
+              <li class="card p-7">
+                <span class="font-display text-4xl text-leaf-200">{String(i + 1).padStart(2, '0')}</span>
+                <span class="mt-4 flex h-11 w-11 items-center justify-center rounded-xl bg-leaf-500/10 text-leaf-600"><Icon name={s.icon} size={22} /></span>
+                <p class="mt-4 font-display text-2xl text-leaf-950">{s.title}</p>
+                <p class="mt-1 text-muted">{s.text}</p>
+              </li>
+            ))
+          }
+        </ol>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section class="slide slide-dark">
+      <div class="slide-inner">
+        <p class="eyebrow !text-leaf-300">04 · Ce qui nous distingue</p>
+        <h2 class="mt-5 max-w-4xl text-4xl font-medium sm:text-6xl">Pas seulement conforme. <span class="italic text-leaf-300">Payé plus vite.</span></h2>
+        <ul class="mt-12 grid gap-px overflow-hidden rounded-3xl bg-white/10 ring-1 ring-white/10 md:grid-cols-2">
+          <li class="bg-leaf-950 p-8"><p class="font-display text-2xl">Vous restez dans Excel</p><p class="mt-2 text-leaf-50/70">Vos colonnes, vos modèles. Deux colonnes de suivi ajoutées, rien d’autre.</p></li>
+          <li class="bg-leaf-950 p-8"><p class="font-display text-2xl">Rien de rejeté ne part</p><p class="mt-2 text-leaf-50/70">Chaque erreur est expliquée en français et pointe la cellule à corriger.</p></li>
+          <li class="bg-leaf-950 p-8"><p class="font-display text-2xl">Mode test</p><p class="mt-2 text-leaf-50/70">Tout le parcours répété sans risque avant le premier envoi réel.</p></li>
+          <li class="bg-leaf-950 p-8"><p class="font-display text-2xl">Suivi jusqu’au paiement</p><p class="mt-2 text-leaf-50/70">Statuts, relances préparées, rapport chaque lundi.</p></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">05 · Intelligence artificielle</p>
+        <h2 class="mt-5 text-4xl font-medium text-leaf-950 sm:text-6xl">L’IA propose. Les règles décident.</h2>
+        <div class="mt-12 grid gap-8 lg:grid-cols-[1fr_1.2fr]">
+          <ul class="space-y-5 text-lg">
+            <li class="flex gap-3"><Icon name="eye" size={22} className="mt-1 shrink-0 text-leaf-500" /> Données anonymisées avant chaque appel</li>
+            <li class="flex gap-3"><Icon name="shield" size={22} className="mt-1 shrink-0 text-leaf-500" /> Validité vérifiée par un moteur de règles déterministe</li>
+            <li class="flex gap-3"><Icon name="key" size={22} className="mt-1 shrink-0 text-leaf-500" /> IA incluse, ou votre propre clé chiffrée</li>
+            <li class="flex gap-3"><Icon name="plug" size={22} className="mt-1 shrink-0 text-leaf-500" /> Tout service compatible OpenAI, même sur votre serveur</li>
+          </ul>
+          <ul class="grid grid-cols-2 gap-3">
+            {
+              providers.map((p) => (
+                <li class="card flex items-center justify-between gap-2 px-4 py-3">
+                  <span class="font-semibold text-leaf-950">{p.name}</span>
+                  {p.eu && <span class="rounded bg-leaf-500 px-1.5 py-px text-[0.62rem] font-bold text-white">UE</span>}
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7 -->
+    <section class="slide slide-sand">
+      <div class="slide-inner">
+        <p class="eyebrow">06 · Confiance</p>
+        <h2 class="mt-5 text-4xl font-medium text-leaf-950 sm:text-6xl">Conçu pour ne jamais vous surprendre.</h2>
+        <ul class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <li class="card p-7"><Icon name="globe" size={26} className="text-leaf-500" /><p class="mt-4 font-display text-xl text-leaf-950">Hébergé dans l’UE</p><p class="mt-1 text-muted">RGPD par défaut.</p></li>
+          <li class="card p-7"><Icon name="lock" size={26} className="text-leaf-500" /><p class="mt-4 font-display text-xl text-leaf-950">Vous validez</p><p class="mt-1 text-muted">Aucun envoi sans votre accord.</p></li>
+          <li class="card p-7"><Icon name="refresh" size={26} className="text-leaf-500" /><p class="mt-4 font-display text-xl text-leaf-950">Zéro doublon</p><p class="mt-1 text-muted">Même après une coupure.</p></li>
+          <li class="card p-7"><Icon name="history" size={26} className="text-leaf-500" /><p class="mt-4 font-display text-xl text-leaf-950">Tout est tracé</p><p class="mt-1 text-muted">Journal exportable.</p></li>
+        </ul>
+        <p class="mt-8 max-w-3xl text-muted">
+          Facture Impec est une solution compatible : les factures sont transmises par une plateforme
+          agréée immatriculée par l’administration fiscale.
+        </p>
+      </div>
+    </section>
+
+    <!-- 8 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">07 · Tarifs de lancement</p>
+        <h2 class="mt-5 text-4xl font-medium text-leaf-950 sm:text-6xl">Trois offres. {trialDays} jours d’essai.</h2>
+        <ul class="mt-12 grid gap-5 lg:grid-cols-3">
+          {
+            plans.map((p) => (
+              <li class:list={['rounded-3xl p-8', p.highlight ? 'bg-leaf-950 text-white' : 'card']}>
+                <p class:list={['font-display text-2xl', p.highlight ? 'text-white' : 'text-leaf-950']}>{p.name}</p>
+                <p class="mt-4 flex items-baseline gap-1.5">
+                  <span class:list={['font-display text-5xl', p.highlight ? 'text-white' : 'text-leaf-950']}>{price.format(p.yearlyPerMonth)} €</span>
+                  <span class:list={['text-sm', p.highlight ? 'text-leaf-100/70' : 'text-muted']}>HT {p.unit}</span>
+                </p>
+                <p class:list={['mt-1 text-sm', p.highlight ? 'text-leaf-100/60' : 'text-muted']}>en annuel · {price.format(p.monthly)} € en mensuel{p.priceNote ? ` · ${p.priceNote}` : ''}</p>
+                <p class:list={['mt-5 text-sm', p.highlight ? 'text-leaf-50/85' : 'text-ink/80']}>{p.quota}</p>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </section>
+
+    <!-- 9 -->
+    <section class="slide slide-sand">
+      <div class="slide-inner">
+        <p class="eyebrow">08 · Calendrier</p>
+        <h2 class="mt-5 text-4xl font-medium text-leaf-950 sm:text-6xl">Prêts bien avant l’échéance.</h2>
+        <ol class="mt-12 grid gap-5 md:grid-cols-3">
+          <li class="card p-7"><p class="text-sm font-semibold text-leaf-600">Maintenant</p><p class="mt-2 font-display text-2xl text-leaf-950">Programme pilote</p><p class="mt-2 text-muted">Premiers utilisateurs accompagnés, en mode test puis en réel.</p></li>
+          <li class="card p-7"><p class="text-sm font-semibold text-leaf-600">Ensuite</p><p class="mt-2 font-display text-2xl text-leaf-950">Ouverture générale</p><p class="mt-2 text-muted">Disponible pour toutes les TPE, PME et cabinets.</p></li>
+          <li class="card p-7 ring-2 ring-leaf-400/60"><p class="text-sm font-semibold text-leaf-600">{deadlines.emission.label}</p><p class="mt-2 font-display text-2xl text-leaf-950">Obligation d’émission</p><p class="mt-2 text-muted">Vos clients reçoivent déjà des factures conformes.</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- 10 -->
+    <section class="slide slide-dark">
+      <div class="slide-inner text-center">
+        <h2 class="mx-auto max-w-3xl text-5xl font-medium sm:text-7xl">Essayez-le <span class="italic text-leaf-300">{trialDays} jours.</span></h2>
+        <p class="mx-auto mt-6 max-w-xl text-xl text-leaf-50/75">Sans carte bancaire. Mode test illimité. Vous restez dans Excel.</p>
+        <div class="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
+          <a href="/#essai" class="btn btn-primary !px-7 !py-4 text-lg">Demander mon accès <Icon name="arrowRight" size={20} /></a>
+          <a href="/#demo" class="btn btn-ghost-light !px-7 !py-4 text-lg"><Icon name="play" size={18} /> Voir la démo</a>
+        </div>
+      </div>
+    </section>
+  </div>
+</Base>
+
+<style is:global>
+  html:has(.deck) {
+    scroll-padding-top: 0;
+  }
+  .deck {
+    height: 100dvh;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+  }
+  .deck-bar {
+    background: rgb(5 36 26 / 0.88);
+    backdrop-filter: blur(12px);
+  }
+  .slide {
+    min-height: 100dvh;
+    scroll-snap-align: start;
+    display: flex;
+    align-items: center;
+    padding: 6rem 0 4rem;
+    background: var(--color-cream);
+  }
+  .slide-inner {
+    width: 100%;
+    max-width: 72rem;
+    margin-inline: auto;
+    padding-inline: 1.25rem;
+  }
+  .slide-dark {
+    color: white;
+    background:
+      radial-gradient(55rem 35rem at 85% -10%, rgb(71 181 130 / 0.3), transparent 60%),
+      radial-gradient(45rem 30rem at -10% 110%, rgb(201 168 91 / 0.14), transparent 60%),
+      #05241a;
+  }
+  .slide-sand {
+    background: color-mix(in srgb, var(--color-sand) 55%, var(--color-cream));
+  }
+  @media print {
+    @page {
+      size: 297mm 167mm;
+      margin: 0;
+    }
+    .deck-bar {
+      display: none;
+    }
+    .deck {
+      height: auto;
+      overflow: visible;
+    }
+    .slide {
+      min-height: 0;
+      height: 167mm;
+      padding: 12mm 0;
+      break-after: page;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+</style>
+
+<script>
+  const deck = document.getElementById('deck');
+  const slides = Array.from(document.querySelectorAll<HTMLElement>('.slide'));
+  const count = document.getElementById('deck-count');
+  let current = 0;
+
+  const go = (i: number) => {
+    const next = Math.max(0, Math.min(slides.length - 1, i));
+    slides[next]?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          current = slides.indexOf(e.target as HTMLElement);
+          if (count) count.textContent = `${current + 1} / ${slides.length}`;
+        }
+      }
+    },
+    { root: deck, threshold: 0.6 },
+  );
+  for (const s of slides) observer.observe(s);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) {
+      e.preventDefault();
+      go(current + 1);
+    } else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) {
+      e.preventDefault();
+      go(current - 1);
+    } else if (e.key === 'Home') {
+      go(0);
+    } else if (e.key === 'End') {
+      go(slides.length - 1);
+    }
+  });
+
+  document.getElementById('deck-fullscreen')?.addEventListener('click', () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void document.documentElement.requestFullscreen();
+  });
+  document.getElementById('deck-print')?.addEventListener('click', () => window.print());
+</script>

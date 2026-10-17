@@ -1,0 +1,180 @@
+@import "tailwindcss";
+@import "@fontsource-variable/fraunces";
+@import "@fontsource-variable/inter";
+
+/* Values mirror packages/shared/src/brand.ts — change both together. */
+@theme {
+  --color-leaf-50: #eefaf3;
+  --color-leaf-100: #d6f2e2;
+  --color-leaf-200: #ade3c6;
+  --color-leaf-300: #7bcfa5;
+  --color-leaf-400: #47b582;
+  --color-leaf-500: #249a66;
+  --color-leaf-600: #167c51;
+  --color-leaf-700: #126343;
+  --color-leaf-800: #104f37;
+  --color-leaf-900: #0d402e;
+  --color-leaf-950: #05241a;
+  --color-cream: #faf8f2;
+  --color-sand: #efe9da;
+  --color-gold: #c9a85b;
+  --color-ink: #0c1d16;
+  --color-muted: #53665c;
+  --color-test: #f59e0b;
+
+  --font-display: "Fraunces Variable", ui-serif, Georgia, serif;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-soft: 0 1px 2px rgb(12 29 22 / 0.04), 0 8px 24px -8px rgb(12 29 22 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(12 29 22 / 0.05), 0 24px 48px -16px rgb(12 29 22 / 0.22);
+
+  --animate-rise: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-pulse-ring: pulse-ring 2.4s ease-out infinite;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes pulse-ring {
+    0% {
+      box-shadow: 0 0 0 0 rgb(71 181 130 / 0.45);
+    }
+    70% {
+      box-shadow: 0 0 0 10px rgb(71 181 130 / 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgb(71 181 130 / 0);
+    }
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-variation-settings:
+      "SOFT" 60,
+      "WONK" 0;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  ::selection {
+    background: var(--color-leaf-200);
+    color: var(--color-leaf-950);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-leaf-500);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+}
+
+@layer components {
+  .container-page {
+    width: 100%;
+    max-width: 76rem;
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+  @media (min-width: 640px) {
+    .container-page {
+      padding-inline: 1.5rem;
+    }
+  }
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-leaf-700);
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 999px;
+    padding: 0.8rem 1.4rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition:
+      transform 0.2s ease,
+      background-color 0.2s ease,
+      box-shadow 0.2s ease,
+      color 0.2s ease;
+  }
+  .btn:hover {
+    transform: translateY(-1px);
+  }
+  .btn-primary {
+    background: var(--color-leaf-500);
+    color: white;
+    box-shadow: 0 8px 24px -10px rgb(36 154 102 / 0.8);
+  }
+  .btn-primary:hover {
+    background: var(--color-leaf-600);
+  }
+  .btn-ghost-light {
+    color: white;
+    background: rgb(255 255 255 / 0.08);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
+  }
+  .btn-ghost-light:hover {
+    background: rgb(255 255 255 / 0.14);
+  }
+  .btn-outline {
+    color: var(--color-leaf-800);
+    box-shadow: inset 0 0 0 1px var(--color-leaf-200);
+    background: white;
+  }
+  .btn-outline:hover {
+    box-shadow: inset 0 0 0 1px var(--color-leaf-400);
+  }
+  .card {
+    background: white;
+    border-radius: 1.25rem;
+    box-shadow: var(--shadow-soft);
+    border: 1px solid rgb(13 64 46 / 0.07);
+  }
+  .grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E");
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* !important is deliberate: the reduced-motion override must beat every utility (biome.json override). */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,45 @@
+---
+import { Icon } from '../Icon';
+---
+
+<section id="reforme" class="py-20 sm:py-28">
+  <div class="container-page grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
+    <div>
+      <p class="eyebrow"><span class="h-px w-6 bg-leaf-500"></span>La réforme</p>
+      <h2 class="mt-4 text-4xl leading-tight font-medium text-leaf-950 sm:text-5xl">
+        La facture PDF par e-mail, c’est bientôt fini.
+      </h2>
+      <p class="mt-5 text-lg leading-relaxed text-muted">
+        Toutes les entreprises assujetties à la TVA doivent déjà pouvoir recevoir des factures
+        électroniques. Dans moins d’un an, les TPE et PME devront aussi les émettre dans un format
+        structuré, transmis par une plateforme agréée. Une facture hors format ne sera plus une facture.
+      </p>
+    </div>
+    <ol class="relative space-y-4 before:absolute before:top-3 before:bottom-3 before:left-[1.15rem] before:w-px before:bg-leaf-200">
+      <li class="card relative flex gap-5 p-6">
+        <span class="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-leaf-500 text-white"><Icon name="check" size={18} /></span>
+        <div>
+          <p class="text-sm font-semibold text-leaf-700">1er septembre 2026 · en vigueur</p>
+          <p class="mt-1 font-display text-xl text-leaf-950">Réception obligatoire pour tous</p>
+          <p class="mt-1.5 text-muted">Chaque entreprise doit pouvoir recevoir ses factures fournisseurs via une plateforme agréée.</p>
+        </div>
+      </li>
+      <li class="card relative flex gap-5 p-6 ring-2 ring-leaf-400/60">
+        <span class="relative z-10 flex h-9 w-9 shrink-0 animate-pulse-ring items-center justify-center rounded-full bg-gold text-leaf-950"><Icon name="calendar" size={18} /></span>
+        <div>
+          <p class="text-sm font-semibold text-leaf-700">1er septembre 2027 <span class="countdown" data-target="2027-09-01"></span></p>
+          <p class="mt-1 font-display text-xl text-leaf-950">Émission obligatoire pour les TPE et PME</p>
+          <p class="mt-1.5 text-muted">Vos factures clients doivent partir au format électronique (Factur-X, UBL ou CII), avec les nouvelles mentions obligatoires.</p>
+        </div>
+      </li>
+      <li class="card relative flex gap-5 p-6">
+        <span class="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-leaf-100 text-leaf-700"><Icon name="alert" size={18} /></span>
+        <div>
+          <p class="text-sm font-semibold text-leaf-700">Ce qui change pour vous</p>
+          <p class="mt-1 font-display text-xl text-leaf-950">Quatre nouvelles mentions, zéro approximation</p>
+          <p class="mt-1.5 text-muted">SIREN du client, adresse de livraison, nature de l’opération, option TVA sur les débits. Facture Impec les vérifie pour vous.</p>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>

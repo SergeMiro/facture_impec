@@ -1,0 +1,48 @@
+---
+import Todo from '../components/Todo.astro';
+import { legal } from '../content/site';
+import Legal from '../layouts/Legal.astro';
+---
+
+<Legal title="Mentions légales" description="Éditeur, hébergeur et propriété intellectuelle du site Facture Impec." updated="17 octobre 2026">
+  <section>
+    <h2>Éditeur du site</h2>
+    <p>
+      <Todo value={legal.publisher} label="Raison sociale ou nom" />, <Todo value={legal.legalForm} label="forme juridique" />,
+      SIREN <Todo value={legal.siren} label="SIREN" />.
+    </p>
+    <p>Adresse : <Todo value={legal.address} label="adresse" />.</p>
+    <p>Directeur de la publication : <Todo value={legal.director} label="nom" />.</p>
+    <p>Contact : <Todo value={legal.email} label="e-mail de contact" />.</p>
+  </section>
+
+  <section>
+    <h2>Hébergement</h2>
+    <p>Vercel Inc., 440 N Barranca Ave #4133, Covina, CA 91723, États-Unis — vercel.com.</p>
+    <p>
+      Les demandes d’essai sont enregistrées dans une base de données Supabase hébergée dans l’Union
+      européenne.
+    </p>
+  </section>
+
+  <section>
+    <h2>Propriété intellectuelle</h2>
+    <p>
+      Les textes, visuels et éléments graphiques de ce site sont la propriété de l’éditeur, sauf
+      mention contraire. Toute reproduction sans autorisation est interdite.
+    </p>
+    <p>
+      Microsoft, Excel et Microsoft 365 sont des marques du groupe Microsoft. Les autres marques citées
+      appartiennent à leurs propriétaires respectifs. Facture Impec n’est ni affilié ni approuvé par
+      ces sociétés.
+    </p>
+  </section>
+
+  <section>
+    <h2>Démonstration</h2>
+    <p>
+      La démonstration interactive de la page d’accueil est entièrement simulée dans votre navigateur.
+      Les entreprises, numéros et montants qui y figurent sont fictifs.
+    </p>
+  </section>
+</Legal>

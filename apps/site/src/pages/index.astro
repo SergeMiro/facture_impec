@@ -1,0 +1,29 @@
+---
+import AiProviders from '../components/sections/AiProviders.astro';
+import DemoSection from '../components/sections/DemoSection.astro';
+import Faq from '../components/sections/Faq.astro';
+import Features from '../components/sections/Features.astro';
+import Hero from '../components/sections/Hero.astro';
+import PricingSection from '../components/sections/PricingSection.astro';
+import Reform from '../components/sections/Reform.astro';
+import Security from '../components/sections/Security.astro';
+import Steps from '../components/sections/Steps.astro';
+import TrialSection from '../components/sections/TrialSection.astro';
+import Base from '../layouts/Base.astro';
+---
+
+<Base
+  title="Facture Impec — la facture électronique depuis Excel"
+  description="Vérifiez, convertissez en Factur-X et envoyez vos factures par une plateforme agréée sans quitter Excel. Essai gratuit 30 jours pour les TPE, PME et experts-comptables."
+>
+  <Hero />
+  <Reform />
+  <Steps />
+  <DemoSection />
+  <Features />
+  <AiProviders />
+  <Security />
+  <PricingSection />
+  <TrialSection />
+  <Faq />
+</Base>

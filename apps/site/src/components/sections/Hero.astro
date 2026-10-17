@@ -1,0 +1,122 @@
+---
+import { deadlines, trialDays } from '../../content/site';
+import { Icon } from '../Icon';
+
+const rows = [
+  { n: 'F-2027-041', c: 'Boulangerie Martin', a: '1 250,00', s: 'Encaissée', tone: 'paid' },
+  { n: 'F-2027-042', c: 'Atelier Dubois', a: '3 480,00', s: 'Approuvée', tone: 'ok' },
+  { n: 'F-2027-043', c: 'Garage des Lilas', a: '860,40', s: 'À corriger', tone: 'fix' },
+  { n: 'F-2027-044', c: 'Studio Lumen', a: '2 100,00', s: 'Déposée', tone: 'sent' },
+  { n: 'F-2027-045', c: 'Cave Bonnard', a: '415,90', s: 'Prête', tone: 'ready' },
+];
+const chip: Record<string, string> = {
+  paid: 'bg-leaf-500 text-white',
+  ok: 'bg-leaf-100 text-leaf-800',
+  fix: 'bg-amber-100 text-amber-800',
+  sent: 'bg-sky-100 text-sky-800',
+  ready: 'bg-white text-leaf-800 ring-1 ring-leaf-200',
+};
+---
+
+<section class="relative isolate overflow-hidden bg-leaf-950 pt-28 pb-20 text-white sm:pt-36 sm:pb-28">
+  <div class="grain absolute inset-0 -z-10 opacity-70"></div>
+  <div
+    class="absolute inset-0 -z-20"
+    style="background: radial-gradient(60rem 40rem at 85% -10%, rgb(71 181 130 / 0.35), transparent 60%), radial-gradient(50rem 30rem at -10% 110%, rgb(201 168 91 / 0.16), transparent 60%), linear-gradient(180deg, #05241a, #082f22);"
+  >
+  </div>
+  <svg class="absolute inset-0 -z-10 h-full w-full opacity-[0.07]" aria-hidden="true">
+    <defs>
+      <pattern id="hero-grid" width="44" height="44" patternUnits="userSpaceOnUse">
+        <path d="M44 0H0v44" fill="none" stroke="white" stroke-width="1"></path>
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#hero-grid)"></rect>
+  </svg>
+
+  <div class="container-page grid items-center gap-14 lg:grid-cols-[1.05fr_1fr]">
+    <div class="animate-rise">
+      <a
+        href="#reforme"
+        class="inline-flex items-center gap-2 rounded-full bg-white/8 py-1.5 pr-3 pl-1.5 text-xs font-medium text-leaf-100 ring-1 ring-white/15 transition hover:bg-white/12"
+      >
+        <span class="rounded-full bg-gold/90 px-2 py-0.5 text-[0.7rem] font-semibold text-leaf-950">Réforme</span>
+        Émission obligatoire pour les TPE/PME le {deadlines.emission.label}
+        <span class="countdown hidden font-semibold text-white sm:inline" data-target={deadlines.emission.date}></span>
+      </a>
+      <h1 class="mt-6 text-[2.6rem] leading-[1.05] font-medium sm:text-6xl lg:text-[4.1rem]">
+        Vos factures Excel, <span class="italic text-leaf-300">impeccables</span> pour la facture électronique.
+      </h1>
+      <p class="mt-6 max-w-xl text-lg leading-relaxed text-leaf-50/80">
+        Facture Impec vérifie chaque facture, la convertit au format Factur-X, l’envoie par une
+        plateforme agréée et la suit jusqu’au paiement. Sans quitter Excel, sans changer vos habitudes.
+      </p>
+      <div class="mt-9 flex flex-col gap-3 sm:flex-row">
+        <a href="#essai" class="btn btn-primary !px-6 !py-3.5 text-base">
+          Essai gratuit {trialDays} jours <Icon name="arrowRight" size={18} />
+        </a>
+        <a href="#demo" class="btn btn-ghost-light !px-6 !py-3.5 text-base">
+          <Icon name="play" size={16} /> Voir la démo
+        </a>
+      </div>
+      <ul class="mt-9 flex flex-wrap gap-x-6 gap-y-2 text-sm text-leaf-100/75">
+        <li class="flex items-center gap-2"><Icon name="check" size={16} className="text-leaf-300" /> Sans carte bancaire</li>
+        <li class="flex items-center gap-2"><Icon name="check" size={16} className="text-leaf-300" /> Windows, Mac et Excel en ligne</li>
+        <li class="flex items-center gap-2"><Icon name="check" size={16} className="text-leaf-300" /> Données hébergées en UE</li>
+      </ul>
+    </div>
+
+    <div class="relative animate-rise [animation-delay:120ms]" aria-hidden="true">
+      <div class="absolute -inset-6 -z-10 rounded-[2rem] bg-leaf-400/20 blur-3xl"></div>
+      <div class="overflow-hidden rounded-2xl bg-white text-ink shadow-[0_40px_80px_-30px_rgb(0_0_0/0.6)] ring-1 ring-white/10">
+        <div class="flex items-center gap-2 bg-[#1f6e43] px-4 py-2.5 text-xs text-white/90">
+          <span class="flex gap-1.5"><i class="h-2.5 w-2.5 rounded-full bg-white/30"></i><i class="h-2.5 w-2.5 rounded-full bg-white/30"></i><i class="h-2.5 w-2.5 rounded-full bg-white/30"></i></span>
+          <span class="ml-2 font-medium">Factures 2027.xlsx</span>
+        </div>
+        <div class="grid grid-cols-[1fr] sm:grid-cols-[1fr_11.5rem]">
+          <div class="overflow-hidden text-[0.72rem]">
+            <div class="grid grid-cols-[6.4rem_1fr_4.6rem_5.8rem] border-b border-black/5 bg-[#f3f5f4] font-semibold text-black/45">
+              <span class="px-2 py-1.5">N°</span><span class="px-2 py-1.5">Client</span><span class="px-2 py-1.5 text-right">HT €</span><span class="bg-leaf-50 px-2 py-1.5 text-leaf-700">FI_Statut</span>
+            </div>
+            {
+              rows.map((r) => (
+                <div class="grid grid-cols-[6.4rem_1fr_4.6rem_5.8rem] border-b border-black/[0.04]">
+                  <span class="px-2 py-2 whitespace-nowrap tabular-nums text-black/70">{r.n}</span>
+                  <span class="truncate px-2 py-2">{r.c}</span>
+                  <span class="px-2 py-2 text-right tabular-nums">{r.a}</span>
+                  <span class="bg-leaf-50/50 px-1.5 py-1.5">
+                    <span class={`inline-block rounded-full px-2 py-0.5 text-[0.66rem] font-semibold ${chip[r.tone]}`}>{r.s}</span>
+                  </span>
+                </div>
+              ))
+            }
+          </div>
+          <div class="hidden border-l border-black/5 bg-cream p-3 sm:block">
+            <p class="font-display text-sm font-semibold text-leaf-900">Facture Impec</p>
+            <div class="mt-3 rounded-xl bg-white p-2.5 shadow-soft">
+              <p class="text-[0.68rem] font-semibold text-amber-700">1 facture à corriger</p>
+              <p class="mt-1 text-[0.66rem] leading-snug text-black/60">F-2027-043 : le SIREN du client semble incorrect. Cellule D4.</p>
+              <span class="mt-2 inline-block rounded-full bg-leaf-500 px-2 py-0.5 text-[0.62rem] font-semibold text-white">Corriger</span>
+            </div>
+            <div class="mt-2.5 rounded-xl bg-white p-2.5 shadow-soft">
+              <p class="text-[0.68rem] font-semibold text-leaf-800">Encaissé ce mois</p>
+              <p class="font-display text-lg font-semibold text-leaf-700">12 840 €</p>
+              <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-leaf-100"><div class="h-full w-3/4 rounded-full bg-leaf-500"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  const fmt = (target: string) => {
+    const days = Math.ceil((new Date(`${target}T00:00:00+02:00`).getTime() - Date.now()) / 86_400_000);
+    return days > 0 ? `· J-${days}` : '';
+  };
+  document.querySelectorAll<HTMLElement>('.countdown').forEach((el) => {
+    const target = el.dataset.target;
+    if (target) el.textContent = fmt(target);
+  });
+</script>
