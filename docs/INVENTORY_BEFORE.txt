@@ -1,0 +1,52 @@
+.  (main @ 4c6b294, 2026-10-17 — before M0; depth 3, without .git/node_modules/target)
+├── .github
+│   └── workflows
+│       └── ci.yml
+├── .gitignore
+├── AGENT_PLAN.md
+├── Cargo.lock
+├── Cargo.toml
+├── Dockerfile
+├── LICENSE
+├── README.md
+├── addin
+│   ├── .gitignore
+│   ├── app
+│   │   ├── api
+│   │   ├── globals.css
+│   │   ├── icon.png
+│   │   ├── layout.tsx
+│   │   ├── page.tsx
+│   │   └── taskpane
+│   ├── next.config.mjs
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── public
+│   │   ├── assets
+│   │   └── manifest.xml
+│   ├── src
+│   │   ├── components
+│   │   ├── lib
+│   │   └── wasm
+│   └── tsconfig.json
+├── crates
+│   ├── facture-backend
+│   │   ├── Cargo.toml
+│   │   ├── src
+│   │   └── tests
+│   ├── facture-core
+│   │   ├── Cargo.toml
+│   │   ├── src
+│   │   └── tests
+│   └── facture-wasm
+│       ├── Cargo.toml
+│       └── src
+├── docs
+│   ├── AI_LAYER.md
+│   ├── ARCHITECTURE.md
+│   ├── DEPLOIEMENT.md
+│   ├── INVENTORY_BEFORE.txt
+│   ├── PDP_INTEGRATION.md
+│   ├── ROADMAP.md
+│   └── VALIDATION_RULES.md
+└── rust-toolchain.toml
