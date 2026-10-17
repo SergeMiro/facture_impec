@@ -9,7 +9,8 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "codelists": "tsx scripts/codelists.ts"
+    "codelists": "tsx scripts/codelists.ts",
+    "gen:docs": "tsx scripts/generate-docs.ts"
   },
   "dependencies": {
     "@cantoo/fontkit": "^2.0.12",
