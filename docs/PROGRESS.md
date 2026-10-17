@@ -9,7 +9,7 @@ Each milestone restates its acceptance criteria before work starts and checks th
 | Clone `SergeMiro/facture_impec` and inventory what exists | ✅ | `docs/INVENTORY_BEFORE.txt` (tree of `main @ 4c6b294`) |
 | Decide Rust keep/port (plan §1) | ✅ port to TS | `docs/ARCHITECTURE.md` § "Decision: port the Rust core"; `cargo test --workspace` → 36 passed, `cargo fmt --check` clean |
 | Write `docs/ARCHITECTURE.md` | ✅ | this branch |
-| Write `docs/B2BROUTER.md` with verified facts | ⏳ | |
+| Write `docs/B2BROUTER.md` with verified facts | ✅ | 666 lines, every fact with source + date; 18 `TODO(verify)` items in §11, each backed by the mock PDP; 13 discrepancies with the old Rust adapter in §10 |
 | Scaffold the monorepo (plan §2) | ✅ | `apps/{addin,api,mock-pdp}`, `packages/{core,agents,pdp-adapter,db,shared}`, Turborepo, Biome, Vitest |
 | CI green on an empty test | ✅ locally | `pnpm verify`: biome ci clean, 8/8 typecheck, 8/8 test tasks (6 tests). GitHub Actions is disabled on the account, so CI cannot run there. |
 | `pnpm install && pnpm test && pnpm dev` works on a fresh machine following `RUNBOOK.md` | ✅ | 2026-10-17, clean `node:22` container (Node 22.23.3, pnpm 11.8.0 via corepack), no caches: install 59 packages, 8/8 test tasks green, `/health` of api and mock-pdp answer, add-in page served |

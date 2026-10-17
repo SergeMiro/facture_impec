@@ -82,7 +82,11 @@ the `FF-` prefix for our own checks, French messages, and the cell reference car
   equivalents are `claude-sonnet-5-5` / `claude-haiku-5-5`; model ids will come from env so the choice
   stays a config change.
 - **PDP (M2/M4).** Facts about B2Brouter, with sources and dates, live in `docs/B2BROUTER.md`.
-  Business code only sees `PdpAdapter`.
+  Business code only sees `PdpAdapter`. Two changes to the plan §8 interface follow from those facts
+  and land in M2: B2Brouter keeps one account per SIREN, so every call carries the tenant's PDP
+  account; and reporting a payment (`paid`, French status 212) needs its own method. B2Brouter has no
+  idempotency key, so `sendInvoice` imports first and sends in a second call, and our own
+  idempotency key guards both.
 
 ## Environments
 
