@@ -9,7 +9,9 @@ like "plan §7" refer to it. Where this file and the plan disagree, the plan win
 ## Where things are
 
 - Single working copy on the VPS: `/home/sergiy_prod/facture_impec` (not under `~/workspaces`, which is auto-cleaned).
-- Layout: `apps/{addin,api,mock-pdp}`, `packages/{core,agents,pdp-adapter,db,shared}`, `fixtures/`, `docs/`, `scripts/`.
+- Layout: `apps/{addin,api,mock-pdp,site}`, `packages/{core,agents,pdp-adapter,db,shared}`, `fixtures/`, `docs/`, `scripts/`.
+- `apps/site` is the marketing site (Astro + Vercel, green brand). Its copy lives in `apps/site/src/content/`;
+  rule 6 below is about product UI. Never put unverified claims, fake testimonials or customer counts on it.
 - `legacy/rust-mvp/` is the frozen Rust/Next.js MVP. Read it while porting rules in M1; never build on it,
   never edit it. It is deleted at the end of M1 (the branch `archive/rust-mvp-v1` keeps it forever).
 - Progress and evidence: `docs/PROGRESS.md`. Things consciously postponed: `docs/DEFERRED.md`.
@@ -18,7 +20,7 @@ like "plan §7" refer to it. Where this file and the plan disagree, the plan win
 
 ```bash
 pnpm install          # Node 22, pnpm 11 (corepack)
-pnpm dev              # api :4000, mock-pdp :4010, add-in :3000
+pnpm dev              # api :4000, mock-pdp :4010, add-in :3000, site :4321
 pnpm verify           # biome ci + typecheck + tests — the gate before every commit
 pnpm format           # biome check --write
 ```

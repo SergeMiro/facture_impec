@@ -31,6 +31,31 @@ places: in the task pane for instant hints, and in the API as the authoritative 
 | `packages/shared` | `t()` over `i18n/fr.json` (keys type-checked) and the Zod server-env schema. |
 | `packages/{core,agents,pdp-adapter,db}` | Empty, wired into the workspace. Each `src/index.ts` names the milestone that fills it. |
 | `legacy/rust-mvp` | Frozen previous MVP, kept as reading material for the M1 port; deleted at the end of M1. |
+| `apps/site` | Marketing site (added 2026-10-17, outside the plan's milestones, at the owner's request): landing page with an in-browser demo, pricing, `/presentation` slides, legal pages, and the trial-access form backed by `POST /api/trial`. |
+
+## Marketing site (`apps/site`)
+
+Astro 7, static pages plus one serverless endpoint (`@astrojs/vercel`), Tailwind 4, and React 18 only
+for the three interactive islands (demo, pricing toggle, trial form). It is separate from the add-in:
+marketing copy lives in `apps/site/src/content/`, while product UI strings stay in
+`packages/shared/i18n/fr.json` (rule 6).
+
+- **Brand.** Green: the palette in `packages/shared/src/brand.ts` is mirrored by the Tailwind `@theme`
+  tokens in `apps/site/src/styles/global.css`. The add-in adopts the same tokens in M3, with the
+  orange « Mode test » colour kept apart.
+- **Fonts.** Fraunces (titles) and Inter (text) are self-hosted through Fontsource: no request to
+  Google Fonts, so no third-party transfer to declare.
+- **Demo.** Simulated in the browser: five invoices, two planted errors, then a « Mode test »
+  rehearsal with the French lifecycle statuses. Its SIREN key check is a local copy; after M1 it
+  imports `@fi/core` instead.
+- **Trial form.** The request schema is shared (`@fi/shared` `TrialRequestSchema`). The handler
+  (`apps/site/src/lib/trial.ts`) drops bots silently (honeypot + minimum fill time), validates,
+  stores one row per e-mail in Supabase through PostgREST (`apps/site/sql/001_trial_requests.sql`,
+  RLS on, no policy, server secret key only) and optionally notifies the owner on Telegram without
+  personal data. With no storage configured, development logs the request and production answers 503.
+- **Env.** Astro reads the root `.env` (`vite.envDir`), like every other app.
+- **Prices** on the site come from `docs/research/PRICING.md` §3.2 and are a proposal until the owner
+  validates them and B2Brouter's price is known.
 
 ## Decision: port the Rust core to TypeScript, archive Rust
 
@@ -78,9 +103,10 @@ the `FF-` prefix for our own checks, French messages, and the cell reference car
   quantity × price to cents, computed in `bigint`. Never floats.
 - **XML (M1).** Evaluate `@e-invoice-eu/core` against the golden corpus before writing builders (plan §1).
 - **API runtime (M2).** Bundle `apps/api` and `apps/mock-pdp` (esbuild/tsup) and ship one Docker image for the EU VPS.
-- **LLM (M3).** Plan §1 names the Anthropic API with `claude-sonnet-4-6` / `claude-haiku-4-5`. Current
-  equivalents are `claude-sonnet-5-5` / `claude-haiku-5-5`; model ids will come from env so the choice
-  stays a config change.
+- **LLM (M3).** Plan §1 named the Anthropic API only. On 2026-10-17 the owner asked for every major
+  provider plus any OpenAI-compatible endpoint, included or with the tenant's own key: design in
+  `docs/AI_PROVIDERS.md` (Vercel AI SDK, per-tenant settings, sealed keys, capability probe, no silent
+  provider switch). Model ids come from env so the default stays a config change.
 - **PDP (M2/M4).** Facts about B2Brouter, with sources and dates, live in `docs/B2BROUTER.md`.
   Business code only sees `PdpAdapter`. Two changes to the plan §8 interface follow from those facts
   and land in M2: B2Brouter keeps one account per SIREN, so every call carries the tenant's PDP
