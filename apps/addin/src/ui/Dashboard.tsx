@@ -1,10 +1,11 @@
-// Screen 3, Tableau de bord (plan §5): one line per invoice of the sheet, coloured like its
-// FI_Statut cell, with « Voir » to open its fiche.
+// Screen 3, Tableau de bord (plan §5): the week in a few lines (ReportAgent), then one line per
+// invoice of the sheet, coloured like its FI_Statut cell, with « Voir » to open its fiche.
 import { t } from '@fi/shared';
 import {
   Badge,
   Button,
   Caption1,
+  Card,
   Link,
   makeStyles,
   Spinner,
@@ -12,7 +13,7 @@ import {
   Text,
   tokens,
 } from '@fluentui/react-components';
-import type { RowStatus } from '../api';
+import type { RowStatus, WeeklyReport } from '../api';
 import { parisTime, useFi } from './context';
 
 const useStyles = makeStyles({
@@ -28,7 +29,35 @@ const useStyles = makeStyles({
   },
   detail: { gridColumn: '1 / -1', color: tokens.colorNeutralForeground2 },
   muted: { color: tokens.colorNeutralForeground3 },
+  card: { display: 'flex', flexDirection: 'column', gap: '4px', padding: '10px' },
+  todo: { margin: 0, paddingLeft: '20px' },
 });
+
+function Week({ report }: { report: WeeklyReport }) {
+  const styles = useStyles();
+  return (
+    <Card className={styles.card} data-testid="weekly">
+      <Text weight="semibold">{report.title}</Text>
+      {report.numbers.map((n) => (
+        <Caption1 key={n}>{n}</Caption1>
+      ))}
+      {report.actions.length > 0 ? (
+        <>
+          <Text weight="semibold">{t('report.todo')}</Text>
+          <ul className={styles.todo}>
+            {report.actions.map((a) => (
+              <li key={a}>
+                <Caption1>{a}</Caption1>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <Caption1>{t('report.nothing')}</Caption1>
+      )}
+    </Card>
+  );
+}
 
 export const BADGE: Record<
   RowStatus['tone'],
@@ -65,6 +94,12 @@ export function Dashboard() {
           sync && <Caption1>{t('addin.dash.lastSync', { time: parisTime(sync.at) })}</Caption1>
         )}
       </div>
+
+      {state.report ? (
+        <Week report={state.report} />
+      ) : (
+        state.busy.includes('report') && <Spinner size="tiny" label={t('addin.report.loading')} />
+      )}
 
       {sync && (
         <Text weight="semibold" data-testid="counts">

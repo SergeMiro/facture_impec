@@ -1,5 +1,5 @@
 // Screen 4, Fiche facture (plan §5): what to fix and where, the rehearsal, sending, the XML and PDF,
-// the timeline, and in Mode test the scenario panel (plan §3).
+// « Relancer », the MonitorAgent's next step, the timeline, and in Mode test the scenario panel.
 import { frDate, frMoney } from '@fi/core';
 import { isMessageKey, type MessageKey, t } from '@fi/shared';
 import {
@@ -18,8 +18,10 @@ import {
   Text,
   tokens,
 } from '@fluentui/react-components';
-import { type InvoiceEvent, SCENARIOS, type Scenario } from '../api';
+import { useState } from 'react';
+import { type InvoiceEvent, MONITOR_PROPOSALS, SCENARIOS, type Scenario } from '../api';
 import type { OpenInvoice } from '../controller';
+import { ChasePanel, dayLabel, kindLabel, NextStepCard, stepStatus } from './ChasePanel';
 import { parisDateTime, useFi } from './context';
 import { TEST_ORANGE } from './theme';
 
@@ -84,6 +86,25 @@ function eventText(e: InvoiceEvent): string {
     const scenario = 'scenario' in payload ? payload.scenario : null;
     const label = SCENARIOS.find((s) => s === scenario);
     text = t('addin.invoice.event.scenario', { scenario: label ? t(SCENARIO_LABEL[label]) : '' });
+  } else if (e.type === 'note' && e.event === 'chase') {
+    const offset = 'offset' in payload && typeof payload.offset === 'number' ? payload.offset : 0;
+    const kind = 'kind' in payload && typeof payload.kind === 'string' ? payload.kind : 'reminder';
+    const status = 'status' in payload && typeof payload.status === 'string' ? payload.status : '';
+    text = t('addin.invoice.event.chase', {
+      kind: kindLabel(kind),
+      day: dayLabel(offset),
+      status: stepStatus(status),
+    });
+  } else if (e.type === 'note' && e.event === 'promise') {
+    const until = 'until' in payload && typeof payload.until === 'string' ? payload.until : null;
+    text = until
+      ? t('addin.invoice.event.promise', { date: frDate(until) })
+      : t('addin.invoice.event.promiseRemoved');
+  } else if (e.type === 'note' && e.event === 'monitor') {
+    const proposal = MONITOR_PROPOSALS.find((p) => 'proposal' in payload && payload.proposal === p);
+    text = proposal
+      ? t('addin.invoice.event.monitor', { proposal: t(`monitor.proposal.${proposal}`) })
+      : t('addin.invoice.event.monitorOpen');
   } else if (e.type === 'note' && e.event === 'scenario_planned') {
     const status = 'status' in payload && typeof payload.status === 'string' ? payload.status : '';
     text = t('addin.invoice.event.planned', { status: statusLabel(status) });
@@ -111,11 +132,15 @@ function eventText(e: InvoiceEvent): string {
     .join(' ');
 }
 
+/** The fiche opens on the chasing when there is something to do there. */
+const CHASE_FIRST = ['overdue', 'chasing'];
+
 export function InvoiceView() {
   const styles = useStyles();
   const [state, fi] = useFi();
   const open = state.invoice;
   const screen = state.screen;
+  const [chaseShown, showChase] = useState<boolean | null>(null);
   if (!open || screen.name !== 'invoice') {
     return state.busy.includes('invoice') ? <Spinner label={t('addin.loading')} /> : null;
   }
@@ -124,6 +149,9 @@ export function InvoiceView() {
   const number = d.number ?? '';
   const amount = d.payable !== null ? frMoney(d.payable, d.currency ?? 'EUR') : '';
   const sendable = d.status === 'validated' && errors.length === 0;
+  const chaseOpen =
+    chaseShown ??
+    (CHASE_FIRST.includes(d.status) || Boolean(d.chase?.steps.some((s) => s.status === 'drafted')));
 
   return (
     <section className={styles.section} aria-labelledby="invoice-title">
@@ -146,6 +174,8 @@ export function InvoiceView() {
         {amount && <Text>{t('addin.invoice.amount', { amount })}</Text>}
         {d.dueDate && <Text>{t('addin.invoice.due', { date: frDate(d.dueDate) })}</Text>}
       </div>
+
+      {d.nextStep && <NextStepCard next={d.nextStep} />}
 
       <Issues open={open} />
 
@@ -199,8 +229,8 @@ export function InvoiceView() {
           >
             {d.isTest ? t('addin.invoice.sendTest') : t('addin.invoice.send')}
           </Button>
-          <Button disabled title={t('addin.invoice.chaseSoon')}>
-            {t('addin.invoice.chase')}
+          <Button onClick={() => showChase(!chaseOpen)} aria-expanded={chaseOpen}>
+            {chaseOpen ? t('addin.invoice.chaseHide') : t('addin.invoice.chase')}
           </Button>
           <Button onClick={() => void fi.viewXml()} disabled={state.busy.includes('xml')}>
             {open.xml ? t('addin.invoice.hideXml') : t('addin.invoice.xml')}
@@ -227,6 +257,8 @@ export function InvoiceView() {
           </Link>
         </>
       )}
+
+      {chaseOpen && <ChasePanel detail={d} />}
 
       {state.testMode && <ScenarioPanel isTest={d.isTest} />}
 

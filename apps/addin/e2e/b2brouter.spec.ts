@@ -1,7 +1,8 @@
 // M4 acceptance (plan §11): one invoice goes from the sheet to B2Brouter's sandbox, and its status
 // comes back to FI_Statut without a click, the fiche closed. By default against B2Brouter's stand-in
 // in apps/mock-pdp (the real adapter, webhooks included); with FI_LIVE_B2BROUTER_* against the real
-// sandbox (docs/RUNBOOK.md § E2E), where the sweep brings the news.
+// sandbox (docs/RUNBOOK.md § E2E), where the sweep brings the news. Then, on the stand-in, M5's
+// « Encaissée » from « Relancer » reports the payment and the sheet says it was paid.
 // browser: local (Chrome of this server; Browserbase cannot reach localhost).
 import { type MessageKey, t } from '@fi/shared';
 import { expect, test } from '@playwright/test';
@@ -99,5 +100,27 @@ test('an invoice goes to B2Brouter and its status comes back to the sheet by its
       `FI_Statut: « ${await cell.textContent()} » ${Math.round((Date.now() - sent) / 1000)} s after the send`,
     );
     await page.screenshot({ path: info.outputPath('sheet.png') });
+  });
+
+  // M5 « Relancer » / « Encaissée »: the stand-in takes the payment report like B2Brouter's API.
+  if (LIVE) return;
+  await test.step('Relancer, then Encaissée: the sheet says it was paid', async () => {
+    await row(pane, `TEST-${number}`)
+      .getByRole('button', { name: t('addin.dash.view') })
+      .click();
+    await pane.getByRole('button', { name: t('addin.invoice.chase') }).click();
+    const panel = pane.getByTestId('chase-panel');
+    await expect(panel.getByRole('heading', { name: t('addin.chase.title') })).toBeVisible();
+    await panel.getByRole('button', { name: t('addin.chase.paid') }).click();
+    await panel
+      .getByTestId('confirm-paid')
+      .getByRole('button', { name: t('addin.chase.confirm') })
+      .click();
+    await expect(
+      pane.getByText(t('addin.chase.paidDone', { number: `TEST-${number}` })),
+    ).toBeVisible();
+    await page.screenshot({ path: info.outputPath('paid.png') });
+    await pane.getByRole('button', { name: t('addin.invoice.back') }).click();
+    await expect(page.getByTestId('cell-M2')).toHaveText(testLabel('paid'), { timeout: 30_000 });
   });
 });

@@ -1,5 +1,6 @@
-// Screen 6, Réglages (plan §5): mode, chasing cadence, pseudonymization, PDP connection, Mode test,
-// the invoice defaults, the AI choice and the RGPD export.
+// Screen 6, Réglages (plan §5): mode (Review, or the chasing autopilot with its ceiling), chasing
+// cadence, pseudonymization, PDP connection, Mode test, the invoice defaults, the AI choice and the
+// RGPD export.
 import { isMessageKey, t } from '@fi/shared';
 import {
   Badge,
@@ -47,6 +48,14 @@ export function parseCadence(text: string): number[] | null {
   return valid ? days : null;
 }
 
+/** « 2 000 », « 1500,50 » → cents; null unless a positive amount in euros with at most 2 decimals. */
+export function parseEuros(text: string): number | null {
+  const clean = text.replace(/[\s\u00a0\u202f€]/g, '').replace(',', '.');
+  if (!/^\d+(\.\d{1,2})?$/.test(clean)) return null;
+  const cents = Math.round(Number(clean) * 100);
+  return cents > 0 && cents <= 100_000_000 ? cents : null;
+}
+
 export function SettingsView() {
   const styles = useStyles();
   const [state] = useFi();
@@ -70,6 +79,68 @@ export function SettingsView() {
   );
 }
 
+function Mode({ settings }: { settings: Settings }) {
+  const styles = useStyles();
+  const [state, fi] = useFi();
+  const [mode, setMode] = useState(settings.mode);
+  const [ceiling, setCeiling] = useState(
+    settings.autopilotMaxAmount === null ? '' : String(settings.autopilotMaxAmount / 100),
+  );
+  const [ceilingError, setCeilingError] = useState(false);
+  useEffect(() => setMode(settings.mode), [settings.mode]);
+  const saving = state.busy.includes('saveSettings');
+
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    if (mode === 'review') {
+      void fi.saveSettings({ mode: 'review' });
+      return;
+    }
+    const cents = parseEuros(ceiling);
+    setCeilingError(cents === null);
+    if (cents !== null) void fi.saveSettings({ mode: 'autopilot', autopilotMaxAmount: cents });
+  };
+
+  return (
+    <form className={styles.form} onSubmit={save} data-testid="mode">
+      <Field
+        label={t('addin.settings.mode')}
+        hint={
+          settings.autopilotAvailable
+            ? t('addin.settings.modeHint')
+            : t('addin.settings.autopilotUnavailable')
+        }
+      >
+        <RadioGroup value={mode} onChange={(_, d) => setMode(d.value as Settings['mode'])}>
+          <Radio value="review" label={t('addin.settings.modeReview')} />
+          <Radio
+            value="autopilot"
+            label={t('addin.settings.modeAutopilot')}
+            disabled={!settings.autopilotAvailable}
+          />
+        </RadioGroup>
+      </Field>
+      {mode === 'autopilot' && (
+        <Field
+          label={t('addin.settings.ceiling')}
+          hint={t('addin.settings.ceilingHint')}
+          validationState={ceilingError ? 'error' : 'none'}
+          validationMessage={ceilingError ? t('addin.settings.ceilingInvalid') : undefined}
+        >
+          <Input inputMode="decimal" value={ceiling} onChange={(_, d) => setCeiling(d.value)} />
+        </Field>
+      )}
+      {(mode !== settings.mode || mode === 'autopilot') && (
+        <Button type="submit" disabled={saving}>
+          {mode === 'autopilot'
+            ? t('addin.settings.autopilotSave')
+            : t('addin.settings.reviewSave')}
+        </Button>
+      )}
+    </form>
+  );
+}
+
 function General({ settings }: { settings: Settings }) {
   const styles = useStyles();
   const [state, fi] = useFi();
@@ -87,12 +158,7 @@ function General({ settings }: { settings: Settings }) {
 
   return (
     <div className={styles.form}>
-      <Field label={t('addin.settings.mode')} hint={t('addin.settings.modeHint')}>
-        <RadioGroup value={settings.mode}>
-          <Radio value="review" label={t('addin.settings.modeReview')} />
-          <Radio value="autopilot" label={t('addin.settings.modeAutopilot')} disabled />
-        </RadioGroup>
-      </Field>
+      <Mode settings={settings} />
 
       <Switch
         checked={state.testMode}

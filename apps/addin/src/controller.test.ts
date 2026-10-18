@@ -4,6 +4,7 @@ import {
   fakeAdapter,
   linkToken,
   newTenant,
+  runCollect,
   runSend,
   runSync,
   type testApi as TestApi,
@@ -11,6 +12,7 @@ import {
   testDatabase,
   type WorkerDeps,
 } from '@fi/api/testing';
+import { addDays, parisToday } from '@fi/core';
 import { type MessageKey, t } from '@fi/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Controller, type FiState, SETTING, SHEET_POLL_MAX_MS, SHEET_POLL_MS } from './controller';
@@ -311,6 +313,56 @@ describe('a new user on the demo sheet', () => {
     expect(state().settings?.pseudonymizeLlm).toBe(true);
     expect(await controller.saveSettings({ chaseCadence: [-3, 7, 15] })).toBe(true);
     expect(state().settings?.chaseCadence).toEqual([-3, 7, 15]);
+
+    // This deployment mails (the test outbox): the chasing autopilot can be chosen, with a ceiling.
+    expect(state().settings?.autopilotAvailable).toBe(true);
+    expect(await controller.saveSettings({ mode: 'autopilot', autopilotMaxAmount: 150_000 })).toBe(
+      true,
+    );
+    expect(state().settings).toMatchObject({ mode: 'autopilot', autopilotMaxAmount: 150_000 });
+    expect(await controller.saveSettings({ mode: 'review' })).toBe(true);
+    expect(state().settings?.mode).toBe('review');
+  });
+
+  it('chases the accepted invoice from its fiche, records a promise, then « Encaissée »', async () => {
+    const id = row(2)?.invoiceId;
+    if (!id) throw new Error('row 2 has no invoice');
+    // The CollectAgent's sweep gives the accepted invoice its plan (the company's cadence).
+    expect(await runCollect(api.deps)).toMatchObject({ planned: 1 });
+    await controller.openInvoice(id);
+    expect(state().invoice?.detail.chase?.cadence).toEqual([-3, 7, 15]);
+
+    expect(await controller.prepareChase()).toBe(true);
+    const manual = state().invoice?.detail.chase?.steps.find((s) => s.reason === 'manual');
+    expect(manual).toMatchObject({ status: 'drafted' });
+    expect(manual?.draft?.subject).toContain(row(2)?.number ?? '?');
+    expect(state().notice?.text).toBe(t('addin.chase.prepared', { number: row(2)?.number ?? '' }));
+    if (!manual) throw new Error('no manual step');
+    expect(await controller.markChaseSent(manual.offset)).toBe(true);
+    expect(
+      state().invoice?.detail.chase?.steps.find((s) => s.offset === manual.offset),
+    ).toMatchObject({ status: 'sent', by: 'user' });
+
+    const promised = addDays(parisToday(), 3);
+    expect(await controller.promisePayment(promised)).toBe(true);
+    expect(state().invoice?.detail.chase?.promisedUntil).toBe(promised);
+    expect(await controller.promisePayment(null)).toBe(true);
+    expect(state().invoice?.detail.chase?.promisedUntil).toBeNull();
+
+    await controller.recordPayment();
+    expect(state().invoice?.detail.status).toBe('paid');
+    expect(state().notice?.text).toBe(t('addin.chase.paidDone', { number: row(2)?.number ?? '' }));
+    await until(
+      () => book.cell(DEMO_SHEET, 'M2')?.text?.includes(t('invoice.status.paid')) ?? false,
+      'Encaissée on the sheet',
+    );
+  });
+
+  it('shows the week on the dashboard', async () => {
+    controller.navigate({ name: 'dashboard' });
+    await until(() => state().report !== null, 'the weekly report');
+    expect(state().report?.numbers.length).toBeGreaterThan(0);
+    expect(state().report?.title).toBeTruthy();
   });
 });
 

@@ -1,6 +1,6 @@
 // The task pane's only door to the API. Every answer is checked with Zod (rule 4); an API error
 // arrives as ApiFailure with the server's French message, a network failure as Offline.
-import { SheetMapping, type SheetSnapshot } from '@fi/core';
+import { ChaseDraft, ChaseStep, SheetMapping, type SheetSnapshot } from '@fi/core';
 import { z } from 'zod';
 
 export class ApiFailure extends Error {
@@ -116,9 +116,34 @@ const InvoiceSummary = z.object({
     .nullable(),
 });
 
+/** The chasing plan (« Relancer »): the cadence's steps with their dates and outcomes. */
+export const ChasePlan = z.object({
+  cadence: z.array(z.number()),
+  dueDate: z.string(),
+  steps: z.array(ChaseStep),
+  nextStepOn: z.string().nullable(),
+  paused: z.boolean(),
+  promisedUntil: z.string().nullable(),
+});
+export type ChasePlan = z.infer<typeof ChasePlan>;
+
+export const MONITOR_PROPOSALS = ['fix_and_resend', 'credit_note', 'contact_customer'] as const;
+
+/** The MonitorAgent's advice on a rejection or refusal still open. */
+export const NextStep = z.object({
+  kind: z.enum(['rejection', 'refusal']),
+  proposal: z.enum(MONITOR_PROPOSALS).nullable(),
+  why: z.string(),
+  rules: z.array(z.string()),
+  draft: ChaseDraft.nullable(),
+});
+export type NextStep = z.infer<typeof NextStep>;
+
 export const InvoiceDetail = InvoiceSummary.extend({
   issues: z.array(Issue),
   events: z.array(InvoiceEvent),
+  chase: ChasePlan.nullable(),
+  nextStep: NextStep.nullable(),
 });
 export type InvoiceDetail = z.infer<typeof InvoiceDetail>;
 
@@ -165,8 +190,10 @@ export const AI_PROVIDERS = [
 ] as const;
 
 export const Settings = z.object({
-  mode: z.string(),
+  mode: z.enum(['review', 'autopilot']),
   autopilotAvailable: z.boolean(),
+  /** Cents: the highest invoice amount the autopilot chases by itself. */
+  autopilotMaxAmount: z.number().nullable(),
   sandboxEnabled: z.boolean(),
   testPlatform: z.boolean(),
   pseudonymizeLlm: z.boolean(),
@@ -197,7 +224,19 @@ export type SettingsPatch = Partial<{
   sandboxEnabled: boolean;
   chaseCadence: number[];
   invoiceDefaults: Settings['invoiceDefaults'];
+  mode: Settings['mode'];
+  autopilotMaxAmount: number | null;
 }>;
+
+/** The weekly report (Tableau de bord card): numbers first, then what to do. */
+export const WeeklyReport = z.object({
+  subject: z.string(),
+  title: z.string(),
+  numbers: z.array(z.string()),
+  actions: z.array(z.string()),
+  text: z.string(),
+});
+export type WeeklyReport = z.infer<typeof WeeklyReport>;
 
 export type AiChoice =
   | { mode: 'included' }
@@ -317,6 +356,20 @@ export class ApiClient {
   send = (id: string) => this.#json(Sent, `/invoices/${id}/send`, { method: 'POST' });
   scenario = (id: string, scenario: Scenario) =>
     this.#json(InvoiceDetail, `/invoices/${id}/scenario`, { method: 'POST', body: { scenario } });
+  /** « Encaissée »: the customer paid; chasing stops and the platform is told. */
+  recordPayment = (id: string, paidOn?: string) =>
+    this.#json(InvoiceDetail, `/invoices/${id}/payment`, {
+      method: 'POST',
+      body: paidOn ? { paidOn } : {},
+    });
+  /** « Promesse de paiement » until that day; null withdraws it. */
+  promise = (id: string, until: string | null) =>
+    this.#json(InvoiceDetail, `/invoices/${id}/promise`, { method: 'POST', body: { until } });
+  prepareChase = (id: string) =>
+    this.#json(InvoiceDetail, `/invoices/${id}/chase`, { method: 'POST' });
+  markChaseSent = (id: string, offset: number) =>
+    this.#json(InvoiceDetail, `/invoices/${id}/chase/steps/${offset}/sent`, { method: 'POST' });
+  report = () => this.#json(WeeklyReport, '/report');
   /** The XML as text, the PDF as bytes: the fiche shows them inline. */
   xml = async (id: string) => (await this.#send(`/invoices/${id}/xml`)).text();
   pdf = async (id: string) => (await this.#send(`/invoices/${id}/pdf`)).blob();

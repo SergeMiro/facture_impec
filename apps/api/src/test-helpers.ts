@@ -12,6 +12,7 @@ import { SCENARIO_SELLER, scenarioDraft } from './scenarios/invoice';
 import { runSend, runSync, type WorkerDeps } from './workers';
 
 // The task pane's tests move invoices as the workers would.
+export { runCollect } from './collect';
 export { runSend, runSync, type WorkerDeps };
 
 export const ADMIN_TOKEN = 'test-admin-token-0123456789abcdef';

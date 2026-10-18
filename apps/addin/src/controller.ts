@@ -1,6 +1,6 @@
 // The task pane's state and actions, shared by the screens and the ribbon buttons (one shared runtime,
 // docs/OFFICE.md §2). Screens render `state`; nothing here knows about React.
-import { columnIndex, parseAddress, SheetMapping } from '@fi/core';
+import { columnIndex, frDate, parseAddress, SheetMapping } from '@fi/core';
 import { type MessageKey, t } from '@fi/shared';
 import {
   type AiChoice,
@@ -17,6 +17,7 @@ import {
   type Settings,
   type SettingsPatch,
   type SyncResult,
+  type WeeklyReport,
 } from './api';
 import type { ExcelPort, StatusPlan } from './excel/port';
 import {
@@ -70,6 +71,8 @@ export interface FiState {
   sync: { result: SyncResult; at: number } | null;
   invoice: OpenInvoice | null;
   settings: Settings | null;
+  /** The weekly card of the Tableau de bord; null until loaded, or where it could not be. */
+  report: WeeklyReport | null;
   /** Actions running now ('sync', 'detect', 'send', …): their buttons show a spinner. */
   busy: string[];
   /** null when online; otherwise the actions waiting for the connection. */
@@ -131,6 +134,7 @@ const INITIAL: FiState = {
   sync: null,
   invoice: null,
   settings: null,
+  report: null,
   busy: [],
   offline: null,
   notice: null,
@@ -204,6 +208,7 @@ export class Controller {
     if (screen.name !== 'invoice') this.#closeInvoice();
     this.#set({ screen, notice: null });
     if (screen.name === 'settings' && !this.#state.settings) void this.loadSettings();
+    if (screen.name === 'dashboard') void this.loadReport();
   };
 
   /** The connection is back (browser `online` event). */
@@ -330,6 +335,7 @@ export class Controller {
     if (mapping) {
       this.#set({ screen: { name: 'dashboard' } });
       void this.sync();
+      void this.loadReport();
     } else {
       this.#set({ screen: { name: 'detect' } });
       void this.detect();
@@ -743,6 +749,59 @@ export class Controller {
     void this.sync();
   };
 
+  // ── Relancer (plan §6 CollectAgent) ─────────────────────────────────────────────────────────────
+  /** Runs a chasing action on the open invoice; the fiche shows the answer. */
+  async #chase(
+    busy: string,
+    call: (id: string) => Promise<InvoiceDetail>,
+    done: (detail: InvoiceDetail) => string,
+  ): Promise<boolean> {
+    const id = this.#state.invoice?.detail.id;
+    if (!id) return false;
+    const detail = await this.#act(busy, () => call(id));
+    if (!detail || this.#state.invoice?.detail.id !== id) return false;
+    this.#patchInvoice({ detail });
+    this.notify('success', done(detail));
+    return true;
+  }
+
+  /** « Encaissée », after the user confirmed it: chasing stops and the platform is told. */
+  recordPayment = async (paidOn?: string): Promise<void> => {
+    const ok = await this.#chase(
+      'payment',
+      (id) => this.api.recordPayment(id, paidOn),
+      (d) => t('addin.chase.paidDone', { number: d.number ?? '' }),
+    );
+    if (ok) void this.sync();
+  };
+
+  /** « Promesse de paiement » until `until` (YYYY-MM-DD); null withdraws it. */
+  promisePayment = (until: string | null): Promise<boolean> =>
+    this.#chase(
+      'promise',
+      (id) => this.api.promise(id, until),
+      () =>
+        until
+          ? t('addin.chase.promiseSaved', { date: frDate(until) })
+          : t('addin.chase.promiseRemoved'),
+    );
+
+  /** « Préparer une relance maintenant ». */
+  prepareChase = (): Promise<boolean> =>
+    this.#chase(
+      'chase',
+      (id) => this.api.prepareChase(id),
+      (d) => t('addin.chase.prepared', { number: d.number ?? '' }),
+    );
+
+  /** « Marquer comme envoyée »: the user sent this step from their own mailbox. */
+  markChaseSent = (offset: number): Promise<boolean> =>
+    this.#chase(
+      'chaseSent',
+      (id) => this.api.markChaseSent(id, offset),
+      (d) => t('addin.chase.markedSent', { number: d.number ?? '' }),
+    );
+
   viewXml = async (): Promise<void> => {
     const id = this.#state.invoice?.detail.id;
     if (!id) return;
@@ -782,6 +841,19 @@ export class Controller {
     this.notify('info', t(on ? 'addin.testMode.on' : 'addin.testMode.off'));
     if (this.#state.screen.name === 'invoice') this.navigate({ name: 'dashboard' });
     void this.sync();
+  };
+
+  // ── Tableau de bord ───────────────────────────────────────────────────────────────────────────
+  /** The weekly card: without it the dashboard still works, so a failure stays quiet. */
+  loadReport = async (): Promise<void> => {
+    this.#busy('report', true);
+    try {
+      this.#set({ report: await this.api.report() });
+    } catch {
+      // The card is left out; the next visit to the dashboard asks again.
+    } finally {
+      this.#busy('report', false);
+    }
   };
 
   // ── Réglages ──────────────────────────────────────────────────────────────────────────────────
