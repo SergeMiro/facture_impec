@@ -1,6 +1,6 @@
 # Architecture
 
-Status: M0 (2026-10-17). This file records what is built and the decisions taken; the product spec
+Status: M1 (2026-10-18). This file records what is built and the decisions taken; the product spec
 is the owner's implementation plan (see `CLAUDE.md`). "Plan §N" refers to its sections.
 
 ## Shape
@@ -29,8 +29,27 @@ places: in the task pane for instant hints, and in the API as the authoritative 
 | `apps/mock-pdp` | Hono app with `GET /health` on :4010. The lifecycle engine is M2. |
 | `apps/addin` | Vite + React 18 placeholder page that renders French strings from `@fi/shared`. Office.js, HTTPS and the manifest are M3. |
 | `packages/shared` | `t()` over `i18n/fr.json` (keys type-checked) and the Zod server-env schema. |
-| `packages/{core,agents,pdp-adapter,db}` | Empty, wired into the workspace. Each `src/index.ts` names the milestone that fills it. |
-| `legacy/rust-mvp` | Frozen previous MVP, kept as reading material for the M1 port; deleted at the end of M1. |
+| `packages/{agents,pdp-adapter,db}` | Empty, wired into the workspace. Each `src/index.ts` names the milestone that fills it. |
+
+## What M1 added: `packages/core`
+
+Pure TypeScript, no Node modules outside tests and scripts, so the add-in runs the same code as the API.
+
+| Module | What it does |
+|---|---|
+| `model.ts` | EN 16931 semantic model (BT/BG ids in comments) as Zod schemas; `InvoiceDraft` is what a user or the mapping provides. |
+| `money.ts`, `compute.ts` | Amounts in integer cents; quantities and prices stay decimal text and are multiplied in `bigint`, rounded half away from zero. `computeInvoice` fills line amounts, totals and the VAT breakdown. |
+| `rules/` | 224 rules (EN 16931, code lists generated from the CEN artefacts, VAT categories, French rules of `docs/research/FR_RULES.md`, sanity). `validate()` returns issues with French message and fix hint; `docs/RULES.md` is generated from them. |
+| `xml/` | CII (Factur-X EN 16931) and UBL 2.1 builders and namespace-aware parsers; a bad value becomes an issue, only a file that is not CII or UBL throws. |
+| `pdf/` (`@fi/core/pdf`) | The Factur-X PDF: an A4 rendering in DejaVu Sans, PDF/A-3B with `factur-x.xml` attached by `@cantoo/pdf-lib`'s `embedFacturX`, reproducible bytes; and the reader that takes the XML back out. Separate entry so pdf-lib (≈ 600 KB) loads only on demand. |
+| `state.ts` | The invoice state machine of plan §4 (`docs/STATE_MACHINE.md`). |
+| `ids.ts`, `dates.ts` | SIREN/SIRET/VAT/IBAN checks; ISO dates, Europe/Paris « today ». |
+
+Tests: `pnpm --filter @fi/core test` (unit, offline, coverage ≥ 90 %) and `test:oracle`, which runs
+the official XSD and schematrons (CEN 1.3.17, Factur-X 1.09.2) on every golden invoice, every CEN
+example read back, and every EN 16931 invalid fixture. The Factur-X files we may not commit are
+downloaded once into `.oracle-cache/`, pinned by sha256. `pdf:check` runs veraPDF and the Akretion
+extractor on the golden PDFs; it is manual because both tools live outside `node_modules`.
 
 ## Decision: port the Rust core to TypeScript, archive Rust
 
@@ -49,8 +68,8 @@ for the add-in and a second runtime binding for the Node API, for a rule set we 
 two days. The plan forbids dual implementations, so Rust stops being a source of truth today:
 
 - the branch `archive/rust-mvp-v1` points at `4c6b294` and keeps the whole MVP (Rust crates, Next.js add-in, docs);
-- `legacy/rust-mvp/` holds a read-only copy during M1, so the port can be checked rule by rule;
-- M1 is done only when every Rust rule id has a TypeScript equivalent and a fixture, then `legacy/` is deleted.
+- `legacy/rust-mvp/` held a read-only copy during M1, so the port could be checked rule by rule;
+- once every Rust rule id had a TypeScript equivalent and a fixture (`docs/PROGRESS.md`), `legacy/` was deleted.
 
 What the port keeps from the MVP: exact EN 16931 rule codes (source: Peppol BIS Billing 3.0 rule
 list, to be cross-checked against the official schematron `ConnectingEurope/eInvoicing-EN16931`),
@@ -72,11 +91,12 @@ the `FF-` prefix for our own checks, French messages, and the cell reference car
 
 ## Decisions prepared for later milestones
 
-- **Money (M1).** Document-level and line amounts are integer cents (`number`, safe up to 9×10¹⁵).
-  EN 16931 allows more than two decimals for item net price (BT-146) and invoiced quantity (BT-129), so
-  those become scaled integers (proposal: 10⁻⁶ units) and line net = half-up rounding of
-  quantity × price to cents, computed in `bigint`. Never floats.
-- **XML (M1).** Evaluate `@e-invoice-eu/core` against the golden corpus before writing builders (plan §1).
+- **Money (M1, done).** Amounts are integer cents (`number`, safe up to 9×10¹⁵). Quantity (BT-129)
+  and item net price (BT-146) may have more decimals: they stay decimal text and line net is
+  quantity × price rounded half away from zero to the cent, computed in `bigint`. Never floats.
+- **XML (M1, done).** `@e-invoice-eu/core` was evaluated and not adopted: it cannot parse CII or UBL,
+  has no business rules and installs 74 MB (`docs/research/FORMATS.md` §1). Our own builders pass the
+  official XSD and schematrons.
 - **API runtime (M2).** Bundle `apps/api` and `apps/mock-pdp` (esbuild/tsup) and ship one Docker image for the EU VPS.
 - **LLM (M3).** Plan §1 names the Anthropic API with `claude-sonnet-4-6` / `claude-haiku-4-5`. Current
   equivalents are `claude-sonnet-5-5` / `claude-haiku-5-5`; model ids will come from env so the choice
