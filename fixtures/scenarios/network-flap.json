@@ -1,0 +1,15 @@
+{
+  "description": "The platform keeps the invoice but its answer is lost three times in a row, and the first four webhooks fail: the send job retries with the same key, webhook retries and the sweep bring the statuses in.",
+  "invoices": 2,
+  "platform": {
+    "timeline": [
+      { "status": "received_by_platform", "after": "PT5M" },
+      { "status": "delivered", "after": "PT1H" },
+      { "status": "accepted", "after": "P1D" },
+      { "status": "payment_received", "after": "P3D" }
+    ],
+    "failNext": { "count": 3, "mode": "drop-response" },
+    "webhookFailures": 4
+  },
+  "expect": { "status": "paid", "withinSeconds": 45 }
+}

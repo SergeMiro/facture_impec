@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./scenarios": "./src/scenarios/index.ts"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
@@ -10,11 +13,17 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fi/core": "workspace:*",
+    "@fi/db": "workspace:*",
+    "@fi/pdp-adapter": "workspace:*",
     "@fi/shared": "workspace:*",
     "@hono/node-server": "^2.1.5",
-    "hono": "^4.13.13"
+    "hono": "^4.13.13",
+    "pg-boss": "12.38.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@fi/mock-pdp": "workspace:*",
     "@types/node": "^22.19.0",
     "tsx": "^4.23.15"
   }
