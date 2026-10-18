@@ -3,6 +3,8 @@ import type { FacturXOptions } from '@fi/core/pdf';
 import type { Db, PdpProvider } from '@fi/db';
 import type { PdpAdapter, ScenarioPort } from '@fi/pdp-adapter';
 import type { ServerEnv } from '@fi/shared/env';
+import type { Billing } from './billing';
+import type { RequestWindows } from './limits';
 
 /** The adapters this deployment can use; a tenant on a missing provider cannot send yet. */
 export type PdpRegistry = Partial<Record<PdpProvider, PdpAdapter>>;
@@ -40,6 +42,8 @@ export interface Mail {
   to: string;
   subject: string;
   text: string;
+  /** The sender's display name when an accounting firm's brand replaces ours (white label). */
+  fromName?: string;
 }
 
 export interface Mailer {
@@ -55,7 +59,10 @@ export interface TestPlatform {
 }
 
 export interface ApiDeps {
-  env: Pick<ServerEnv, 'FI_ENV' | 'ADMIN_TOKEN' | 'API_PUBLIC_URL' | 'ADDIN_ORIGINS'>;
+  env: Pick<
+    ServerEnv,
+    'FI_ENV' | 'ADMIN_TOKEN' | 'API_PUBLIC_URL' | 'ADDIN_ORIGINS' | 'TRUST_PROXY_HEADER'
+  >;
   db: Db;
   jobs: Jobs;
   pdp: PdpRegistry;
@@ -63,10 +70,14 @@ export interface ApiDeps {
   test: TestPlatform | null;
   ai: AiDeps;
   /**
-   * Null: no sign-in links, no chasing e-mail sent by the autopilot, no weekly report by mail (no
-   * mail provider yet outside local, docs/DEFERRED.md).
+   * Null: no sign-in or sign-up links, no chasing e-mail sent by the autopilot, no weekly report by
+   * mail (outside local without MAIL_SMTP_URL).
    */
   mailer: Mailer | null;
   fonts: FacturXOptions['fonts'];
+  /** Stripe (src/billing.ts); absent or null: nobody is billed and no send waits for a plan. */
+  billing?: Billing | null;
+  /** Request counters (src/limits.ts); default: fresh ones per app. */
+  limits?: RequestWindows;
   now: () => Date;
 }

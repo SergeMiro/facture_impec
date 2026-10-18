@@ -18,6 +18,18 @@ export function tenantView(row: TenantRow) {
     sandboxEnabled: row.sandboxEnabled,
     pseudonymizeLlm: row.pseudonymizeLlm,
     vatOnDebits: row.vatOnDebits,
+    liveAt: row.liveAt?.toISOString() ?? null,
+    whiteLabel: row.whiteLabel,
+    billing: {
+      status: row.billingStatus,
+      plan: row.plan,
+      interval: row.billingInterval,
+      trialEndsAt: row.trialEndsAt?.toISOString() ?? null,
+      periodEnd: row.billingPeriodEnd?.toISOString() ?? null,
+    },
+    terms: row.termsVersion
+      ? { version: row.termsVersion, acceptedAt: row.termsAcceptedAt?.toISOString() ?? null }
+      : null,
     createdAt: row.createdAt.toISOString(),
   };
 }

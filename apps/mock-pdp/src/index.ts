@@ -4,3 +4,4 @@ export { B2BrouterStandIn, type B2BrouterStandInOptions } from './b2brouter';
 export { type Clock, ManualClock, systemClock } from './clock';
 export { type EngineOptions, MockPdpEngine, WEBHOOK_RETRY_MS } from './engine';
 export { type Listening, listen } from './listen';
+export { StripeStandIn, type StripeStandInOptions } from './stripe';

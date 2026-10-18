@@ -9,7 +9,9 @@ import {
   asc,
   audit,
   auditEvents,
+  billingUsage,
   chasePlans,
+  type Db,
   eq,
   inArray,
   inboundExports,
@@ -17,12 +19,14 @@ import {
   invoiceEvents,
   invoices,
   isNull,
+  lt,
   magicLinks,
   or,
   paymentReports,
   pdpSubmissions,
   sessions,
   sheetMappings,
+  signupRequests,
   sql,
   type TenantRow,
   tenants,
@@ -32,6 +36,7 @@ import {
 } from '@fi/db';
 import { z } from 'zod';
 import { isOwner, type Principal } from './auth';
+import { cancelSubscription } from './billing';
 import { chaseView } from './collect';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
@@ -52,7 +57,7 @@ function assertOwner(principal: Principal) {
 export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: Principal) {
   assertOwner(principal);
   const db = deps.db;
-  const [people, keys, mappings, rows, runs, log, received, plans, payments, reports, sent] =
+  const [people, keys, mappings, rows, runs, log, received, plans, payments, reports, sent, usage] =
     await Promise.all([
       db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
       db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
@@ -89,6 +94,11 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
         .from(inboundExports)
         .where(eq(inboundExports.tenantId, tenant.id))
         .orderBy(asc(inboundExports.createdAt)),
+      db
+        .select()
+        .from(billingUsage)
+        .where(eq(billingUsage.tenantId, tenant.id))
+        .orderBy(asc(billingUsage.sentAt)),
     ]);
   const ids = rows.map((r) => r.id);
   const events = ids.length
@@ -155,6 +165,13 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       exportId: r.exportId,
       xml: r.xml,
     })),
+    billingUsage: usage.map((u) => ({
+      invoiceId: u.invoiceId,
+      month: u.month,
+      sentAt: u.sentAt.toISOString(),
+      billable: u.billable,
+      reportedAt: u.reportedAt?.toISOString() ?? null,
+    })),
     accountantExports: sent.map((e) => ({ ...exportView(e), fec: e.fec, csv: e.csv })),
     agentRuns: runs.map((r) => ({
       agent: r.agent,
@@ -188,6 +205,9 @@ export async function deleteTenant(
 ) {
   assertOwner(principal);
   if (confirmSiren.replace(/\s/g, '') !== tenant.siren) throw new ApiError(400, 'confirm_mismatch');
+  // First, so that nothing is charged to a company that no longer exists; if Stripe cannot be
+  // reached, nothing is deleted and the owner tries again.
+  await cancelSubscription(deps, tenant);
   const now = deps.now();
   return deps.db.transaction(async (tx) => {
     // Never transmitted: no platform reference and no send attempt (a platform may have it).
@@ -247,6 +267,7 @@ export async function deleteTenant(
       .where(eq(users.tenantId, tenant.id));
     const userIds = people.map((u) => u.id);
     await tx.delete(sessions).where(eq(sessions.tenantId, tenant.id));
+    await tx.delete(signupRequests).where(eq(signupRequests.tenantId, tenant.id));
     if (userIds.length) await tx.delete(magicLinks).where(inArray(magicLinks.userId, userIds));
     await tx.delete(users).where(eq(users.tenantId, tenant.id));
     await tx.delete(sheetMappings).where(eq(sheetMappings.tenantId, tenant.id));
@@ -262,6 +283,8 @@ export async function deleteTenant(
         aiKeySealed: null,
         aiKeyHint: null,
         invoiceDefaults: {},
+        whiteLabel: null,
+        ...(tenant.billingStatus !== 'pilot' && { billingStatus: 'ended' as const }),
         deletedAt: now,
       })
       .where(eq(tenants.id, tenant.id));
@@ -282,5 +305,32 @@ export async function deleteTenant(
       after: result,
     });
     return result;
+  });
+}
+
+/** How long an expired link, session or sign-up request stays, for the support's sake. */
+export const PURGE_AFTER_MS = 86_400_000;
+
+/**
+ * Removes what only served to sign in or sign up once it can no longer be used (docs/RGPD.md):
+ * links and sign-up requests a day after they expire, sessions a day after they expire or end. A
+ * sign-up request holds an address of someone who may never have become a customer.
+ */
+export async function purgeExpired(deps: { db: Db; now: () => Date }) {
+  const before = new Date(+deps.now() - PURGE_AFTER_MS);
+  return deps.db.transaction(async (tx) => {
+    const links = await tx
+      .delete(magicLinks)
+      .where(lt(magicLinks.expiresAt, before))
+      .returning({ id: magicLinks.id });
+    const signups = await tx
+      .delete(signupRequests)
+      .where(lt(signupRequests.expiresAt, before))
+      .returning({ id: signupRequests.id });
+    const ended = await tx
+      .delete(sessions)
+      .where(or(lt(sessions.expiresAt, before), lt(sessions.revokedAt, before)))
+      .returning({ id: sessions.id });
+    return { links: links.length, signups: signups.length, sessions: ended.length };
   });
 }

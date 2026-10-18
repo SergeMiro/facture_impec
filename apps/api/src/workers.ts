@@ -26,8 +26,10 @@ import {
   tenants,
 } from '@fi/db';
 import { eventFor, type PdpAdapter, PdpUnavailableError, type SendResult } from '@fi/pdp-adapter';
+import type { FiEnv } from '@fi/shared/env';
 import type { PgBoss } from 'pg-boss';
 import { z } from 'zod';
+import { type Billing, recordUsage, runUsageReport } from './billing';
 import { runCollect } from './collect';
 import type { AiDeps, Jobs, Mailer, PdpRegistry, SyncTarget, TestPlatform } from './deps';
 import { INJECTED_PREFIX, triagePending } from './inbound';
@@ -35,16 +37,21 @@ import { idempotencyKey } from './invoices';
 import { QUEUES } from './jobs';
 import { ADVISED, awaitingAdvice, runMonitor } from './monitor';
 import { runReportPayment } from './payments';
-import { routeFor } from './platform';
+import { awaitsGoLive, routeFor } from './platform';
 import { runWeeklyReports } from './report';
+import { purgeExpired } from './rgpd';
 
 export interface WorkerDeps {
+  /** Only FI_ENV, for the go-live gate (src/platform.ts); absent in unit tests: not prod. */
+  env?: { FI_ENV: FiEnv };
   db: Db;
   pdp: PdpRegistry;
   test: TestPlatform | null;
   jobs: Jobs;
   ai: AiDeps;
   mailer: Mailer | null;
+  /** Counts real sends and reports those beyond the quota (src/billing.ts). */
+  billing?: Billing | null;
   now: () => Date;
 }
 
@@ -99,7 +106,7 @@ export async function runSend(deps: WorkerDeps, invoiceId: string): Promise<void
         target: pdpSubmissions.idempotencyKey,
         set: { attempts: sql`${pdpSubmissions.attempts} + 1`, updatedAt: deps.now() },
       });
-    return { route, key, xml };
+    return { route, key, xml, tenantId: tenant.id, isTest: row.isTest };
   });
   if (!claim) return;
 
@@ -145,6 +152,9 @@ export async function runSend(deps: WorkerDeps, invoiceId: string): Promise<void
         patch: { pdpRef: result.pdpRef },
         payload: { pdpRef: result.pdpRef },
       });
+      if (!claim.isTest) {
+        await recordUsage(tx, deps, { id: invoiceId, tenantId: claim.tenantId }, deps.now());
+      }
     } else {
       await tx
         .update(pdpSubmissions)
@@ -296,6 +306,7 @@ export async function runInboundPoll(
       provider: tenants.pdpProvider,
       account: tenants.pdpAccount,
       sandboxEnabled: tenants.sandboxEnabled,
+      liveAt: tenants.liveAt,
       createdAt: tenants.createdAt,
     })
     .from(tenants)
@@ -303,7 +314,8 @@ export async function runInboundPoll(
   let stored = 0;
   let failed = 0;
   for (const company of companies) {
-    const providers = new Set<PdpProvider>([company.provider]);
+    // A company not live yet in prod has no account at the real platform to ask.
+    const providers = new Set<PdpProvider>(awaitsGoLive(deps, company) ? [] : [company.provider]);
     if (company.sandboxEnabled && deps.test) providers.add(deps.test.provider);
     for (const provider of providers) {
       const adapter = deps.pdp[provider];
@@ -397,6 +409,7 @@ export async function startWorkers(
   await boss.work(QUEUES.sweep, polling, async () => {
     await runSweep(deps);
     await runInboundPoll(deps, options.log);
+    await runUsageReport(deps, options.log);
   });
   await boss.work(QUEUES.monitor, { ...polling, localConcurrency: 2 }, async ([job]) => {
     if (job) await runMonitor(deps, InvoiceJob.parse(job.data).invoiceId);
@@ -414,7 +427,8 @@ export async function startWorkers(
 
   // Chasing runs on its own timer rather than through the queue: it must see each business day,
   // and the scenario stack's accelerated clock turns a day into a fraction of a second. Plans are
-  // locked row by row, so instances running it at once do not act twice.
+  // locked row by row, so instances running it at once do not act twice. Expired sign-in rows go
+  // on the same timer (src/rgpd.ts purgeExpired).
   let collecting = false;
   const collect = async () => {
     if (collecting) return;
@@ -422,6 +436,7 @@ export async function startWorkers(
     try {
       await runCollect(deps, options.log);
       await runWeeklyReports(deps, options.log);
+      await purgeExpired(deps);
     } catch (e) {
       options.log?.(`chasing run failed: ${message(e)}`);
     } finally {

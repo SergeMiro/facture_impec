@@ -43,6 +43,13 @@
       "when": 1792324479289,
       "tag": "0005_reception",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792327856808,
+      "tag": "0006_pilot",
+      "breakpoints": true
     }
   ]
 }

@@ -12,6 +12,7 @@ import {
   MockUnavailable,
   MockUnreadable,
 } from './engine';
+import { StripeStandIn, type StripeStandInOptions } from './stripe';
 
 const Payment = z.object({ amount: z.number().int().nonnegative() });
 
@@ -105,10 +106,12 @@ export function createApp(
 export interface MockPdpOptions extends EngineOptions {
   /** B2Brouter's API over the same engine, at /b2brouter (./b2brouter.ts). */
   b2brouter?: Omit<B2BrouterStandInOptions, 'webhookSecret'> & { webhookSecret?: string };
+  /** Stripe's API for billing, at /stripe (./stripe.ts). */
+  stripe?: Partial<StripeStandInOptions>;
 }
 
 export function createMockPdp(options: MockPdpOptions) {
-  const { b2brouter: standIn, ...engineOptions } = options;
+  const { b2brouter: standIn, stripe: stripeOptions, ...engineOptions } = options;
   const engine = new MockPdpEngine(engineOptions);
   const app = createApp(engine);
   const b2brouter = new B2BrouterStandIn(engine, {
@@ -116,5 +119,11 @@ export function createMockPdp(options: MockPdpOptions) {
     webhookSecret: standIn?.webhookSecret ?? options.webhookSecret,
   });
   app.route('/b2brouter', b2brouter.app);
-  return { engine, app, b2brouter };
+  const stripe = new StripeStandIn({
+    webhookSecret: 'whsec_local-mock-stripe-secret',
+    ...(options.log && { log: options.log }),
+    ...stripeOptions,
+  });
+  app.route('/stripe', stripe.app);
+  return { engine, app, b2brouter, stripe };
 }

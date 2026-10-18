@@ -9,6 +9,7 @@ describe('ServerEnvSchema', () => {
     expect(ServerEnvSchema.parse({})).toEqual({
       FI_ENV: 'local',
       API_PORT: 4000,
+      API_HOST: '127.0.0.1',
       MOCK_PDP_PORT: 4010,
       PGLITE_DIR: `${REPO_ROOT}.data/pglite`,
       API_WORKERS: true,
@@ -20,6 +21,9 @@ describe('ServerEnvSchema', () => {
       ADDIN_ORIGINS: ['https://localhost:3000'],
       AI_RUN_TOKENS: 30_000,
       AI_DAILY_TOKENS: 300_000,
+      SIRENE_URL: 'https://recherche-entreprises.api.gouv.fr',
+      STRIPE_AUTOMATIC_TAX: false,
+      MOCK_STRIPE_WEBHOOK_SECRET: 'whsec_local-mock-stripe-secret',
     });
   });
 

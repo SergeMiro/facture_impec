@@ -1,39 +1,31 @@
 // HTTP API (plan §1): tenants, invoices, validation, platform webhooks, and the add-in's routes
 // (sign-in, sheet sync, settings, Mode test, supplier invoices, RGPD). Business rules live in the modules next to this
 // file and in @fi/core; this file reads requests (Zod) and shapes answers.
-import {
-  Address,
-  InvoiceDraft,
-  isIsoDate,
-  isValidSiren,
-  SheetMapping,
-  STATES,
-  toCii,
-} from '@fi/core';
+import { Address, InvoiceDraft, isIsoDate, SheetMapping, STATES, toCii } from '@fi/core';
 import {
   and,
-  apiKeys,
   audit,
   desc,
   eq,
   inArray,
   invoices,
   PDP_PROVIDERS,
-  sha256,
   type TenantRow,
   tenants,
-  users,
 } from '@fi/db';
 import { PdpRequestError } from '@fi/pdp-adapter';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { secureHeaders } from 'hono/secure-headers';
 import { z } from 'zod';
+import { adminRoutes } from './admin';
 import { explainInvoice, invoicePdf, rehearseInvoice } from './assist';
-import { adminAuth, newApiKey, type TenantEnv, tenantAuth } from './auth';
+import { type TenantEnv, tenantAuth } from './auth';
+import { billingPages, billingRoutes, handleStripeWebhook } from './billing';
 import { markStepSent, prepareChase, recordPromise } from './collect';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
-import { body, Email, parse, uuid } from './http';
+import { body, parse, uuid } from './http';
 import {
   ApproveBody,
   approveInbound,
@@ -62,8 +54,16 @@ import {
   updateInvoice,
   validateDraft,
 } from './invoices';
+import {
+  KB,
+  type LimitName,
+  limitByAddress,
+  limitByTenant,
+  MB,
+  maxBody,
+  RequestWindows,
+} from './limits';
 import { loginRoutes } from './login';
-import { OutboxMailer } from './mail';
 import { PaymentBody, recordPayment } from './payments';
 import { reportFor } from './report';
 import { DeleteBody, deleteTenant, exportTenant } from './rgpd';
@@ -88,18 +88,6 @@ const ExcelBinding = z.object({
 });
 const InvoiceBody = z.object({ draft: InvoiceDraft, excelBinding: ExcelBinding.optional() });
 const NewInvoice = InvoiceBody.extend({ test: z.boolean().default(false) });
-const NewTenant = z.object({
-  name: z.string().min(1),
-  siren: z.string().refine(isValidSiren, 'not a valid SIREN'),
-  vatId: z.string().min(1).optional(),
-  address: Address.optional(),
-  pdpProvider: z.enum(PDP_PROVIDERS).default('mock'),
-  /** Defaults to the SIREN: B2Brouter keeps one account per SIREN (docs/B2BROUTER.md §3.2). */
-  pdpAccount: z.string().min(1).optional(),
-  vatOnDebits: z.boolean().default(false),
-  /** The person who signs in to the add-in with a link (role owner). */
-  ownerEmail: Email.optional(),
-});
 const TenantPatch = z
   .object({
     name: z.string().min(1),
@@ -139,6 +127,37 @@ export function createApp(deps: ApiDeps) {
     }),
   );
 
+  // Headers for the HTML pages (sign-in confirmation…): no framing, no sniffing, no referrer. The
+  // task pane reads the API with CORS, which the resource policy would not affect, so it stays off.
+  app.use('*', secureHeaders({ crossOriginResourcePolicy: false }));
+
+  // A sheet of 5 000 rows is a few MB; nothing else comes near 2 MB, and webhooks stay small.
+  const bigBody = maxBody(16 * MB);
+  const body2Mb = maxBody(2 * MB);
+  const smallBody = maxBody(256 * KB);
+  app.use('*', (c, next) => {
+    const path = c.req.path;
+    if (path.startsWith('/workbooks/') || path === '/detect') return bigBody(c, next);
+    if (path.startsWith('/webhooks/') || path.startsWith('/auth/')) return smallBody(c, next);
+    return body2Mb(c, next);
+  });
+
+  const windows = deps.limits ?? new RequestWindows();
+  const byAddress = Object.fromEntries(
+    (['public', 'poll', 'admin'] as const).map((name) => [
+      name,
+      limitByAddress(windows, name, deps.env.TRUST_PROXY_HEADER),
+    ]),
+  ) as Record<Exclude<LimitName, 'tenant'>, ReturnType<typeof limitByAddress>>;
+  app.use('*', (c, next) => {
+    const path = c.req.path;
+    if (path.startsWith('/admin/')) return byAddress.admin(c, next);
+    if (path.startsWith('/auth/') || path.startsWith('/onboarding/')) {
+      return (path.endsWith('/poll') ? byAddress.poll : byAddress.public)(c, next);
+    }
+    return next();
+  });
+
   app.onError((err, c) => {
     if (err instanceof ApiError) return c.json(err.body, err.status);
     if (err instanceof z.ZodError) {
@@ -156,70 +175,8 @@ export function createApp(deps: ApiDeps) {
 
   app.get('/health', (c) => c.json({ ok: true, service: 'api', env: deps.env.FI_ENV }));
 
-  // ── Admin ─────────────────────────────────────────────────────────────────────────────────────
-  const admin = new Hono();
-  admin.use(adminAuth(deps));
-  admin.post('/tenants', async (c) => {
-    const input = await body(c, NewTenant);
-    if (!deps.pdp[input.pdpProvider]) throw new ApiError(409, 'pdp_not_configured');
-    const apiKey = newApiKey();
-    const tenant = await deps.db.transaction(async (tx) => {
-      const [row] = await tx
-        .insert(tenants)
-        .values({
-          name: input.name,
-          siren: input.siren,
-          vatId: input.vatId ?? null,
-          address: input.address ?? null,
-          pdpProvider: input.pdpProvider,
-          pdpAccount: input.pdpAccount ?? input.siren,
-          vatOnDebits: input.vatOnDebits,
-        })
-        .returning();
-      if (!row) throw new Error('insert returned nothing');
-      if (input.ownerEmail) {
-        const [owner] = await tx
-          .insert(users)
-          .values({ tenantId: row.id, email: input.ownerEmail, role: 'owner' })
-          .returning({ id: users.id });
-        await audit(tx, {
-          tenantId: row.id,
-          actor: 'admin',
-          action: 'user.create',
-          objectType: 'user',
-          objectId: owner?.id ?? '',
-        });
-      }
-      const [key] = await tx
-        .insert(apiKeys)
-        .values({ tenantId: row.id, hash: sha256(apiKey), label: 'initial' })
-        .returning({ id: apiKeys.id });
-      await audit(tx, {
-        tenantId: row.id,
-        actor: 'admin',
-        action: 'tenant.create',
-        objectType: 'tenant',
-        objectId: row.id,
-        after: tenantView(row),
-      });
-      await audit(tx, {
-        tenantId: row.id,
-        actor: 'admin',
-        action: 'api_key.create',
-        objectType: 'api_key',
-        objectId: key?.id ?? '',
-      });
-      return row;
-    });
-    // The key is shown here once and never again (only its hash is stored).
-    return c.json({ tenant: tenantView(tenant), apiKey }, 201);
-  });
-  // Local only: the mails the outbox kept (src/mail.ts), for the E2E run, scenarios and the developer.
-  admin.get('/outbox', (c) => {
-    if (!(deps.mailer instanceof OutboxMailer)) throw new ApiError(404, 'route_not_found');
-    return c.json({ mails: deps.mailer.sent });
-  });
-  app.route('/admin', admin);
+  // ── Operator ──────────────────────────────────────────────────────────────────────────────────
+  app.route('/admin', adminRoutes(deps));
 
   // ── Sign-in links (no tenant key yet) ─────────────────────────────────────────────────────────
   app.route('/auth', loginRoutes(deps));
@@ -246,6 +203,12 @@ export function createApp(deps: ApiDeps) {
     return c.json({ received: notices.length }, 202);
   });
 
+  // Stripe: subscription changes (signed), and the pages it sends the browser back to.
+  app.post('/webhooks/stripe', async (c) =>
+    c.json(await handleStripeWebhook(deps, c.req.raw.headers, await c.req.text())),
+  );
+  app.route('/billing', billingPages());
+
   // ── Tenant API ────────────────────────────────────────────────────────────────────────────────
   const api = new Hono<TenantEnv>();
   for (const path of [
@@ -262,8 +225,11 @@ export function createApp(deps: ApiDeps) {
     '/inbound',
     '/inbound/*',
     '/report',
+    '/billing',
+    '/billing/checkout',
+    '/billing/portal',
   ]) {
-    api.use(path, tenantAuth(deps));
+    api.use(path, tenantAuth(deps), limitByTenant(windows));
   }
 
   api.get('/me', (c) => {
@@ -540,6 +506,8 @@ export function createApp(deps: ApiDeps) {
     const input = await body(c, DisputeBody);
     return c.json(inboundView(await disputeInbound(deps, tenant, c.get('principal'), id, input)));
   });
+
+  api.route('/billing', billingRoutes(deps));
 
   app.route('/', api);
   return app;

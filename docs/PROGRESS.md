@@ -343,3 +343,52 @@ M6's code is done. Left for later and listed in `docs/DEFERRED.md`: telling the 
 the buyer decided (lifecycle statuses), the original PDF of a received invoice, per-supplier charge
 accounts and currencies in the FEC.
 
+
+## M7 — Pilot hardening (started 2026-10-18)
+
+Plan §11: « Onboarding wizard (SIREN → auto-fill tenant from SIRENE), billing (Stripe, per-invoice or
+monthly cap), RGPD endpoints, AppSource submission package, accountant white-label flag. Acceptance: 3
+pilot tenants on sandbox, zero P1 bugs for 5 days, then switch one to prod. »
+
+How each criterion is read here:
+
+- **Onboarding wizard**: « Créer un compte » on the Connexion screen. The user types a SIREN; the API looks
+  the company up in the public SIRENE directory and shows its legal name, head-office address and the
+  VAT number computed from the SIREN (marked « à confirmer »: a company may not be VAT-registered). A
+  closed company, or one that already has an account, cannot be created. The user then gives an e-mail
+  and accepts the terms; the e-mailed link confirms the address, and only then does the company exist:
+  in trial, « Mode test » on, the pane signed in and on to Détection. Wherever a sign-in link can be sent
+  (the outbox in local, a mail provider elsewhere).
+- **Billing (Stripe)**: a company starts on a 30-day trial with 10 real sends (`docs/research/PRICING.md`
+  §3.2). « Choisir une formule » in Réglages opens Stripe Checkout for a plan; « Gérer mon abonnement »
+  opens Stripe's customer portal; Stripe's signed webhooks keep the company's billing status. The plan
+  covers a monthly quota of sent invoices; beyond it each sent invoice is billed (per invoice) through
+  Stripe usage-based billing, and Réglages shows « N factures envoyées ce mois-ci sur M ». Prices live
+  in Stripe (the owner's account), quotas in code; both are the proposal of PRICING.md until the owner
+  confirms them, and nothing is published. Billing never blocks Mode test, reading, exports, RGPD
+  requests or the follow-up of invoices already sent; only a real send is refused once the trial is over
+  without a subscription or the subscription has ended, with a message that says what to do.
+- **RGPD endpoints**: export and deletion exist since M3. M7 adds deletion from the add-in (owner only,
+  SIREN typed again), which also ends the subscription; the new data (sign-up requests, billing ids) in
+  the export and in `docs/RGPD.md`; and a daily purge of expired sign-in links, sessions and sign-up
+  requests, so the retention the register states is the retention the database has.
+- **AppSource submission package**: `pnpm appsource:package` writes the production manifest from the public
+  URLs, validates it at production level with Microsoft's validator, and gathers icons, store logo,
+  screenshots, the French listing text and the notes for certification into one folder and zip.
+  `docs/APPSOURCE.md` lists what Partner Center asks and what only the owner can do (publisher account,
+  public URLs, a test account for Microsoft's testers).
+- **Accountant white-label flag**: the operator sets an accounting firm's name (and colour) on a company;
+  the pane then shows the firm's name, and the chasing e-mails and weekly report are signed with it. The
+  « full » variant removes the Facture Impec mention (PRICING.md: on quote).
+- **3 pilot tenants on sandbox, zero P1 bugs for 5 days, then switch one to prod**: this needs real pilot
+  customers, a hosted sandbox (public HTTPS, the B2Brouter sandbox key, a mail provider, a Stripe test
+  key) and a B2Brouter production account, which only the owner can bring. What M7 builds so that the
+  pilot can start the day those exist:
+  - the deployment: an API image and a compose file with Postgres, listening beyond 127.0.0.1, rate and
+    body-size limits, the mock platform only in local, a second B2Brouter adapter so that Mode test works
+    in prod, and a per-company go-live switch for the operator (« switch one to prod » is one admin call
+    after its checks);
+  - `pnpm scenario pilot`: three companies sign up through the wizard on the in-process stack, rehearse in
+    Mode test, subscribe or get the pilot status, send, get paid, receive and export; one is switched
+    live; the run fails on any error;
+  - what a P1 bug is, and the daily pilot check, in `docs/RUNBOOK.md` § Pilot.

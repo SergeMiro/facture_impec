@@ -12,6 +12,7 @@ import type {
   SheetMapping,
 } from '@fi/core';
 import { INBOUND_STATES, STATES } from '@fi/core';
+import { BILLING_INTERVALS, BILLING_STATUSES, PLANS, type Plan, type WhiteLabel } from '@fi/shared';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -33,8 +34,14 @@ const updatedAt = () => timestamp('updated_at', { withTimezone: true }).notNull(
 /** Amounts are integer cents (CLAUDE.md rule 4). */
 const cents = (name: string) => bigint(name, { mode: 'number' });
 
-export const PDP_PROVIDERS = ['mock', 'b2brouter'] as const;
+/**
+ * Where an invoice can sit. `b2brouter_test` is B2Brouter's sandbox seen from prod, where « Mode test »
+ * sends (a second key of the same integration); a company itself is on `mock` or `b2brouter`.
+ */
+export const PDP_PROVIDERS = ['mock', 'b2brouter', 'b2brouter_test'] as const;
 export type PdpProvider = (typeof PDP_PROVIDERS)[number];
+export const TENANT_PROVIDERS = ['mock', 'b2brouter'] as const;
+export type TenantProvider = (typeof TENANT_PROVIDERS)[number];
 
 /** J-3 courtesy, J+1, J+8, J+15 firm, J+30 formal notice draft (plan §6 CollectAgent). */
 export const DEFAULT_CHASE_CADENCE = [-3, 1, 8, 15, 30] as const;
@@ -45,7 +52,7 @@ export const tenants = pgTable('tenants', {
   siren: text('siren').notNull(),
   vatId: text('vat_id'),
   address: jsonb('address_json').$type<Address>(),
-  pdpProvider: text('pdp_provider', { enum: PDP_PROVIDERS }).notNull(),
+  pdpProvider: text('pdp_provider', { enum: TENANT_PROVIDERS }).notNull(),
   /** The tenant's account at the PDP: B2Brouter keeps one per SIREN (docs/B2BROUTER.md §3.2). */
   pdpAccount: text('pdp_account').notNull(),
   mode: text('mode', { enum: ['review', 'autopilot'] })
@@ -73,6 +80,24 @@ export const tenants = pgTable('tenants', {
   aiSettings: jsonb('ai_settings_json').$type<Record<string, unknown>>(),
   aiKeySealed: text('ai_key_sealed'),
   aiKeyHint: text('ai_key_hint'),
+  /**
+   * In prod, real sends wait for the operator to switch the company live once its platform account
+   * exists (M7); « Mode test » never waits. Unused in local and sandbox, where nothing is real.
+   */
+  liveAt: timestamp('live_at', { withTimezone: true }),
+  /** An accounting firm's brand on this company (@fi/shared WhiteLabel); null = Facture Impec. */
+  whiteLabel: jsonb('white_label_json').$type<WhiteLabel>(),
+  /** The terms the person who created the account accepted (sign-up, M7). */
+  termsVersion: text('terms_version'),
+  termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
+  // Billing (M7, @fi/shared account.ts): Stripe holds the subscription, these columns mirror it.
+  billingStatus: text('billing_status', { enum: BILLING_STATUSES }).notNull().default('trial'),
+  trialEndsAt: timestamp('trial_ends_at', { withTimezone: true }),
+  plan: text('plan', { enum: PLANS }).$type<Plan>(),
+  billingInterval: text('billing_interval', { enum: BILLING_INTERVALS }),
+  stripeCustomerId: text('stripe_customer_id'),
+  stripeSubscriptionId: text('stripe_subscription_id'),
+  billingPeriodEnd: timestamp('billing_period_end', { withTimezone: true }),
   /** RGPD deletion (plan §10): personal data is gone, the invoices the law keeps stay. */
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   createdAt: createdAt(),
@@ -114,6 +139,37 @@ export const magicLinks = pgTable('magic_links', {
   consumedAt: timestamp('consumed_at', { withTimezone: true }),
   createdAt: createdAt(),
 });
+
+/**
+ * « Créer un compte » (M7): the company found in SIRENE and the person's address wait here until the
+ * e-mailed link confirms the address; only then does the company exist. Same two secrets as a
+ * sign-in link, stored as SHA-256.
+ */
+export const signupRequests = pgTable(
+  'signup_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    email: text('email').notNull(),
+    siren: text('siren').notNull(),
+    /** What the user confirmed on screen: name, head-office address, VAT number. */
+    company: jsonb('company_json').$type<SignupCompany>().notNull(),
+    termsVersion: text('terms_version').notNull(),
+    linkHash: text('link_hash').notNull().unique(),
+    pollHash: text('poll_hash').notNull().unique(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    tenantId: uuid('tenant_id').references(() => tenants.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index('signup_requests_email').on(t.email, t.createdAt)],
+);
+
+export interface SignupCompany {
+  name: string;
+  address: Address | null;
+  vatId: string | null;
+}
 
 /** Task pane sessions (`fis_…`), stored as SHA-256 like tenant keys. */
 export const sessions = pgTable('sessions', {
@@ -465,6 +521,37 @@ export const weeklyReports = pgTable(
   },
   (t) => [uniqueIndex('weekly_reports_week').on(t.tenantId, t.week)],
 );
+
+/**
+ * One row per invoice a company sent for real (deposited at its platform), in the Europe/Paris month
+ * it left: the month's count against the plan's quota, and the meter event of each one beyond it.
+ */
+export const billingUsage = pgTable(
+  'billing_usage',
+  {
+    invoiceId: uuid('invoice_id')
+      .primaryKey()
+      .references(() => invoices.id),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    /** `2026-10`. */
+    month: text('month').notNull(),
+    sentAt: timestamp('sent_at', { withTimezone: true }).notNull(),
+    /** Beyond the quota of a subscribed company: reported to Stripe as one meter event. */
+    billable: boolean('billable').notNull().default(false),
+    reportedAt: timestamp('reported_at', { withTimezone: true }),
+    reportError: text('report_error'),
+  },
+  (t) => [index('billing_usage_month').on(t.tenantId, t.month)],
+);
+
+/** Stripe events already applied: an endpoint may receive the same event twice (docs/BILLING.md). */
+export const stripeEvents = pgTable('stripe_events', {
+  id: text('id').primaryKey(),
+  type: text('type').notNull(),
+  receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 export type TenantRow = typeof tenants.$inferSelect;
 export type UserRow = typeof users.$inferSelect;

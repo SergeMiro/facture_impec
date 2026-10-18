@@ -15,6 +15,22 @@ const port = (fallback: number) => z.coerce.number().int().min(1).max(65535).def
 /** `KEY=` in .env means "not set". */
 const blank = (value: unknown) => (value === '' ? undefined : value);
 const optionalText = (min = 1) => z.preprocess(blank, z.string().min(min).optional());
+/** `price_a,price_b` → ['price_a', 'price_b']; empty: that plan is not sold. */
+const priceList = z.preprocess(
+  (v) => {
+    if (typeof v !== 'string') return v;
+    const ids = v
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    return ids.length ? ids : undefined;
+  },
+  z
+    .array(z.string().regex(/^price_\w+$/, 'price_…'))
+    .min(1)
+    .max(5)
+    .optional(),
+);
 const flag = (fallback: boolean) =>
   z.preprocess(
     (v) => (typeof v === 'string' ? !['false', '0', 'no', 'off'].includes(v.toLowerCase()) : v),
@@ -25,6 +41,16 @@ export const ServerEnvSchema = z
   .object({
     FI_ENV: FiEnv.default('local'),
     API_PORT: port(4000),
+    /** 0.0.0.0 in a container; the default keeps a dev API off the network. */
+    API_HOST: z.string().min(1).default('127.0.0.1'),
+    /**
+     * Behind a reverse proxy: the request header that carries the client's address
+     * (`cf-connecting-ip` behind Cloudflare, `x-forwarded-for` behind nginx). Empty: the socket's.
+     */
+    TRUST_PROXY_HEADER: z.preprocess(
+      (v) => (typeof v === 'string' ? blank(v.trim().toLowerCase()) : v),
+      z.string().optional(),
+    ),
     MOCK_PDP_PORT: port(4010),
     DATABASE_URL: optionalText(),
     PGLITE_DIR: z.string().default('.data/pglite'),
@@ -41,6 +67,28 @@ export const ServerEnvSchema = z
     // Empty: B2Brouter's API host, which serves the sandbox to `test_` keys.
     B2BROUTER_BASE_URL: z.preprocess(blank, z.url().optional()),
     B2BROUTER_WEBHOOK_SECRET: optionalText(),
+    // prod only: a sandbox key (test_…) of the same integration, where « Mode test » sends.
+    B2BROUTER_SANDBOX_API_KEY: optionalText(),
+    B2BROUTER_SANDBOX_WEBHOOK_SECRET: optionalText(),
+    // Sign-in links, chasing e-mails and the weekly report outside local (src/mail.ts in the API).
+    MAIL_SMTP_URL: optionalText(),
+    MAIL_FROM: optionalText(),
+    SIRENE_URL: z.url().default('https://recherche-entreprises.api.gouv.fr'),
+    // Billing (docs/BILLING.md): the owner's Stripe account. Empty key: nobody is billed or gated.
+    STRIPE_SECRET_KEY: optionalText(),
+    STRIPE_WEBHOOK_SECRET: optionalText(),
+    // Empty: Stripe's API host. Local and tests point it at the stand-in (apps/mock-pdp /stripe).
+    STRIPE_BASE_URL: z.preprocess(blank, z.url().optional()),
+    // Per plan and interval, the Checkout prices: the flat one first, then any metered one.
+    STRIPE_PRICES_ESSENTIEL_MONTH: priceList,
+    STRIPE_PRICES_ESSENTIEL_YEAR: priceList,
+    STRIPE_PRICES_CROISSANCE_MONTH: priceList,
+    STRIPE_PRICES_CROISSANCE_YEAR: priceList,
+    // The meter's event name: one event per invoice sent beyond the month's quota. Empty: none.
+    STRIPE_METER_EVENT: optionalText(),
+    STRIPE_AUTOMATIC_TAX: flag(false),
+    MOCK_STRIPE_WEBHOOK_URL: z.preprocess(blank, z.url().optional()),
+    MOCK_STRIPE_WEBHOOK_SECRET: z.string().min(16).default('whsec_local-mock-stripe-secret'),
     API_PUBLIC_URL: z.url().default('http://localhost:4000'),
     ADDIN_ORIGINS: z.string().default('https://localhost:3000'),
     AI_PROVIDER: optionalText(),
@@ -59,6 +107,42 @@ export const ServerEnvSchema = z
     AI_DAILY_TOKENS: z.coerce.number().int().positive().default(300_000),
   })
   .superRefine((env, ctx) => {
+    if (env.MAIL_SMTP_URL && !env.MAIL_FROM) {
+      ctx.addIssue({ code: 'custom', path: ['MAIL_FROM'], message: 'required with MAIL_SMTP_URL' });
+    }
+    if (env.B2BROUTER_SANDBOX_API_KEY) {
+      const problem =
+        env.FI_ENV !== 'prod'
+          ? 'only prod takes a second key: elsewhere B2BROUTER_API_KEY is the sandbox one'
+          : !env.B2BROUTER_SANDBOX_API_KEY.startsWith('test_')
+            ? 'a B2Brouter sandbox key (test_…)'
+            : null;
+      if (problem) {
+        ctx.addIssue({ code: 'custom', path: ['B2BROUTER_SANDBOX_API_KEY'], message: problem });
+      }
+    }
+    if (env.STRIPE_SECRET_KEY) {
+      if (!env.STRIPE_WEBHOOK_SECRET) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['STRIPE_WEBHOOK_SECRET'],
+          message: 'required with STRIPE_SECRET_KEY',
+        });
+      }
+      // Real money only in prod; everywhere else a test key (docs.stripe.com/keys).
+      const live = /^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY);
+      const test = /^(sk|rk)_test_/.test(env.STRIPE_SECRET_KEY);
+      if (env.FI_ENV === 'prod' ? !live : !test) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['STRIPE_SECRET_KEY'],
+          message:
+            env.FI_ENV === 'prod'
+              ? 'prod takes a live key (sk_live_… or rk_live_…)'
+              : `${env.FI_ENV} takes a test key (sk_test_… or rk_test_…)`,
+        });
+      }
+    }
     if (env.FI_ENV === 'local') return;
     const keys = [
       'DATABASE_URL',

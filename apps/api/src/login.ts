@@ -18,12 +18,12 @@ import {
 } from '@fi/db';
 import { t } from '@fi/shared';
 import { Hono } from 'hono';
-import { html, raw } from 'hono/html';
 import { z } from 'zod';
 import { newSessionToken, type TenantEnv, tenantAuth } from './auth';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { body, Email } from './http';
+import { page as htmlPage } from './page';
 import { tenantView } from './views';
 
 export const LINK_MINUTES = 15;
@@ -35,26 +35,7 @@ const secret = () => randomBytes(32).toString('base64url');
 const minutes = (n: number) => n * 60_000;
 
 const page = (message: string, form?: { action: string; button: string }) =>
-  html`<!doctype html>
-<html lang="fr">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex" />
-    <title>${t('login.page.title')}</title>
-    <style>
-      body { font: 16px/1.5 'Segoe UI', system-ui, sans-serif; max-width: 32rem; margin: 4rem auto;
-        padding: 0 1rem; color: #1b1b1b; background: #fff; }
-      button { font: inherit; padding: .6rem 1.2rem; border: 0; border-radius: 4px;
-        background: #0f6b3a; color: #fff; cursor: pointer; }
-    </style>
-  </head>
-  <body>
-    <h1>${t('login.page.title')}</h1>
-    <p>${message}</p>
-    ${form ? html`<form method="post" action="${form.action}"><button type="submit">${form.button}</button></form>` : raw('')}
-  </body>
-</html>`;
+  htmlPage(t('login.page.title'), message, form);
 
 export function loginRoutes(deps: ApiDeps) {
   const app = new Hono<TenantEnv>();

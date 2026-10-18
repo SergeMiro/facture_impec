@@ -114,6 +114,9 @@ importers:
       hono:
         specifier: ^4.13.13
         version: 4.13.13
+      nodemailer:
+        specifier: 10.0.14
+        version: 10.0.14
       pg-boss:
         specifier: 12.38.0
         version: 12.38.0(@opentelemetry/api@1.9.1)
@@ -296,6 +299,9 @@ importers:
       '@fi/core':
         specifier: workspace:*
         version: link:../core
+      '@fi/shared':
+        specifier: workspace:*
+        version: link:../shared
       drizzle-orm:
         specifier: 0.45.4
         version: 0.45.4(@electric-sql/pglite@0.5.10)(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(pg@8.23.1)
@@ -3605,6 +3611,10 @@ packages:
 
   node-mock-http@1.0.5:
     resolution: {integrity: sha512-KQyt/wLjG3TAc7DOUhpqWzgd4ERxR80JOlTK5VE5R1S12IaPVN5qkj4klBce9HPG1Njuup4Sb5bljaT34lIyjw==}
+
+  nodemailer@10.0.14:
+    resolution: {integrity: sha512-eJoLFKg55fesSlzUekmfOv/SBXh4KUYT8oiQc2RLP0tfG0rbNMJBK7wgHJwXTJwqyKlSJMz9UzDZ4v+aHEvo8g==}
+    engines: {node: '>=20.0.0'}
 
   non-error@0.1.0:
     resolution: {integrity: sha512-TMB1uHiGsHRGv1uYclfhivcnf0/PdFp2pNqRxXjncaAsjYMoisaQJI+SSZCqRq+VliwRTC8tsMQfmrWjDMhkPQ==}
@@ -7823,6 +7833,8 @@ snapshots:
       html-entities: 2.6.0
 
   node-mock-http@1.0.5: {}
+
+  nodemailer@10.0.14: {}
 
   non-error@0.1.0: {}
 

@@ -32,10 +32,11 @@ import {
   validationResults,
 } from '@fi/db';
 import { t } from '@fi/shared';
+import { assertMaySend } from './billing';
 import { chasePlanOf } from './collect';
 import type { ApiDeps } from './deps';
 import { ApiError, isUniqueViolation } from './errors';
-import { routeFor } from './platform';
+import { awaitsGoLive, routeFor } from './platform';
 
 export const EDITABLE: readonly InvoiceState[] = ['draft', 'needs_fix', 'validated'];
 const BEFORE_DEPOSIT: readonly InvoiceState[] = [
@@ -340,6 +341,8 @@ export async function requestSend(deps: ApiDeps, tenant: TenantRow, id: string) 
     if (!routeFor(deps, tenant, row.isTest)?.adapter) {
       throw new ApiError(409, row.isTest ? 'test_platform_missing' : 'pdp_not_configured');
     }
+    if (!row.isTest && awaitsGoLive(deps, tenant)) throw new ApiError(409, 'not_live');
+    if (!row.isTest) await assertMaySend(deps, tx, tenant);
     await applyTransition(tx, { invoiceId: row.id, event: 'approve', actor: 'user' });
     return false;
   });

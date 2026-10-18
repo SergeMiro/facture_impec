@@ -42,11 +42,12 @@ let api: ReturnType<typeof testApi>;
 const delivered: Record<PdpProvider, Map<string, InboundInvoice[]>> = {
   mock: new Map(),
   b2brouter: new Map(),
+  b2brouter_test: new Map(),
 };
 const asked: { provider: PdpProvider; account: string; since: Date }[] = [];
 const platform = (provider: PdpProvider): PdpAdapter =>
   fakeAdapter({
-    provider,
+    provider: provider === 'mock' ? 'mock' : 'b2brouter',
     listInbound: async ({ account, since }) => {
       asked.push({ provider, account, since });
       return (delivered[provider].get(account) ?? []).filter(
