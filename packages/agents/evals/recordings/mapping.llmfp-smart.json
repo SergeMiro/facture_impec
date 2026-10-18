@@ -239,9 +239,7 @@
         }
       ],
       "groupingColumn": "C",
-      "warnings": [
-        "Colonnes manquantes : montant HT de la ligne, total TTC, adresse, email, etc."
-      ]
+      "warnings": ["Colonnes manquantes : montant HT de la ligne, total TTC, adresse, email, etc."]
     },
     "07-two-row-header": {
       "headerRow": 2,
