@@ -1,6 +1,6 @@
 // M4 acceptance (plan §11): one invoice goes from the sheet to B2Brouter's sandbox, and its status
 // comes back to FI_Statut without a click, the fiche closed. By default against B2Brouter's stand-in
-// in apps/mock-pdp (the real adapter, webhooks included); with FI_E2E_B2BROUTER_* against the real
+// in apps/mock-pdp (the real adapter, webhooks included); with FI_LIVE_B2BROUTER_* against the real
 // sandbox (docs/RUNBOOK.md § E2E), where the sweep brings the news.
 // browser: local (Chrome of this server; Browserbase cannot reach localhost).
 import { type MessageKey, t } from '@fi/shared';

@@ -19,7 +19,7 @@ export const E2E_DB = process.env.FI_E2E_DB;
 
 function required(name: string): string {
   const value = process.env[name];
-  if (!value) throw new Error(`${name} is required with FI_E2E_B2BROUTER_KEY (docs/RUNBOOK.md)`);
+  if (!value) throw new Error(`${name} is required with FI_LIVE_B2BROUTER_KEY (docs/RUNBOOK.md)`);
   return value;
 }
 
@@ -27,10 +27,17 @@ function required(name: string): string {
  * The live run against B2Brouter's sandbox (docs/RUNBOOK.md § E2E): the owner's sandbox key, the
  * account it serves and a SIREN its directory knows. Unset: the stand-in in apps/mock-pdp.
  */
-export const LIVE = process.env.FI_E2E_B2BROUTER_KEY
+export const LIVE = process.env.FI_LIVE_B2BROUTER_KEY
   ? {
-      key: process.env.FI_E2E_B2BROUTER_KEY,
-      account: required('FI_E2E_B2BROUTER_ACCOUNT'),
-      buyerSiren: required('FI_E2E_B2BROUTER_BUYER_SIREN'),
+      key: sandboxKey(process.env.FI_LIVE_B2BROUTER_KEY),
+      account: required('FI_LIVE_B2BROUTER_ACCOUNT'),
+      buyerSiren: required('FI_LIVE_B2BROUTER_SIREN'),
     }
   : null;
+
+/** The E2E run sends invoices: never with a key that reaches real customers. */
+function sandboxKey(key: string): string {
+  if (!key.startsWith('test_'))
+    throw new Error('FI_LIVE_B2BROUTER_KEY: sandbox keys only (test_…)');
+  return key;
+}

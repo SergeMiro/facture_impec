@@ -2,7 +2,7 @@
 // the server's local Chrome (browser: local). `pnpm test:e2e` starts the three on ports of their own.
 // e2e/harness.spec.ts drives the harness page (a sheet in the browser, no Excel);
 // e2e/b2brouter.spec.ts sends through the B2Brouter adapter: to the stand-in in apps/mock-pdp, or to
-// B2Brouter's sandbox with the owner's key (FI_E2E_B2BROUTER_*, docs/RUNBOOK.md § E2E);
+// B2Brouter's sandbox with the owner's key (FI_LIVE_B2BROUTER_*, docs/RUNBOOK.md § E2E);
 // e2e/excel-web.spec.ts drives Excel on the web and runs only with an account (docs/RUNBOOK.md).
 import { defineConfig } from '@playwright/test';
 import { E2E, E2E_DB, LIVE } from './e2e/env';
