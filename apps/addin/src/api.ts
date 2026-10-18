@@ -60,6 +60,12 @@ export const SyncResult = z.object({
 });
 export type SyncResult = z.infer<typeof SyncResult>;
 
+/** The most invoices one status check asks about (the API lists at most 200 at a time). */
+const MAX_IDS = 200;
+const InvoiceStatuses = z.object({
+  invoices: z.array(z.object({ id: z.string(), status: z.string() })),
+});
+
 export const Degraded = z.enum(['ai_off', 'daily_budget', 'run_budget', 'error']);
 export type Degraded = z.infer<typeof Degraded>;
 
@@ -300,6 +306,12 @@ export class ApiClient {
     });
 
   invoice = (id: string) => this.#json(InvoiceDetail, `/invoices/${id}`);
+  /** Where these invoices are now: cheaper than a sync, which reads and validates the whole sheet. */
+  statuses = (ids: string[]) =>
+    this.#json(
+      InvoiceStatuses,
+      `/invoices?limit=${MAX_IDS}&ids=${ids.slice(0, MAX_IDS).join(',')}`,
+    );
   explain = (id: string) => this.#json(Explained, `/invoices/${id}/explain`, { method: 'POST' });
   rehearse = (id: string) => this.#json(Rehearsal, `/invoices/${id}/rehearse`, { method: 'POST' });
   send = (id: string) => this.#json(Sent, `/invoices/${id}/send`, { method: 'POST' });

@@ -9,6 +9,9 @@ import type { ApiDeps, Jobs, PdpRegistry, SyncTarget } from './deps';
 import { OutboxMailer } from './mail';
 import { SCENARIO_SELLER, scenarioDraft } from './scenarios/invoice';
 
+// The task pane's tests move invoices as the workers would.
+export { runSend, runSync, type WorkerDeps } from './workers';
+
 export const ADMIN_TOKEN = 'test-admin-token-0123456789abcdef';
 
 export interface RecordedJobs extends Jobs {

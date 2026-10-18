@@ -248,6 +248,9 @@ describe('invoices', () => {
     expect((await request(`/invoices/${created.body.id}`, { token: b.apiKey })).status).toBe(404);
     expect((await request('/invoices/not-a-uuid', { token: a.apiKey })).status).toBe(404);
     expect((await request('/invoices?status=nope', { token: a.apiKey })).status).toBe(400);
+    expect((await list(`?ids=${created.body.id}`)).map((i) => i.id)).toEqual([created.body.id]);
+    expect(await list(`?ids=${created.body.id}`, b.apiKey)).toHaveLength(0);
+    expect((await request('/invoices?ids=nope', { token: a.apiKey })).status).toBe(400);
   });
 
   it('edits a draft and validates it again', async () => {

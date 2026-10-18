@@ -4,13 +4,16 @@ import {
   fakeAdapter,
   linkToken,
   newTenant,
+  runSend,
+  runSync,
   type testApi as TestApi,
   testApi,
   testDatabase,
+  type WorkerDeps,
 } from '@fi/api/testing';
-import { t } from '@fi/shared';
+import { type MessageKey, t } from '@fi/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Controller, type FiState, SETTING } from './controller';
+import { Controller, type FiState, SETTING, SHEET_POLL_MAX_MS, SHEET_POLL_MS } from './controller';
 import { FakeWorkbook } from './excel/fake';
 import { DEMO_DEFAULTS, DEMO_OWNER, DEMO_SELLER, DEMO_SHEET, demoSheet } from './harness/demo';
 import type { Timers } from './offline';
@@ -21,15 +24,26 @@ const OWNER = DEMO_OWNER;
 const SELLER = { ...DEMO_SELLER, ownerEmail: OWNER };
 const DEFAULTS = DEMO_DEFAULTS;
 
+/** The delays the controller asked for, before they were shrunk. */
+const delays: number[] = [];
+
 /** Every delay of the controller shrunk to a few milliseconds. */
 const fastTimers: Timers = {
-  setTimeout: (fn, ms) => setTimeout(fn, Math.min(ms, 5)),
+  setTimeout: (fn, ms) => {
+    delays.push(ms);
+    return setTimeout(fn, Math.min(ms, 5));
+  },
   clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
 };
 
 let database: Awaited<ReturnType<typeof testDatabase>>;
 let api: ReturnType<typeof TestApi>;
 let apiKey: string;
+let adapter: ReturnType<typeof fakeAdapter>;
+let account: string;
+type PlatformEvent = Awaited<ReturnType<typeof adapter.getStatus>>[number];
+/** What the platform answers when asked about an invoice. */
+let platformEvents: PlatformEvent[] = [];
 /** Unplugs the network for the offline tests. */
 let down = false;
 const calls: string[] = [];
@@ -70,14 +84,15 @@ beforeAll(async () => {
   database = await testDatabase();
   // A platform that takes every invoice and finds every customer; it never answers by itself.
   let deposits = 0;
-  const adapter = fakeAdapter({
+  adapter = fakeAdapter({
     sendInvoice: async () => ({ outcome: 'deposited', pdpRef: `inv_${++deposits}` }),
-    getStatus: async () => [],
+    getStatus: async () => platformEvents,
     lookupRecipient: async ({ siren }) => ({ siren }),
   });
   api = testApi(database, { mock: adapter });
   const tenant = await newTenant(api.request, SELLER);
   apiKey = tenant.apiKey;
+  account = tenant.account;
   const res = await api.request('/settings', {
     method: 'PATCH',
     token: apiKey,
@@ -228,6 +243,52 @@ describe('a new user on the demo sheet', () => {
     await controller.playScenario('pdp_reject');
     expect(state().notice?.tone).toBe('error');
     expect(state().notice?.text).toBe(t('api.error.scenario_needs_send'));
+  });
+
+  it('follows the sent invoice on the sheet by itself, less and less often, until it arrives', async () => {
+    const id = row(2)?.invoiceId;
+    if (!id) throw new Error('row 2 has no invoice');
+    controller.navigate({ name: 'dashboard' });
+    const worker: WorkerDeps = {
+      db: database.db,
+      pdp: { mock: adapter },
+      test: api.deps.test,
+      jobs: api.jobs,
+      now: () => new Date(),
+    };
+    const sheetSays = (status: string) =>
+      book.cell(DEMO_SHEET, 'M2')?.text ===
+      t('addin.sheet.testLabel', { label: t(`invoice.status.${status}` as MessageKey) });
+    // Nothing moves yet: the checks space out (the offline retries are the only other long delays).
+    await until(() => delays.includes(SHEET_POLL_MAX_MS), 'the checks to space out');
+    const checks = delays.filter((d) => d >= SHEET_POLL_MS);
+    expect(checks.slice(checks.lastIndexOf(SHEET_POLL_MS)).slice(0, 5)).toEqual([
+      30_000, 60_000, 120_000, 240_000, 300_000,
+    ]);
+
+    await runSend(worker, id);
+    await until(() => sheetSays('deposited'), 'the deposit on the sheet');
+    const { pdpRef } = (await (await api.request(`/invoices/${id}`, { token: apiKey })).json()) as {
+      pdpRef: string;
+    };
+
+    const event = (n: number, status: PlatformEvent['status']): PlatformEvent => ({
+      id: `evt-${n}`,
+      status,
+      raw: status,
+      at: new Date().toISOString(),
+    });
+    platformEvents = [event(1, 'delivered')];
+    await runSync(worker, { provider: 'mock', account, pdpRef });
+    await until(() => sheetSays('delivered'), 'the delivery on the sheet');
+
+    platformEvents = [event(1, 'delivered'), event(2, 'accepted')];
+    await runSync(worker, { provider: 'mock', account, pdpRef });
+    await until(() => sheetSays('accepted'), 'the acceptance on the sheet');
+    // Accepted: the platform has nothing urgent left to say, the checks stop.
+    const asked = calls.filter((c) => c.startsWith('GET /invoices?')).length;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(calls.filter((c) => c.startsWith('GET /invoices?')).length).toBe(asked);
   });
 
   it('keeps a sync waiting while offline and runs it when the connection is back', async () => {

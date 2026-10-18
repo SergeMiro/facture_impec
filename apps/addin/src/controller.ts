@@ -85,6 +85,9 @@ export const POLL_MS = 3_000;
 export const POLL_TIMES = 20;
 export const LINK_POLL_MS = 2_000;
 export const AUTO_SYNC_MS = 1_500;
+/** While invoices on the sheet are on their way: first status check, then twice as late each time. */
+export const SHEET_POLL_MS = 30_000;
+export const SHEET_POLL_MAX_MS = 300_000;
 
 const TOKEN_KEY = 'token';
 
@@ -153,6 +156,7 @@ export class Controller {
   #linkTimer: unknown = null;
   #linkRequest: string | null = null;
   #poll: { timer: unknown; left: number } | null = null;
+  #sheetPoll: { timer: unknown; delay: number } | null = null;
 
   constructor(deps: ControllerDeps) {
     this.#deps = {
@@ -320,6 +324,7 @@ export class Controller {
         if (!(e instanceof ApiFailure && e.status === 404)) throw e;
       }
     }
+    this.#stopFollowing();
     this.#set({ sheet, mapping, sync: null, detection: null });
     await this.#listen(sheet);
     if (mapping) {
@@ -398,6 +403,7 @@ export class Controller {
     await this.#deps.tokens.remove(TOKEN_KEY);
     this.#queue.clear();
     this.#closeInvoice();
+    this.#stopFollowing();
     await this.#stopListening?.();
     this.#stopListening = null;
     this.#set({
@@ -515,9 +521,51 @@ export class Controller {
     this.#statusCols = { statusCol: plan.statusCol, detailCol: plan.detailCol };
     await this.#writer.write(plan);
     this.#set({ sync: { result, at: this.#deps.now() } });
+    this.#followSheet(sheet, result);
     const open = this.#state.invoice?.detail;
     const row = open && result.rows.find((r) => r.invoiceId === open.id);
     if (open && row && row.status !== open.status) await this.#refreshInvoice();
+  }
+
+  /**
+   * Keeps FI_Statut up to date without a click while invoices on the sheet are on their way: asks
+   * where they are (30 s, then twice as late up to 5 min) and checks the sheet as soon as one moved.
+   */
+  #followSheet(sheet: string, result: SyncResult): void {
+    this.#stopFollowing();
+    const known = new Map<string, string>();
+    for (const r of result.rows) {
+      if (r.invoiceId && r.status && MOVING.has(r.status)) known.set(r.invoiceId, r.status);
+    }
+    if (known.size === 0) return;
+    const tick = async () => {
+      const follow = this.#sheetPoll;
+      if (!follow || this.#state.sheet !== sheet || !this.#state.me) return;
+      let moved = false;
+      try {
+        const { invoices } = await this.api.statuses([...known.keys()]);
+        moved = invoices.some((i) => known.has(i.id) && known.get(i.id) !== i.status);
+      } catch {
+        // Offline or a hiccup: not worth a notice, the next check asks again.
+      }
+      if (this.#sheetPoll !== follow) return;
+      if (moved) {
+        this.#sheetPoll = null;
+        void this.sync();
+        return;
+      }
+      follow.delay = Math.min(follow.delay * 2, SHEET_POLL_MAX_MS);
+      follow.timer = this.#deps.timers.setTimeout(tick, follow.delay);
+    };
+    this.#sheetPoll = {
+      timer: this.#deps.timers.setTimeout(tick, SHEET_POLL_MS),
+      delay: SHEET_POLL_MS,
+    };
+  }
+
+  #stopFollowing(): void {
+    if (this.#sheetPoll) this.#deps.timers.clearTimeout(this.#sheetPoll.timer);
+    this.#sheetPoll = null;
   }
 
   #plan(reading: SheetReading, mapping: SheetMapping, result: SyncResult): StatusPlan {

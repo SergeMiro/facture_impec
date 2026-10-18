@@ -67,7 +67,8 @@ interface Answer {
 
 interface CallOptions {
   query?: Record<string, string>;
-  body?: string | Uint8Array;
+  /** ArrayBuffer-backed: what the DOM's BodyInit accepts too (the add-in typechecks this file). */
+  body?: string | Uint8Array<ArrayBuffer>;
   contentType?: string;
   accept: readonly number[];
 }
@@ -220,7 +221,7 @@ export function createB2BrouterAdapter(options: B2BrouterAdapterOptions): PdpAda
   async function importXml(
     accountId: string,
     number: string,
-    xml: Uint8Array,
+    xml: Uint8Array<ArrayBuffer>,
   ): Promise<B2bInvoice | SendResult> {
     const answer = await call('POST', `${account(accountId)}/invoices/import`, {
       query: { send_after_import: 'false', issued: 'true' },
@@ -269,7 +270,7 @@ export function createB2BrouterAdapter(options: B2BrouterAdapterOptions): PdpAda
           // TODO(verify): docs/B2BROUTER.md §11 T16 — an attachment cannot be replaced cleanly.
           await call('POST', `${invoicePath(invoice.id)}/add_attachment`, {
             query: { filename: `${number}.pdf`, use_as_pdf_view: 'true' },
-            body: pdf,
+            body: new Uint8Array(pdf),
             contentType: 'application/octet-stream',
             accept: [200, 201, 204],
           });

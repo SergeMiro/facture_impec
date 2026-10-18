@@ -8,6 +8,7 @@ import {
   audit,
   desc,
   eq,
+  inArray,
   invoices,
   PDP_PROVIDERS,
   sha256,
@@ -79,6 +80,12 @@ const TenantPatch = z
   .partial();
 const ListQuery = z.object({
   status: z.enum(STATES).optional(),
+  /** Comma-separated: the task pane asks only for the invoices its sheet is waiting on. */
+  ids: z
+    .string()
+    .transform((s) => s.split(','))
+    .pipe(z.array(z.uuid()).min(1).max(200))
+    .optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });
@@ -332,7 +339,11 @@ export function createApp(deps: ApiDeps) {
       .select()
       .from(invoices)
       .where(
-        and(eq(invoices.tenantId, tenant.id), q.status ? eq(invoices.status, q.status) : undefined),
+        and(
+          eq(invoices.tenantId, tenant.id),
+          q.status ? eq(invoices.status, q.status) : undefined,
+          q.ids ? inArray(invoices.id, q.ids) : undefined,
+        ),
       )
       .orderBy(desc(invoices.createdAt), desc(invoices.id))
       .limit(q.limit)
