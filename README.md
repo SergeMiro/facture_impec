@@ -15,7 +15,8 @@ le client, un plan de relances suit l'échéance (brouillons à envoyer soi-mêm
 avec plafond ; la mise en demeure reste toujours un brouillon), « Encaissée » clôt la facture et
 prévient la plateforme, et un point hebdomadaire résume la semaine. C'est prouvé contre une réplique
 locale de l'API B2Brouter ; l'essai sur le bac à sable B2Brouter attend la clé du propriétaire. Rien
-n'est encore hébergé ni publié : on le charge depuis sa machine (voir `docs/RUNBOOK.md`). L'ancien
+n'est encore hébergé ni publié, sauf le site de présentation (https://facture-impec-site.vercel.app) :
+on charge le complément depuis sa machine (voir `docs/RUNBOOK.md`). L'ancien
 prototype (Rust + Next.js) reste consultable dans le tag `archive/rust-mvp-v1` et sur
 https://facture-impec.vercel.app jusqu'à son remplacement.
 

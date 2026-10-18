@@ -15,7 +15,7 @@ const env = {
 };
 
 export default defineConfig({
-  site: env.PUBLIC_SITE_URL ?? 'https://facture-impec.vercel.app',
+  site: env.PUBLIC_SITE_URL ?? 'https://facture-impec-site.vercel.app',
   output: 'static',
   adapter: vercel(),
   integrations: [react()],

@@ -40,13 +40,19 @@ French message. Optional: `TRIAL_NOTIFY_TELEGRAM_BOT_TOKEN` + `TRIAL_NOTIFY_TELE
 Read new requests: Supabase table editor → `trial_requests` (newest first); set `status` to
 `contacted`, `active` or `declined` as you go.
 
-Deploy (the Vercel project is not linked to git; deploy from the CLI). Build with Astro, whose Vercel
-adapter writes `apps/site/.vercel/output`; do not use `vercel build`, which applies the project's
-remote settings (still Next.js from the old MVP) and fails:
+Deploy: Vercel project `facture-impec-site` (team `sergemiros-projects`, created 2026-10-18, framework
+Astro, Node 22), production https://facture-impec-site.vercel.app. It is not linked to git: pushes deploy
+nothing, the CLI does. Link the folder once (`apps/site/.vercel` is ignored), then build with Astro, whose
+Vercel adapter writes `apps/site/.vercel/output`, and upload that output. Remove the old output first:
+`deploy --prebuilt` silently ships whatever it finds. The old project `facture-impec` keeps the
+Next.js MVP and is not touched. The CLI reads `VERCEL_TOKEN` from the environment; never pass
+`--token` on the command line, the CLI repeats the command, token included, in its output.
 
 ```bash
-pnpm --filter @fi/site build && (cd apps/site && npx vercel deploy --prebuilt --yes)   # preview URL
-(cd apps/site && npx vercel deploy --prebuilt --prod --yes)                           # production, after review
+(cd apps/site && npx vercel link --yes --project facture-impec-site --scope sergemiros-projects)  # once
+rm -rf apps/site/.vercel/output && pnpm --filter @fi/site build
+(cd apps/site && npx vercel deploy --prebuilt --yes)          # preview URL
+(cd apps/site && npx vercel deploy --prebuilt --prod --yes)   # production
 ```
 
 Before production: fill the publisher identity in `apps/site/src/content/site.ts` (`legal`) and set
