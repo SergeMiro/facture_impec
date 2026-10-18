@@ -1,0 +1,10 @@
+---
+// Shows a value, or a loud marker when the owner has not provided it yet.
+interface Props {
+  value: string | null | undefined;
+  label: string;
+}
+const { value, label } = Astro.props;
+---
+
+{value ? <span>{value}</span> : <mark class="rounded bg-amber-100 px-1.5 py-0.5 text-amber-900">[{label} : à compléter]</mark>}

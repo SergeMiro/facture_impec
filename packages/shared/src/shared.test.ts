@@ -41,10 +41,21 @@ describe('ServerEnvSchema', () => {
     expect(env.FI_ENV).toBe('prod');
   });
 
-  it('is what .env.example lists, plus the add-in port Vite reads', () => {
+  it('is what .env.example lists, with the variables Vite and Astro read', () => {
+    // apps/addin/vite.config.ts and the astro:env schema of apps/site/astro.config.mjs.
+    const elsewhere = [
+      'ADDIN_PORT',
+      'SITE_PORT',
+      'PUBLIC_SITE_URL',
+      'PUBLIC_CONTACT_EMAIL',
+      'SUPABASE_URL',
+      'SUPABASE_SECRET_KEY',
+      'TRIAL_NOTIFY_TELEGRAM_BOT_TOKEN',
+      'TRIAL_NOTIFY_TELEGRAM_CHAT_ID',
+    ];
     const example = readFileSync(resolve(REPO_ROOT, '.env.example'), 'utf8');
     const listed = [...example.matchAll(/^([A-Z_]+)=/gm)].map((m) => m[1]);
-    expect(listed.sort()).toEqual([...Object.keys(ServerEnvSchema.in.shape), 'ADDIN_PORT'].sort());
+    expect(listed.sort()).toEqual([...Object.keys(ServerEnvSchema.in.shape), ...elsewhere].sort());
   });
 });
 

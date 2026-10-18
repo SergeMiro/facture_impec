@@ -14,15 +14,43 @@ pnpm test
 pnpm dev
 ```
 
-`pnpm dev` starts three processes through Turborepo:
+`pnpm dev` starts four processes through Turborepo:
 
 | Process | URL | Check |
 |---|---|---|
 | API | http://localhost:4000 | `curl localhost:4000/health` → `{"ok":true,"service":"api","env":"local"}` |
 | Mock PDP | http://localhost:4010 | `curl localhost:4010/health` → `{"ok":true,"service":"mock-pdp"}` |
 | Add-in (task pane) | http://localhost:3000 | page titled « Facture Impec » |
+| Marketing site | http://localhost:4321 | landing page; `/presentation`, `/api/trial` |
 
-Stop with Ctrl+C. Ports come from `.env` (`API_PORT`, `MOCK_PDP_PORT`, `ADDIN_PORT`).
+Stop with Ctrl+C. Ports come from `.env` (`API_PORT`, `MOCK_PDP_PORT`, `ADDIN_PORT`, `SITE_PORT`).
+
+## Marketing site
+
+```bash
+pnpm --filter @fi/site dev       # http://localhost:4321
+pnpm --filter @fi/site build     # static pages + Vercel function in apps/site/.vercel/output
+```
+
+Trial requests need a Supabase project: run `apps/site/sql/001_trial_requests.sql` once in its SQL
+editor, then set `SUPABASE_URL` and `SUPABASE_SECRET_KEY` (server secret, `sb_secret_…`) in Vercel.
+Without them, `pnpm dev` accepts the form and only logs it; production answers 503 with a calm
+French message. Optional: `TRIAL_NOTIFY_TELEGRAM_BOT_TOKEN` + `TRIAL_NOTIFY_TELEGRAM_CHAT_ID`.
+
+Read new requests: Supabase table editor → `trial_requests` (newest first); set `status` to
+`contacted`, `active` or `declined` as you go.
+
+Deploy (the Vercel project is not linked to git; deploy from the CLI). Build with Astro, whose Vercel
+adapter writes `apps/site/.vercel/output`; do not use `vercel build`, which applies the project's
+remote settings (still Next.js from the old MVP) and fails:
+
+```bash
+pnpm --filter @fi/site build && (cd apps/site && npx vercel deploy --prebuilt --yes)   # preview URL
+(cd apps/site && npx vercel deploy --prebuilt --prod --yes)                           # production, after review
+```
+
+Before production: fill the publisher identity in `apps/site/src/content/site.ts` (`legal`) and set
+`PUBLIC_CONTACT_EMAIL`; the legal pages show « à compléter » markers until then.
 
 ## Database
 
@@ -81,7 +109,7 @@ expected status and time limit); the same runs are part of `pnpm verify` (`apps/
 | `pnpm --filter @fi/core oracle:fetch` | Downloads the Factur-X and UBL files we may not commit into `packages/core/.oracle-cache/`, checked by sha256. `test:oracle` runs it itself. |
 | `pnpm --filter @fi/core pdf:check [dir]` | Renders the 25 golden invoices as Factur-X and runs veraPDF (Docker `verapdf/cli:v1.30.2`) and the Akretion extractor (`pip install factur-x`; `FACTURX_EXTRACT=/path/to/facturx-pdfextractxml` if it is not on PATH). Manual, before changing the PDF layout. |
 | `pnpm format` | Format and apply safe lint fixes. |
-| `pnpm build` | Production build (today only the add-in has one). |
+| `pnpm build` | Production build (add-in and marketing site). |
 | `pnpm --filter @fi/api dev` | Run one package. |
 
 The first `pnpm verify` on a machine needs the network once: the oracle downloads its files and

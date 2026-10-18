@@ -1,0 +1,31 @@
+---
+import { faqs } from '../../content/site';
+import { Icon } from '../Icon';
+---
+
+<section id="faq" class="bg-leaf-50/60 py-20 sm:py-28">
+  <div class="container-page grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
+    <div>
+      <p class="eyebrow"><span class="h-px w-6 bg-leaf-500"></span>Questions fréquentes</p>
+      <h2 class="mt-4 text-4xl leading-tight font-medium text-leaf-950 sm:text-5xl">Vous vous demandez sûrement…</h2>
+      <p class="mt-5 text-lg text-muted">
+        Une autre question ? Écrivez-la dans le formulaire d’essai, nous vous répondons personnellement.
+      </p>
+    </div>
+    <div class="space-y-3">
+      {
+        faqs.map((f) => (
+          <details class="faq card group px-6 py-1 open:shadow-lift">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-6 py-4 font-display text-lg text-leaf-950 [&::-webkit-details-marker]:hidden">
+              {f.q}
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-leaf-50 text-leaf-700 transition duration-300 group-open:rotate-180 group-open:bg-leaf-500 group-open:text-white">
+                <Icon name="chevronDown" size={18} />
+              </span>
+            </summary>
+            <p class="pb-5 leading-relaxed text-muted">{f.a}</p>
+          </details>
+        ))
+      }
+    </div>
+  </div>
+</section>

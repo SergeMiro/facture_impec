@@ -1,0 +1,61 @@
+---
+import { cabinetTrialDays, trialDays, trialRealSends } from '../../content/site';
+import { Icon, type IconName } from '../Icon';
+import TrialForm from '../islands/TrialForm';
+
+const perks: { icon: IconName; text: string }[] = [
+  {
+    icon: 'calendar',
+    text: `${trialDays} jours avec toutes les fonctionnalités Croissance (${cabinetTrialDays} jours pour les cabinets)`,
+  },
+  {
+    icon: 'flask',
+    text: `Mode test illimité, et jusqu’à ${trialRealSends} envois réels pour vous lancer`,
+  },
+  { icon: 'mail', text: 'Lien d’installation et premiers pas envoyés par e-mail' },
+  {
+    icon: 'users',
+    text: 'Premiers utilisateurs : une ligne directe avec l’équipe, vos retours façonnent le produit',
+  },
+];
+---
+
+<section id="essai" class="relative isolate overflow-hidden bg-leaf-950 py-20 text-white sm:py-28">
+  <div class="grain absolute inset-0 -z-10 opacity-60"></div>
+  <div
+    class="absolute inset-0 -z-20"
+    style="background: radial-gradient(50rem 32rem at 10% 0%, rgb(71 181 130 / 0.28), transparent 60%), radial-gradient(40rem 30rem at 100% 100%, rgb(201 168 91 / 0.14), transparent 60%), #05241a;"
+  >
+  </div>
+  <div class="container-page grid items-start gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
+    <div class="lg:sticky lg:top-28">
+      <p class="eyebrow !text-leaf-300"><span class="h-px w-6 bg-leaf-400"></span>Essai gratuit</p>
+      <h2 class="mt-4 text-4xl leading-tight font-medium sm:text-5xl">
+        Prêt avant l’échéance. <span class="italic text-leaf-300">Serein dès aujourd’hui.</span>
+      </h2>
+      <p class="mt-5 text-lg leading-relaxed text-leaf-50/75">
+        Demandez votre accès : nous ouvrons les essais au fil de l’eau pour accompagner chaque
+        nouvel utilisateur correctement.
+      </p>
+      <ul class="mt-8 space-y-4">
+        {
+          perks.map((p) => (
+            <li class="flex gap-3.5">
+              <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-leaf-400/15 text-leaf-300 ring-1 ring-leaf-300/20">
+                <Icon name={p.icon} size={16} />
+              </span>
+              <span class="text-leaf-50/85">{p.text}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+    <div class="overflow-hidden rounded-[1.6rem] bg-cream text-ink shadow-[0_40px_80px_-30px_rgb(0_0_0/0.6)] ring-1 ring-white/10">
+      <div class="border-b border-leaf-900/8 bg-white/60 px-6 py-5 sm:px-9">
+        <p class="font-display text-2xl text-leaf-950">Demander mon accès d’essai</p>
+        <p class="mt-1 text-sm text-muted">Deux minutes. Nous vous répondons par e-mail.</p>
+      </div>
+      <TrialForm client:idle />
+    </div>
+  </div>
+</section>

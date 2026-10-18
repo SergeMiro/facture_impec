@@ -1,0 +1,76 @@
+---
+import Todo from '../components/Todo.astro';
+import { legal } from '../content/site';
+import Legal from '../layouts/Legal.astro';
+---
+
+<Legal title="Politique de confidentialité" description="Quelles données le site Facture Impec collecte, pourquoi, combien de temps, et vos droits." updated="17 octobre 2026">
+  <section>
+    <h2>En bref</h2>
+    <p>
+      Ce site ne dépose aucun cookie publicitaire ni traceur de mesure d’audience. Les seules données
+      personnelles collectées sont celles que vous saisissez dans le formulaire de demande d’essai.
+    </p>
+  </section>
+
+  <section>
+    <h2>Responsable du traitement</h2>
+    <p>
+      <Todo value={legal.publisher} label="Raison sociale ou nom" />, <Todo value={legal.address} label="adresse" />.
+      Contact : <Todo value={legal.email} label="e-mail de contact" />.
+    </p>
+  </section>
+
+  <section>
+    <h2>Données collectées et finalité</h2>
+    <p>Lorsque vous demandez un essai, nous enregistrons :</p>
+    <ul>
+      <li>vos prénom, nom et adresse e-mail professionnelle ;</li>
+      <li>le nom de votre entreprise ou cabinet, et son SIREN si vous le donnez ;</li>
+      <li>votre volume de factures, votre version d’Excel, l’offre choisie et votre message éventuel.</li>
+    </ul>
+    <p>
+      Ces données servent uniquement à vous ouvrir un accès d’essai, à vous accompagner pendant cet
+      essai et à vous proposer la suite. Base légale : votre consentement, donné en cochant la case
+      du formulaire. Elles ne sont jamais vendues ni louées.
+    </p>
+  </section>
+
+  <section>
+    <h2>Destinataires et hébergement</h2>
+    <ul>
+      <li>Supabase : base de données, hébergée dans l’Union européenne ;</li>
+      <li>Vercel : hébergement du site et traitement technique du formulaire ;</li>
+      <li>
+        Telegram : notification interne d’une nouvelle demande, limitée au nom de l’entreprise, au
+        profil et au volume de factures (ni nom, ni e-mail).
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Durée de conservation</h2>
+    <p>
+      Trois ans à compter de notre dernier échange, puis suppression. Si vous devenez client, vos
+      données relèvent alors du contrat d’abonnement.
+    </p>
+  </section>
+
+  <section>
+    <h2>Vos droits</h2>
+    <p>
+      Vous pouvez à tout moment accéder à vos données, les rectifier, les supprimer, vous opposer à
+      leur traitement ou retirer votre consentement, en écrivant à <Todo value={legal.email} label="e-mail de contact" />.
+      Si vous estimez que vos droits ne sont pas respectés, vous pouvez saisir la CNIL (cnil.fr).
+    </p>
+  </section>
+
+  <section>
+    <h2>Le produit Facture Impec</h2>
+    <p>
+      Le traitement des factures dans le complément Excel fait l’objet d’un accord de traitement des
+      données distinct, remis avec l’abonnement. Avant tout appel à une intelligence artificielle,
+      les noms, SIREN, IBAN, adresses et e-mails sont remplacés par des jetons anonymes.
+    </p>
+  </section>
+</Legal>

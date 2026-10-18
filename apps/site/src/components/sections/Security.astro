@@ -1,0 +1,48 @@
+---
+import { Icon, type IconName } from '../Icon';
+
+const items: { icon: IconName; title: string; text: string }[] = [
+  {
+    icon: 'globe',
+    title: 'Hébergé dans l’UE',
+    text: 'Base de données et traitements en Union européenne, conformément au RGPD.',
+  },
+  {
+    icon: 'lock',
+    title: 'Rien ne part sans vous',
+    text: 'Par défaut, chaque envoi attend votre validation. Le mode automatique se choisit, il ne s’impose pas.',
+  },
+  {
+    icon: 'refresh',
+    title: 'Jamais de doublon',
+    text: 'Une même facture ne peut pas être envoyée deux fois, même après une coupure réseau.',
+  },
+  {
+    icon: 'history',
+    title: 'Journal complet',
+    text: 'Chaque action est enregistrée : vérification, envoi, statut, relance. Exportable à tout moment.',
+  },
+];
+---
+
+<section id="securite" class="bg-sand/50 py-20 sm:py-24">
+  <div class="container-page">
+    <div class="mx-auto max-w-2xl text-center">
+      <p class="eyebrow justify-center">Confiance</p>
+      <h2 class="mt-4 text-4xl font-medium text-leaf-950 sm:text-5xl">Vos factures, entre de bonnes mains.</h2>
+    </div>
+    <ul class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      {
+        items.map((it) => (
+          <li class="card p-6">
+            <span class="flex h-10 w-10 items-center justify-center rounded-full bg-leaf-500 text-white">
+              <Icon name={it.icon} size={19} />
+            </span>
+            <h3 class="mt-4 text-lg text-leaf-950">{it.title}</h3>
+            <p class="mt-1.5 leading-relaxed text-muted">{it.text}</p>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</section>

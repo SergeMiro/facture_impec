@@ -1,0 +1,40 @@
+---
+import Logo from './Logo.astro';
+
+const year = new Date().getFullYear();
+---
+
+<footer class="bg-leaf-950 text-white/70">
+  <div class="container-page grid gap-10 py-14 md:grid-cols-[1.4fr_1fr_1fr]">
+    <div class="max-w-sm">
+      <Logo tone="light" />
+      <p class="mt-4 text-sm leading-relaxed">
+        La facture électronique, directement depuis Excel. Conçu en France pour les TPE, les PME et
+        leurs experts-comptables.
+      </p>
+    </div>
+    <div>
+      <p class="text-sm font-semibold text-white">Produit</p>
+      <ul class="mt-3 space-y-2 text-sm">
+        <li><a class="hover:text-white" href="/#fonctionnement">Fonctionnement</a></li>
+        <li><a class="hover:text-white" href="/#demo">Démo</a></li>
+        <li><a class="hover:text-white" href="/#tarifs">Tarifs</a></li>
+        <li><a class="hover:text-white" href="/presentation">Présentation</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="text-sm font-semibold text-white">Informations</p>
+      <ul class="mt-3 space-y-2 text-sm">
+        <li><a class="hover:text-white" href="/#faq">Questions fréquentes</a></li>
+        <li><a class="hover:text-white" href="/mentions-legales">Mentions légales</a></li>
+        <li><a class="hover:text-white" href="/confidentialite">Confidentialité</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="border-t border-white/10">
+    <div class="container-page flex flex-col gap-2 py-6 text-xs text-white/50 sm:flex-row sm:justify-between">
+      <p>© {year} Facture Impec</p>
+      <p>Microsoft, Excel et Microsoft 365 sont des marques du groupe Microsoft.</p>
+    </div>
+  </div>
+</footer>

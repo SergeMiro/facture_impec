@@ -1,0 +1,53 @@
+---
+import { Icon, type IconName } from '../Icon';
+
+const steps: { icon: IconName; title: string; text: string }[] = [
+  {
+    icon: 'sheet',
+    title: 'Vous facturez dans Excel',
+    text: 'Comme aujourd’hui, avec votre modèle. Facture Impec reconnaît vos colonnes tout seul.',
+  },
+  {
+    icon: 'shield',
+    title: 'Il vérifie et explique',
+    text: 'Chaque problème est expliqué en français simple, avec la cellule à corriger en un clic.',
+  },
+  {
+    icon: 'send',
+    title: 'Vous envoyez',
+    text: 'Un clic sur « Envoyer » : la facture part au format Factur-X par une plateforme agréée.',
+  },
+  {
+    icon: 'euro',
+    title: 'Il suit jusqu’au paiement',
+    text: 'Statuts dans votre feuille, relances préparées, rapport chaque lundi.',
+  },
+];
+---
+
+<section id="fonctionnement" class="bg-leaf-50/60 py-20 sm:py-28">
+  <div class="container-page">
+    <div class="mx-auto max-w-2xl text-center">
+      <p class="eyebrow justify-center">Fonctionnement</p>
+      <h2 class="mt-4 text-4xl font-medium text-leaf-950 sm:text-5xl">Quatre étapes. Toutes dans Excel.</h2>
+      <p class="mt-5 text-lg text-muted">
+        Vous gardez vos outils. Facture Impec fait le travail de conformité, et vous laisse décider à
+        chaque étape qui compte.
+      </p>
+    </div>
+    <ol class="mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+      {
+        steps.map((s, i) => (
+          <li class="card group relative p-7 transition duration-300 hover:-translate-y-1 hover:shadow-lift">
+            <span class="font-display text-5xl text-leaf-200 transition group-hover:text-leaf-300">{String(i + 1).padStart(2, '0')}</span>
+            <span class="mt-5 flex h-11 w-11 items-center justify-center rounded-xl bg-leaf-500/10 text-leaf-600">
+              <Icon name={s.icon} size={22} />
+            </span>
+            <h3 class="mt-4 text-xl text-leaf-950">{s.title}</h3>
+            <p class="mt-2 leading-relaxed text-muted">{s.text}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>

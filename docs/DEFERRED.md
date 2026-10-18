@@ -37,3 +37,6 @@ Each line says where it came from and what would bring it back.
 | Bundled API image (esbuild/tsup + Docker), listening beyond 127.0.0.1 (`API_HOST`) | M2: `tsx` and `127.0.0.1` | M7, deployment to the EU VPS. |
 | Scenarios against servers already running (`pnpm dev`, sandbox) | M2: each scenario starts its own in-process stack | M4, to replay the scenarios on the B2Brouter sandbox. |
 | Listing invoices beyond `limit`/`offset` (search, date range, sort) | M2: status filter only | M3, when the add-in shows a list. |
+| Rate limiting on `POST /api/trial` beyond honeypot + fill time + one row per e-mail | Marketing site | Spam actually reaches the table; then Vercel WAF rule or Upstash rate limit. |
+| Site in other languages, blog, analytics | Marketing site | The French pilot converts and there is content worth translating or measuring (analytics would need a consent banner). |
+| Automatic trial provisioning (account + install link sent on submit) | Marketing site | M3 has accounts; until then the owner answers each request by hand. |
