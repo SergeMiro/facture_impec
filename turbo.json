@@ -8,8 +8,9 @@
     },
     "typecheck": {},
     "test": {
-      "outputs": ["coverage/**"]
+      "outputs": []
     },
+    "test:oracle": {},
     "dev": {
       "cache": false,
       "persistent": true

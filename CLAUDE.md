@@ -12,8 +12,8 @@ like "plan §7" refer to it. Where this file and the plan disagree, the plan win
 - Layout: `apps/{addin,api,mock-pdp,site}`, `packages/{core,agents,pdp-adapter,db,shared}`, `fixtures/`, `docs/`, `scripts/`.
 - `apps/site` is the marketing site (Astro + Vercel, green brand). Its copy lives in `apps/site/src/content/`;
   rule 6 below is about product UI. Never put unverified claims, fake testimonials or customer counts on it.
-- `legacy/rust-mvp/` is the frozen Rust/Next.js MVP. Read it while porting rules in M1; never build on it,
-  never edit it. It is deleted at the end of M1 (the branch `archive/rust-mvp-v1` keeps it forever).
+- The previous Rust/Next.js MVP was ported to `packages/core` in M1 and removed; the branch
+  `archive/rust-mvp-v1` keeps it with its history. Never build on it.
 - Progress and evidence: `docs/PROGRESS.md`. Things consciously postponed: `docs/DEFERRED.md`.
 
 ## Commands

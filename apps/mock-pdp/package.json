@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
@@ -10,9 +13,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fi/core": "workspace:*",
+    "@fi/pdp-adapter": "workspace:*",
     "@fi/shared": "workspace:*",
     "@hono/node-server": "^2.1.5",
-    "hono": "^4.13.13"
+    "hono": "^4.13.13",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",

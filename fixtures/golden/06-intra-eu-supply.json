@@ -1,0 +1,107 @@
+{
+  "description": "Livraison de biens à un client allemand : exonération intracommunautaire.",
+  "draft": {
+    "processType": "B1",
+    "number": "F2026-0046",
+    "issueDate": "2026-10-15",
+    "typeCode": "380",
+    "currency": "EUR",
+    "dueDate": "2026-11-14",
+    "paymentTerms": "Paiement à 30 jours par virement.",
+    "notes": [
+      {
+        "subjectCode": "PMT",
+        "text": "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €."
+      },
+      {
+        "subjectCode": "PMD",
+        "text": "Pénalités de retard : trois fois le taux d'intérêt légal."
+      },
+      {
+        "subjectCode": "AAB",
+        "text": "Escompte pour paiement anticipé : néant."
+      }
+    ],
+    "seller": {
+      "name": "Atelier Dupont SARL",
+      "ids": [
+        {
+          "id": "10000000900017",
+          "scheme": "0009"
+        }
+      ],
+      "legalId": {
+        "id": "100000009",
+        "scheme": "0002"
+      },
+      "vatId": "FR88100000009",
+      "electronicAddress": {
+        "id": "100000009",
+        "scheme": "0225"
+      },
+      "address": {
+        "line1": "12 rue des Lilas",
+        "city": "Dijon",
+        "postCode": "21000",
+        "country": "FR"
+      }
+    },
+    "buyer": {
+      "name": "Müller Verpackung GmbH",
+      "vatId": "DE129273398",
+      "electronicAddress": {
+        "id": "DE129273398",
+        "scheme": "9930"
+      },
+      "address": {
+        "line1": "Industriestraße 14",
+        "city": "Berlin",
+        "postCode": "10115",
+        "country": "DE"
+      }
+    },
+    "delivery": {
+      "date": "2026-10-08",
+      "address": {
+        "line1": "Industriestraße 14",
+        "city": "Berlin",
+        "postCode": "10115",
+        "country": "DE"
+      }
+    },
+    "payment": {
+      "meansCode": "30",
+      "accounts": [
+        {
+          "iban": "FR7630006000011234567890189",
+          "name": "Atelier Dupont SARL"
+        }
+      ]
+    },
+    "vatExemptions": [
+      {
+        "category": "K",
+        "code": "VATEX-EU-IC",
+        "reason": "Exonération de TVA, article 262 ter I du CGI"
+      }
+    ],
+    "lines": [
+      {
+        "id": "1",
+        "quantity": "1",
+        "unitCode": "H87",
+        "price": {
+          "net": "18500.00"
+        },
+        "vat": {
+          "category": "K",
+          "rate": "0"
+        },
+        "item": {
+          "name": "Machine de conditionnement MX-200"
+        },
+        "nature": "goods"
+      }
+    ]
+  }
+}

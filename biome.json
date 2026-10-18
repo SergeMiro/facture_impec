@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!!legacy"]
+    "includes": ["**", "!!packages/core/vendor"]
   },
   "formatter": {
     "indentStyle": "space",
@@ -32,6 +32,16 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["packages/core/src/**", "!packages/core/src/**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noNodejsModules": "error"
+          }
+        }
+      }
+    },
     {
       "includes": ["**/*.astro"],
       "linter": {

@@ -1,0 +1,17 @@
+{
+  "description": "The platform takes the file, then rejects it (« Rejetée »): nothing reached the customer and the invoice comes back to us as rejected_by_pdp.",
+  "invoices": 1,
+  "platform": {
+    "timeline": [
+      {
+        "status": "rejected",
+        "after": "PT5M",
+        "reason": {
+          "code": "REJ_UNI",
+          "text": "Le destinataire n'est pas joignable sur cette plateforme."
+        }
+      }
+    ]
+  },
+  "expect": { "status": "rejected_by_pdp", "withinSeconds": 15 }
+}
