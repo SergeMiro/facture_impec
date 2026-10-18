@@ -40,6 +40,31 @@ describe('ServerEnvSchema', () => {
     expect(ServerEnvSchema.parse({ AI_KEY_SEALING_KEY: key }).AI_KEY_SEALING_KEY).toBe(key);
   });
 
+  it('takes the B2Brouter key of its own environment, and requires one in sandbox', () => {
+    const outside = { DATABASE_URL: 'postgres://fi@db/fi', ADMIN_TOKEN: 'x'.repeat(24) };
+    expect(() => ServerEnvSchema.parse({ ...outside, FI_ENV: 'sandbox' })).toThrow(
+      /B2BROUTER_API_KEY/,
+    );
+    expect(() =>
+      ServerEnvSchema.parse({ ...outside, FI_ENV: 'sandbox', B2BROUTER_API_KEY: 'prod_abc' }),
+    ).toThrow(/sandbox key/);
+    expect(() =>
+      ServerEnvSchema.parse({ ...outside, FI_ENV: 'prod', B2BROUTER_API_KEY: 'test_abc' }),
+    ).toThrow(/production key/);
+    const sandbox = ServerEnvSchema.parse({
+      ...outside,
+      FI_ENV: 'sandbox',
+      B2BROUTER_API_KEY: 'test_abc',
+      B2BROUTER_BASE_URL: '',
+    });
+    expect(sandbox.B2BROUTER_API_KEY).toBe('test_abc');
+    expect(sandbox.B2BROUTER_BASE_URL).toBeUndefined();
+    // Local takes any key: the stand-in in apps/mock-pdp wants a test_ one.
+    expect(ServerEnvSchema.parse({ B2BROUTER_API_KEY: 'test_local' }).B2BROUTER_API_KEY).toBe(
+      'test_local',
+    );
+  });
+
   it('rejects an unknown environment', () => {
     expect(() => ServerEnvSchema.parse({ FI_ENV: 'staging' })).toThrow();
   });
@@ -68,7 +93,7 @@ describe('ServerEnvSchema', () => {
       'TRIAL_NOTIFY_TELEGRAM_CHAT_ID',
     ];
     const example = readFileSync(resolve(REPO_ROOT, '.env.example'), 'utf8');
-    const listed = [...example.matchAll(/^([A-Z_]+)=/gm)].map((m) => m[1]);
+    const listed = [...example.matchAll(/^([A-Z0-9_]+)=/gm)].map((m) => m[1]);
     expect(listed.sort()).toEqual([...Object.keys(ServerEnvSchema.in.shape), ...elsewhere].sort());
   });
 });

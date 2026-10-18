@@ -29,6 +29,12 @@ export function environmentOfKey(apiKey: string): B2BrouterEnvironment {
   return 'production'; // `prod_`, or an older key without a prefix
 }
 
+/** One of B2Brouter's own hosts, as opposed to a stand-in (apps/mock-pdp serves one). */
+export function isB2BrouterHost(baseUrl: string): boolean {
+  const known: string[] = Object.values(B2BROUTER_HOSTS);
+  return known.includes(new URL(baseUrl).origin);
+}
+
 /**
  * Why this key cannot be used with this base URL, or null. A B2Brouter host must match the key's
  * environment (a key from another environment answers 401); another host is a local stand-in.
@@ -37,8 +43,7 @@ export function keyProblem(apiKey: string, baseUrl: string): string | null {
   const origin = new URL(baseUrl).origin;
   const environment = environmentOfKey(apiKey);
   const expected = environment === 'staging' ? B2BROUTER_HOSTS.staging : B2BROUTER_HOSTS.production;
-  const known: string[] = Object.values(B2BROUTER_HOSTS);
-  if (known.includes(origin) && origin !== expected) {
+  if (isB2BrouterHost(baseUrl) && origin !== expected) {
     return `a ${environment} key (${apiKey.slice(0, 5)}…) needs ${expected}, not ${origin}`;
   }
   return null;

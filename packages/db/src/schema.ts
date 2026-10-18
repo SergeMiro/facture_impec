@@ -1,5 +1,5 @@
-// Postgres schema (plan §4), the part M3 needs. Tables of later milestones (parties, chase_plans,
-// inbound_queue) arrive with them (docs/DEFERRED.md).
+// Postgres schema (plan §4), the part M4 needs. Tables of later milestones (parties, chase_plans)
+// arrive with them (docs/DEFERRED.md).
 // Change it, then `pnpm --filter @fi/db generate` writes the migration into drizzle/.
 import type {
   Address,
@@ -317,6 +317,33 @@ export const pdpSubmissions = pgTable('pdp_submissions', {
   updatedAt: updatedAt(),
 });
 
+/**
+ * Supplier invoices the tenant's platform received for it (plan §4), stored by the sweep as they
+ * come. M4 keeps the file; parsing, triage and the Réception screen arrive with M6 (docs/DEFERRED.md).
+ */
+export const inboundQueue = pgTable(
+  'inbound_queue',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    provider: text('provider', { enum: PDP_PROVIDERS }).notNull(),
+    pdpRef: text('pdp_ref').notNull(),
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull(),
+    xml: text('xml').notNull(),
+    status: text('status', { enum: ['new', 'approved', 'disputed', 'exported'] })
+      .notNull()
+      .default('new'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    // A platform lists the same invoice on every poll: it is stored once.
+    uniqueIndex('inbound_queue_pdp_ref').on(t.tenantId, t.provider, t.pdpRef),
+    index('inbound_queue_tenant').on(t.tenantId, t.receivedAt),
+  ],
+);
+
 export type TenantRow = typeof tenants.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type AgentRunRow = typeof agentRuns.$inferSelect;
@@ -324,3 +351,4 @@ export type SheetMappingRow = typeof sheetMappings.$inferSelect;
 export type InvoiceRow = typeof invoices.$inferSelect;
 export type InvoiceEventRow = typeof invoiceEvents.$inferSelect;
 export type PdpSubmissionRow = typeof pdpSubmissions.$inferSelect;
+export type InboundRow = typeof inboundQueue.$inferSelect;

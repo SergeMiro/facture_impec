@@ -35,6 +35,11 @@ export const ServerEnvSchema = z
     MOCK_PDP_WEBHOOK_URL: z.preprocess(blank, z.url().optional()),
     MOCK_PDP_WEBHOOK_SECRET: z.string().min(16).default('local-mock-pdp-webhook-secret'),
     MOCK_PDP_SPEED: z.coerce.number().positive().default(86_400),
+    // One operator key for every company account of our B2Brouter integration (docs/B2BROUTER.md §1).
+    B2BROUTER_API_KEY: optionalText(),
+    // Empty: B2Brouter's API host, which serves the sandbox to `test_` keys.
+    B2BROUTER_BASE_URL: z.preprocess(blank, z.url().optional()),
+    B2BROUTER_WEBHOOK_SECRET: optionalText(),
     API_PUBLIC_URL: z.url().default('http://localhost:4000'),
     ADDIN_ORIGINS: z.string().default('https://localhost:3000'),
     AI_PROVIDER: optionalText(),
@@ -54,9 +59,27 @@ export const ServerEnvSchema = z
   })
   .superRefine((env, ctx) => {
     if (env.FI_ENV === 'local') return;
-    for (const key of ['DATABASE_URL', 'ADMIN_TOKEN'] as const) {
+    const keys = [
+      'DATABASE_URL',
+      'ADMIN_TOKEN',
+      ...(env.FI_ENV === 'sandbox' ? ['B2BROUTER_API_KEY' as const] : []),
+    ] as const;
+    for (const key of keys) {
       if (!env[key])
         ctx.addIssue({ code: 'custom', path: [key], message: `required in ${env.FI_ENV}` });
+    }
+    // The sandbox environment never reaches a real platform (plan §0.5), and prod never pretends
+    // to send: each takes the B2Brouter key of its own environment (test_… is the sandbox).
+    const sandboxKey = env.B2BROUTER_API_KEY?.startsWith('test_');
+    if (env.B2BROUTER_API_KEY && sandboxKey !== (env.FI_ENV === 'sandbox')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['B2BROUTER_API_KEY'],
+        message:
+          env.FI_ENV === 'sandbox'
+            ? 'sandbox takes a B2Brouter sandbox key (test_…)'
+            : 'prod takes a B2Brouter production key, not a sandbox one (test_…)',
+      });
     }
   })
   .transform((env) => ({

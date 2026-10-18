@@ -44,7 +44,7 @@ export interface Mailer {
 
 /** « Mode test » (plan §3): where test invoices go, and how their scenarios are played. */
 export interface TestPlatform {
-  /** The mock platform now; B2Brouter's sandbox from M4. */
+  /** The mock platform, or B2Brouter when the deployment holds a sandbox key (runtime.ts). */
   provider: PdpProvider;
   /** Null when the platform cannot play scenarios: the ScenarioInjector fakes the events. */
   scenarios: ScenarioPort | null;

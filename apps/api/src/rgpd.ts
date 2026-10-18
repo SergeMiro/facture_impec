@@ -1,6 +1,7 @@
 // RGPD (plan §10, docs/RGPD.md): a tenant takes all its data away, or deletes what the law lets it
-// delete. Invoices that reached a platform stay (10 years, Code de commerce L123-22), and so does the
-// append-only audit log, which holds hashes and ids, never names or e-mails.
+// delete. Invoices that reached a platform stay (10 years, Code de commerce L123-22), received ones
+// too (they are the company's purchase records), and so does the append-only audit log, which holds
+// hashes and ids, never names or e-mails.
 import {
   agentRuns,
   and,
@@ -10,6 +11,7 @@ import {
   auditEvents,
   eq,
   inArray,
+  inboundQueue,
   invoiceEvents,
   invoices,
   isNull,
@@ -41,7 +43,7 @@ function assertOwner(principal: Principal) {
 export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: Principal) {
   assertOwner(principal);
   const db = deps.db;
-  const [people, keys, mappings, rows, runs, log] = await Promise.all([
+  const [people, keys, mappings, rows, runs, log, received] = await Promise.all([
     db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
     db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
     db.select().from(sheetMappings).where(eq(sheetMappings.tenantId, tenant.id)),
@@ -56,6 +58,11 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       .from(auditEvents)
       .where(eq(auditEvents.tenantId, tenant.id))
       .orderBy(asc(auditEvents.id)),
+    db
+      .select()
+      .from(inboundQueue)
+      .where(eq(inboundQueue.tenantId, tenant.id))
+      .orderBy(asc(inboundQueue.receivedAt)),
   ]);
   const ids = rows.map((r) => r.id);
   const events = ids.length
@@ -89,6 +96,13 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       ...invoiceSummary(r),
       document: r.document,
       events: events.filter((e) => e.invoiceId === r.id).map(eventView),
+    })),
+    receivedInvoices: received.map((r) => ({
+      provider: r.provider,
+      pdpRef: r.pdpRef,
+      receivedAt: r.receivedAt.toISOString(),
+      status: r.status,
+      xml: r.xml,
     })),
     agentRuns: runs.map((r) => ({
       agent: r.agent,

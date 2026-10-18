@@ -3,7 +3,15 @@
 import { includedAi } from '@fi/agents';
 import { bundledFonts } from '@fi/core/fonts';
 import { type Database, openDatabase } from '@fi/db';
-import { createMockPdpAdapter, createMockScenarioPort } from '@fi/pdp-adapter';
+import {
+  B2BROUTER_HOSTS,
+  createB2BrouterAdapter,
+  createMockPdpAdapter,
+  createMockScenarioPort,
+  environmentOfKey,
+  isB2BrouterHost,
+  keyProblem,
+} from '@fi/pdp-adapter';
 import type { ServerEnv } from '@fi/shared/env';
 import type { PgBoss } from 'pg-boss';
 import { createAiDeps } from './ai';
@@ -21,7 +29,7 @@ export interface ApiOptions {
   /** An open database; default: DATABASE_URL, else PGlite in PGLITE_DIR. Not closed on stop. */
   database?: Database;
   pdp?: PdpRegistry;
-  /** Default: the mock platform when the registry has it (testPlatformFromEnv). */
+  /** Default: testPlatformFromEnv (B2Brouter's sandbox, else the mock platform). */
   test?: TestPlatform | null;
   /** Default: AI_* from env (createAiDeps). */
   ai?: AiDeps;
@@ -40,18 +48,45 @@ export interface RunningApi {
   close(): Promise<void>;
 }
 
-/** The adapters this environment offers. B2Brouter arrives in M4 (docs/DEFERRED.md). */
+/**
+ * The adapters this environment offers: the mock platform, and B2Brouter when a key is set. A key
+ * that does not fit its host, or a stand-in host outside local, stops the API at startup.
+ */
 export function pdpFromEnv(env: ServerEnv): PdpRegistry {
-  return {
+  const pdp: PdpRegistry = {
     mock: createMockPdpAdapter({
       baseUrl: env.MOCK_PDP_URL,
       webhookSecret: env.MOCK_PDP_WEBHOOK_SECRET,
     }),
   };
+  const apiKey = env.B2BROUTER_API_KEY;
+  if (apiKey) {
+    const baseUrl = env.B2BROUTER_BASE_URL ?? B2BROUTER_HOSTS.production;
+    const problem = keyProblem(apiKey, baseUrl);
+    if (problem) throw new Error(`B2BROUTER_API_KEY: ${problem}`);
+    if (env.FI_ENV !== 'local' && !isB2BrouterHost(baseUrl)) {
+      throw new Error(
+        `B2BROUTER_BASE_URL: only local may use a stand-in (${new URL(baseUrl).origin})`,
+      );
+    }
+    pdp.b2brouter = createB2BrouterAdapter({
+      apiKey,
+      baseUrl,
+      ...(env.B2BROUTER_WEBHOOK_SECRET && { webhookSecret: env.B2BROUTER_WEBHOOK_SECRET }),
+    });
+  }
+  return pdp;
 }
 
-/** « Mode test » goes to the mock platform in M3; B2Brouter's sandbox replaces it in M4. */
+/**
+ * Where « Mode test » sends: B2Brouter when this deployment holds a sandbox key (it cannot reach a
+ * real platform; B2Brouter plays no scenarios, so the ScenarioInjector fakes them), else the mock.
+ */
 export function testPlatformFromEnv(env: ServerEnv, pdp: PdpRegistry): TestPlatform | null {
+  const key = env.B2BROUTER_API_KEY;
+  if (pdp.b2brouter && key && environmentOfKey(key) === 'sandbox') {
+    return { provider: 'b2brouter', scenarios: null };
+  }
   if (!pdp.mock) return null;
   return { provider: 'mock', scenarios: createMockScenarioPort({ baseUrl: env.MOCK_PDP_URL }) };
 }

@@ -5,14 +5,19 @@ import { toCii } from '@fi/core';
 import {
   and,
   applyTransition,
+  audit,
   type Db,
   eq,
   inArray,
+  inboundQueue,
   invoiceEvents,
   invoices,
   isNotNull,
+  isNull,
   lockInvoice,
+  max,
   PDP_PROVIDERS,
+  type PdpProvider,
   pdpSubmissions,
   sql,
   tenants,
@@ -242,6 +247,87 @@ export async function runSweep(deps: WorkerDeps): Promise<{ synced: number; send
   return { synced: inFlight.length, sends: unfinished.length };
 }
 
+/**
+ * Asks each company's platform for the supplier invoices it received since the last one stored, and
+ * stores each one once (plan §11 M4 « inbound polling »; reading them is M6). A company is polled on
+ * its own platform and, in « Mode test », on the test platform too. One platform failing does not
+ * stop the others: the next sweep asks again from the same point.
+ */
+export async function runInboundPoll(
+  deps: WorkerDeps,
+  log: (message: string) => void = () => {},
+): Promise<{ stored: number; failed: number }> {
+  const companies = await deps.db
+    .select({
+      id: tenants.id,
+      provider: tenants.pdpProvider,
+      account: tenants.pdpAccount,
+      sandboxEnabled: tenants.sandboxEnabled,
+      createdAt: tenants.createdAt,
+    })
+    .from(tenants)
+    .where(isNull(tenants.deletedAt));
+  let stored = 0;
+  let failed = 0;
+  for (const company of companies) {
+    const providers = new Set<PdpProvider>([company.provider]);
+    if (company.sandboxEnabled && deps.test) providers.add(deps.test.provider);
+    for (const provider of providers) {
+      const adapter = deps.pdp[provider];
+      if (!adapter) continue;
+      try {
+        stored += await pollOne(deps, adapter, { ...company, provider });
+      } catch (e) {
+        failed++;
+        log(`inbound ${provider} ${company.account}: ${message(e)}`);
+      }
+    }
+  }
+  return { stored, failed };
+}
+
+async function pollOne(
+  deps: WorkerDeps,
+  adapter: PdpAdapter,
+  company: { id: string; provider: PdpProvider; account: string; createdAt: Date },
+): Promise<number> {
+  const [last] = await deps.db
+    .select({ at: max(inboundQueue.receivedAt) })
+    .from(inboundQueue)
+    .where(and(eq(inboundQueue.tenantId, company.id), eq(inboundQueue.provider, company.provider)));
+  const since = last?.at ?? company.createdAt;
+  const received = await adapter.listInbound({ account: company.account, since });
+  let stored = 0;
+  for (const r of received) {
+    const receivedAt = new Date(r.receivedAt);
+    if (Number.isNaN(receivedAt.getTime())) throw new Error(`bad receivedAt for ${r.pdpRef}`);
+    await deps.db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(inboundQueue)
+        .values({
+          tenantId: company.id,
+          provider: company.provider,
+          pdpRef: r.pdpRef,
+          receivedAt,
+          xml: r.xml,
+        })
+        .onConflictDoNothing()
+        .returning({ id: inboundQueue.id });
+      if (!row) return;
+      stored++;
+      await audit(tx, {
+        tenantId: company.id,
+        actor: 'pdp',
+        action: 'inbound_received',
+        objectType: 'inbound',
+        objectId: row.id,
+        after: r.xml,
+      });
+    });
+  }
+  return stored;
+}
+
 export interface WorkerOptions {
   pollingIntervalSeconds?: number;
   sweepEverySeconds: number;
@@ -263,6 +349,7 @@ export async function startWorkers(
   });
   await boss.work(QUEUES.sweep, polling, async () => {
     await runSweep(deps);
+    await runInboundPoll(deps, options.log);
   });
   const tick = () =>
     boss

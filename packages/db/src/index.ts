@@ -11,6 +11,7 @@ export {
   isNotNull,
   isNull,
   lt,
+  max,
   ne,
   notInArray,
   or,

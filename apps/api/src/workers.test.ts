@@ -1,5 +1,14 @@
 import type { Database } from '@fi/db';
-import { asc, eq, invoiceEvents, invoices, pdpSubmissions } from '@fi/db';
+import {
+  and,
+  asc,
+  auditEvents,
+  eq,
+  inboundQueue,
+  invoiceEvents,
+  invoices,
+  pdpSubmissions,
+} from '@fi/db';
 import {
   type PdpAdapter,
   type PdpStatusEvent,
@@ -8,7 +17,14 @@ import {
 } from '@fi/pdp-adapter';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { draft, fakeAdapter, newTenant, recordedJobs, testApi, testDatabase } from './test-helpers';
-import { NotReadyError, runSend, runSweep, runSync, type WorkerDeps } from './workers';
+import {
+  NotReadyError,
+  runInboundPoll,
+  runSend,
+  runSweep,
+  runSync,
+  type WorkerDeps,
+} from './workers';
 
 let database: Database;
 let request: ReturnType<typeof testApi>['request'];
@@ -219,6 +235,61 @@ describe('runSweep', () => {
       account: sent.account,
       pdpRef: 'inv_20',
     });
+  });
+});
+
+describe('runInboundPoll', () => {
+  const supplierInvoice = (n: number) => ({
+    pdpRef: `inb_${n}`,
+    receivedAt: `2026-10-1${n}T08:00:00.000Z`,
+    xml: `<Invoice n="${n}"/>`,
+  });
+
+  it('stores each received invoice once, asking from the last one stored', async () => {
+    const tenant = await newTenant(request);
+    const asked: Date[] = [];
+    const received = [supplierInvoice(5)];
+    const adapter = fakeAdapter({
+      listInbound: async ({ account, since }) => {
+        if (account !== tenant.account) return [];
+        asked.push(since);
+        return received;
+      },
+    });
+    expect((await runInboundPoll(worker(adapter))).stored).toBe(1);
+    received.push(supplierInvoice(6));
+    expect((await runInboundPoll(worker(adapter))).stored).toBe(1);
+    expect(asked[1]?.toISOString()).toBe('2026-10-15T08:00:00.000Z');
+
+    const rows = await database.db
+      .select()
+      .from(inboundQueue)
+      .where(eq(inboundQueue.tenantId, tenant.id))
+      .orderBy(asc(inboundQueue.receivedAt));
+    expect(rows.map((r) => [r.pdpRef, r.provider, r.status, r.xml])).toEqual([
+      ['inb_5', 'mock', 'new', '<Invoice n="5"/>'],
+      ['inb_6', 'mock', 'new', '<Invoice n="6"/>'],
+    ]);
+    const audited = await database.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.tenantId, tenant.id), eq(auditEvents.action, 'inbound_received')));
+    expect(audited).toHaveLength(2);
+  });
+
+  it('goes on when one platform fails, and logs which one', async () => {
+    const down = await newTenant(request);
+    const up = await newTenant(request);
+    const adapter = fakeAdapter({
+      listInbound: async ({ account }) => {
+        if (account === down.account) throw new PdpUnavailableError('down');
+        return account === up.account ? [supplierInvoice(7)] : [];
+      },
+    });
+    const logs: string[] = [];
+    const result = await runInboundPoll(worker(adapter), (m) => logs.push(m));
+    expect(result).toEqual({ stored: 1, failed: 1 });
+    expect(logs).toEqual([expect.stringContaining(down.account)]);
   });
 });
 
