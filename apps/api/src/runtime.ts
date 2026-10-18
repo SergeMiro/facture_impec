@@ -1,13 +1,17 @@
 // Assembles the API process: database (migrated), pg-boss, PDP adapters, HTTP server, workers.
 // server.ts runs it from .env; the scenario stack runs it in-process on a free port.
+import { includedAi } from '@fi/agents';
+import { bundledFonts } from '@fi/core/fonts';
 import { type Database, openDatabase } from '@fi/db';
-import { createMockPdpAdapter } from '@fi/pdp-adapter';
+import { createMockPdpAdapter, createMockScenarioPort } from '@fi/pdp-adapter';
 import type { ServerEnv } from '@fi/shared/env';
 import type { PgBoss } from 'pg-boss';
+import { createAiDeps } from './ai';
 import { createApp } from './app';
-import type { ApiDeps, PdpRegistry } from './deps';
+import type { AiDeps, ApiDeps, Mailer, PdpRegistry, TestPlatform } from './deps';
 import { bossJobs, createBoss, ensureQueues } from './jobs';
 import { type Listening, listen } from './listen';
+import { OutboxMailer } from './mail';
 import { startWorkers } from './workers';
 
 export interface ApiOptions {
@@ -17,6 +21,12 @@ export interface ApiOptions {
   /** An open database; default: DATABASE_URL, else PGlite in PGLITE_DIR. Not closed on stop. */
   database?: Database;
   pdp?: PdpRegistry;
+  /** Default: the mock platform when the registry has it (testPlatformFromEnv). */
+  test?: TestPlatform | null;
+  /** Default: AI_* from env (createAiDeps). */
+  ai?: AiDeps;
+  /** Default: the outbox in local, none elsewhere (docs/DEFERRED.md). */
+  mailer?: Mailer | null;
   pollingIntervalSeconds?: number;
   now?: () => Date;
   log?: (message: string) => void;
@@ -40,6 +50,12 @@ export function pdpFromEnv(env: ServerEnv): PdpRegistry {
   };
 }
 
+/** « Mode test » goes to the mock platform in M3; B2Brouter's sandbox replaces it in M4. */
+export function testPlatformFromEnv(env: ServerEnv, pdp: PdpRegistry): TestPlatform | null {
+  if (!pdp.mock) return null;
+  return { provider: 'mock', scenarios: createMockScenarioPort({ baseUrl: env.MOCK_PDP_URL }) };
+}
+
 export async function startApi(options: ApiOptions): Promise<RunningApi> {
   const { env } = options;
   const log = options.log ?? ((message: string) => console.warn(message));
@@ -54,12 +70,31 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
   await boss.start();
   await ensureQueues(boss);
 
+  const now = options.now ?? (() => new Date());
+  const pdp = options.pdp ?? pdpFromEnv(env);
   const deps: ApiDeps = {
     env,
     db: database.db,
     jobs: bossJobs(boss),
-    pdp: options.pdp ?? pdpFromEnv(env),
-    now: options.now ?? (() => new Date()),
+    pdp,
+    test: options.test === undefined ? testPlatformFromEnv(env, pdp) : options.test,
+    ai:
+      options.ai ??
+      createAiDeps({
+        db: database.db,
+        now,
+        included: includedAi(env),
+        sealingKey: env.AI_KEY_SEALING_KEY,
+        budget: { runTokens: env.AI_RUN_TOKENS, tenantDailyTokens: env.AI_DAILY_TOKENS },
+      }),
+    mailer:
+      options.mailer === undefined
+        ? env.FI_ENV === 'local'
+          ? new OutboxMailer(log)
+          : null
+        : options.mailer,
+    fonts: bundledFonts(),
+    now,
   };
   const stopSweep = env.API_WORKERS
     ? await startWorkers(boss, deps, {

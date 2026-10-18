@@ -2,6 +2,7 @@
 // accelerated clock, webhooks between them. The same runs as `pnpm scenario all`.
 import { describe, expect, it } from 'vitest';
 import { loadScenario, runScenario, type ScenarioReport, startStack } from './scenarios';
+import { SCENARIO_SELLER, scenarioDraft } from './scenarios/invoice';
 import type { StackOptions } from './scenarios/stack';
 
 async function run(name: string, options: StackOptions = {}): Promise<ScenarioReport> {
@@ -65,5 +66,41 @@ describe('scenarios', () => {
 
   it('customer-refuse without webhooks: the sweep alone brings the news', async () => {
     passes(await run('customer-refuse', { webhooks: false }));
+  }, 30_000);
+});
+
+describe('Mode test on the mock platform', () => {
+  it('« Simuler un rejet PDP » travels mock → webhook → sync to the test invoice', async () => {
+    // Real time on the mock: its own timeline does not move while the scenario plays.
+    const stack = await startStack({ speed: 1 });
+    try {
+      const call = async (path: string, token: string, body?: unknown) => {
+        const res = await fetch(`${stack.apiUrl}${path}`, {
+          method: body === undefined ? 'GET' : 'POST',
+          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+          ...(body !== undefined && { body: JSON.stringify(body) }),
+        });
+        return (await res.json()) as { id: string; status: string; apiKey: string; number: string };
+      };
+      const { apiKey } = await call('/admin/tenants', stack.adminToken, {
+        ...SCENARIO_SELLER,
+        pdpAccount: 'acct-mode-test',
+      });
+      const created = await call('/invoices', apiKey, { draft: scenarioDraft(1), test: true });
+      expect(created.number).toMatch(/^TEST-/);
+      await call(`/invoices/${created.id}/send`, apiKey, {});
+      const until = async (status: string) => {
+        for (let i = 0; i < 100; i++) {
+          if ((await call(`/invoices/${created.id}`, apiKey)).status === status) return;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        throw new Error(`never reached ${status}`);
+      };
+      await until('deposited');
+      await call(`/invoices/${created.id}/scenario`, apiKey, { scenario: 'pdp_reject' });
+      await until('rejected_by_pdp');
+    } finally {
+      await stack.close();
+    }
   }, 30_000);
 });

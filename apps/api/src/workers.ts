@@ -20,13 +20,15 @@ import {
 import { eventFor, type PdpAdapter, PdpUnavailableError, type SendResult } from '@fi/pdp-adapter';
 import type { PgBoss } from 'pg-boss';
 import { z } from 'zod';
-import type { Jobs, PdpRegistry, SyncTarget } from './deps';
+import type { Jobs, PdpRegistry, SyncTarget, TestPlatform } from './deps';
 import { idempotencyKey } from './invoices';
 import { QUEUES } from './jobs';
+import { routeFor } from './platform';
 
 export interface WorkerDeps {
   db: Db;
   pdp: PdpRegistry;
+  test: TestPlatform | null;
   jobs: Jobs;
   now: () => Date;
 }
@@ -65,7 +67,8 @@ export async function runSend(deps: WorkerDeps, invoiceId: string): Promise<void
       return null; // sent, cancelled or rejected meanwhile: nothing to do
     }
     const [tenant] = await tx.select().from(tenants).where(eq(tenants.id, row.tenantId));
-    if (!tenant || !xml) return null;
+    const route = tenant && routeFor(deps, tenant, row.isTest);
+    if (!tenant || !xml || !route) return null;
     const key = idempotencyKey(row);
     await tx
       .insert(pdpSubmissions)
@@ -73,24 +76,24 @@ export async function runSend(deps: WorkerDeps, invoiceId: string): Promise<void
         tenantId: tenant.id,
         invoiceId,
         idempotencyKey: key,
-        provider: tenant.pdpProvider,
+        provider: route.provider,
         attempts: 1,
       })
       .onConflictDoUpdate({
         target: pdpSubmissions.idempotencyKey,
         set: { attempts: sql`${pdpSubmissions.attempts} + 1`, updatedAt: deps.now() },
       });
-    return { tenant, key, xml };
+    return { route, key, xml };
   });
   if (!claim) return;
 
   // 2. Call the platform outside any transaction.
   let result: SendResult;
   try {
-    const adapter = deps.pdp[claim.tenant.pdpProvider];
-    if (!adapter) throw new NotReadyError(`no ${claim.tenant.pdpProvider} adapter configured`);
+    const { adapter, provider, account } = claim.route;
+    if (!adapter) throw new NotReadyError(`no ${provider} adapter configured`);
     result = await adapter.sendInvoice({
-      account: claim.tenant.pdpAccount,
+      account,
       xml: claim.xml,
       format: 'CII',
       idempotencyKey: claim.key,
@@ -153,14 +156,19 @@ export async function runSend(deps: WorkerDeps, invoiceId: string): Promise<void
 export async function runSync(deps: WorkerDeps, target: SyncTarget): Promise<void> {
   const adapter: PdpAdapter | undefined = deps.pdp[target.provider];
   if (!adapter) throw new NotReadyError(`no ${target.provider} adapter configured`);
+  // The submission says which platform holds the invoice: test invoices sit on the test platform.
   const [found] = await deps.db
     .select({ id: invoices.id })
     .from(invoices)
     .innerJoin(tenants, eq(tenants.id, invoices.tenantId))
+    .innerJoin(
+      pdpSubmissions,
+      and(eq(pdpSubmissions.invoiceId, invoices.id), eq(pdpSubmissions.pdpRef, invoices.pdpRef)),
+    )
     .where(
       and(
         eq(invoices.pdpRef, target.pdpRef),
-        eq(tenants.pdpProvider, target.provider),
+        eq(pdpSubmissions.provider, target.provider),
         eq(tenants.pdpAccount, target.account),
       ),
     );
@@ -213,11 +221,15 @@ export async function runSweep(deps: WorkerDeps): Promise<{ synced: number; send
   const inFlight = await deps.db
     .select({
       pdpRef: invoices.pdpRef,
-      provider: tenants.pdpProvider,
+      provider: pdpSubmissions.provider,
       account: tenants.pdpAccount,
     })
     .from(invoices)
     .innerJoin(tenants, eq(tenants.id, invoices.tenantId))
+    .innerJoin(
+      pdpSubmissions,
+      and(eq(pdpSubmissions.invoiceId, invoices.id), eq(pdpSubmissions.pdpRef, invoices.pdpRef)),
+    )
     .where(and(inArray(invoices.status, AWAITING_PLATFORM), isNotNull(invoices.pdpRef)));
   for (const i of inFlight) {
     if (i.pdpRef) await deps.jobs.enqueueSync({ ...i, pdpRef: i.pdpRef });

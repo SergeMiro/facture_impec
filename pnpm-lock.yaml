@@ -60,6 +60,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@fi/agents':
+        specifier: workspace:*
+        version: link:../../packages/agents
       '@fi/core':
         specifier: workspace:*
         version: link:../../packages/core

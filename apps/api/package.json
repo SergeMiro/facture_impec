@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fi/agents": "workspace:*",
     "@fi/core": "workspace:*",
     "@fi/db": "workspace:*",
     "@fi/pdp-adapter": "workspace:*",

@@ -1,13 +1,28 @@
-// HTTP API (plan §1): tenants, invoices, validation, platform webhooks. Business rules live in
-// src/invoices.ts and @fi/core; this file reads requests (Zod) and shapes answers.
-import { Address, InvoiceDraft, isValidSiren, STATES, toCii } from '@fi/core';
-import { and, apiKeys, audit, desc, eq, invoices, PDP_PROVIDERS, sha256, tenants } from '@fi/db';
+// HTTP API (plan §1): tenants, invoices, validation, platform webhooks, and the add-in's routes
+// (sign-in, sheet sync, settings, Mode test, RGPD). Business rules live in the modules next to this
+// file and in @fi/core; this file reads requests (Zod) and shapes answers.
+import { Address, InvoiceDraft, isValidSiren, SheetMapping, STATES, toCii } from '@fi/core';
+import {
+  and,
+  apiKeys,
+  audit,
+  desc,
+  eq,
+  invoices,
+  PDP_PROVIDERS,
+  sha256,
+  tenants,
+  users,
+} from '@fi/db';
 import { PdpRequestError } from '@fi/pdp-adapter';
-import { type Context, Hono } from 'hono';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { z } from 'zod';
+import { explainInvoice, invoicePdf, rehearseInvoice } from './assist';
 import { adminAuth, newApiKey, type TenantEnv, tenantAuth } from './auth';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
+import { body, Email, parse, uuid } from './http';
 import {
   cancelInvoice,
   createInvoice,
@@ -18,7 +33,22 @@ import {
   updateInvoice,
   validateDraft,
 } from './invoices';
+import { loginRoutes } from './login';
+import { OutboxMailer } from './mail';
+import { DeleteBody, deleteTenant, exportTenant } from './rgpd';
+import { playScenario, SCENARIOS } from './sandbox';
+import { AiChoice, SettingsPatch, saveAi, settingsView, updateSettings } from './settings';
 import { invoiceDetail, invoiceSummary, tenantView } from './views';
+import {
+  assertTestMode,
+  detect,
+  getMapping,
+  Snapshot,
+  SyncBody,
+  saveMapping,
+  syncSheet,
+  WorkbookId,
+} from './workbooks';
 
 const ExcelBinding = z.object({
   workbookId: z.string().min(1),
@@ -26,6 +56,7 @@ const ExcelBinding = z.object({
   rowKey: z.string().min(1),
 });
 const InvoiceBody = z.object({ draft: InvoiceDraft, excelBinding: ExcelBinding.optional() });
+const NewInvoice = InvoiceBody.extend({ test: z.boolean().default(false) });
 const NewTenant = z.object({
   name: z.string().min(1),
   siren: z.string().refine(isValidSiren, 'not a valid SIREN'),
@@ -35,6 +66,8 @@ const NewTenant = z.object({
   /** Defaults to the SIREN: B2Brouter keeps one account per SIREN (docs/B2BROUTER.md §3.2). */
   pdpAccount: z.string().min(1).optional(),
   vatOnDebits: z.boolean().default(false),
+  /** The person who signs in to the add-in with a link (role owner). */
+  ownerEmail: Email.optional(),
 });
 const TenantPatch = z
   .object({
@@ -50,26 +83,22 @@ const ListQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
-async function body<T>(c: Context, schema: z.ZodType<T>): Promise<T> {
-  let raw: unknown;
-  try {
-    raw = await c.req.json();
-  } catch {
-    throw new ApiError(400, 'invalid_request', undefined, 'body is not JSON');
-  }
-  return parse(schema, raw);
-}
-
-function parse<T>(schema: z.ZodType<T>, raw: unknown): T {
-  const result = schema.safeParse(raw);
-  if (!result.success) {
-    throw new ApiError(400, 'invalid_request', undefined, z.prettifyError(result.error));
-  }
-  return result.data;
-}
+const fileName = (row: { number: string | null; id: string }, ext: string) =>
+  `${(row.number ?? row.id).replace(/[^\w.-]/g, '_')}.${ext}`;
 
 export function createApp(deps: ApiDeps) {
   const app = new Hono();
+
+  // The task pane runs on its own origin (ADDIN_ORIGINS); in dev, Vite proxies /api instead.
+  app.use(
+    '*',
+    cors({
+      origin: deps.env.ADDIN_ORIGINS,
+      allowHeaders: ['authorization', 'content-type'],
+      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+      maxAge: 600,
+    }),
+  );
 
   app.onError((err, c) => {
     if (err instanceof ApiError) return c.json(err.body, err.status);
@@ -109,6 +138,19 @@ export function createApp(deps: ApiDeps) {
         })
         .returning();
       if (!row) throw new Error('insert returned nothing');
+      if (input.ownerEmail) {
+        const [owner] = await tx
+          .insert(users)
+          .values({ tenantId: row.id, email: input.ownerEmail, role: 'owner' })
+          .returning({ id: users.id });
+        await audit(tx, {
+          tenantId: row.id,
+          actor: 'admin',
+          action: 'user.create',
+          objectType: 'user',
+          objectId: owner?.id ?? '',
+        });
+      }
       const [key] = await tx
         .insert(apiKeys)
         .values({ tenantId: row.id, hash: sha256(apiKey), label: 'initial' })
@@ -133,7 +175,15 @@ export function createApp(deps: ApiDeps) {
     // The key is shown here once and never again (only its hash is stored).
     return c.json({ tenant: tenantView(tenant), apiKey }, 201);
   });
+  // Local only: the sign-in mails the outbox kept (src/mail.ts), for the E2E run and the developer.
+  admin.get('/outbox', (c) => {
+    if (!(deps.mailer instanceof OutboxMailer)) throw new ApiError(404, 'route_not_found');
+    return c.json({ mails: deps.mailer.sent });
+  });
   app.route('/admin', admin);
+
+  // ── Sign-in links (no tenant key yet) ─────────────────────────────────────────────────────────
+  app.route('/auth', loginRoutes(deps));
 
   // ── Platform webhooks (signed; no tenant key) ─────────────────────────────────────────────────
   app.post('/webhooks/pdp/:provider', async (c) => {
@@ -159,15 +209,61 @@ export function createApp(deps: ApiDeps) {
 
   // ── Tenant API ────────────────────────────────────────────────────────────────────────────────
   const api = new Hono<TenantEnv>();
-  for (const path of ['/tenant', '/validate', '/invoices', '/invoices/*']) {
+  for (const path of [
+    '/me',
+    '/tenant',
+    '/tenant/*',
+    '/settings',
+    '/settings/*',
+    '/validate',
+    '/detect',
+    '/workbooks/*',
+    '/invoices',
+    '/invoices/*',
+  ]) {
     api.use(path, tenantAuth(deps));
   }
 
+  api.get('/me', (c) => {
+    const tenant = c.get('tenant');
+    const principal = c.get('principal');
+    return c.json({
+      tenant: tenantView(tenant),
+      user: principal.kind === 'session' ? { email: principal.email, role: principal.role } : null,
+      testMode: { enabled: tenant.sandboxEnabled, available: deps.test !== null },
+    });
+  });
+
   api.get('/tenant', (c) => c.json(tenantView(c.get('tenant'))));
+
+  api.get('/tenant/export', async (c) => {
+    const data = await exportTenant(deps, c.get('tenant'), c.get('principal'));
+    return c.json(data, 200, {
+      'content-disposition': `attachment; filename="facture-impec-${data.tenant.siren}.json"`,
+    });
+  });
+
+  api.delete('/tenant', async (c) => {
+    const { confirmSiren } = await body(c, DeleteBody);
+    return c.json(await deleteTenant(deps, c.get('tenant'), c.get('principal'), confirmSiren));
+  });
+
+  api.get('/settings', (c) => c.json(settingsView(deps, c.get('tenant'))));
+
+  api.patch('/settings', async (c) => {
+    const row = await updateSettings(deps, c.get('tenant'), await body(c, SettingsPatch));
+    return c.json(settingsView(deps, row));
+  });
+
+  api.put('/settings/ai', async (c) => {
+    const row = await saveAi(deps, c.get('tenant'), await body(c, AiChoice));
+    return c.json(settingsView(deps, row));
+  });
 
   api.patch('/tenant', async (c) => {
     const patch = await body(c, TenantPatch);
     const before = c.get('tenant');
+    if (Object.keys(patch).length === 0) return c.json(tenantView(before));
     const updated = await deps.db.transaction(async (tx) => {
       const [row] = await tx
         .update(tenants)
@@ -194,9 +290,37 @@ export function createApp(deps: ApiDeps) {
     return c.json(validateDraft(deps, c.get('tenant'), draft));
   });
 
+  // ── The add-in's sheet ────────────────────────────────────────────────────────────────────────
+  api.post('/detect', async (c) => {
+    const { snapshot } = await body(c, z.object({ snapshot: Snapshot }));
+    return c.json(await detect(deps, c.get('tenant'), snapshot, c.req.raw.signal));
+  });
+
+  api.get('/workbooks/:id/mappings/:sheet', async (c) => {
+    const workbookId = parse(WorkbookId, c.req.param('id'));
+    return c.json(await getMapping(deps, c.get('tenant'), workbookId, c.req.param('sheet')));
+  });
+
+  api.put('/workbooks/:id/mappings/:sheet', async (c) => {
+    const workbookId = parse(WorkbookId, c.req.param('id'));
+    const { mapping } = await body(c, z.object({ mapping: SheetMapping }));
+    if (mapping.sheet !== c.req.param('sheet')) {
+      throw new ApiError(400, 'invalid_request', undefined, 'mapping.sheet differs from the path');
+    }
+    return c.json(await saveMapping(deps, c.get('tenant'), workbookId, mapping));
+  });
+
+  api.post('/workbooks/:id/sync', async (c) => {
+    const workbookId = parse(WorkbookId, c.req.param('id'));
+    return c.json(await syncSheet(deps, c.get('tenant'), workbookId, await body(c, SyncBody)));
+  });
+
+  // ── Invoices ──────────────────────────────────────────────────────────────────────────────────
   api.post('/invoices', async (c) => {
     const tenant = c.get('tenant');
-    const { row, created } = await createInvoice(deps, tenant, await body(c, InvoiceBody));
+    const { test, ...input } = await body(c, NewInvoice);
+    if (test) assertTestMode(deps, tenant);
+    const { row, created } = await createInvoice(deps, tenant, { ...input, isTest: test });
     const { issues, events } = await invoiceDetailData(deps, row);
     return c.json(invoiceDetail(row, issues, events), created ? 201 : 200);
   });
@@ -253,16 +377,40 @@ export function createApp(deps: ApiDeps) {
     const row = await getInvoice(deps, c.get('tenant'), uuid(c.req.param('id')));
     return c.body(row.xmlCii ?? toCii(row.document), 200, {
       'content-type': 'application/xml; charset=utf-8',
-      'content-disposition': `inline; filename="${(row.number ?? row.id).replace(/[^\w.-]/g, '_')}.xml"`,
+      'content-disposition': `inline; filename="${fileName(row, 'xml')}"`,
     });
+  });
+
+  api.get('/invoices/:id/pdf', async (c) => {
+    const row = await getInvoice(deps, c.get('tenant'), uuid(c.req.param('id')));
+    const pdf = await invoicePdf(deps, row.document);
+    return c.body(new Uint8Array(pdf), 200, {
+      'content-type': 'application/pdf',
+      'content-disposition': `inline; filename="${fileName(row, 'pdf')}"`,
+    });
+  });
+
+  api.post('/invoices/:id/explain', async (c) => {
+    const tenant = c.get('tenant');
+    const row = await getInvoice(deps, tenant, uuid(c.req.param('id')));
+    return c.json(await explainInvoice(deps, tenant, row, c.req.raw.signal));
+  });
+
+  api.post('/invoices/:id/rehearse', async (c) => {
+    const tenant = c.get('tenant');
+    const row = await getInvoice(deps, tenant, uuid(c.req.param('id')));
+    return c.json(await rehearseInvoice(deps, tenant, row));
+  });
+
+  api.post('/invoices/:id/scenario', async (c) => {
+    const tenant = c.get('tenant');
+    const { scenario } = await body(c, z.object({ scenario: z.enum(SCENARIOS) }));
+    const row = await getInvoice(deps, tenant, uuid(c.req.param('id')));
+    const after = await playScenario(deps, tenant, row, scenario);
+    const { issues, events } = await invoiceDetailData(deps, after);
+    return c.json(invoiceDetail(after, issues, events), 202);
   });
 
   app.route('/', api);
   return app;
-}
-
-/** A malformed id is an invoice we do not have. */
-function uuid(value: string): string {
-  if (!z.uuid().safeParse(value).success) throw new ApiError(404, 'not_found');
-  return value;
 }

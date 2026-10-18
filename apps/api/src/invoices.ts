@@ -34,6 +34,7 @@ import {
 import { t } from '@fi/shared';
 import type { ApiDeps } from './deps';
 import { ApiError, isUniqueViolation } from './errors';
+import { routeFor } from './platform';
 
 export const EDITABLE: readonly InvoiceState[] = ['draft', 'needs_fix', 'validated'];
 const BEFORE_DEPOSIT: readonly InvoiceState[] = [
@@ -55,6 +56,15 @@ const ON_ITS_WAY: readonly InvoiceState[] = [
 ];
 
 const label = (status: InvoiceState) => t(`invoice.status.${status}`);
+
+export const TEST_PREFIX = 'TEST-';
+
+/** « Mode test » (plan §3): a test invoice's number starts with TEST-, so it can never pass for a real one. */
+export function testDraft(draft: InvoiceDraft): InvoiceDraft {
+  const number = draft.number?.trim();
+  if (!number || number.startsWith(TEST_PREFIX)) return draft;
+  return { ...draft, number: `${TEST_PREFIX}${number}` };
+}
 
 /** Plan §0.4: tenant + number + fingerprint. The same invoice never gets two keys. */
 export const idempotencyKey = (row: Pick<InvoiceRow, 'tenantId' | 'number' | 'fingerprint'>) =>
@@ -132,7 +142,12 @@ async function runValidation(tx: Tx, row: InvoiceRow, tenant: TenantRow, now: Da
   return issues;
 }
 
-async function findByNumber(deps: ApiDeps, tenant: TenantRow, number: string | null) {
+async function findByNumber(
+  deps: ApiDeps,
+  tenant: TenantRow,
+  number: string | null,
+  isTest: boolean,
+) {
   if (number === null) return undefined;
   const [row] = await deps.db
     .select()
@@ -141,7 +156,7 @@ async function findByNumber(deps: ApiDeps, tenant: TenantRow, number: string | n
       and(
         eq(invoices.tenantId, tenant.id),
         eq(invoices.direction, 'out'),
-        eq(invoices.isTest, false),
+        eq(invoices.isTest, isTest),
         eq(invoices.number, number),
         ne(invoices.status, 'cancelled'),
       ),
@@ -158,22 +173,30 @@ export interface CreateResult {
  * Creating the same invoice twice returns the first one (same number, same fingerprint): a double
  * click or a retried request never makes a second invoice. Same number, other content: 409.
  */
+export interface InvoiceInput {
+  draft: InvoiceDraft;
+  excelBinding?: ExcelBinding | undefined;
+  /** « Mode test »: numbered TEST-…, sent to the test platform only. */
+  isTest?: boolean | undefined;
+}
+
 export async function createInvoice(
   deps: ApiDeps,
   tenant: TenantRow,
-  input: { draft: InvoiceDraft; excelBinding?: ExcelBinding },
+  input: InvoiceInput,
 ): Promise<CreateResult> {
-  const computed = compute(tenant, input.draft);
+  const isTest = input.isTest ?? false;
+  const computed = compute(tenant, isTest ? testDraft(input.draft) : input.draft);
   const number = computed.document.number ?? null;
   const existing = async (): Promise<CreateResult> => {
-    const row = await findByNumber(deps, tenant, number);
+    const row = await findByNumber(deps, tenant, number, isTest);
     if (!row) throw new ApiError(500, 'internal');
     if (row.fingerprint !== computed.fingerprint) {
       throw new ApiError(409, 'number_taken', { number: number ?? '' });
     }
     return { row, created: false };
   };
-  if (await findByNumber(deps, tenant, number)) return existing();
+  if (await findByNumber(deps, tenant, number, isTest)) return existing();
 
   try {
     const row = await deps.db.transaction(async (tx) => {
@@ -182,6 +205,7 @@ export async function createInvoice(
         .values({
           tenantId: tenant.id,
           ...columns(computed),
+          isTest,
           source: input.excelBinding ? 'excel' : 'api',
           excelBinding: input.excelBinding ?? null,
         })
@@ -193,7 +217,7 @@ export async function createInvoice(
         action: 'invoice.create',
         objectType: 'invoice',
         objectId: inserted.id,
-        after: { fingerprint: computed.fingerprint },
+        after: { fingerprint: computed.fingerprint, isTest },
       });
       await runValidation(tx, inserted, tenant, deps.now());
       return inserted;
@@ -247,16 +271,18 @@ export async function updateInvoice(
   deps: ApiDeps,
   tenant: TenantRow,
   id: string,
-  input: { draft: InvoiceDraft; excelBinding?: ExcelBinding },
+  input: InvoiceInput,
 ): Promise<{ row: InvoiceRow; issues: Issue[] }> {
-  const computed = compute(tenant, input.draft);
-  const number = computed.document.number ?? null;
+  let number: string | null = null;
   try {
     const issues = await deps.db.transaction(async (tx) => {
       const row = await lockOwn(tx, tenant, id);
       if (!EDITABLE.includes(row.status)) {
         throw new ApiError(409, 'not_editable', { status: label(row.status) });
       }
+      // A test invoice stays a test invoice, and a real one stays real.
+      const computed = compute(tenant, row.isTest ? testDraft(input.draft) : input.draft);
+      number = computed.document.number ?? null;
       const [updated] = await tx
         .update(invoices)
         .set({
@@ -310,7 +336,9 @@ export async function requestSend(deps: ApiDeps, tenant: TenantRow, id: string) 
     if (row.status !== 'validated') {
       throw new ApiError(409, 'not_sendable', { status: label(row.status) });
     }
-    if (!deps.pdp[tenant.pdpProvider]) throw new ApiError(409, 'pdp_not_configured');
+    if (!routeFor(deps, tenant, row.isTest)?.adapter) {
+      throw new ApiError(409, row.isTest ? 'test_platform_missing' : 'pdp_not_configured');
+    }
     await applyTransition(tx, { invoiceId: row.id, event: 'approve', actor: 'user' });
     return false;
   });

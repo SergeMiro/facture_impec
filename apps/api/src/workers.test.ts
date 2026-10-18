@@ -24,6 +24,7 @@ afterAll(async () => {
 const worker = (adapter: PdpAdapter, jobs = recordedJobs()): WorkerDeps => ({
   db: database.db,
   pdp: { mock: adapter },
+  test: null,
   jobs,
   now: () => new Date(),
 });
@@ -218,5 +219,67 @@ describe('runSweep', () => {
       account: sent.account,
       pdpRef: 'inv_20',
     });
+  });
+});
+
+describe('Mode test routing', () => {
+  it('sends a test invoice to the test platform, whatever platform the tenant uses', async () => {
+    const real = fakeAdapter({
+      provider: 'b2brouter',
+      sendInvoice: async () => {
+        throw new Error('a test invoice reached the real platform');
+      },
+    });
+    const testCalls: SendInput[] = [];
+    const sandbox = fakeAdapter({
+      sendInvoice: async (input) => {
+        testCalls.push(input);
+        return { outcome: 'deposited', pdpRef: 'inv_test_1' };
+      },
+      getStatus: async () => [event(1, 'deposited'), event(2, 'rejected')],
+    });
+    const pdp = { mock: sandbox, b2brouter: real };
+    const local = testApi(database, pdp).request;
+    const tenant = await newTenant(local, { pdpProvider: 'b2brouter' });
+    const res = await local('/invoices', {
+      method: 'POST',
+      token: tenant.apiKey,
+      body: { draft: draft(1), test: true },
+    });
+    const { id, number } = (await res.json()) as { id: string; number: string };
+    expect(number).toMatch(/^TEST-/);
+    await local(`/invoices/${id}/send`, { method: 'POST', token: tenant.apiKey });
+
+    const deps: WorkerDeps = {
+      ...worker(sandbox),
+      pdp,
+      test: { provider: 'mock', scenarios: null },
+    };
+    await runSend(deps, id);
+    expect(testCalls).toHaveLength(1);
+    const [sub] = await submissions(id);
+    expect(sub).toMatchObject({ provider: 'mock', pdpRef: 'inv_test_1' });
+
+    // The sweep and the sync look for it on the test platform too.
+    const jobs = recordedJobs();
+    await runSweep({ ...deps, jobs });
+    const target = jobs.syncs.find((s) => s.pdpRef === 'inv_test_1');
+    expect(target).toMatchObject({ provider: 'mock', account: tenant.account });
+    if (!target) throw new Error('no sync');
+    await runSync(deps, target);
+    expect((await invoice(id)).status).toBe('rejected_by_pdp');
+
+    // Without a test platform it waits instead of going anywhere else.
+    const ready = await local('/invoices', {
+      method: 'POST',
+      token: tenant.apiKey,
+      body: { draft: draft(2), test: true },
+    });
+    const second = ((await ready.json()) as { id: string }).id;
+    const refused = await testApi(database, pdp, undefined, { test: null }).request(
+      `/invoices/${second}/send`,
+      { method: 'POST', token: tenant.apiKey },
+    );
+    expect(refused.status).toBe(409);
   });
 });
