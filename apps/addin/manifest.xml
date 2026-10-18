@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Development manifest (docs/OFFICE.md §2, validated with office-addin-manifest 3.0.1).
+     Every URL points at the dev server of `pnpm dev:addin` (https://localhost:3000); the localhost and
+     example.com URLs are replaced before release (docs/DEFERRED.md). Sideloading: docs/RUNBOOK.md. -->
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+           xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+           xsi:type="TaskPaneApp">
+  <!-- Base manifest: order is fixed by the XSD (Id, Version, ProviderName, DefaultLocale, ...). -->
+  <Id>65013856-1f36-4b17-9800-671932bb5e36</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Facture Impec</ProviderName>
+  <DefaultLocale>fr-FR</DefaultLocale>
+  <DisplayName DefaultValue="Facture Impec"/>
+  <Description DefaultValue="Vérifier et envoyer des factures électroniques depuis Excel."/>
+  <IconUrl DefaultValue="https://localhost:3000/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
+  <SupportUrl DefaultValue="https://www.example.com/support"/>
+  <AppDomains>
+    <AppDomain>https://localhost:3000</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Workbook"/>
+  </Hosts>
+  <Requirements>
+    <Sets DefaultMinVersion="1.1">
+      <Set Name="SharedRuntime" MinVersion="1.1"/>
+      <Set Name="ExcelApi" MinVersion="1.7"/>
+    </Sets>
+  </Requirements>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://localhost:3000/taskpane.html"/>
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Workbook">
+        <!-- Runtimes must come right after <Host>, before <DesktopFormFactor>. -->
+        <Runtimes>
+          <Runtime resid="Taskpane.Url" lifetime="long"/>
+        </Runtimes>
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="GetStarted.Title"/>
+            <Description resid="GetStarted.Description"/>
+            <LearnMoreUrl resid="GetStarted.LearnMoreUrl"/>
+          </GetStarted>
+          <!-- Same resid as <Runtime>: function commands run in the task pane's runtime. -->
+          <FunctionFile resid="Taskpane.Url"/>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="FactureImpec.Group">
+                <Label resid="Group.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16x16"/>
+                  <bt:Image size="32" resid="Icon.32x32"/>
+                  <bt:Image size="80" resid="Icon.80x80"/>
+                </Icon>
+                <Control xsi:type="Button" id="FactureImpec.Ouvrir">
+                  <Label resid="Ouvrir.Label"/>
+                  <Supertip>
+                    <Title resid="Ouvrir.Label"/>
+                    <Description resid="Ouvrir.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <!-- No <TaskpaneId>: a shared runtime supports one task pane. -->
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+                <Control xsi:type="Button" id="FactureImpec.Verifier">
+                  <Label resid="Verifier.Label"/>
+                  <Supertip>
+                    <Title resid="Verifier.Label"/>
+                    <Description resid="Verifier.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>verifier</FunctionName>
+                  </Action>
+                </Control>
+                <Control xsi:type="Button" id="FactureImpec.Envoyer">
+                  <Label resid="Envoyer.Label"/>
+                  <Supertip>
+                    <Title resid="Envoyer.Label"/>
+                    <Description resid="Envoyer.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>envoyer</FunctionName>
+                  </Action>
+                </Control>
+                <Control xsi:type="Button" id="FactureImpec.ModeTest">
+                  <Label resid="ModeTest.Label"/>
+                  <Supertip>
+                    <Title resid="ModeTest.Label"/>
+                    <Description resid="ModeTest.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>modeTest</FunctionName>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16x16" DefaultValue="https://localhost:3000/assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="https://localhost:3000/assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="https://localhost:3000/assets/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://www.example.com/aide"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="GetStarted.Title" DefaultValue="Facture Impec est prêt"/>
+        <bt:String id="Group.Label" DefaultValue="Facture Impec"/>
+        <bt:String id="Ouvrir.Label" DefaultValue="Ouvrir"/>
+        <bt:String id="Verifier.Label" DefaultValue="Vérifier"/>
+        <bt:String id="Envoyer.Label" DefaultValue="Envoyer"/>
+        <bt:String id="ModeTest.Label" DefaultValue="Mode test"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="GetStarted.Description" DefaultValue="Ouvrez le volet depuis l'onglet Accueil."/>
+        <bt:String id="Ouvrir.Tooltip" DefaultValue="Ouvrir le volet Facture Impec."/>
+        <bt:String id="Verifier.Tooltip" DefaultValue="Vérifier la facture de la feuille active."/>
+        <bt:String id="Envoyer.Tooltip" DefaultValue="Envoyer la facture vérifiée."/>
+        <bt:String id="ModeTest.Tooltip" DefaultValue="Activer ou désactiver le mode test."/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>
