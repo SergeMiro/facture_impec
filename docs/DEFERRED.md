@@ -24,9 +24,6 @@ Each line says where it came from and what would bring it back.
 | A table row taller than a page in the PDF | M1 render.ts: a row is never split | A line description longer than about 60 lines. |
 | `MINIMUM` / `BASIC WL` Factur-X profiles (AFRelationship `Data`) | M1: only EN 16931 is written | A PDP asks for a lighter profile. |
 | Parties (customers/suppliers) table and the buyer context for rules | M2 schema: the buyer lives inside the invoice document | The add-in offers a customer picker or reads customers from a second sheet (M3 reads them from the invoice rows). |
-| A payment recorded by the user and the `reportPayment` job (« Encaissée », status 212) | M2: the adapter method and the mock route exist, nothing calls them | M5, with chasing and the autopilot. |
-| `late-payment` scenario (plan §9), `overdue`/`chasing` states driven by due dates | M2: no due-date clock yet | M5. |
-| Autopilot (sending without a click when every check is green) | M2: Review mode only, a send always comes from a user's « Envoyer » | M5. |
 | Reading received invoices: `parsed_json`, `triage_json`, `pdf_ref` of plan §4 `inbound_queue`, and the Réception screen | M4: the sweep polls each platform into `inbound_queue` (the XML, status `new`), nothing reads it yet | M6. |
 | Acknowledging received invoices on B2Brouter (`POST /invoices/{id}/ack`) | M4: `listInbound` asks for `ack=false` from the day before the last one stored and never acks; the unique index drops repeats | M6: ack once a received invoice is stored and triaged. |
 | Remaining plan §4 tables | M2–M4: only the tables routes and jobs use (`agent_runs` since M3, `inbound_queue` since M4) | The milestone whose feature writes them. |
@@ -43,9 +40,7 @@ Each line says where it came from and what would bring it back.
 | Names in a sheet column whose header does not announce them (« Cli. » is caught, « Partenaire » is not) reach MappingAgent unmasked when they carry no legal form | M3 masking.ts: header keywords + patterns + the dictionary's personal columns | A tenant's sheets show such columns; then mask every free-text column the dictionary cannot place, or show the model value shapes only. |
 | DNS check of a BYOK endpoint (a public name that resolves to a private address) | M3 providers/net.ts checks the URL as written | Before BYOK is offered outside the pilot: resolve and pin the address for the call. |
 | Spend cap per tenant in euros (today: a daily token cap per tenant, same for every model) | M3 orchestrator | Pricing of the AI fair use is decided (`docs/research/PRICING.md` §3.2). |
-| Autopilot switch in Réglages | M3: shown, disabled, « Revue » selected | M5, with the autopilot itself. |
 | Pseudonymization switch in Réglages | M3: shown on and locked; the API always pseudonymizes | A customer needs raw data sent to their own model (BYOK) and accepts it in writing. |
-| « Relancer » on the fiche | M3: shown, disabled (« Les relances arrivent bientôt ») | M5, chasing. |
 | Deleting the company from the add-in (RGPD erasure) | M3: `DELETE /tenant` exists and is tested; Réglages offers the export only | The owner settles the retention questions of `docs/RGPD.md`; then a button with SIREN confirmation. |
 | Several companies for one e-mail | M3: the sign-in link opens the oldest company with that address | An accountant signs in for several clients: a company picker after the link. |
 | Sending the sign-in mail for real | M3: local outbox only (`FI_ENV=local`); elsewhere the add-in offers the access key | A hosted sandbox or prod (M7): a transactional mail provider (owner's choice, it costs money). |
@@ -54,3 +49,12 @@ Each line says where it came from and what would bring it back.
 | Excel-on-the-web E2E run | M3: `e2e/excel-web.spec.ts` written, skipped without an account; its Excel selectors are `TODO(verify)` | The owner provides a Microsoft account that can upload an add-in (`docs/RUNBOOK.md` § E2E). |
 | Sideload scripts tried on Windows and Mac | M3: written from Microsoft's guides, run on neither | First session on a Windows or Mac machine with Excel. |
 | Splitting the task pane bundle (889 kB minified, 255 kB gzipped, one chunk) | M3: served from localhost, Vite warns above 500 kB | Before hosting the pane publicly (M7): lazy-load Réglages and the fiche's XML/PDF views. |
+| Autopilot for sending invoices (« Envoyer » without a click when every check is green) | M5: the autopilot covers chasing only; an invoice always leaves on a user's « Envoyer » | The owner decides invoices may leave without a click (plan §0.2), with its own ceiling and a trial period. |
+| Chase drafts reworded by a model (tone, the customer's history) | M5: deterministic templates in `fr.json`; no model writes amounts, dates or legal text | A pilot customer finds the templates stiff; then a model rewrites only the wording around the code-written facts, with an eval. |
+| Partial payments and instalments | M5: « Encaissée » records the whole amount payable; the adapter and the stand-in already carry an amount | A customer is paid in instalments: a balance on the invoice, the plan chasing what is left. |
+| Credit notes generated from a refusal | M5: the MonitorAgent proposes « avoir » and drafts the message; the user issues the credit note in their own tool | The credit-note builder (type 381) from the original invoice, with the `credited` transition it ends in. |
+| Chasing again after a dispute is settled | M5: a refusal or a dispute pauses the plan, and the state machine has no way back from `refused_by_customer` to the chased states | The state machine gets a « litige réglé » transition back to `accepted`; the plan then resumes from the next step. |
+| A mail provider for chasing and the weekly report | M5: the local outbox only; elsewhere the autopilot cannot be switched on (409) and the report is the task-pane card | Same provider as the sign-in mail (M7, owner's choice). |
+| Weekly report per person (opt-out, HTML) | M5: one plain-text mail to every owner of the company | An owner asks to stop it. |
+| Send throughput beyond one API process | M5 k6: 4 send workers per process, about 8 invoices/s end to end (`docs/PROGRESS.md` M5) | A company sends several thousand invoices at once, or several API processes share the queue. |
+| Formal-notice wording reviewed by a lawyer | M5: written from articles L441-10 and D441-5 of the Code de commerce; always a draft the user reads and sends | Before the first paying customer uses it: the owner or a lawyer reads `chase.body.formal_notice`. |

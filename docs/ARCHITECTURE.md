@@ -200,6 +200,49 @@ scenarios through the adapter (`scenarios-b2brouter.test.ts`, `pnpm scenario --p
 | Received invoices | Polled by the sweep, stored as XML with status `new`; reading and triage wait for M6 | Plan §11 asks M4 for the polling; the Réception screen is M6. |
 | A stand-in for B2Brouter | In `apps/mock-pdp`, over the same engine | No sandbox key on this server yet: everything but the live calls is proven against it, and the live run is one command (`docs/RUNBOOK.md`). |
 
+## What M5 added: getting paid (Monitor, Collect, Report)
+
+```
+sync / webhook ─► invoice delivered/accepted ─► chasing run (every 5 min) ─► chase_plans.steps
+                                                   │ overdue at J+1, then each step from 9:00 Paris
+                                                   ├─ Review: a draft on « Relancer » → user mails it, « Marquer comme envoyée »
+                                                   └─ Autopilot (≤ ceiling): the agent mails courtesy/reminder/firm; formal notice: always a draft
+« Encaissée » ─► paid + plan ended ─► payment_reports ─► job: PdpAdapter.reportPayment (B2Brouter POST /payments)
+rejection / refusal ─► monitor job ─► note « next step » on the timeline (rules by code; a model picks among 3 for a refusal)
+Monday 8:00 Paris ─► weekly report mailed to the owners; the same card on the Tableau de bord (GET /report)
+```
+
+| Path | What it does |
+|---|---|
+| `packages/core/src/chase.ts` | The plan as data: cadence → steps with their tone and date, the step of the day from 9:00 Paris, missed steps skipped instead of a burst, promise hold, rescheduling after a new cadence, end. Pure functions, no clock of their own. |
+| `packages/agents/src/collect.ts` | Chase drafts from `fr.json` templates with the number, amount, dates and days late written by code; the autopilot guardrail (`autopilotDecision`): never a formal notice, never a test invoice, never above the ceiling or without an address. |
+| `packages/agents/src/monitor.ts`, `prompts/monitor.md` | Next step after a rejection (rule ids read from the platform's answer, « fix and resend ») or a refusal (a model chooses among fix and resend / credit note / contact the customer and drafts the message, after pseudonymization; a draft with a wrong amount or an invented token falls back to the three options). |
+| `packages/agents/src/report.ts` | The week in at most 10 lines: four numbers, then at most three actions, formal notices first. Deterministic. |
+| `apps/api/src/collect.ts` | The chasing run: overdue, plan creation, the step of the day per invoice (invoice locked first, plan second), mail sending outside the transaction with a `sending` claim so a crash never sends twice; « Relancer » routes (prepare, mark as sent, promise). |
+| `apps/api/src/payments.ts` | « Encaissée »: paid, plan ended, a `payment_reports` row in the same transaction, then the report job (once; a refusal is `failed`, an outage is retried). |
+| `apps/api/src/monitor.ts`, `report.ts` | The monitor job (queued after the send and sync commits, and by the sweep); the weekly mail (one claim per company and ISO week in `weekly_reports`) and `GET /report`. |
+| `apps/addin/src/ui/ChasePanel.tsx` | « Relancer » on the fiche: plan, draft (copy, open in the mail app), « Marquer comme envoyée », « Préparer une relance maintenant », « Promesse de paiement », « Encaissée »; the MonitorAgent's card. Réglages: autopilot with its ceiling; Tableau de bord: the weekly card. |
+| `scripts/load/` | The k6 batch test (`pnpm load`): the API and the mock platform in one process on a throwaway Postgres, k6 in Docker. |
+
+Tables (migration `0004_chasing.sql`): `chase_plans` (one per invoice, steps as JSON), `payment_reports`,
+`weekly_reports`. The tenant's `mode` and `autopilot_max_amount` columns, there since M2, are now read.
+
+Tests: `packages/core/src/chase.test.ts`, the agents' tests and the monitor eval, `apps/api/src/collect.test.ts`,
+`monitor.test.ts`, `report.test.ts`, the `late-payment` scenario on the accelerated business clock (mock and
+B2Brouter adapter), `controller.test.ts` and `e2e/b2brouter.spec.ts` for the pane.
+
+### Decisions taken in M5
+
+| Topic | Decision | Why |
+|---|---|---|
+| Who writes a chase mail | Templates with code-written facts; no model | Amounts, dates and legal references must be exact; the plan's non-negotiable « an LLM never decides validity » extends to what is owed. |
+| Formal notice | Always a draft, in every mode, checked in the agent, the API and the scenario | Plan §6; it has legal effect and is best sent by registered letter. |
+| Autopilot scope | Chasing only, opt-in per company, with a mandatory ceiling, only where the deployment can send mail | Plan §0.2: nothing leaves without an explicit user decision; switching the autopilot on is that decision for chasing. |
+| A step missed while the server was down | Skipped, the latest due step acts | A customer must not receive three reminders in one morning. |
+| Sending a chase mail | Claim the step (`sending`, committed), send outside the transaction, then record; a claim older than 10 min becomes a draft « interrompu » | A crash between the mail and the commit must never lead to a second mail. |
+| Business clock in the scenario | The API's clock runs at the platform's speed only once the invoice is at the customer | The platform's latency would otherwise eat business days before the plan exists. |
+| Payment report | One `payment_reports` row per invoice written with the payment; the job retries only outages | « Encaissée » must reach the platform once; a lost answer at B2Brouter is still open (`docs/B2BROUTER.md` T21). |
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

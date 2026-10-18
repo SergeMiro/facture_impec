@@ -111,6 +111,13 @@ Recorded with `pnpm --filter @fi/agents eval:record` on synthetic data only; rep
 | 2026-10-18 | none (dictionary only, `detectMapping`) | 91.3 % | the floor every agent answer must beat |
 | 2026-10-18 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 98.1 % | 15/20 answered by the model, 5 fell back to the dictionary after 3 retries (free routing has no JSON schema mode); `mapping.llmfp-smart.json`, not a gate |
 
+MonitorAgent, 13 customer refusals of `evals/monitor.fixtures.ts` (the proposal among fix and resend /
+credit note / contact the customer; gate when one is set: ≥ 85 %, and never a wrong amount in a draft):
+
+| Date | Provider / model | Right proposal | Notes |
+|---|---|---|---|
+| 2026-10-18 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 11/13 (85 %) | `total`: the draft was refused by the guardrail and fell back to the three options; `billed-twice`: no proposal; `monitor.llmfp-smart.json`, not a gate |
+
 Not recorded yet: Mistral and Claude (need a paid key: owner), and ExplainAgent against a live model
 (its guardrail tests run on scripted answers).
 

@@ -345,6 +345,8 @@ export function createB2BrouterAdapter(options: B2BrouterAdapterOptions): PdpAda
 
     async reportPayment({ account: accountId, pdpRef, amount }) {
       // POST /payments, not mark_as: its `amount` is the CDV 206 partial approval (OpenAPI 2026-06-26).
+      // TODO(verify): docs/B2BROUTER.md §11 T21 — no idempotency key: a retry after a lost answer may
+      // record the payment twice.
       const body: B2bPaymentRequest = {
         payment: { invoice_id: Number(pdpRef), amount: amount / 100 },
       };

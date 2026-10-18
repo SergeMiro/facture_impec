@@ -247,11 +247,12 @@ How each criterion is read here:
   (sent, paid, overdue, at risk), then the three things the user must do. Deterministic: the numbers and
   the priorities are facts computed from the invoices.
 - **k6 batch test** (plan §9 « 1 000 invoices / tenant batch send »): a k6 script creates and sends 1 000
-  invoices for one company against a local stack and checks that each was deposited once; throughput and
-  p95 are recorded here.
+  invoices for one company against a local stack on a real Postgres and checks that each was deposited
+  once; throughput and p95 are recorded here.
 - **Late-payment scenario on the accelerated clock**: `fixtures/scenarios/late-payment.json`, run by
-  `pnpm scenario late-payment` and in `pnpm verify`. The API and the mock platform share one accelerated
-  business clock; the customer pays 45 days after the due date. The run checks that each chase step
+  `pnpm scenario late-payment` and in `pnpm verify`. The API's clock runs at the mock platform's speed
+  from the moment the invoice reaches the customer; the customer pays a few days after the formal notice.
+  The run checks that each chase step
   happened on its own business day (due date + offset) with the expected outcome (sent by the autopilot up
   to « firm », formal notice drafted), and that the payment ended the plan.
 - **Mise en demeure never auto-sent**: a test with the autopilot on, a mail service, an amount under the
@@ -264,13 +265,19 @@ How each criterion is read here:
 
 | Criterion | Status | Evidence |
 |---|---|---|
-| Overdue cron | ⏳ | |
-| CollectAgent: chasing plans from the company's cadence, e-mail drafts | ⏳ | |
-| Autopilot for chasing: ceiling, never a test invoice, never the formal notice | ⏳ | |
-| Payment recorded by the user and reported to the platform; payment promise | ⏳ | |
-| MonitorAgent: next action on rejections and refusals, with its eval | ⏳ | |
-| ReportAgent weekly (e-mail + task-pane card) | ⏳ | |
-| k6 batch test (1 000 invoices, one company) | ⏳ | |
-| late-payment scenario: right chase steps on the right days, accelerated clock | ⏳ | |
-| Mise en demeure never auto-sent (test asserts it) | ⏳ | |
-| Fiche « Relancer », Réglages autopilot, weekly card | ⏳ | |
+| Overdue cron | ✅ | `apps/api/src/collect.test.ts` « plans the reminders, marks the invoice overdue the next day, and drafts each step from 9:00 », « acts once on a step whose day has come, whatever the number of runs »; the chasing run is a recurring job, every 5 minutes (`COLLECT_EVERY_SECONDS`, `apps/api/src/workers.ts`) |
+| CollectAgent: chasing plans from the company's cadence, e-mail drafts | ✅ | `packages/core/src/chase.test.ts` « chase plan » (7 tests: default cadence and tones, 9:00 Paris, missed steps skipped instead of a burst, promise, new cadence, end); `packages/agents/src/collect.test.ts` « CollectAgent drafts » (« write the number, amount and dates from the invoice, never a placeholder », « count the days late, and quote the law only from the firm step on »); `collect.test.ts` « follows a new cadence for the steps still to come », « pauses on a customer refusal » |
+| Autopilot for chasing: ceiling, never a test invoice, never the formal notice | ✅ | `packages/agents/src/collect.test.ts` « CollectAgent autopilot guardrail » (3 tests); `apps/api/src/collect.test.ts` « in Autopilot, sends the courtesy, reminder and firm e-mails itself, never the formal notice », « leaves the e-mail to the user above the ceiling, without an address, or without mail », « turns a failed send into a draft, and never sends twice a send that was cut short »; `settings.test.ts` « turns the chasing autopilot on only with a ceiling, and only where mail can be sent » |
+| Payment recorded by the user and reported to the platform; payment promise | ✅ | `collect.test.ts` « Encaissée »: « records the payment, ends the plan and reports it to the platform once », « marks a payment report the platform refuses as failed, without retrying », « refuses a payment on an invoice that has not left »; « Relancer »: « holds every step until the day after a payment promise »; through B2Brouter's protocol: `e2e/b2brouter.spec.ts` (below) |
+| MonitorAgent: next action on rejections and refusals, with its eval | ✅ | `packages/agents/src/monitor.test.ts` (6 tests: rule ids by code, « never sends a party name or e-mail to the model », fallback to the three options on a wrong amount or an invented token or with the AI off); `apps/api/src/monitor.test.ts` « advises once after a platform rejection: correct the rules it names, then send again », « answers a customer refusal with a calm draft to the customer when the AI is off »; eval `packages/agents/evals` « MonitorAgent eval fixtures » (13 refusals) and the recording `monitor.llmfp-smart.json`: 11/13 right, not a gate (free models, `docs/AI_PROVIDERS.md`) |
+| ReportAgent weekly (e-mail + task-pane card) | ✅ | `packages/agents/src/report.test.ts` « ReportAgent » (3 tests); `apps/api/src/report.test.ts` « counts what left, what was paid, what is late or due soon, and what waits for the user », « mails the owners once per week, from Monday 8:00 Paris »; `apps/addin/src/controller.test.ts` « shows the week on the dashboard » |
+| k6 batch test (1 000 invoices, one company) | ✅ | `pnpm load` (`scripts/load/`, k6 `grafana/k6:2.3.0`, Postgres `postgres:17.11-alpine`, API + mock platform in one process; 8 cores, 15 GB): 1 000 created and sent by 20 VUs in 13.8 s, 150.5 req/s, p95 create 268 ms, send 145 ms, all requests 247 ms, no failed request; at the platform 1 000 invoices, 1 000 numbers (each once), all recorded by the API 125.6 s after the start (8.0 invoices/s, the 4 send workers of one API process); 2026-10-18 |
+| late-payment scenario: right chase steps on the right days, accelerated clock | ✅ | `apps/api/src/scenarios.test.ts` « late-payment: each chase step on its business day, the formal notice never e-mailed » (2 business days per second: J-3, J+1, J+8, J+15 sent by the agent on their day, J+30 drafted, paid; 20.5 s); the same through the B2Brouter adapter: `scenarios-b2brouter.test.ts` « late-payment: the chasing steps on their days, the payment from B2Brouter ends the plan » |
+| Mise en demeure never auto-sent (test asserts it) | ✅ | `packages/agents/src/collect.test.ts` « never sends a formal notice, whatever the settings (plan §6) »; `apps/api/src/collect.test.ts` « in Autopilot, sends the courtesy, reminder and firm e-mails itself, never the formal notice » (no outbox mail mentions « mise en demeure »); the late-payment scenario checks the outbox the same way |
+| Fiche « Relancer », Réglages autopilot, weekly card | ✅ | `apps/addin/src/controller.test.ts` « chases the accepted invoice from its fiche, records a promise, then « Encaissée » », « loads the settings with the fields the pane edits » (autopilot with its ceiling); `e2e/b2brouter.spec.ts` step « Relancer, then Encaissée: the sheet says it was paid » in local Chrome (browser: local) against the B2Brouter stand-in |
+
+M5's code is done. Two things are the owner's: the wording of the formal notice
+(`chase.body.formal_notice` in `packages/shared/i18n/fr.json`, written from articles L441-10 and D441-5
+of the Code de commerce) should be read by the owner or a lawyer before a paying customer uses it; and the
+live B2Brouter runs of M4 still wait for the sandbox key (the contract's « records a payment reported by
+the seller » covers « Encaissée »; T21, a payment posted twice, needs one call by hand).
