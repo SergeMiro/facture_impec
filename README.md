@@ -8,10 +8,12 @@ chaque problème en français simple.
 > Réception obligatoire pour toutes les entreprises assujetties depuis le 1er septembre 2026 ;
 > émission obligatoire pour les TPE/PME au 1er septembre 2027.
 
-**État : M3 — le complément Excel fonctionne en développement** : connexion, détection des colonnes,
-tableau de bord dans la feuille, fiche facture avec « Corriger dans la feuille », répétition, mode test
-et scénarios, contre une plateforme simulée. Il n'est pas encore hébergé ni publié : on le charge
-depuis sa machine (voir `docs/RUNBOOK.md`). L'ancien prototype (Rust + Next.js) reste consultable dans
+**État : M4 — B2Brouter branché** : le complément Excel (connexion, détection des colonnes, tableau de
+bord dans la feuille, fiche facture avec « Corriger dans la feuille », répétition, mode test) envoie
+par l'adaptateur B2Brouter, et le statut revient seul dans la feuille. C'est prouvé contre une
+réplique locale de l'API B2Brouter ; l'essai sur le bac à sable B2Brouter attend la clé du
+propriétaire. Rien n'est encore hébergé ni publié : on le charge depuis sa machine (voir
+`docs/RUNBOOK.md`). L'ancien prototype (Rust + Next.js) reste consultable dans
 le tag `archive/rust-mvp-v1` et sur https://facture-impec.vercel.app jusqu'à son remplacement.
 
 ## Pour les développeurs

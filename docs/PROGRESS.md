@@ -200,9 +200,13 @@ How each criterion is read here:
 
 | Criterion | Status | Evidence |
 |---|---|---|
-| Real adapter on the documented API | ⏳ | |
-| Contract suite green on the stand-in and on the sandbox | ⏳ | |
-| Status mapping in code with tests | ⏳ | |
-| Inbound polling | ⏳ | |
-| Operator key from the environment, checked against the environment | ⏳ | |
-| Excel → B2Brouter sandbox → status in the sheet, no manual step | ⏳ | |
+| Real adapter on the documented API | ✅ | `packages/pdp-adapter/src/b2brouter/adapter.test.ts` « B2Brouter requests » (29 tests): « imports without sending, then sends: one invoice, its reference », « reuses the invoice the platform already holds when its file is ours », « replaces a draft from an earlier attempt of a corrected invoice », « refuses calmly when the number belongs to another sent document », « finds its own import when the number appeared meanwhile (a lost answer) », « passes on the platform refusal of an import, in French, one item per problem », « retries the same request while it answers 202, and reads a wrapped entry », « reports a payment in euros through /payments »; `docs/B2BROUTER.md` §3.4 |
+| Contract suite green on the stand-in and on the sandbox | ✅ stand-in · ⏳ sandbox | `apps/mock-pdp/src/b2brouter.test.ts`: « PdpAdapter contract: B2Brouter stand-in » and « …, alternate shapes » (10 + 10, in `pnpm verify`). The sandbox run is `src/b2brouter/sandbox.test.ts`, skipped until the owner's `test_` key exists (`docs/RUNBOOK.md` § B2Brouter sandbox) |
+| Status mapping in code with tests | ✅ | `adapter.test.ts` « B2Brouter status mapping »: « maps every documented state to statuses our state machine knows, oldest first », « turns the current state into the history it proves, with the events’ times », « adds a rejection the responses announce, and nothing for a draft », « keeps an undocumented state raw, as « unknown » »; through the API: `apps/api/src/scenarios-b2brouter.test.ts` « happy: 10 invoices reach paid in < 60 s, each through every status », « pdp-reject and customer-refuse land on the invoice » |
+| Inbound polling | ✅ | `apps/api/src/workers.test.ts` « runInboundPoll »: « stores each received invoice once, asking from the last one stored », « goes on when one platform fails, and logs which one »; `adapter.test.ts` « lists received invoices from the day before, keeping only readable invoices »; table `inbound_queue` (migration `0003_inbound.sql`) |
+| Operator key from the environment, checked against the environment | ✅ | `packages/shared/src/shared.test.ts` « takes the B2Brouter key of its own environment, and requires one in sandbox »; `apps/api/src/runtime.test.ts` « accepts the stand-in in local only, and a key only on its own B2Brouter host », « sends « Mode test » to B2Brouter when the key is a sandbox key, without scenarios »; `adapter.test.ts` « sends the key and the pinned version in headers, never in the URL », « keeps a base path, and the key out of error messages » |
+| Excel → B2Brouter sandbox → status in the sheet, no manual step | ✅ stand-in · ⏳ sandbox | `apps/addin/src/controller.test.ts` « follows the sent invoice on the sheet by itself, less and less often, until it arrives »; `apps/addin/e2e/b2brouter.spec.ts` « an invoice goes to B2Brouter and its status comes back to the sheet by itself » in local Chrome (browser: local) against the stand-in: « FI_Statut: « Test · Acceptée par le client » 31 s after the send », 2026-10-18. The same spec against the real sandbox waits for the owner's key |
+
+M4's code is done; the two live runs need the owner's B2Brouter sandbox key, account id and a SIREN the
+sandbox directory knows (`docs/RUNBOOK.md` § B2Brouter sandbox). Their results close
+`docs/B2BROUTER.md` §11 T1, T3–T5, T10, T19, T20.

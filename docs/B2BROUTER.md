@@ -1,6 +1,9 @@
 # B2Brouter API: verified facts for Facture Impec
 
 Research date: **2026-10-17**. API version documented at that date: **2026-06-26**.
+Re-read on **2026-10-18** while writing the adapter (M4), against the same OpenAPI file (S1): the
+`POST /payments` body, `GET /invoices/{id}/as/original`, list and event paging. What the adapter
+does with all this is §3.4; nothing has been run against the real API yet (§11).
 
 This file is the only source of truth about B2Brouter for `packages/pdp-adapter`. Business code
 sees only `PdpAdapter`. Anything not in this file is unknown: implement it against `apps/mock-pdp`
@@ -185,7 +188,8 @@ Paths are relative to the base URL. "Wrapper" means the JSON object around the r
 | Code lists | `GET /document_types`, `/transport_types`, `/invoice_states`, `/schemes` | — | Lists | verified S1 |
 | Accounts | `GET /accounts`, `POST /accounts` and others | `POST` works with **eDocSync only**. With eDocExchange, accounts are created in the web app. | — | verified S1, S11 |
 | DGFiP setting | `/accounts/{account}/tax_report_settings` (code `dgfip`) | Turning it on publishes the company's SIREN/SIRET in the PPF Annuaire | — | verified S1, S14 |
-| Record a payment | `POST /accounts/{account}/payments` | Needs API version ≥ 2026-03-02 | — | verified S1, S18 |
+| Record a payment | `POST /accounts/{account}/payments` | `{"payment": {"invoice_id", "amount" \| "full": true}}`, exactly one of the two; `amount` in euros. Needs API version ≥ 2026-03-02 | 201 (checked 2026-10-18) | verified S1, S18 |
+| Original file | `GET /invoices/{id}/as/original` | — | The file as it was imported, byte for byte; not a billable transformation (checked 2026-10-18) | verified S1, S10 |
 
 ### 3.2 Mapping to `PdpAdapter`
 
@@ -224,7 +228,7 @@ All of this is [our decision], built on the verified facts above.
   - 404 → `null`.
 - **Missing from the interface:** a way to report payment (our `paid`). B2Brouter takes it as
   `mark_as` `state=paid` with `amount` and `amount_code` (§7). Add `reportPayment(pdpRef, amount)`,
-  or a general `markAs`.
+  or a general `markAs`. (Done: `reportPayment`, through `POST /payments` since 2026-10-18, §3.4.)
 
 ### 3.3 Directory details
 
@@ -261,6 +265,34 @@ All of this is [our decision], built on the verified facts above.
   `invoice{transport_type_code, document_type_code, other_document_type_codes}`.
 
 **Other French identifier schemes:** Suffix = 8040, Code Routage = 0224 [verified, S14].
+
+### 3.4 What the adapter does (M4, 2026-10-18)
+
+`packages/pdp-adapter/src/b2brouter/` — all [our decision], on the facts above.
+
+- **One operator key** (`B2BROUTER_API_KEY`) for every company; each tenant keeps its B2Brouter
+  account id in `tenants.pdp_account`, passed as `account` to every adapter call. The API refuses
+  to start with a key that does not fit its host or environment: `test_…` only in `sandbox`,
+  never in `prod`, and a host other than B2Brouter's (the stand-in) only in `local`.
+- **`sendInvoice`**, with no idempotency key on B2Brouter's side (§6):
+  1. Look the number up (`GET …/invoices?type=IssuedInvoice&number=`, exact match on our side).
+  2. Found, and its original (`/as/original`) is byte-equal to our XML: it is ours from an earlier
+     attempt; send it if it is still `new`, else just return its id.
+  3. Found with other bytes: still `new` → our draft of an invoice corrected since, deleted and
+     replaced; already sent → refused « numéro déjà utilisé » (`pdp.refused.numberTaken`).
+  4. Not found: import (`send_after_import=false&issued=true`), attach the PDF, `send_invoice`.
+     A 422 `parameter_taken` on import means the number appeared meanwhile: back to step 2.
+     Any other 422 is a refusal, with B2Brouter's messages (`pdp.refused.platform`).
+- **`getStatus`** builds the history from the events (each one carries the state it reached),
+  the current state and the responses; `history()` in `adapter.ts`, state paths in `states.ts`.
+- **`reportPayment`** uses `POST /payments`, not `mark_as`: `mark_as`'s `amount` is the CDV 206
+  partial approval.
+- **`listInbound`** lists `ReceivedInvoice` from the day before `since` (the filter takes a date)
+  and reads each file from `/as/original`; the API's inbound poll drops repeats. No `ack` yet
+  (docs/DEFERRED.md).
+- **The stand-in** in `apps/mock-pdp/src/b2brouter.ts` speaks this protocol over the mock's engine,
+  in both shapes where the docs disagree (T3–T5); the same contract suite runs against it, and
+  against the real sandbox by hand (`src/b2brouter/sandbox.test.ts`, docs/RUNBOOK.md).
 
 ## 4. Webhooks
 
@@ -660,7 +692,9 @@ close with one call using the owner's sandbox key (`test_`). Items marked "stagi
 | T15 | Webhook retry schedule, timeout, source IPs, timestamp tolerance | Verify the HMAC and reject `t` older than 5 minutes; answer 2xx fast and process asynchronously | Support ticket |
 | T16 | Deleting an attachment: OpenAPI has `DELETE /attachments/{id}`, but S13 advises deleting and re-creating the invoice | Never attach the wrong PDF: attach only after local validation | Sandbox call |
 | T17 | Does a Factur-X import plus a contact set to CII send the embedded CII unchanged? (Same issue as T2, for PDF.) | Send XML, with the PDF attached separately as `use_as_pdf_view` | Sandbox, after T2 |
-| T18 | Does the seller have to send 212 (paid + amount) for e-reporting? | `reportPayment` exists in the adapter; mock records it | Check DGFiP specifications (and S14 on payment data) |
+| T18 | Does the seller have to send 212 (paid + amount) for e-reporting? **Partly closed 2026-10-18:** how to send it is known (`POST /payments`, §3.1); whether it is required is not. | `reportPayment` sends it through `POST /payments`; mock records it | Check DGFiP specifications (and S14 on payment data) |
+| T19 | Does an import that passes the XSD but fails Schematron (or B2Brouter's own checks) answer 422 with `errors`, or import and fail at `send_invoice` (state `error`)? | Both are handled: a 422 on import or on send is a refusal with B2Brouter's messages | One sandbox import of an invoice with an empty buyer name |
+| T20 | The sandbox's default path is `sent → registered` and only Peppol invoices go further (§1): does a French invoice sent to a SIREN follow it, and how fast? Must the invoice's seller be the account's own company? | The E2E and the contract accept any status after the deposit; the demo seller is used | The live contract and E2E with the owner's key (docs/RUNBOOK.md § B2Brouter sandbox) |
 
 **Closed during this research:** Annuaire publication delay = nightly batch, live the next
 morning [verified, S14, 2026-10-17].

@@ -48,6 +48,7 @@ describe('migrations', () => {
       'agent_runs',
       'api_keys',
       'audit_events',
+      'inbound_queue',
       'invoice_events',
       'invoices',
       'magic_links',

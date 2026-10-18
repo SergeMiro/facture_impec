@@ -24,16 +24,18 @@ Each line says where it came from and what would bring it back.
 | A table row taller than a page in the PDF | M1 render.ts: a row is never split | A line description longer than about 60 lines. |
 | `MINIMUM` / `BASIC WL` Factur-X profiles (AFRelationship `Data`) | M1: only EN 16931 is written | A PDP asks for a lighter profile. |
 | Parties (customers/suppliers) table and the buyer context for rules | M2 schema: the buyer lives inside the invoice document | The add-in offers a customer picker or reads customers from a second sheet (M3 reads them from the invoice rows). |
-| B2Brouter adapter (import then send, search-then-retry, webhook secret per account) | M2: mock adapter only; facts in `docs/B2BROUTER.md` | M4, against the sandbox, with the same contract suite. |
 | A payment recorded by the user and the `reportPayment` job (« Encaissée », status 212) | M2: the adapter method and the mock route exist, nothing calls them | M5, with chasing and the autopilot. |
 | `late-payment` scenario (plan §9), `overdue`/`chasing` states driven by due dates | M2: no due-date clock yet | M5. |
 | Autopilot (sending without a click when every check is green) | M2: Review mode only, a send always comes from a user's « Envoyer » | M5. |
-| Inbound invoices polled into an `inbound_queue` | M2: the mock serves `GET /inbound`, the API does not poll it | M6. |
-| Remaining plan §4 tables (`agent_runs`, `inbound_queue`, `mappings`, …) | M2: only the tables its routes and jobs use | The milestone whose feature writes them. |
-| Encryption of PDP credentials at rest | M2: the mock needs none; `pdpAccount` is an id, not a secret | M4, before the first B2Brouter API key is stored. |
+| Reading received invoices: `parsed_json`, `triage_json`, `pdf_ref` of plan §4 `inbound_queue`, and the Réception screen | M4: the sweep polls each platform into `inbound_queue` (the XML, status `new`), nothing reads it yet | M6. |
+| Acknowledging received invoices on B2Brouter (`POST /invoices/{id}/ack`) | M4: `listInbound` asks for `ack=false` from the day before the last one stored and never acks; the unique index drops repeats | M6: ack once a received invoice is stored and triaged. |
+| Remaining plan §4 tables | M2–M4: only the tables routes and jobs use (`agent_runs` since M3, `inbound_queue` since M4) | The milestone whose feature writes them. |
+| Encryption of per-company PDP credentials at rest | M4: one operator key and one webhook secret in the environment (`B2BROUTER_*`); a tenant stores only its account id, which is not a secret | A company brings its own B2Brouter key, or B2Brouter gives one webhook secret per account. |
+| Mode test in prod | M4: the test platform is B2Brouter when the key is a sandbox key (`test_…`), else the mock; prod has a live key and runs no mock, so its Mode test has nowhere to go | M7, before prod opens: a second, sandbox-only B2Brouter adapter for test invoices. |
+| The mock adapter registered in every environment | M4 `pdpFromEnv`: always, pointing at `MOCK_PDP_URL` | M7: only in `local` (a tenant on `pdp_provider = mock` in prod would send nowhere). |
 | Rate limiting and request size limits on the API | M2: local only | Before the API is reachable from the internet (M7). |
 | Bundled API image (esbuild/tsup + Docker), listening beyond 127.0.0.1 (`API_HOST`) | M2: `tsx` and `127.0.0.1` | M7, deployment to the EU VPS. |
-| Scenarios against servers already running (`pnpm dev`, sandbox) | M2: each scenario starts its own in-process stack | M4, to replay the scenarios on the B2Brouter sandbox. |
+| Scenarios against servers already running (`pnpm dev`, a hosted sandbox) | M2: each scenario starts its own in-process stack; M4: `pnpm scenario --provider b2brouter` runs them through the real adapter against the stand-in. The live sandbox has none of the mock's fault controls, so it gets the contract and the E2E instead (`docs/RUNBOOK.md`) | A hosted sandbox exists (M7) and wants a smoke run of the happy path. |
 | Listing invoices beyond `limit`/`offset` (search, date range, sort) | M2: status filter only | A screen lists invoices outside the open sheet (M3's Tableau de bord lists the sheet's rows). |
 | Rate limiting on `POST /api/trial` beyond honeypot + fill time + one row per e-mail | Marketing site | Spam actually reaches the table; then Vercel WAF rule or Upstash rate limit. |
 | Site in other languages, blog, analytics | Marketing site | The French pilot converts and there is content worth translating or measuring (analytics would need a consent banner). |
@@ -46,7 +48,7 @@ Each line says where it came from and what would bring it back.
 | « Relancer » on the fiche | M3: shown, disabled (« Les relances arrivent bientôt ») | M5, chasing. |
 | Deleting the company from the add-in (RGPD erasure) | M3: `DELETE /tenant` exists and is tested; Réglages offers the export only | The owner settles the retention questions of `docs/RGPD.md`; then a button with SIREN confirmation. |
 | Several companies for one e-mail | M3: the sign-in link opens the oldest company with that address | An accountant signs in for several clients: a company picker after the link. |
-| Sending the sign-in mail for real | M3: local outbox only (`FI_ENV=local`); elsewhere the add-in offers the access key | M4 sandbox: a transactional mail provider (owner's choice, it costs money). |
+| Sending the sign-in mail for real | M3: local outbox only (`FI_ENV=local`); elsewhere the add-in offers the access key | A hosted sandbox or prod (M7): a transactional mail provider (owner's choice, it costs money). |
 | Sheets over 5 000 invoice rows | M3: the add-in says the sheet is too big and stops (the API refuses more too) | A customer's sheet is that big: read and sync it in chunks. |
 | Production manifest (public HTTPS URLs, support and help pages instead of example.com) and hosting of the task pane | M3: development manifest on https://localhost:3000 | M7, deployment; AppSource only if the owner wants it. |
 | Excel-on-the-web E2E run | M3: `e2e/excel-web.spec.ts` written, skipped without an account; its Excel selectors are `TODO(verify)` | The owner provides a Microsoft account that can upload an add-in (`docs/RUNBOOK.md` § E2E). |

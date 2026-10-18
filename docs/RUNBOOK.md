@@ -99,6 +99,40 @@ webhooks between them), so it neither needs nor touches `pnpm dev` or `.env`. Sc
 `fixtures/scenarios/` (number of invoices, platform timeline and faults, repeated creates/sends,
 expected status and time limit); the same runs are part of `pnpm verify` (`apps/api/src/scenarios.test.ts`).
 
+`pnpm scenario --provider b2brouter …` runs the same scenarios through the real B2Brouter adapter,
+against the B2Brouter stand-in the mock serves at `/b2brouter` (`apps/api/src/scenarios-b2brouter.test.ts`
+keeps four of them in `pnpm verify`). The live sandbox has none of the mock's fault controls, so it
+gets the contract and the E2E instead (§ B2Brouter sandbox).
+
+## B2Brouter sandbox
+
+Nothing in `pnpm verify` reaches B2Brouter. Locally, the stand-in answers in its place: in `.env`,
+`B2BROUTER_API_KEY=test_local_stand_in`, `B2BROUTER_BASE_URL=http://localhost:4010/b2brouter`,
+`MOCK_PDP_B2BROUTER_WEBHOOK_URL=http://localhost:4000/webhooks/pdp/b2brouter`, and a
+`B2BROUTER_WEBHOOK_SECRET` of your choice; then `pnpm dev`, and Mode test goes through the adapter.
+
+**Owner, once** (`docs/B2BROUTER.md` §1; an agent never creates accounts or keys):
+
+1. Register at https://app.b2brouter.net, set up the company on the free Basic plan.
+2. Developers (lightning bolt) → Create Sandbox; copy the `test_…` key.
+3. Note the sandbox account id (a number, in the account's URL or `GET /accounts`), and a SIREN the
+   sandbox directory knows (`GET /directory/fr/0002/{siren}` answers 200).
+
+**The live runs** (the key goes in the environment, never in a file, a URL, a log or a chat):
+
+```bash
+read -rs FI_LIVE_B2BROUTER_KEY && export FI_LIVE_B2BROUTER_KEY   # paste the test_… key, Enter
+export FI_LIVE_B2BROUTER_ACCOUNT=123456 FI_LIVE_B2BROUTER_SIREN=123456789
+pnpm --filter @fi/pdp-adapter exec vitest run src/b2brouter/sandbox.test.ts   # the contract, ~3 min
+pnpm --filter @fi/addin exec playwright test e2e/b2brouter.spec.ts            # Excel → sandbox → sheet
+unset FI_LIVE_B2BROUTER_KEY
+```
+
+Both refuse a key that is not `test_…`. Each run leaves a few test invoices in the sandbox (numbers
+`FI-…` and `TEST-E2E-…`); the sandbox never sends them anywhere. Webhooks cannot reach this server,
+so the E2E's API polls the platform every 10 s. What these runs show answers `docs/B2BROUTER.md` §11
+T1, T3–T5, T10, T19 and T20: write the answers there, with the date.
+
 ## Daily commands
 
 | Command | What it does |
@@ -200,7 +234,12 @@ server (:3100), so it runs next to `pnpm dev`, and drives the harness page in th
 (`/usr/bin/google-chrome`; on this VPS that is the right browser: Browserbase cannot reach localhost).
 `e2e/harness.spec.ts` is the M3 acceptance path: sign in by link, confirm the columns, fix the two
 errors from « Corriger dans la feuille », rehearse, « Prêt à envoyer », Mode test, send a test invoice,
-« Simuler un rejet PDP ». About 30 s. It is not part of `pnpm verify` (it needs Chrome and free ports).
+« Simuler un rejet PDP ». `e2e/b2brouter.spec.ts` is M4's: a test invoice goes through the B2Brouter
+adapter to the stand-in, the fiche is closed, and FI_Statut turns « Test · Acceptée par le client » by
+itself (about 30 s, the pane's first status check). The stack has a `test_` key, so B2Brouter's
+stand-in is the test platform for both. About a minute in all. It is not part of `pnpm verify` (it
+needs Chrome and free ports). With `FI_LIVE_B2BROUTER_*` set, run `e2e/b2brouter.spec.ts` alone: it
+goes to the real sandbox and the M3 spec skips itself (§ B2Brouter sandbox).
 
 `e2e/excel-web.spec.ts` runs the pane inside Excel on the web and is skipped unless both are set:
 

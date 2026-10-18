@@ -167,6 +167,39 @@ server (`docs/RUNBOOK.md` § E2E).
 | Contract tests | The pane against the real API in memory, not mocked HTTP | The pane and the API change together; a mocked API would drift. |
 | E2E target | The harness page in local Chrome on every run; Excel on the web only with an account | Excel on the web needs a Microsoft account that can upload add-ins (owner, `docs/DEFERRED.md`). |
 
+## What M4 added: B2Brouter, received invoices, a sheet that follows its invoices
+
+```
+apps/addin ── sync / GET /invoices?ids= ──► apps/api ── PdpAdapter ──► B2Brouter (test_ key: sandbox)
+     ▲ FI_Statut without a click                 │  ▲                  └─ or its stand-in, apps/mock-pdp /b2brouter
+     └──────────── 30 s → 5 min ─────────────────┘  └── webhooks /webhooks/pdp/b2brouter + the sweep
+```
+
+| Path | What it does |
+|---|---|
+| `packages/pdp-adapter/src/b2brouter` | The real adapter (`docs/B2BROUTER.md` §3.4): one operator key, the tenant's account id on every call, import → attach → send with search-then-reuse instead of an idempotency key, history from events + state + responses, directory with 202 polling, `POST /payments`, received invoices from `/as/original`, signed webhooks. Platform refusals are French (`pdp.refused.*`). `sandbox.test.ts` runs the contract against the real sandbox by hand. |
+| `apps/mock-pdp/src/b2brouter.ts` | B2Brouter's API over the mock's engine (same clock, timeline, faults, directory, inbound), in both shapes where B2Brouter's docs disagree; its webhooks are signed the B2Brouter way. The contract suite runs against it in both shapes. |
+| `apps/api/src/runtime.ts` | `pdpFromEnv` adds B2Brouter when `B2BROUTER_API_KEY` is set and stops the API when the key does not fit its host or environment; `testPlatformFromEnv` makes B2Brouter the test platform for a sandbox key (scenarios are then written by the API, `sandbox.ts`). |
+| `apps/api/src/workers.ts` | The sweep also polls every company's platform (and the test platform) for received invoices into `inbound_queue`, from the last one stored, once each, with an audit event. |
+| `apps/addin/src/controller.ts` | While a row of the sheet is on its way (`ready_to_send` … `delivered`), the pane asks `GET /invoices?ids=` every 30 s, then twice as late up to 5 min, and syncs the sheet as soon as one moved. |
+
+Tests: the contract suite against the stand-in (both shapes) and, by hand, the real sandbox; the
+scenarios through the adapter (`scenarios-b2brouter.test.ts`, `pnpm scenario --provider b2brouter`);
+`controller.test.ts` follows a sent invoice on the sheet with the fiche closed;
+`e2e/b2brouter.spec.ts` does it in Chrome against the stand-in, or the sandbox with the owner's key.
+
+### Decisions taken in M4
+
+| Topic | Decision | Why |
+|---|---|---|
+| Credentials | One operator key in the environment; tenants keep their B2Brouter account id | B2Brouter keeps one account per SIREN, and one key per integration group reaches every account in the group (`docs/B2BROUTER.md` §2); nothing secret is stored per tenant, so nothing to encrypt yet. |
+| Key hygiene | `sandbox` takes only `test_…`, `prod` never; the key must fit its host; a stand-in host only in `local`; live test runs refuse non-sandbox keys | A wrong key in the wrong place either sends real invoices from a test or fakes sends in prod; both must stop at startup. |
+| No idempotency key | Search the number, compare the original bytes, reuse or replace our own draft, refuse a number taken by another document | B2Brouter has none for invoices (`docs/B2BROUTER.md` §6); blind retries would duplicate. |
+| Mode test | B2Brouter when the key is a sandbox key, else the mock | The sandbox is the honest test; the mock stays for local work without a key. |
+| Status in the sheet | The pane polls a cheap status list, with backoff, and syncs only on a change | A full sync reads and validates the whole sheet and writes audit rows; every 30 s it would flood both. |
+| Received invoices | Polled by the sweep, stored as XML with status `new`; reading and triage wait for M6 | Plan §11 asks M4 for the polling; the Réception screen is M6. |
+| A stand-in for B2Brouter | In `apps/mock-pdp`, over the same engine | No sandbox key on this server yet: everything but the live calls is proven against it, and the live run is one command (`docs/RUNBOOK.md`). |
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than
@@ -229,8 +262,8 @@ the `FF-` prefix for our own checks, French messages, and the cell reference car
 
 | Env | PDP | Data |
 |---|---|---|
-| `local` | `apps/mock-pdp` on :4010 | PGlite in `.data/pglite`, or any Postgres through `DATABASE_URL` |
-| `sandbox` | B2Brouter sandbox | Supabase `fi-sandbox`, from M4 |
+| `local` | `apps/mock-pdp` on :4010 (with B2Brouter's stand-in at `/b2brouter`), or B2Brouter's sandbox with a `test_` key | PGlite in `.data/pglite`, or any Postgres through `DATABASE_URL` |
+| `sandbox` | B2Brouter sandbox (`test_` key required) | Supabase `fi-sandbox`, when it is hosted (M7) |
 | `prod` | B2Brouter production | Supabase `fi-prod` (EU), from M7 |
 
 `FI_ENV` selects the environment; it is validated at startup and reported by `/health`.

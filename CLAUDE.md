@@ -24,7 +24,12 @@ pnpm dev              # api :4000, mock-pdp :4010, add-in :3000, site :4321
 pnpm verify           # biome ci + typecheck + tests — the gate before every commit
 pnpm format           # biome check --write
 pnpm test:e2e         # add-in E2E in local Chrome, own ports (docs/RUNBOOK.md § E2E); not part of verify
+pnpm scenario [--provider b2brouter] all   # plan §9 scenarios, in-process; through the B2Brouter adapter
 ```
+
+B2Brouter: nothing in `pnpm verify` reaches it; the stand-in in `apps/mock-pdp` (`/b2brouter`) answers in
+its place. Live runs need the owner's sandbox key in `FI_LIVE_B2BROUTER_*` (`docs/RUNBOOK.md` § B2Brouter
+sandbox); never put a B2Brouter key in a file, a URL, a log or a message.
 
 Branches: work on `dev` (the default branch). Promote by merging `dev` → `preprod` with `pnpm verify` green,
 then `preprod` → `prod` when everything is OK; fast-forward only, never commit on `preprod` or `prod`
