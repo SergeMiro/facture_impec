@@ -3,7 +3,11 @@
   "extends": ["//"],
   "tasks": {
     "test": {
+      "outputs": [],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/fixtures/**", "$TURBO_ROOT$/docs/*.md"]
+    },
+    "test:oracle": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/fixtures/**"]
     }
   }
 }

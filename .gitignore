@@ -25,6 +25,9 @@ legacy/rust-mvp/addin/.next/
 .DS_Store
 *~
 
+# Oracle files fetched by `pnpm --filter @fi/core oracle:fetch` and compiled SEF (packages/core)
+.oracle-cache/
+
 # Astro / Vercel build output (apps/site)
 .astro
 .vercel

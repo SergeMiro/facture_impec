@@ -10,6 +10,7 @@
     "test": {
       "outputs": ["coverage/**"]
     },
+    "test:oracle": {},
     "dev": {
       "cache": false,
       "persistent": true

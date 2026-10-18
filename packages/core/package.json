@@ -8,9 +8,11 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest run --project unit --coverage",
+    "test:oracle": "vitest run --project oracle",
     "codelists": "tsx scripts/codelists.ts",
-    "gen:docs": "tsx scripts/generate-docs.ts"
+    "gen:docs": "tsx scripts/generate-docs.ts",
+    "oracle:fetch": "tsx scripts/oracle-fetch.ts"
   },
   "dependencies": {
     "@cantoo/fontkit": "^2.0.12",
