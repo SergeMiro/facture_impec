@@ -74,7 +74,7 @@ const PROCESS_TYPES = [
   'M9',
 ];
 const FR_CATEGORIES = ['S', 'E', 'AE', 'K', 'G', 'O', 'Z'];
-const FR_RATES = [
+export const FR_RATES = [
   '0',
   '0.9',
   '1.05',
