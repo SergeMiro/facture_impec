@@ -1,5 +1,5 @@
-// Everything in one process for scenarios and tests: PGlite in memory, the mock platform and the API
-// on free ports, webhooks from one to the other. No Docker, no .env. With `provider: 'b2brouter'`,
+// Everything in one process for scenarios and tests: PGlite in memory (or a Postgres the caller
+// names), the mock platform and the API on free ports, webhooks from one to the other. No .env. With `provider: 'b2brouter'`,
 // invoices go through the real B2Brouter adapter to the stand-in the mock serves at /b2brouter.
 import { randomBytes } from 'node:crypto';
 import { openDatabase, type PdpProvider } from '@fi/db';
@@ -26,6 +26,8 @@ export interface StackOptions {
   businessClock?: boolean;
   /** Real seconds between chasing runs; default 0.05 on the business clock. */
   collectEverySeconds?: number;
+  /** A Postgres to use instead of PGlite in memory (the k6 load test, scripts/load). */
+  databaseUrl?: string;
   log?: (message: string) => void;
 }
 
@@ -75,7 +77,7 @@ export async function startStack(options: StackOptions = {}): Promise<Stack> {
     log,
   });
   const mock = await listen(app.fetch, 0);
-  const database = await openDatabase();
+  const database = await openDatabase(options.databaseUrl ? { url: options.databaseUrl } : {});
   const speed = env.MOCK_PDP_SPEED;
   const businessClock = options.businessClock === true;
   let started: number | null = null;

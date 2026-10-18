@@ -17,6 +17,7 @@
     "format": "biome check --write .",
     "verify": "pnpm lint && pnpm typecheck && turbo run test test:oracle",
     "scenario": "tsx scripts/run-scenario.ts",
+    "load": "tsx scripts/load/run.ts",
     "test:e2e": "pnpm --filter @fi/addin test:e2e",
     "seed:demo": "pnpm --filter @fi/addin seed:demo",
     "addin:icons": "tsx scripts/addin-icons.ts"

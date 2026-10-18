@@ -25,6 +25,7 @@ pnpm verify           # biome ci + typecheck + tests — the gate before every c
 pnpm format           # biome check --write
 pnpm test:e2e         # add-in E2E in local Chrome, own ports (docs/RUNBOOK.md § E2E); not part of verify
 pnpm scenario [--provider b2brouter] all   # plan §9 scenarios, in-process; through the B2Brouter adapter
+pnpm load             # k6 batch test, 1 000 invoices on a throwaway Postgres (Docker); not part of verify
 ```
 
 B2Brouter: nothing in `pnpm verify` reaches it; the stand-in in `apps/mock-pdp` (`/b2brouter`) answers in

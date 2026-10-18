@@ -101,8 +101,23 @@ expected status and time limit); the same runs are part of `pnpm verify` (`apps/
 
 `pnpm scenario --provider b2brouter …` runs the same scenarios through the real B2Brouter adapter,
 against the B2Brouter stand-in the mock serves at `/b2brouter` (`apps/api/src/scenarios-b2brouter.test.ts`
-keeps four of them in `pnpm verify`). The live sandbox has none of the mock's fault controls, so it
-gets the contract and the E2E instead (§ B2Brouter sandbox).
+keeps six of them in `pnpm verify`, `late-payment` included). The live sandbox has none of the mock's
+fault controls, so it gets the contract and the E2E instead (§ B2Brouter sandbox).
+
+## Load test (k6)
+
+```bash
+pnpm load                          # 1 000 invoices, 20 virtual users, about 2.5 min
+pnpm load --invoices 200 --vus 10  # a quicker run
+```
+
+Plan §9 « 1 000 invoices / tenant batch send ». `scripts/load/run.ts` starts a throwaway Postgres in
+Docker (`postgres:17.11-alpine`, removed at the end), the API and the mock platform in its own process,
+creates one company, and runs `scripts/load/batch-send.js` in Docker (`grafana/k6:2.3.0`, host network):
+each iteration creates an invoice and sends it. Then it waits until the API has recorded every invoice
+as at the platform and checks that the platform holds each number once. It prints k6's request rate,
+p95 per request (create, send) and the end-to-end throughput, then PASS or FAIL. Manual, not part of
+`pnpm verify`; the last numbers are in `docs/PROGRESS.md` M5. It needs Docker, nothing else.
 
 ## B2Brouter sandbox
 
@@ -134,7 +149,8 @@ unset FI_LIVE_B2BROUTER_KEY
 Both refuse a key that is not `test_…`. Each run leaves a few test invoices in the sandbox (numbers
 `FI-…` and `TEST-E2E-…`); the sandbox never sends them anywhere. Webhooks cannot reach this server,
 so the E2E's API polls the platform every 10 s. What these runs show answers `docs/B2BROUTER.md` §11
-T1, T3–T5, T10, T19 and T20: write the answers there, with the date.
+T1, T3–T5, T10, T19 and T20: write the answers there, with the date. T21 (a payment posted twice) takes
+one more call by hand on an invoice the contract left in the sandbox.
 
 ## Daily commands
 

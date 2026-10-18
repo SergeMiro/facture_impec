@@ -2,10 +2,10 @@
 // serves at /b2brouter: B2Brouter's protocol, the mock's engine and accelerated clock. The same runs
 // as `pnpm scenario --provider b2brouter all`; docs/RUNBOOK.md has the run against the real sandbox.
 import { describe, expect, it } from 'vitest';
-import { loadScenario, runScenario, type ScenarioReport, startStack } from './scenarios';
+import { loadScenario, runScenario, type ScenarioReport, stackFor, startStack } from './scenarios';
 
 async function run(name: string): Promise<ScenarioReport> {
-  const stack = await startStack({ provider: 'b2brouter' });
+  const stack = await startStack({ provider: 'b2brouter', ...stackFor(loadScenario(name)) });
   try {
     return await runScenario(name, loadScenario(name), stack);
   } finally {
@@ -50,5 +50,11 @@ describe('scenarios through the B2Brouter adapter', () => {
   it('pdp-reject and customer-refuse land on the invoice', async () => {
     passes(await run('pdp-reject'));
     passes(await run('customer-refuse'));
+  }, 60_000);
+
+  it('late-payment: the chasing steps on their days, the payment from B2Brouter ends the plan', async () => {
+    const report = await run('late-payment');
+    passes(report);
+    expect(report.chase).toHaveLength(5);
   }, 60_000);
 });
