@@ -118,11 +118,14 @@ Nothing in `pnpm verify` reaches B2Brouter. Locally, the stand-in answers in its
 3. Note the sandbox account id (a number, in the account's URL or `GET /accounts`), and a SIREN the
    sandbox directory knows (`GET /directory/fr/0002/{siren}` answers 200).
 
-**The live runs** (the key goes in the environment, never in a file, a URL, a log or a chat):
+**The live runs** (the key goes in the environment or in a chmod 600 file outside the repo, never in
+the repo, a URL, a log or a chat):
 
 ```bash
 read -rs FI_LIVE_B2BROUTER_KEY && export FI_LIVE_B2BROUTER_KEY   # paste the test_… key, Enter
 export FI_LIVE_B2BROUTER_ACCOUNT=123456 FI_LIVE_B2BROUTER_SIREN=123456789
+# or, once: the three lines `export FI_LIVE_B2BROUTER_…=…` in ~/.config/facture-impec/b2brouter.env
+# (chmod 600), then: set -a; . ~/.config/facture-impec/b2brouter.env; set +a
 pnpm --filter @fi/pdp-adapter exec vitest run src/b2brouter/sandbox.test.ts   # the contract, ~3 min
 pnpm --filter @fi/addin exec playwright test e2e/b2brouter.spec.ts            # Excel → sandbox → sheet
 unset FI_LIVE_B2BROUTER_KEY

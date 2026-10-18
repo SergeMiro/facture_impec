@@ -29,7 +29,8 @@ pnpm scenario [--provider b2brouter] all   # plan §9 scenarios, in-process; thr
 
 B2Brouter: nothing in `pnpm verify` reaches it; the stand-in in `apps/mock-pdp` (`/b2brouter`) answers in
 its place. Live runs need the owner's sandbox key in `FI_LIVE_B2BROUTER_*` (`docs/RUNBOOK.md` § B2Brouter
-sandbox); never put a B2Brouter key in a file, a URL, a log or a message.
+sandbox); a B2Brouter key lives only in the environment or a chmod 600 file outside the repo
+(`~/.config/facture-impec/b2brouter.env`), never in the repo, a URL, a log or a message.
 
 Branches: work on `dev` (the default branch). Promote by merging `dev` → `preprod` with `pnpm verify` green,
 then `preprod` → `prod` when everything is OK; fast-forward only, never commit on `preprod` or `prod`
