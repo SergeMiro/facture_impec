@@ -1,0 +1,26 @@
+{
+  "description": "Autopilot chasing on the accelerated clock (two days per second): the invoice falls due 5 days after it leaves, the agent e-mails the courtesy, reminder and firm steps on their days, prepares the formal notice without sending it, and the customer pays a few days after it (the payment ends the plan).",
+  "invoices": 1,
+  "platform": {
+    "speed": 172800,
+    "timeline": [
+      { "status": "received_by_platform", "after": "PT5M" },
+      { "status": "delivered", "after": "PT1H" },
+      { "status": "payment_received", "after": "P40D" }
+    ]
+  },
+  "chase": {
+    "dueInDays": 5,
+    "customerEmail": "compta@boulangerie-martin.test",
+    "settings": { "mode": "autopilot", "autopilotMaxAmount": 1000000 },
+    "steps": [
+      { "offset": -3, "status": "sent" },
+      { "offset": 1, "status": "sent" },
+      { "offset": 8, "status": "sent" },
+      { "offset": 15, "status": "sent" },
+      { "offset": 30, "status": "drafted", "reason": "formal_notice" }
+    ],
+    "mails": 4
+  },
+  "expect": { "status": "paid", "withinSeconds": 30 }
+}

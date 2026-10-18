@@ -196,7 +196,7 @@ export function createApp(deps: ApiDeps) {
     // The key is shown here once and never again (only its hash is stored).
     return c.json({ tenant: tenantView(tenant), apiKey }, 201);
   });
-  // Local only: the sign-in mails the outbox kept (src/mail.ts), for the E2E run and the developer.
+  // Local only: the mails the outbox kept (src/mail.ts), for the E2E run, scenarios and the developer.
   admin.get('/outbox', (c) => {
     if (!(deps.mailer instanceof OutboxMailer)) throw new ApiError(404, 'route_not_found');
     return c.json({ mails: deps.mailer.sent });

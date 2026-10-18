@@ -4,7 +4,7 @@ import { PDP_PROVIDERS, type PdpProvider } from '@fi/db';
 import { z } from 'zod';
 import { runScenario, type ScenarioReport } from './runner';
 import { loadScenario, scenarioNames } from './scenario';
-import { startStack } from './stack';
+import { stackFor, startStack } from './stack';
 
 function print(report: ScenarioReport): void {
   const verdict = report.ok ? 'PASS' : 'FAIL';
@@ -16,6 +16,7 @@ function print(report: ScenarioReport): void {
       `  ${i.number.padEnd(12)} ${i.status.padEnd(20)} deposits at platform: ${i.deposits}  timeline: ${i.timeline.join(' → ')}`,
     );
   }
+  for (const line of report.chase) console.log(`  ${line}`);
   for (const f of report.failures) console.log(`  ✗ ${f}`);
 }
 
@@ -48,11 +49,10 @@ export async function main(argv: string[]): Promise<number> {
   console.log(`platform adapter: ${provider}`);
   let failed = 0;
   for (const name of names) {
-    const stack = await startStack({ provider });
+    const scenario = loadScenario(name);
+    const stack = await startStack({ provider, ...stackFor(scenario) });
     try {
-      const report = await runScenario(name, loadScenario(name), stack, (line) =>
-        console.log(line),
-      );
+      const report = await runScenario(name, scenario, stack, (line) => console.log(line));
       print(report);
       if (!report.ok) failed++;
     } finally {

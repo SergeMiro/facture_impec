@@ -1,10 +1,37 @@
-// fixtures/scenarios/<name>.json (plan §9 "Scenario"): one outbound cycle against the mock platform.
+// fixtures/scenarios/<name>.json (plan §9 "Scenario"): one outbound cycle against the mock platform,
+// and with `chase`, the chasing of an invoice paid late on the accelerated business clock.
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { STATES } from '@fi/core';
+import { STATES, STEP_REASONS } from '@fi/core';
 import { MockControl } from '@fi/pdp-adapter';
 import { REPO_ROOT } from '@fi/shared/env';
 import { z } from 'zod';
+
+export const ChaseExpectation = z.object({
+  /** The invoices fall due this many days after today (Europe/Paris). */
+  dueInDays: z.number().int().min(4).max(60),
+  /** Synthetic address on the invoices (BT-58): where the autopilot writes. */
+  customerEmail: z.email(),
+  /** Réglages of the scenario's company, set before its first invoice (PATCH /settings). */
+  settings: z.object({
+    mode: z.enum(['review', 'autopilot']),
+    autopilotMaxAmount: z.number().int().min(0).nullable().optional(),
+    chaseCadence: z.array(z.number().int()).optional(),
+  }),
+  /** How each step must end up, on its own business day (due date + offset). */
+  steps: z
+    .array(
+      z.object({
+        offset: z.number().int(),
+        status: z.enum(['sent', 'drafted']),
+        reason: z.enum(STEP_REASONS).optional(),
+      }),
+    )
+    .min(1),
+  /** E-mails the customer receives from the autopilot, per invoice. */
+  mails: z.number().int().min(0),
+});
+export type ChaseExpectation = z.infer<typeof ChaseExpectation>;
 
 export const Scenario = z.object({
   description: z.string(),
@@ -19,6 +46,8 @@ export const Scenario = z.object({
       send: z.number().int().min(1).default(1),
     })
     .default({ create: 1, send: 1 }),
+  /** Chasing: the API runs on the platform's clock (`platform.speed`) and its steps are checked. */
+  chase: ChaseExpectation.optional(),
   expect: z.object({
     status: z.enum(STATES),
     withinSeconds: z.number().positive(),

@@ -6,6 +6,7 @@ import { openDatabase, type PdpProvider } from '@fi/db';
 import { createMockPdp, listen, type MockPdpEngine } from '@fi/mock-pdp';
 import { ServerEnvSchema } from '@fi/shared/env';
 import { type RunningApi, startApi } from '../runtime';
+import type { Scenario } from './scenario';
 
 /** A sandbox-shaped key: the stand-in wants the `test_` prefix, and it is no secret. */
 const STAND_IN_KEY = 'test_scenario_stand_in';
@@ -18,7 +19,23 @@ export interface StackOptions {
   /** Mock → API webhooks (default on). Off, only the sweep brings news. */
   webhooks?: boolean;
   sweepEverySeconds?: number;
+  /**
+   * The API's clock runs at `speed` too once `startBusinessClock` is called (real time until then):
+   * chasing days and the mails' dates are business time. Off, only the platform hurries.
+   */
+  businessClock?: boolean;
+  /** Real seconds between chasing runs; default 0.05 on the business clock. */
+  collectEverySeconds?: number;
   log?: (message: string) => void;
+}
+
+/** What a scenario needs from its stack: chasing runs the API on the platform's clock. */
+export function stackFor(scenario: Scenario): StackOptions {
+  if (!scenario.chase) return {};
+  return {
+    businessClock: true,
+    ...(scenario.platform.speed && { speed: scenario.platform.speed }),
+  };
 }
 
 export interface Stack {
@@ -28,6 +45,8 @@ export interface Stack {
   adminToken: string;
   api: RunningApi;
   mock: MockPdpEngine;
+  /** From now on the API's clock runs at the platform's speed (with `businessClock`). */
+  startBusinessClock(): void;
   close(): Promise<void>;
 }
 
@@ -57,6 +76,11 @@ export async function startStack(options: StackOptions = {}): Promise<Stack> {
   });
   const mock = await listen(app.fetch, 0);
   const database = await openDatabase();
+  const speed = env.MOCK_PDP_SPEED;
+  const businessClock = options.businessClock === true;
+  let started: number | null = null;
+  const now = () =>
+    started === null ? new Date() : new Date(started + (Date.now() - started) * speed);
   const api = await startApi({
     env: {
       ...env,
@@ -66,6 +90,10 @@ export async function startStack(options: StackOptions = {}): Promise<Stack> {
     port: 0,
     database,
     pollingIntervalSeconds: 0.5,
+    ...(businessClock && {
+      now,
+      collectEverySeconds: options.collectEverySeconds ?? 0.05,
+    }),
     log,
   });
   if (options.webhooks !== false) {
@@ -80,6 +108,9 @@ export async function startStack(options: StackOptions = {}): Promise<Stack> {
     adminToken,
     api,
     mock: engine,
+    startBusinessClock() {
+      if (businessClock && started === null) started = Date.now();
+    },
     async close() {
       engine.setWebhookUrl(undefined);
       standIn.setWebhookUrl(undefined);

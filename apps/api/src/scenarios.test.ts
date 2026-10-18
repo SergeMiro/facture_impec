@@ -1,7 +1,7 @@
 // Plan §9 scenarios, end to end over HTTP: the API with its pg-boss workers, the mock platform with its
 // accelerated clock, webhooks between them. The same runs as `pnpm scenario all`.
 import { describe, expect, it } from 'vitest';
-import { loadScenario, runScenario, type ScenarioReport, startStack } from './scenarios';
+import { loadScenario, runScenario, type ScenarioReport, stackFor, startStack } from './scenarios';
 import { SCENARIO_SELLER, scenarioDraft } from './scenarios/invoice';
 import type { StackOptions } from './scenarios/stack';
 
@@ -67,6 +67,19 @@ describe('scenarios', () => {
   it('customer-refuse without webhooks: the sweep alone brings the news', async () => {
     passes(await run('customer-refuse', { webhooks: false }));
   }, 30_000);
+
+  it('late-payment: each chase step on its business day, the formal notice never e-mailed', async () => {
+    const report = await run('late-payment', stackFor(loadScenario('late-payment')));
+    passes(report);
+    expect(report.chase).toHaveLength(5);
+    expect(report.chase.at(-1)).toContain('formal_notice drafted (formal_notice)');
+    expect(report.invoices[0]?.timeline.slice(-4)).toEqual([
+      'delivered',
+      'overdue',
+      'chasing',
+      'paid',
+    ]);
+  }, 60_000);
 });
 
 describe('Mode test on the mock platform', () => {
