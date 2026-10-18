@@ -8,6 +8,9 @@ import {
   ApiFailure,
   type Degraded,
   type Explained,
+  type ExportFile,
+  type Inbound,
+  type InboundExport,
   type InvoiceDetail,
   type Me,
   Offline,
@@ -17,6 +20,7 @@ import {
   type Settings,
   type SettingsPatch,
   type SyncResult,
+  type TestInboundKind,
   type WeeklyReport,
 } from './api';
 import type { ExcelPort, StatusPlan } from './excel/port';
@@ -37,6 +41,7 @@ export type Screen =
   | { name: 'detect' }
   | { name: 'dashboard' }
   | { name: 'invoice'; id: string; confirmSend: boolean }
+  | { name: 'reception' }
   | { name: 'settings' };
 
 export interface Notice {
@@ -57,6 +62,13 @@ export interface OpenInvoice {
   pdfUrl: string | null;
 }
 
+/** Réception: the supplier invoices of the side « Mode test » shows (test or real). */
+export interface Reception {
+  test: boolean;
+  inbound: Inbound[];
+  exports: InboundExport[];
+}
+
 export interface FiState {
   booted: boolean;
   /** Office could not start in this window (opened outside Excel, or blocked). */
@@ -73,6 +85,7 @@ export interface FiState {
   settings: Settings | null;
   /** The weekly card of the Tableau de bord; null until loaded, or where it could not be. */
   report: WeeklyReport | null;
+  reception: Reception | null;
   /** Actions running now ('sync', 'detect', 'send', …): their buttons show a spinner. */
   busy: string[];
   /** null when online; otherwise the actions waiting for the connection. */
@@ -135,6 +148,7 @@ const INITIAL: FiState = {
   invoice: null,
   settings: null,
   report: null,
+  reception: null,
   busy: [],
   offline: null,
   notice: null,
@@ -209,6 +223,7 @@ export class Controller {
     this.#set({ screen, notice: null });
     if (screen.name === 'settings' && !this.#state.settings) void this.loadSettings();
     if (screen.name === 'dashboard') void this.loadReport();
+    if (screen.name === 'reception') void this.loadReception();
   };
 
   /** The connection is back (browser `online` event). */
@@ -840,6 +855,7 @@ export class Controller {
     this.#set({ testMode: on });
     this.notify('info', t(on ? 'addin.testMode.on' : 'addin.testMode.off'));
     if (this.#state.screen.name === 'invoice') this.navigate({ name: 'dashboard' });
+    if (this.#state.screen.name === 'reception') void this.loadReception();
     void this.sync();
   };
 
@@ -854,6 +870,69 @@ export class Controller {
     } finally {
       this.#busy('report', false);
     }
+  };
+
+  // ── Réception (plan §3 screen 5) ──────────────────────────────────────────────────────────────
+  loadReception = async (): Promise<void> => {
+    const test = this.#state.testMode;
+    const reception = await this.#act('reception', async () => {
+      const [{ inbound }, { exports }] = await Promise.all([
+        this.api.inbound(test),
+        this.api.inboundExports(test),
+      ]);
+      return { test, inbound, exports };
+    });
+    if (reception) this.#set({ reception });
+  };
+
+  #putInbound(row: Inbound): void {
+    const r = this.#state.reception;
+    if (!r || r.test !== row.isTest) return;
+    const known = r.inbound.some((i) => i.id === row.id);
+    const inbound = known ? r.inbound.map((i) => (i.id === row.id ? row : i)) : [row, ...r.inbound];
+    this.#set({ reception: { ...r, inbound } });
+  }
+
+  /** « Bon pour paiement »; `ibanChecked` when the user confirmed a new IBAN with the supplier. */
+  approveInbound = async (id: string, ibanChecked = false): Promise<void> => {
+    const row = await this.#act(`approve:${id}`, () => this.api.approveInbound(id, ibanChecked));
+    if (!row) return;
+    this.#putInbound(row);
+    this.notify('success', t('addin.reception.approved', { number: row.number ?? '' }));
+  };
+
+  disputeInbound = async (id: string, reason: string): Promise<boolean> => {
+    const row = await this.#act(`dispute:${id}`, () => this.api.disputeInbound(id, reason));
+    if (!row) return false;
+    this.#putInbound(row);
+    this.notify('success', t('addin.reception.disputedDone', { number: row.number ?? '' }));
+    return true;
+  };
+
+  exportInbound = async (): Promise<void> => {
+    const made = await this.#act('exportInbound', () =>
+      this.api.exportInbound(this.#state.testMode),
+    );
+    if (!made) return;
+    this.notify(
+      'success',
+      made.skipped > 0
+        ? t('addin.reception.exportedSkipped', { count: made.count, skipped: made.skipped })
+        : t('addin.reception.exported', { count: made.count }),
+    );
+    await this.loadReception();
+  };
+
+  /** One file of an export, for a download link. */
+  exportFile = (id: string, file: ExportFile): Promise<Blob | undefined> =>
+    this.#act(`file:${id}:${file}`, () => this.api.exportFile(id, file));
+
+  /** « Recevoir une facture de test » (Mode test only). */
+  receiveTestInbound = async (kind: TestInboundKind): Promise<void> => {
+    const row = await this.#act('testInbound', () => this.api.testInbound(kind));
+    if (!row) return;
+    this.#putInbound(row);
+    this.notify('info', t('addin.reception.testReceived'));
   };
 
   // ── Réglages ──────────────────────────────────────────────────────────────────────────────────

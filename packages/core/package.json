@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./pdf": "./src/pdf/index.ts",
     "./fonts": "./fonts/index.ts",
-    "./testing": "./test/fixtures.ts"
+    "./testing": "./test/fixtures.ts",
+    "./export-check": "./test/export-check.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

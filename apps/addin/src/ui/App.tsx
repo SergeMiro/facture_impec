@@ -1,5 +1,5 @@
 // The task pane: banners on every screen (Mode test, offline, the last notice), then one screen.
-// No router: office.js breaks the history API (docs/OFFICE.md §8), and the pane has five screens.
+// No router: office.js breaks the history API (docs/OFFICE.md §8), and the pane has six screens.
 import { t } from '@fi/shared';
 import {
   Button,
@@ -21,6 +21,7 @@ import { Dashboard } from './Dashboard';
 import { Detection } from './Detection';
 import { InvoiceView } from './InvoiceView';
 import { Login } from './Login';
+import { ReceptionView } from './ReceptionView';
 import { SettingsView } from './SettingsView';
 import { TEST_ORANGE, theme } from './theme';
 
@@ -99,7 +100,7 @@ function Pane() {
       )}
 
       {state.notice && (
-        <MessageBar intent={state.notice.tone} data-testid="notice">
+        <MessageBar intent={state.notice.tone} layout="multiline" data-testid="notice">
           <MessageBarBody>{state.notice.text}</MessageBarBody>
           <MessageBarActions>
             <Button size="small" appearance="transparent" onClick={fi.dismiss}>
@@ -114,7 +115,12 @@ function Pane() {
           selectedValue={tab}
           onTabSelect={(_, data) => {
             const name = data.value;
-            if (name === 'dashboard' || name === 'detect' || name === 'settings') {
+            if (
+              name === 'dashboard' ||
+              name === 'detect' ||
+              name === 'reception' ||
+              name === 'settings'
+            ) {
               fi.navigate({ name });
               if (name === 'detect' && !state.detection) void fi.editMapping();
             }
@@ -122,6 +128,7 @@ function Pane() {
         >
           <Tab value="dashboard">{t('addin.nav.dashboard')}</Tab>
           <Tab value="detect">{t('addin.nav.columns')}</Tab>
+          <Tab value="reception">{t('addin.nav.reception')}</Tab>
           <Tab value="settings">{t('addin.nav.settings')}</Tab>
         </TabList>
       )}
@@ -150,6 +157,8 @@ function Screen() {
       return <Dashboard />;
     case 'invoice':
       return <InvoiceView />;
+    case 'reception':
+      return <ReceptionView />;
     case 'settings':
       return <SettingsView />;
   }

@@ -1,7 +1,7 @@
 // RGPD (plan §10, docs/RGPD.md): a tenant takes all its data away, or deletes what the law lets it
 // delete. Invoices that reached a platform stay (10 years, Code de commerce L123-22), received ones
-// too (they are the company's purchase records), and so does the append-only audit log, which holds
-// hashes and ids, never names or e-mails.
+// too (they are the company's purchase records) with their accountant exports, and so does the
+// append-only audit log, which holds hashes and ids, never names or e-mails.
 import {
   agentRuns,
   and,
@@ -12,6 +12,7 @@ import {
   chasePlans,
   eq,
   inArray,
+  inboundExports,
   inboundQueue,
   invoiceEvents,
   invoices,
@@ -34,10 +35,14 @@ import { isOwner, type Principal } from './auth';
 import { chaseView } from './collect';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
+import { exportView } from './inbound';
 import { settingsView } from './settings';
 import { eventView, invoiceSummary, tenantView } from './views';
 
 export const DeleteBody = z.object({ confirmSiren: z.string().min(1).max(20) });
+
+/** Who made an export that outlives its author's deletion. */
+const DELETED_PERSON = 'deleted';
 
 function assertOwner(principal: Principal) {
   if (!isOwner(principal)) throw new ApiError(403, 'owner_only');
@@ -47,7 +52,7 @@ function assertOwner(principal: Principal) {
 export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: Principal) {
   assertOwner(principal);
   const db = deps.db;
-  const [people, keys, mappings, rows, runs, log, received, plans, payments, reports] =
+  const [people, keys, mappings, rows, runs, log, received, plans, payments, reports, sent] =
     await Promise.all([
       db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
       db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
@@ -79,6 +84,11 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
         .from(weeklyReports)
         .where(eq(weeklyReports.tenantId, tenant.id))
         .orderBy(asc(weeklyReports.week)),
+      db
+        .select()
+        .from(inboundExports)
+        .where(eq(inboundExports.tenantId, tenant.id))
+        .orderBy(asc(inboundExports.createdAt)),
     ]);
   const ids = rows.map((r) => r.id);
   const events = ids.length
@@ -132,8 +142,20 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       pdpRef: r.pdpRef,
       receivedAt: r.receivedAt.toISOString(),
       status: r.status,
+      isTest: r.isTest,
+      supplierName: r.supplierName,
+      number: r.number,
+      issueDate: r.issueDate,
+      amount: r.amount,
+      currency: r.currency,
+      flags: r.triage?.flags ?? null,
+      decidedAt: r.decidedAt?.toISOString() ?? null,
+      decidedBy: r.decidedBy,
+      disputeReason: r.disputeReason,
+      exportId: r.exportId,
       xml: r.xml,
     })),
+    accountantExports: sent.map((e) => ({ ...exportView(e), fec: e.fec, csv: e.csv })),
     agentRuns: runs.map((r) => ({
       agent: r.agent,
       provider: r.provider,
@@ -204,6 +226,21 @@ export async function deleteTenant(
       await tx.delete(pdpSubmissions).where(inArray(pdpSubmissions.invoiceId, ids));
       await tx.delete(invoices).where(inArray(invoices.id, ids));
     }
+    // Test supplier invoices and their exports go; real ones stay, without who decided on them.
+    await tx
+      .delete(inboundQueue)
+      .where(and(eq(inboundQueue.tenantId, tenant.id), eq(inboundQueue.isTest, true)));
+    await tx
+      .delete(inboundExports)
+      .where(and(eq(inboundExports.tenantId, tenant.id), eq(inboundExports.isTest, true)));
+    await tx
+      .update(inboundQueue)
+      .set({ decidedBy: null })
+      .where(eq(inboundQueue.tenantId, tenant.id));
+    await tx
+      .update(inboundExports)
+      .set({ createdBy: DELETED_PERSON })
+      .where(eq(inboundExports.tenantId, tenant.id));
     const people = await tx
       .select({ id: users.id })
       .from(users)

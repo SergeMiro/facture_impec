@@ -17,6 +17,7 @@ import {
   isNull,
   lockInvoice,
   max,
+  notLike,
   PDP_PROVIDERS,
   type PdpProvider,
   paymentReports,
@@ -29,6 +30,7 @@ import type { PgBoss } from 'pg-boss';
 import { z } from 'zod';
 import { runCollect } from './collect';
 import type { AiDeps, Jobs, Mailer, PdpRegistry, SyncTarget, TestPlatform } from './deps';
+import { INJECTED_PREFIX, triagePending } from './inbound';
 import { idempotencyKey } from './invoices';
 import { QUEUES } from './jobs';
 import { ADVISED, awaitingAdvice, runMonitor } from './monitor';
@@ -278,15 +280,16 @@ export async function runSweep(
 }
 
 /**
- * Asks each company's platform for the supplier invoices it received since the last one stored, and
- * stores each one once (plan §11 M4 « inbound polling »; reading them is M6). A company is polled on
- * its own platform and, in « Mode test », on the test platform too. One platform failing does not
- * stop the others: the next sweep asks again from the same point.
+ * Asks each company's platform for the supplier invoices it received since the last one stored,
+ * stores each one once (plan §11 M4 « inbound polling »), then lets the InboundAgent triage them
+ * (M6). A company is polled on its own platform and, in « Mode test », on the test platform too:
+ * what only the test platform delivered is a test invoice. One platform failing does not stop the
+ * others: the next sweep asks again from the same point.
  */
 export async function runInboundPoll(
   deps: WorkerDeps,
   log: (message: string) => void = () => {},
-): Promise<{ stored: number; failed: number }> {
+): Promise<{ stored: number; failed: number; triaged: number }> {
   const companies = await deps.db
     .select({
       id: tenants.id,
@@ -306,25 +309,34 @@ export async function runInboundPoll(
       const adapter = deps.pdp[provider];
       if (!adapter) continue;
       try {
-        stored += await pollOne(deps, adapter, { ...company, provider });
+        const isTest = provider !== company.provider;
+        stored += await pollOne(deps, adapter, { ...company, provider, isTest });
       } catch (e) {
         failed++;
         log(`inbound ${provider} ${company.account}: ${message(e)}`);
       }
     }
   }
-  return { stored, failed };
+  const triaged = await triagePending(deps, undefined, log);
+  return { stored, failed, triaged };
 }
 
 async function pollOne(
   deps: WorkerDeps,
   adapter: PdpAdapter,
-  company: { id: string; provider: PdpProvider; account: string; createdAt: Date },
+  company: { id: string; provider: PdpProvider; account: string; createdAt: Date; isTest: boolean },
 ): Promise<number> {
+  // The API's own test invoices (inbound.ts) were never at the platform: they say nothing of it.
   const [last] = await deps.db
     .select({ at: max(inboundQueue.receivedAt) })
     .from(inboundQueue)
-    .where(and(eq(inboundQueue.tenantId, company.id), eq(inboundQueue.provider, company.provider)));
+    .where(
+      and(
+        eq(inboundQueue.tenantId, company.id),
+        eq(inboundQueue.provider, company.provider),
+        notLike(inboundQueue.pdpRef, `${INJECTED_PREFIX}%`),
+      ),
+    );
   const since = last?.at ?? company.createdAt;
   const received = await adapter.listInbound({ account: company.account, since });
   let stored = 0;
@@ -340,6 +352,7 @@ async function pollOne(
           pdpRef: r.pdpRef,
           receivedAt,
           xml: r.xml,
+          isTest: company.isTest,
         })
         .onConflictDoNothing()
         .returning({ id: inboundQueue.id });

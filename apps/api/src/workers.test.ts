@@ -280,6 +280,11 @@ describe('runInboundPoll', () => {
       ['inb_5', 'mock', 'new', '<Invoice n="5"/>'],
       ['inb_6', 'mock', 'new', '<Invoice n="6"/>'],
     ]);
+    // The InboundAgent looked at each one right after (a stub file: unreadable).
+    expect(rows.map((r) => r.triage?.flags.map((f) => f.code))).toEqual([
+      ['unreadable'],
+      ['unreadable'],
+    ]);
     const audited = await database.db
       .select()
       .from(auditEvents)
@@ -298,7 +303,7 @@ describe('runInboundPoll', () => {
     });
     const logs: string[] = [];
     const result = await runInboundPoll(worker(adapter), (m) => logs.push(m));
-    expect(result).toEqual({ stored: 1, failed: 1 });
+    expect(result).toEqual({ stored: 1, failed: 1, triaged: 1 });
     expect(logs).toEqual([expect.stringContaining(down.account)]);
   });
 });

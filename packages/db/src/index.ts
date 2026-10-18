@@ -11,11 +11,13 @@ export {
   inArray,
   isNotNull,
   isNull,
+  like,
   lt,
   lte,
   max,
   ne,
   notInArray,
+  notLike,
   or,
   sql,
 } from 'drizzle-orm';

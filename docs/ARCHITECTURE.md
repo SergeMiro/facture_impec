@@ -243,6 +243,48 @@ B2Brouter adapter), `controller.test.ts` and `e2e/b2brouter.spec.ts` for the pan
 | Business clock in the scenario | The API's clock runs at the platform's speed only once the invoice is at the customer | The platform's latency would otherwise eat business days before the plan exists. |
 | Payment report | One `payment_reports` row per invoice written with the payment; the job retries only outages | « Encaissée » must reach the platform once; a lost answer at B2Brouter is still open (`docs/B2BROUTER.md` T21). |
 
+## What M6 added: receiving supplier invoices (Réception)
+
+```
+platform ─► inbound poll (sweep) ─► inbound_queue (XML, new) ─► triage (InboundAgent, per tenant, in order)
+Mode test « Recevoir une facture de test » ─► inbound_queue (is_test) ─┘        │ parsed facts + flags
+« Réception » tab ◄── GET /inbound?test= ◄─────────────────────────────────────┘
+   « Bon pour paiement » / « Contester » ─► applyInboundTransition (new → approved | disputed)
+   « Exporter vers le comptable » ─► POST /inbound/export ─► inbound_exports (FEC + CSV) ─► rows exported
+```
+
+| Path | What it does |
+|---|---|
+| `packages/core/src/inbound.ts` | The supplier invoice's state machine (`new` → `approved` / `disputed` → `exported`), the supplier key (SIREN, else VAT number, else name), the IBANs read and masked, credit notes. |
+| `packages/agents/src/inbound.ts` | The InboundAgent: reads the CII or UBL file with `@fi/core` and the EN 16931 rules, then flags in plain French: unreadable, another buyer, wrong amounts, other rules, duplicate, possible duplicate, IBAN changed or invalid, new supplier, credit note, foreign currency. Deterministic, no model; `block` flags make approval impossible. |
+| `packages/core/src/export.ts` | `buildFec` (purchase journal in the layout of article A47 A-1, `docs/ACCOUNTING_EXPORT.md`) and `buildCsv`. `packages/core/test/export-check.ts` is the strict reader the tests use. |
+| `apps/api/src/inbound.ts` | Triage (row and tenant locked, so two copies of one invoice see each other), the routes of the screen (`GET /inbound?test=`, `GET /inbound/:id`, `POST /inbound/:id/{approve,dispute}`, `POST /inbound/export`, `GET /inbound/exports?test=`, `GET /inbound/exports/:id/{fec,csv}`, `POST /inbound/test`), the export (tenant locked so entry numbers never repeat; files kept in `inbound_exports` for later downloads), the Mode test injection. |
+| `apps/api/src/workers.ts` | The inbound poll stores test-platform deliveries as test rows and triages what it stored. |
+| `apps/addin/src/ui/ReceptionView.tsx` | Screen 5: the cards with their flags, the IBAN confirmation box, the dispute reason, the export and its downloads, the three test buttons in Mode test. |
+| `scripts/accounting/` | `pnpm accounting:check`: the FEC imported into Paheko (pinned Docker image) through its own import, then the books compared with the file. |
+
+Tables (migration `0005_reception.sql`): `inbound_queue` gains `is_test`, `parsed_json`, `triage_json`,
+the facts the triage and the screen need (supplier, number, dates, amount, currency, IBANs), the decision
+(`decided_at`, `decided_by`, `dispute_reason`) and `export_id`; a trigger refuses a status change outside
+`applyInboundTransition`. New `inbound_exports`: one row per export with both files and its entry range.
+
+Tests: the core and agent tests above, `apps/api/src/inbound.test.ts` (delivery, triage, approval, IBAN
+confirmation, export, Mode test, RGPD), `packages/db/src/db.test.ts` (the status guard),
+`controller.test.ts` and `e2e/harness.spec.ts` for the pane, `pnpm accounting:check` by hand.
+
+### Decisions taken in M6
+
+| Topic | Decision | Why |
+|---|---|---|
+| Who triages | Code, no model | Every flag is a fact (a number seen before, an IBAN never seen, totals that do not add up); a model must not decide whether money goes out. |
+| When triage runs | After each poll, and before each listing for rows not triaged yet; serialized per company | A row is never shown untriaged, and two copies arriving together still meet. |
+| What blocks « Bon pour paiement » | Unreadable, another buyer, a duplicate, amounts that do not add up; a new IBAN needs the user's explicit confirmation, recorded in the audit | Paying twice or paying a fraudster are the two expensive mistakes; the rest is information. |
+| IBAN history | Compared with the supplier's earlier invoices of the same side (real or test), disputed ones aside | A disputed invoice may be the fraud itself; the supplier going back to an old IBAN is not an alert. |
+| Mode test supplier invoices | Written by the API as the test platform would deliver them, on the mock and on B2Brouter alike | B2Brouter's sandbox cannot receive (T14), and the mock's ids restart with the process; one path for both keeps them comparable. |
+| Accounts in the FEC | One charge account (606000), deductible VAT (445660), supplier (401000) with an auxiliary account per supplier | The smallest file every French accounting program imports; the accountant re-assigns charges (`docs/DEFERRED.md`). |
+| Invoices the FEC cannot hold | Other currencies and VAT lines that do not add up go to the CSV only, and the pane says so | No exchange rate, and an entry that does not balance would be refused or wrong. |
+| Once exported | No dispute and no second export of an invoice | The accountant holds it now; reversing it is their entry (`docs/DEFERRED.md`). |
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

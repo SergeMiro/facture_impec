@@ -1,16 +1,17 @@
-// Postgres schema (plan §4), the part M5 needs. Tables of later milestones (parties) arrive with them
+// Postgres schema (plan §4), the part M6 needs. Tables of later milestones (parties) arrive with them
 // (docs/DEFERRED.md).
 // Change it, then `pnpm --filter @fi/db generate` writes the migration into drizzle/.
 import type {
   Address,
   ChaseStep,
+  InboundTriage,
   Invoice,
   InvoiceDefaultsInput,
   InvoiceDraft,
   Issue,
   SheetMapping,
 } from '@fi/core';
-import { STATES } from '@fi/core';
+import { INBOUND_STATES, STATES } from '@fi/core';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -319,8 +320,9 @@ export const pdpSubmissions = pgTable('pdp_submissions', {
 });
 
 /**
- * Supplier invoices the tenant's platform received for it (plan §4), stored by the sweep as they
- * come. M4 keeps the file; parsing, triage and the Réception screen arrive with M6 (docs/DEFERRED.md).
+ * Supplier invoices the tenant's platform received for it (plan §4), stored by the inbound poll as they
+ * come and triaged by the InboundAgent right after (`triage_json`, M6). The columns next to the file
+ * are what the triage and the export look up; `parsed_json` keeps the whole invoice.
  */
 export const inboundQueue = pgTable(
   'inbound_queue',
@@ -333,16 +335,64 @@ export const inboundQueue = pgTable(
     pdpRef: text('pdp_ref').notNull(),
     receivedAt: timestamp('received_at', { withTimezone: true }).notNull(),
     xml: text('xml').notNull(),
-    status: text('status', { enum: ['new', 'approved', 'disputed', 'exported'] })
-      .notNull()
-      .default('new'),
+    status: text('status', { enum: INBOUND_STATES }).notNull().default('new'),
+    /** « Mode test »: injected from the pane, or received on the test platform. Never exported as real. */
+    isTest: boolean('is_test').notNull().default(false),
+    /** Null until triaged, and for a file that could not be read. */
+    parsed: jsonb('parsed_json').$type<Invoice>(),
+    triage: jsonb('triage_json').$type<InboundTriage>(),
+    triagedAt: timestamp('triaged_at', { withTimezone: true }),
+    supplierKey: text('supplier_key'),
+    supplierName: text('supplier_name'),
+    number: text('number'),
+    issueDate: date('issue_date', { mode: 'string' }),
+    dueDate: date('due_date', { mode: 'string' }),
+    /** BT-112, as written (a credit note's total is positive too). */
+    amount: cents('amount'),
+    currency: text('currency'),
+    /** The IBANs the invoice asks to be paid on: the IBAN-change check compares them. */
+    ibans: jsonb('ibans_json').$type<string[]>(),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    /** Who approved or disputed it: the signed-in e-mail, or « api » for a key. */
+    decidedBy: text('decided_by'),
+    disputeReason: text('dispute_reason'),
+    exportId: uuid('export_id').references(() => inboundExports.id),
     createdAt: createdAt(),
+    updatedAt: updatedAt(),
   },
   (t) => [
     // A platform lists the same invoice on every poll: it is stored once.
     uniqueIndex('inbound_queue_pdp_ref').on(t.tenantId, t.provider, t.pdpRef),
     index('inbound_queue_tenant').on(t.tenantId, t.receivedAt),
+    index('inbound_queue_supplier').on(t.tenantId, t.supplierKey),
   ],
+);
+
+/**
+ * One « Exporter vers le comptable »: both files are kept, so that a download that failed can be
+ * made again. Entry numbers continue from one export to the next (FEC, article A47 A-1 LPF).
+ */
+export const inboundExports = pgTable(
+  'inbound_exports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    isTest: boolean('is_test').notNull(),
+    count: integer('count').notNull(),
+    /** Invoices in the CSV only: another currency (core fecReady). */
+    skipped: integer('skipped').notNull().default(0),
+    firstEntry: integer('first_entry').notNull(),
+    lastEntry: integer('last_entry').notNull(),
+    fecName: text('fec_name').notNull(),
+    fec: text('fec').notNull(),
+    csvName: text('csv_name').notNull(),
+    csv: text('csv').notNull(),
+    createdBy: text('created_by').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('inbound_exports_tenant').on(t.tenantId, t.createdAt)],
 );
 
 /**
@@ -424,5 +474,6 @@ export type InvoiceRow = typeof invoices.$inferSelect;
 export type InvoiceEventRow = typeof invoiceEvents.$inferSelect;
 export type PdpSubmissionRow = typeof pdpSubmissions.$inferSelect;
 export type InboundRow = typeof inboundQueue.$inferSelect;
+export type InboundExportRow = typeof inboundExports.$inferSelect;
 export type ChasePlanRow = typeof chasePlans.$inferSelect;
 export type PaymentReportRow = typeof paymentReports.$inferSelect;

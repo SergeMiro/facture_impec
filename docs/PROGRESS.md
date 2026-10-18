@@ -281,3 +281,65 @@ M5's code is done. Two things are the owner's: the wording of the formal notice
 of the Code de commerce) should be read by the owner or a lawyer before a paying customer uses it; and the
 live B2Brouter runs of M4 still wait for the sandbox key (the contract's « records a payment reported by
 the seller » covers « Encaissée »; T21, a payment posted twice, needs one call by hand).
+
+## M6 — Reception (started 2026-10-18)
+
+Plan §11: « Screen 5, InboundAgent, accountant export (CSV + FEC-style), IBAN-change alert. Acceptance:
+injected inbound invoices appear, duplicates flagged, export opens in a standard accounting tool without
+errors. »
+
+How each criterion is read here:
+
+- **Screen 5 « Réception »** (plan §3): a tab of the task pane lists the supplier invoices the company's
+  platform received, newest first: supplier, number, date, amount, due date, status (Nouvelle, Bonne pour
+  paiement, Contestée, Exportée) and what the agent noticed, in plain French. Each one can be approved
+  (« Bon pour paiement ») or disputed with a reason. « Exporter vers le comptable » makes the files of the
+  approved invoices not exported yet; every export can be downloaded again.
+- **InboundAgent** (plan §6): deterministic. When an invoice arrives, it reads the CII or UBL file, finds
+  the supplier (SIREN, else VAT number, else name) and writes `triage_json`: file unreadable; invoice
+  addressed to another company; duplicate (same supplier and number already received); possible duplicate
+  (same supplier, amount and date under another number); amounts or VAT that do not add up (the EN 16931
+  arithmetic and VAT rules of `@fi/core`); other rules the file breaks, for information; first invoice from
+  this supplier; credit note; IBAN change. No model: nothing here needs judgment, and a model must not
+  decide whether money goes out. An unreadable file, another company's invoice, a duplicate or amounts that
+  do not add up cannot be approved, only disputed.
+- **IBAN-change alert**: when a known supplier's invoice carries an IBAN that none of its earlier invoices
+  had (disputed ones aside), the row shows an alert with the old and new IBAN (masked) and the advice to
+  call the supplier on a number already known. Approving it requires ticking « J'ai vérifié ce changement
+  auprès du fournisseur », and the audit records it. An IBAN whose checksum is wrong is flagged too.
+- **Accountant export (CSV + FEC-style)**: one export takes the approved invoices not exported yet (test
+  invoices only from Mode test, in files marked test) and makes two files: a CSV for a spreadsheet (`;`,
+  UTF-8 with BOM, decimal comma, one line per invoice) and a purchase journal in the layout of the FEC of
+  article A47 A-1 of the Livre des procédures fiscales (the 18 fields in order, tab separator, header line,
+  AAAAMMJJ dates, decimal comma, UTF-8, entry numbers that continue from one export to the next), named
+  `SirenFECAAAAMMJJ.txt`. It is a file to import, not the company's legal FEC, which only its accounting
+  software can produce. The exported invoices become « Exportée ».
+- **Injected inbound invoices appear**: in Mode test, « Recevoir une facture de test » (Normale, Doublon,
+  RIB modifié) puts a synthetic supplier invoice from « Fournitures Démo SARL (test) » in the company's
+  inbox, kept apart from real ones (`is_test`), and it appears on the Réception screen with its triage.
+  The API writes it as the test platform would deliver it, the same way on the mock and on B2Brouter
+  (whose sandbox cannot receive, T14), as the ScenarioInjector does for scenarios; going through the
+  mock's `POST /inbound` would tie it to the mock and to ids the mock restarts after a restart. Invoices
+  the test platform itself delivers are test invoices too.
+- **Duplicates flagged**: the second copy of an invoice (same supplier and number) is flagged « Doublon » and
+  cannot be approved; the same amount on the same date under another number is « Doublon possible ».
+- **Export opens in a standard accounting tool without errors**: the FEC file is imported by Paheko, an
+  open-source French accounting program (Docker image pinned), through its own FEC import, without an
+  error, and the balance there matches the invoices. In `pnpm verify`, a checker asserts each rule of
+  article A47 A-1 on the file, and the CSV is read back column by column.
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Screen 5 « Réception »: list, « Bon pour paiement », « Contester », « Exporter vers le comptable », downloads | ✅ | `apps/addin/src/controller.test.ts` « receives test supplier invoices, flags the duplicate and the new IBAN, then exports » (against the real API in memory, through the pane's Zod schemas); `e2e/harness.spec.ts` step « Réception: test supplier invoices, the duplicate and the new IBAN flagged, export » in local Chrome (browser: local): three cards with their flags, approval blocked until the IBAN box is ticked, dispute with a reason, export, the FEC downloaded from its link; screenshots `reception.png`, `exported.png` in the run's output folder |
+| InboundAgent (deterministic triage) | ✅ | `packages/agents/src/inbound.test.ts` « InboundAgent reads a supplier invoice » (2 tests, CII and UBL) and « InboundAgent triage » (9 tests: new supplier, another company, duplicate unless the first was disputed, possible duplicate, IBAN change, wrong IBAN check digits, totals that do not add up first, other rules for information, credit note and currency); `packages/core/src/inbound.test.ts` « supplier invoices received » (3 tests); `apps/api/src/inbound.test.ts` « blocks a file that cannot be read, and an invoice for another company »; triage runs when the platform delivers (`apps/api/src/workers.test.ts`, `runInboundPoll` → `{ stored: 1, failed: 1, triaged: 1 }`) and before every listing |
+| IBAN-change alert | ✅ | `packages/agents/src/inbound.test.ts` « raises the alert when the IBAN is not one the supplier used before », « warns about an IBAN whose check digits are wrong »; `apps/api/src/inbound.test.ts` « asks the user to confirm a new IBAN before « Bon pour paiement » » (409 `inbound_iban_unchecked`, then approved with `ibanChecked`, recorded in the audit); the controller test and the E2E step above |
+| Accountant export (CSV + FEC-style) | ✅ | `packages/core/src/export.test.ts` « accountant export: FEC purchase journal » (5 tests), « the FEC checker » (2), « accountant export: CSV » (2); `apps/api/src/inbound.test.ts` « writes a FEC and a CSV of what was approved, and numbering continues from one export to the next » (both files pass `checkFec` / `readCsv`, the USD invoice stays out of the FEC, entries 1–2 then 3, `nothing_to_export`, no dispute after export); rules and sources in `docs/ACCOUNTING_EXPORT.md` |
+| Injected inbound invoices appear | ✅ | `apps/api/src/inbound.test.ts` « arrive from the test supplier, apart from the real ones: normal, duplicate, new IBAN, export » (a `TEST-` export starting at entry 1), « come from the test platform too, and the API’s own never move the polling point »; the controller test and the E2E step above |
+| Duplicates flagged | ✅ | `apps/api/src/inbound.test.ts` « appear triaged; a second copy is a duplicate that cannot be approved » (flag `duplicate` pointing at the first copy, 409 `inbound_blocked`); `packages/agents/src/inbound.test.ts` « blocks the same number twice from one supplier, unless the first was disputed », « warns when another number has the same amount and date »; E2E: the « Doublon » card has no « Bon pour paiement » button |
+| Export opens in a standard accounting tool without errors | ✅ | `pnpm accounting:check` (`scripts/accounting/`, Paheko `paheko/paheko:1.3.23-8.5.10-apache-trixie`, its own FEC import as on its screen), 2026-10-18: the FEC of the 25 golden invoices read as received ones, 24 entries / 78 lines / 59 723,23 € on each side, preview « 24 created, 0 modified », imported without an error, every account balance equal to the file's; the test export downloaded from the pane in the E2E run (2 entries, 284,16 €) imported the same way; a copy with one amount changed is refused (« Écriture non équilibrée », exit 1). Details in `docs/ACCOUNTING_EXPORT.md` § Paheko |
+| Audit, status changes, RGPD | ✅ | Every action writes an event (`inbound.triage` by `agent:inbound`, `inbound.test`, `inbound.approve` / `inbound.dispute` / `inbound.export` through `applyInboundTransition`, `inbound_export.create`); `packages/db/src/db.test.ts` « changes only through applyInboundTransition, with an audit event » (a trigger refuses any other status change); `apps/api/src/inbound.test.ts` « exports supplier invoices and their exports; deletion removes the test ones » |
+
+M6's code is done. Left for later and listed in `docs/DEFERRED.md`: telling the supplier's platform what
+the buyer decided (lifecycle statuses), the original PDF of a received invoice, per-supplier charge
+accounts and currencies in the FEC.
+

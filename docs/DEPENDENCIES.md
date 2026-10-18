@@ -34,3 +34,4 @@ Rule 7 of `CLAUDE.md`: any dependency over 1 MB installed, or under 1k weekly do
 | `@types/office-js` (dev, add-in) | The office.js type definitions Learn points to; 8.5 MB of `.d.ts`, types only. |
 | `@playwright/test` → `playwright-core` (dev, add-in) | The E2E runner of plan §11; 14 MB. It drives the machine's Chrome (`channel: 'chrome'`), no browser download. |
 | `grafana/k6:2.3.0`, `postgres:17.11-alpine` (Docker images, `pnpm load` only) | The k6 batch test of plan §9 on a real Postgres; pulled by the manual load test, never by `pnpm install` or `pnpm verify`. |
+| `paheko/paheko:1.3.23-8.5.10-apache-trixie` (Docker image, 1.5 GB, `pnpm accounting:check` only; published 2026-09-11) | Plan §11 M6 « export opens in a standard accounting tool »: free French accounting software with its own FEC import, run without network; pulled by the manual check, never by `pnpm install` or `pnpm verify` (`docs/ACCOUNTING_EXPORT.md`). |

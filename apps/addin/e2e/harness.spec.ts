@@ -2,8 +2,11 @@
 // the demo sheet, fixes its two errors from the « Corriger dans la feuille » buttons, rehearses and
 // sees « Prêt à envoyer »; then sends a test invoice and plays « Simuler un rejet PDP ». Since M4
 // the test platform is B2Brouter's stand-in (a test_ key), which cannot play scenarios: the API
-// writes the rejection as the platform would have (apps/api/src/sandbox.ts).
+// writes the rejection as the platform would have (apps/api/src/sandbox.ts). Since M6 it also
+// receives test supplier invoices on « Réception » and exports them for the accountant.
 // browser: local (Chrome of this server; Browserbase cannot reach localhost).
+
+import { readFile } from 'node:fs/promises';
 import { t } from '@fi/shared';
 import { expect, test } from '@playwright/test';
 import { DEMO_OWNER } from '../src/harness/demo';
@@ -99,5 +102,51 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
       t('addin.sheet.testLabel', { label: t('invoice.status.rejected_by_pdp') }),
     );
     await page.screenshot({ path: info.outputPath('rejected.png') });
+  });
+
+  await test.step('Réception: test supplier invoices, the duplicate and the new IBAN flagged, export', async () => {
+    await pane.getByRole('tab', { name: t('addin.nav.reception') }).click();
+    await expect(pane.getByText(t('addin.reception.emptyTest'))).toBeVisible();
+    for (const kind of ['normal', 'duplicate', 'iban_change'] as const) {
+      const before = await pane.getByTestId('inbound').count();
+      await pane
+        .getByRole('button', { name: t(`addin.reception.test.${kind}`), exact: true })
+        .click();
+      await expect(pane.getByTestId('inbound')).toHaveCount(before + 1);
+    }
+    // Newest first: the IBAN change, the duplicate, then the first invoice.
+    const [changed, twin, first] = [0, 1, 2].map((n) => pane.getByTestId('inbound').nth(n));
+    if (!changed || !twin || !first) throw new Error('three cards expected');
+    await expect(first.getByTestId('flag-new_supplier')).toBeVisible();
+    await expect(twin.getByTestId('flag-duplicate')).toBeVisible();
+    await expect(twin.getByRole('button', { name: t('addin.reception.approve') })).toHaveCount(0);
+    await expect(changed.getByTestId('flag-iban_changed')).toBeVisible();
+
+    await first.getByRole('button', { name: t('addin.reception.approve') }).click();
+    await expect(first).toHaveAttribute('data-status', 'approved');
+    const approveChanged = changed.getByRole('button', { name: t('addin.reception.approve') });
+    await expect(approveChanged).toBeDisabled();
+    await changed.getByLabel(t('addin.reception.ibanCheck')).check();
+    await approveChanged.click();
+    await expect(changed).toHaveAttribute('data-status', 'approved');
+    await twin.getByRole('button', { name: t('addin.reception.dispute') }).click();
+    await twin.getByLabel(t('addin.reception.disputeReason')).fill('Doublon');
+    await twin.getByRole('button', { name: t('addin.reception.disputeConfirm') }).click();
+    await expect(twin).toHaveAttribute('data-status', 'disputed');
+    await page.screenshot({ path: info.outputPath('reception.png') });
+
+    await pane.getByRole('button', { name: t('addin.reception.export'), exact: true }).click();
+    await expect(pane.getByTestId('notice')).toHaveText(
+      new RegExp(t('addin.reception.exported', { count: 2 }).replace(/[()]/g, '\\$&')),
+    );
+    const made = pane.getByTestId('export').first();
+    await made.getByRole('button', { name: t('addin.reception.downloadFec') }).click();
+    const download = page.waitForEvent('download');
+    await made.getByRole('link', { name: /^TEST-\d{9}FEC\d{8}\.txt$/ }).click();
+    // Kept next to the screenshots: `pnpm accounting:check <file>` imports it into Paheko.
+    const fec = info.outputPath((await download).suggestedFilename());
+    await (await download).saveAs(fec);
+    expect((await readFile(fec, 'utf8')).split('\r\n')[0]).toMatch(/^JournalCode\tJournalLib\t/);
+    await page.screenshot({ path: info.outputPath('exported.png') });
   });
 });

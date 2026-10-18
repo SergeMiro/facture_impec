@@ -1,9 +1,10 @@
 // Agents (plan §6): providers, the pseudonymizer, the orchestrator, MappingAgent, ExplainAgent,
-// MonitorAgent, and the deterministic TestAgent, CollectAgent and ReportAgent. Node only: the add-in
-// never imports this package.
+// MonitorAgent, and the deterministic TestAgent, CollectAgent, ReportAgent and InboundAgent. Node
+// only: the add-in never imports this package.
 export * from './ai';
 export * from './collect';
 export * from './explain';
+export * from './inbound';
 export * from './llm';
 export * from './mapping';
 export * from './masking';

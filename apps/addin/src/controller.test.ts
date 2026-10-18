@@ -364,6 +364,60 @@ describe('a new user on the demo sheet', () => {
     expect(state().report?.numbers.length).toBeGreaterThan(0);
     expect(state().report?.title).toBeTruthy();
   });
+
+  it('receives test supplier invoices, flags the duplicate and the new IBAN, then exports', async () => {
+    expect(state().testMode).toBe(true);
+    controller.navigate({ name: 'reception' });
+    await until(() => state().reception !== null, 'the received invoices');
+    expect(state().reception).toEqual({ test: true, inbound: [], exports: [] });
+
+    // The duplicate and the IBAN change both start from a first, normal invoice.
+    await controller.receiveTestInbound('duplicate');
+    expect(state().notice?.text).toBe(t('api.error.inbound_test_needs_one'));
+    await controller.receiveTestInbound('normal');
+    await controller.receiveTestInbound('duplicate');
+    await controller.receiveTestInbound('iban_change');
+    expect(state().notice?.text).toBe(t('addin.reception.testReceived'));
+    const [changed, twin, first] = state().reception?.inbound ?? [];
+    if (!changed || !twin || !first) throw new Error('three test invoices expected');
+    const codes = (r: typeof first) => r.flags.map((f) => f.code);
+    expect(codes(first)).toEqual(['new_supplier']);
+    expect(codes(twin)).toEqual(['duplicate']);
+    expect(twin.flags[0]?.relatedId).toBe(first.id);
+    expect(twin.canApprove).toBe(false);
+    expect(codes(changed)).toEqual(['iban_changed']);
+    expect(changed.needsIbanCheck).toBe(true);
+    expect(state().reception?.inbound.every((r) => r.isTest)).toBe(true);
+
+    await controller.approveInbound(first.id);
+    expect(state().notice?.text).toBe(
+      t('addin.reception.approved', { number: first.number ?? '' }),
+    );
+    // A new IBAN is only approved once the user says it was checked with the supplier.
+    await controller.approveInbound(changed.id);
+    expect(state().notice?.text).toBe(t('api.error.inbound_iban_unchecked'));
+    await controller.approveInbound(changed.id, true);
+    expect(await controller.disputeInbound(twin.id, 'Doublon de la facture déjà reçue')).toBe(true);
+    const status = () => state().reception?.inbound.map((r) => r.status);
+    expect(status()).toEqual(['approved', 'disputed', 'approved']);
+
+    await controller.exportInbound();
+    expect(state().notice?.text).toBe(t('addin.reception.exported', { count: 2 }));
+    expect(status()).toEqual(['exported', 'disputed', 'exported']);
+    const made = state().reception?.exports[0];
+    expect(made).toMatchObject({ isTest: true, count: 2, skipped: 0 });
+    if (!made) throw new Error('no export');
+    expect(made.fecName).toMatch(/^TEST-\d{9}FEC\d{8}\.txt$/);
+    const fec = await controller.exportFile(made.id, 'fec');
+    expect((await fec?.text())?.split('\r\n')[0]).toMatch(/^JournalCode\tJournalLib\t/);
+    const csv = await controller.exportFile(made.id, 'csv');
+    expect(await csv?.text()).toContain(first.number ?? '?');
+
+    // Out of Mode test, the real side: nothing received, nothing exported.
+    await controller.setTestMode(false);
+    await until(() => state().reception?.test === false, 'the real received invoices');
+    expect(state().reception).toEqual({ test: false, inbound: [], exports: [] });
+  });
 });
 
 describe('signing in', () => {

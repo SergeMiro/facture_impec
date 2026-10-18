@@ -1,5 +1,5 @@
 // HTTP API (plan §1): tenants, invoices, validation, platform webhooks, and the add-in's routes
-// (sign-in, sheet sync, settings, Mode test, RGPD). Business rules live in the modules next to this
+// (sign-in, sheet sync, settings, Mode test, supplier invoices, RGPD). Business rules live in the modules next to this
 // file and in @fi/core; this file reads requests (Zod) and shapes answers.
 import {
   Address,
@@ -34,6 +34,24 @@ import { markStepSent, prepareChase, recordPromise } from './collect';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { body, Email, parse, uuid } from './http';
+import {
+  ApproveBody,
+  approveInbound,
+  DisputeBody,
+  disputeInbound,
+  ExportBody,
+  exportInbound,
+  exportView,
+  getExport,
+  getInbound,
+  InboundQuery,
+  inboundId,
+  inboundView,
+  injectTestInbound,
+  listExports,
+  listInbound,
+  TestInboundBody,
+} from './inbound';
 import {
   cancelInvoice,
   createInvoice,
@@ -241,6 +259,8 @@ export function createApp(deps: ApiDeps) {
     '/workbooks/*',
     '/invoices',
     '/invoices/*',
+    '/inbound',
+    '/inbound/*',
     '/report',
   ]) {
     api.use(path, tenantAuth(deps));
@@ -469,6 +489,57 @@ export function createApp(deps: ApiDeps) {
   });
 
   api.get('/report', async (c) => c.json(await reportFor(deps, c.get('tenant'))));
+
+  // ── Supplier invoices (plan §3 screen 5, §6 InboundAgent) ─────────────────────────────────────────
+  // Paths with a fixed word come before /inbound/:id.
+  api.get('/inbound', async (c) => {
+    const { test } = parse(InboundQuery, c.req.query());
+    return c.json({ inbound: await listInbound(deps, c.get('tenant'), test) });
+  });
+
+  api.post('/inbound/test', async (c) => {
+    const row = await injectTestInbound(deps, c.get('tenant'), await body(c, TestInboundBody));
+    return c.json(inboundView(row), 201);
+  });
+
+  api.post('/inbound/export', async (c) => {
+    const tenant = c.get('tenant');
+    const row = await exportInbound(deps, tenant, c.get('principal'), await body(c, ExportBody));
+    return c.json(exportView(row), 201);
+  });
+
+  api.get('/inbound/exports', async (c) => {
+    const { test } = parse(InboundQuery, c.req.query());
+    return c.json({ exports: await listExports(deps, c.get('tenant'), test) });
+  });
+
+  api.get('/inbound/exports/:id/:file{fec|csv}', async (c) => {
+    const row = await getExport(deps, c.get('tenant'), c.req.param('id'));
+    const fec = c.req.param('file') === 'fec';
+    return c.body(fec ? row.fec : row.csv, 200, {
+      'content-type': fec ? 'text/plain; charset=utf-8' : 'text/csv; charset=utf-8',
+      'content-disposition': `attachment; filename="${fec ? row.fecName : row.csvName}"`,
+    });
+  });
+
+  api.get('/inbound/:id', async (c) => {
+    const row = await getInbound(deps, c.get('tenant'), inboundId(c.req.param('id')));
+    return c.json(inboundView(row));
+  });
+
+  api.post('/inbound/:id/approve', async (c) => {
+    const tenant = c.get('tenant');
+    const id = inboundId(c.req.param('id'));
+    const input = await body(c, ApproveBody);
+    return c.json(inboundView(await approveInbound(deps, tenant, c.get('principal'), id, input)));
+  });
+
+  api.post('/inbound/:id/dispute', async (c) => {
+    const tenant = c.get('tenant');
+    const id = inboundId(c.req.param('id'));
+    const input = await body(c, DisputeBody);
+    return c.json(inboundView(await disputeInbound(deps, tenant, c.get('principal'), id, input)));
+  });
 
   app.route('/', api);
   return app;

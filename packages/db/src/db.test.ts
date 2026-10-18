@@ -4,8 +4,8 @@ import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Database, openDatabase, rows } from './client';
 import { hashOf, stableJson } from './hash';
-import { auditEvents, invoiceEvents, invoices, tenants } from './schema';
-import { applyTransition } from './transition';
+import { auditEvents, inboundQueue, invoiceEvents, invoices, tenants } from './schema';
+import { applyInboundTransition, applyTransition } from './transition';
 
 let database: Database;
 const db = () => database.db;
@@ -49,6 +49,7 @@ describe('migrations', () => {
       'api_keys',
       'audit_events',
       'chase_plans',
+      'inbound_exports',
       'inbound_queue',
       'invoice_events',
       'invoices',
@@ -62,6 +63,62 @@ describe('migrations', () => {
       'validation_results',
       'weekly_reports',
     ]);
+  });
+});
+
+describe('inbound_queue.status', () => {
+  it('changes only through applyInboundTransition, with an audit event', async () => {
+    const t = await tenant();
+    const other = await tenant();
+    const values = {
+      tenantId: t.id,
+      provider: 'mock' as const,
+      receivedAt: new Date(),
+      xml: '<x/>',
+    };
+    const [row] = await db()
+      .insert(inboundQueue)
+      .values({ ...values, pdpRef: 'inb-1' })
+      .returning();
+    if (!row) throw new Error('no inbound row');
+    const direct = db()
+      .update(inboundQueue)
+      .set({ status: 'approved' })
+      .where(eq(inboundQueue.id, row.id));
+    await expect(direct).rejects.toSatisfy((e) => message(e).includes('applyInboundTransition'));
+    const insert = db()
+      .insert(inboundQueue)
+      .values({ ...values, pdpRef: 'inb-2', status: 'exported' });
+    await expect(insert).rejects.toSatisfy((e) => message(e).includes('applyInboundTransition'));
+
+    const move = (event: 'approve' | 'export', tenantId = t.id) =>
+      db().transaction((tx) =>
+        applyInboundTransition(tx, {
+          id: row.id,
+          tenantId,
+          event,
+          actor: 'user',
+          patch: { decidedBy: 'api' },
+          audit: { ibanChecked: false },
+        }),
+      );
+    expect(await move('approve', other.id)).toEqual({ ok: false, reason: 'not_found' });
+    expect(await move('export')).toEqual({ ok: false, reason: 'not_allowed', from: 'new' });
+    const approved = await move('approve');
+    expect(approved).toMatchObject({
+      ok: true,
+      from: 'new',
+      row: { status: 'approved', decidedBy: 'api' },
+    });
+    const trail = await db()
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.objectId, row.id), eq(auditEvents.action, 'inbound.approve')));
+    expect(trail[0]).toMatchObject({
+      actor: 'user',
+      beforeHash: hashOf({ status: 'new' }),
+      afterHash: hashOf({ status: 'approved', ibanChecked: false }),
+    });
   });
 });
 

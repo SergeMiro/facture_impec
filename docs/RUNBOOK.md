@@ -125,6 +125,22 @@ as at the platform and checks that the platform holds each number once. It print
 p95 per request (create, send) and the end-to-end throughput, then PASS or FAIL. Manual, not part of
 `pnpm verify`; the last numbers are in `docs/PROGRESS.md` M5. It needs Docker, nothing else.
 
+## Accountant export check (Paheko)
+
+```bash
+pnpm accounting:check                          # the FEC of the 25 golden invoices, about 10 s
+pnpm accounting:check path/to/…FEC….txt        # a file downloaded from « Réception »
+```
+
+Plan §11 M6 « export opens in a standard accounting tool ». `scripts/accounting/check.ts` builds the FEC
+the way `POST /inbound/export` does (or takes the given file), starts Paheko in Docker without network
+(`paheko/paheko:1.3.23-8.5.10-apache-trixie`, removed at the end), creates an organisation and imports
+the file through Paheko's own FEC import (`scripts/accounting/paheko-import.php`), then compares the books
+with the file: entries, debit and credit, each account's balance, no unbalanced entry. It prints ✓ or the
+first refusal and exits 1. Manual, not part of `pnpm verify` (Docker, 1.5 GB image). Rules, choices and
+the last results: `docs/ACCOUNTING_EXPORT.md`. The E2E run keeps the FEC it downloads next to its
+screenshots (`apps/addin/test-results/…/TEST-…FEC….txt`).
+
 ## B2Brouter sandbox
 
 Nothing in `pnpm verify` reaches B2Brouter. Locally, the stand-in answers in its place: in `.env`,
@@ -167,6 +183,7 @@ one more call by hand on an invoice the contract left in the sandbox.
 | `pnpm --filter @fi/core test:oracle` | Generated XML against the official XSD and schematrons (CEN 1.3.17, Factur-X 1.09.2), about 40 s. |
 | `pnpm --filter @fi/core oracle:fetch` | Downloads the Factur-X and UBL files we may not commit into `packages/core/.oracle-cache/`, checked by sha256. `test:oracle` runs it itself. |
 | `pnpm --filter @fi/core pdf:check [dir]` | Renders the 25 golden invoices as Factur-X and runs veraPDF (Docker `verapdf/cli:v1.30.2`) and the Akretion extractor (`pip install factur-x`; `FACTURX_EXTRACT=/path/to/facturx-pdfextractxml` if it is not on PATH). Manual, before changing the PDF layout. |
+| `pnpm accounting:check [file]` | Imports the accountant FEC into Paheko (Docker) and checks the books (§ Accountant export check). Manual, before changing the export. |
 | `pnpm format` | Format and apply safe lint fixes. |
 | `pnpm build` | Production build (add-in and marketing site). |
 | `pnpm --filter @fi/api dev` | Run one package. |
@@ -259,7 +276,8 @@ server (:3100), so it runs next to `pnpm dev`, and drives the harness page in th
 (`/usr/bin/google-chrome`; on this VPS that is the right browser: Browserbase cannot reach localhost).
 `e2e/harness.spec.ts` is the M3 acceptance path: sign in by link, confirm the columns, fix the two
 errors from « Corriger dans la feuille », rehearse, « Prêt à envoyer », Mode test, send a test invoice,
-« Simuler un rejet PDP ». `e2e/b2brouter.spec.ts` is M4's: a test invoice goes through the B2Brouter
+« Simuler un rejet PDP », then M6's Réception: three test supplier invoices (normal, duplicate, new
+IBAN), approval, dispute, export and the FEC downloaded. `e2e/b2brouter.spec.ts` is M4's: a test invoice goes through the B2Brouter
 adapter to the stand-in, the fiche is closed, and FI_Statut turns « Test · Acceptée par le client » by
 itself (about 30 s, the pane's first status check). The stack has a `test_` key, so B2Brouter's
 stand-in is the test platform for both. About a minute in all. It is not part of `pnpm verify` (it

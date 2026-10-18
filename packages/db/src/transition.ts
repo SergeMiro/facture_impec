@@ -1,11 +1,26 @@
-// The one function that writes invoices.status (plan §4). It locks the row, asks the core state
-// machine, writes the status, the timeline event and the audit event in the caller's transaction.
-// A trigger (migration 0001) refuses a status write that does not come through here.
-import { type Actor, type InvoiceEvent, type TransitionResult, transition } from '@fi/core';
-import { eq, sql } from 'drizzle-orm';
+// The functions that write invoices.status and inbound_queue.status (plan §4). Each locks the row,
+// asks the core state machine, writes the status and the audit event (and an invoice's timeline event)
+// in the caller's transaction. Triggers (migrations 0001, 0005) refuse a status write from elsewhere.
+import {
+  type Actor,
+  type InboundEvent,
+  type InboundState,
+  type InvoiceEvent,
+  inboundTransition,
+  type TransitionResult,
+  transition,
+} from '@fi/core';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Tx } from './client';
 import { hashOf } from './hash';
-import { auditEvents, type InvoiceRow, invoiceEvents, invoices } from './schema';
+import {
+  auditEvents,
+  type InboundRow,
+  type InvoiceRow,
+  inboundQueue,
+  invoiceEvents,
+  invoices,
+} from './schema';
 
 export interface AuditInput {
   tenantId: string | null;
@@ -88,4 +103,56 @@ export async function applyTransition(tx: Tx, input: ApplyInput): Promise<ApplyR
     after: { status: result.to, fingerprint: row.fingerprint },
   });
   return result;
+}
+
+/** Columns that may change together with a supplier invoice's status. */
+export type InboundPatch = Partial<
+  Pick<InboundRow, 'decidedAt' | 'decidedBy' | 'disputeReason' | 'exportId'>
+>;
+
+export type InboundResult =
+  | { ok: true; row: InboundRow; from: InboundState }
+  | { ok: false; reason: 'not_found' }
+  | { ok: false; reason: 'not_allowed'; from: InboundState };
+
+/** Moves one supplier invoice of `tenantId`; `audit` carries what the decision rested on. */
+export async function applyInboundTransition(
+  tx: Tx,
+  input: {
+    id: string;
+    tenantId: string;
+    event: InboundEvent;
+    actor: Actor;
+    patch?: InboundPatch;
+    audit?: Record<string, unknown>;
+  },
+): Promise<InboundResult> {
+  const [row] = await tx
+    .select()
+    .from(inboundQueue)
+    .where(and(eq(inboundQueue.id, input.id), eq(inboundQueue.tenantId, input.tenantId)))
+    .for('update');
+  if (!row) return { ok: false, reason: 'not_found' };
+  const to = inboundTransition(row.status, input.event);
+  if (!to) return { ok: false, reason: 'not_allowed', from: row.status };
+
+  await tx.execute(sql`select set_config('fi.status_write', 'on', true)`);
+  const [moved] = await tx
+    .update(inboundQueue)
+    .set({ ...input.patch, status: to, updatedAt: new Date() })
+    .where(eq(inboundQueue.id, row.id))
+    .returning();
+  await tx.execute(sql`select set_config('fi.status_write', 'off', true)`);
+  if (!moved) return { ok: false, reason: 'not_found' };
+
+  await audit(tx, {
+    tenantId: row.tenantId,
+    actor: input.actor,
+    action: `inbound.${input.event}`,
+    objectType: 'inbound',
+    objectId: row.id,
+    before: { status: row.status },
+    after: { status: to, ...input.audit },
+  });
+  return { ok: true, row: moved, from: row.status };
 }

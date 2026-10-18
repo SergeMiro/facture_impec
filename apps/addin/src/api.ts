@@ -238,6 +238,56 @@ export const WeeklyReport = z.object({
 });
 export type WeeklyReport = z.infer<typeof WeeklyReport>;
 
+/** A supplier invoice received (Réception, plan §3 screen 5), as the InboundAgent sorted it. */
+export const InboundFlag = z.object({
+  code: z.string(),
+  level: z.enum(['block', 'alert', 'warn', 'info']),
+  message: z.string(),
+  details: z.array(z.string()),
+  relatedId: z.string().nullable(),
+});
+export type InboundFlag = z.infer<typeof InboundFlag>;
+
+export const Inbound = z.object({
+  id: z.string(),
+  status: z.enum(['new', 'approved', 'disputed', 'exported']),
+  statusLabel: z.string(),
+  isTest: z.boolean(),
+  triaged: z.boolean(),
+  supplierName: z.string(),
+  number: z.string().nullable(),
+  creditNote: z.boolean(),
+  issueDate: z.string().nullable(),
+  dueDate: z.string().nullable(),
+  amount: z.number().int().nullable(),
+  currency: z.string().nullable(),
+  iban: z.string().nullable(),
+  receivedAt: z.string(),
+  flags: z.array(InboundFlag),
+  canApprove: z.boolean(),
+  needsIbanCheck: z.boolean(),
+  canDispute: z.boolean(),
+  decidedAt: z.string().nullable(),
+  disputeReason: z.string().nullable(),
+  exportId: z.string().nullable(),
+});
+export type Inbound = z.infer<typeof Inbound>;
+
+export const InboundExport = z.object({
+  id: z.string(),
+  isTest: z.boolean(),
+  count: z.number().int(),
+  skipped: z.number().int(),
+  fecName: z.string(),
+  csvName: z.string(),
+  createdAt: z.string(),
+});
+export type InboundExport = z.infer<typeof InboundExport>;
+
+export const TEST_INBOUND_KINDS = ['normal', 'duplicate', 'iban_change'] as const;
+export type TestInboundKind = (typeof TEST_INBOUND_KINDS)[number];
+export type ExportFile = 'fec' | 'csv';
+
 export type AiChoice =
   | { mode: 'included' }
   | { mode: 'off' }
@@ -380,4 +430,19 @@ export class ApiClient {
   saveAi = (choice: AiChoice) =>
     this.#json(Settings, '/settings/ai', { method: 'PUT', body: choice });
   exportData = async () => (await this.#send('/tenant/export')).blob();
+
+  inbound = (test: boolean) =>
+    this.#json(z.object({ inbound: z.array(Inbound) }), `/inbound?test=${test}`);
+  inboundExports = (test: boolean) =>
+    this.#json(z.object({ exports: z.array(InboundExport) }), `/inbound/exports?test=${test}`);
+  approveInbound = (id: string, ibanChecked: boolean) =>
+    this.#json(Inbound, `/inbound/${id}/approve`, { method: 'POST', body: { ibanChecked } });
+  disputeInbound = (id: string, reason: string) =>
+    this.#json(Inbound, `/inbound/${id}/dispute`, { method: 'POST', body: { reason } });
+  exportInbound = (test: boolean) =>
+    this.#json(InboundExport, '/inbound/export', { method: 'POST', body: { test } });
+  exportFile = async (id: string, file: ExportFile) =>
+    (await this.#send(`/inbound/exports/${id}/${file}`)).blob();
+  testInbound = (kind: TestInboundKind) =>
+    this.#json(Inbound, '/inbound/test', { method: 'POST', body: { kind } });
 }

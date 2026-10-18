@@ -2,7 +2,9 @@
 export * from './chase';
 export * from './compute';
 export * from './dates';
+export * from './export';
 export * from './ids';
+export * from './inbound';
 export * from './model';
 export * from './money';
 export { frDate, frDecimal, frMoney, frPrice, NBSP } from './pdf/format';

@@ -14,6 +14,9 @@ importers:
       '@fi/api':
         specifier: workspace:*
         version: link:apps/api
+      '@fi/core':
+        specifier: workspace:*
+        version: link:packages/core
       '@fi/shared':
         specifier: workspace:*
         version: link:packages/shared
