@@ -46,8 +46,8 @@ const NOT_APPLIED: { ids: RegExp; why: string }[] = [
     why: 'Categories L and M (Canary Islands IGIC, Ceuta and Melilla IPSI) are not used in France (BR-FR-15).',
   },
   {
-    ids: /^BR-CL-(05|07|13|24|26)$/,
-    why: 'The attribute is not in the model (amount currency, object identifier, item classification, attachment MIME type, delivery location).',
+    ids: /^BR-CL-(03|07|13|24|26)$/,
+    why: 'The attribute is not in the model (amount currency, object identifier, item classification, attachment MIME type, delivery location). The builders write BT-5 as the currency of every amount, and BT-6 for BT-111.',
   },
   {
     ids: /^BR-CL-06$/,

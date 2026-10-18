@@ -162,8 +162,8 @@ Mandatory fields, calculations (BR-CO), VAT categories (BR-S/Z/E/AE/IC/G/O) and 
 | BR-O-13 | error | vat | BT-95 | An invoice with a category O VAT breakdown has no document level allowance of another category. | Une facture hors champ de la TVA ne peut pas contenir d'autres types de TVA. |
 | BR-O-14 | error | vat | BT-102 | An invoice with a category O VAT breakdown has no document level charge of another category. | Une facture hors champ de la TVA ne peut pas contenir d'autres types de TVA. |
 | BR-CL-01 | error | document | BT-3 | The invoice type code is in UNTDID 1001. | Le code « {value} » n'est pas reconnu. |
-| BR-CL-03 | error | document | BT-5 | The invoice currency is an ISO 4217 code. | Le code « {value} » n'est pas reconnu. |
-| BR-CL-04 | error | document | BT-6 | The VAT accounting currency is an ISO 4217 code. | Le code « {value} » n'est pas reconnu. |
+| BR-CL-04 | error | document | BT-5 | The invoice currency is an ISO 4217 code. | Le code « {value} » n'est pas reconnu. |
+| BR-CL-05 | error | document | BT-6 | The VAT accounting currency is an ISO 4217 code. | Le code « {value} » n'est pas reconnu. |
 | BR-CL-08 | error | notes | BT-21 | Note subject codes are in UNTDID 4451. | Le code « {value} » n'est pas reconnu. |
 | BR-CL-10 | error | document | BT-29-1, BT-46-1 | Party identifier schemes are in the ISO 6523 ICD list. | Le code « {value} » n'est pas reconnu. |
 | BR-CL-11 | error | document | BT-30-1, BT-47-1 | Legal registration identifier schemes are in the ISO 6523 ICD list. | Le code « {value} » n'est pas reconnu. |
@@ -175,7 +175,7 @@ Mandatory fields, calculations (BR-CO), VAT categories (BR-S/Z/E/AE/IC/G/O) and 
 | BR-CL-19 | error | totals | BT-98, BT-140 | Allowance reason codes are in UNTDID 5189. | Le code « {value} » n'est pas reconnu. |
 | BR-CL-20 | error | totals | BT-105, BT-145 | Charge reason codes are in UNTDID 7161. | Le code « {value} » n'est pas reconnu. |
 | BR-CL-21 | error | lines | BT-157-1 | Item standard identifier schemes are in the ISO 6523 ICD list. | Le code « {value} » n'est pas reconnu. |
-| BR-CL-22 | error | vat | BT-121 | VAT exemption reason codes are in the CEF VATEX list. | Le code « {value} » n'est pas reconnu. |
+| BR-CL-22 | error | vat | BT-121 | VAT exemption reason codes are in the CEF VATEX list (any case, as in CEN). | Le code « {value} » n'est pas reconnu. |
 | BR-CL-23 | error | lines | BT-130, BT-150 | Unit codes are in UN/ECE Recommendations 20 and 21. | Le code « {value} » n'est pas reconnu. |
 | BR-CL-25 | error | document | BT-34-1, BT-49-1 | Electronic address schemes are in the CEF EAS list. | Le code « {value} » n'est pas reconnu. |
 
@@ -290,12 +290,12 @@ The reference validator (CEN XSLT, M1 oracle tests) still runs every one of them
 | BR-65 | Item attributes (BG-32) and item classification (BT-158) are not in the model yet (docs/DEFERRED.md). |
 | BR-B-01 | Category B (Italian split payment) is not used in France (BR-FR-15). |
 | BR-B-02 | Category B (Italian split payment) is not used in France (BR-FR-15). |
-| BR-CL-05 | The attribute is not in the model (amount currency, object identifier, item classification, attachment MIME type, delivery location). |
+| BR-CL-03 | The attribute is not in the model (amount currency, object identifier, item classification, attachment MIME type, delivery location). The builders write BT-5 as the currency of every amount, and BT-6 for BT-111. |
 | BR-CL-06 | The model holds the meaning of BT-8 (`vatDueOn`); the CII and UBL builders write the code from VAT_DUE_CODES, so it is always in the list. |
-| BR-CL-07 | The attribute is not in the model (amount currency, object identifier, item classification, attachment MIME type, delivery location). |
-| BR-CL-13 | The attribute is not in the model (amount currency, object identifier, item classification, attachment MIME type, delivery location). |
-| BR-CL-24 | The attribute is not in the model (amount currency, object identifier, item classification, attachment MIME type, delivery location). |
-| BR-CL-26 | The attribute is not in the model (amount currency, object identifier, item classification, attachment MIME type, delivery location). |
+| BR-CL-07 | The attribute is not in the model (amount currency, object identifier, item classification, attachment MIME type, delivery location). The builders write BT-5 as the currency of every amount, and BT-6 for BT-111. |
+| BR-CL-13 | The attribute is not in the model (amount currency, object identifier, item classification, attachment MIME type, delivery location). The builders write BT-5 as the currency of every amount, and BT-6 for BT-111. |
+| BR-CL-24 | The attribute is not in the model (amount currency, object identifier, item classification, attachment MIME type, delivery location). The builders write BT-5 as the currency of every amount, and BT-6 for BT-111. |
+| BR-CL-26 | The attribute is not in the model (amount currency, object identifier, item classification, attachment MIME type, delivery location). The builders write BT-5 as the currency of every amount, and BT-6 for BT-111. |
 | BR-CO-05 | Reason code and reason text "indicate the same type": not machine-checkable; the CEN artefacts assert true(). |
 | BR-CO-06 | Reason code and reason text "indicate the same type": not machine-checkable; the CEN artefacts assert true(). |
 | BR-CO-07 | Reason code and reason text "indicate the same type": not machine-checkable; the CEN artefacts assert true(). |

@@ -1,5 +1,5 @@
 // BR-CL: values must come from the code lists of the CEN artefacts (src/codelists/generated.ts).
-// Code lists that only apply to attributes the model does not have (BR-CL-05 amount currency,
+// Code lists that only apply to attributes the model does not have (BR-CL-03 amount currency,
 // BR-CL-06 BT-8 code, BR-CL-07 object identifier, BR-CL-13 item classification, BR-CL-24 MIME,
 // BR-CL-26 delivery location) are listed in docs/RULES.md as not applicable.
 import {
@@ -31,10 +31,13 @@ const base = {
 
 /** One finding per present value that is not in the list. */
 const outside =
-  (list: ReadonlySet<string>, values: (inv: Invoice) => Value[]) =>
+  (list: ReadonlySet<string>, values: (inv: Invoice) => Value[], caseless = false) =>
   (inv: Invoice): Finding[] =>
     values(inv)
-      .filter((v): v is { path: string; value: string } => present(v.value) && !list.has(v.value))
+      .filter(
+        (v): v is { path: string; value: string } =>
+          present(v.value) && !list.has(caseless ? v.value.toUpperCase() : v.value),
+      )
       .map((v) => finding(v.path, { value: v.value }));
 
 const addressCountries = (inv: Invoice): Value[] => [
@@ -54,7 +57,7 @@ export const CODELIST_RULES: Rule[] = [
   }),
   rule({
     ...base,
-    id: 'BR-CL-03',
+    id: 'BR-CL-04',
     scope: 'document',
     bt: ['BT-5'],
     summary: 'The invoice currency is an ISO 4217 code.',
@@ -62,7 +65,7 @@ export const CODELIST_RULES: Rule[] = [
   }),
   rule({
     ...base,
-    id: 'BR-CL-04',
+    id: 'BR-CL-05',
     scope: 'document',
     bt: ['BT-6'],
     summary: 'The VAT accounting currency is an ISO 4217 code.',
@@ -203,12 +206,15 @@ export const CODELIST_RULES: Rule[] = [
     id: 'BR-CL-22',
     scope: 'vat',
     bt: ['BT-121'],
-    summary: 'VAT exemption reason codes are in the CEF VATEX list.',
-    check: outside(vatexCodes, (inv) =>
-      inv.vatBreakdown.map((b, i) => ({
-        path: `vatBreakdown[${i}].exemptionCode`,
-        value: b.exemptionCode,
-      })),
+    summary: 'VAT exemption reason codes are in the CEF VATEX list (any case, as in CEN).',
+    check: outside(
+      vatexCodes,
+      (inv) =>
+        inv.vatBreakdown.map((b, i) => ({
+          path: `vatBreakdown[${i}].exemptionCode`,
+          value: b.exemptionCode,
+        })),
+      true,
     ),
   }),
   rule({

@@ -8,14 +8,14 @@
       }
     },
     {
-      "rule": "BR-CL-03",
+      "rule": "BR-CL-04",
       "base": "01-services-standard-rate",
       "set": {
         "currency": "ZZZ"
       }
     },
     {
-      "rule": "BR-CL-04",
+      "rule": "BR-CL-05",
       "base": "01-services-standard-rate",
       "set": {
         "vatCurrency": "ZZZ",
@@ -27,7 +27,7 @@
       "base": "01-services-standard-rate",
       "set": {
         "notes[3]": {
-          "subjectCode": "NOPE",
+          "subjectCode": "QQQ",
           "text": "Note libre"
         }
       }

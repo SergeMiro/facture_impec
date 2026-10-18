@@ -24,7 +24,7 @@ export function extractCodeLists(schematron: string): CodeLists {
 /** The lists our model uses, by rule id. Ids that only alias another list are left out. */
 export const EXPORTED: Record<string, string> = {
   'BR-CL-01': 'invoiceTypeCodes',
-  'BR-CL-03': 'currencyCodes',
+  'BR-CL-04': 'currencyCodes',
   'BR-CL-07': 'referenceQualifiers',
   'BR-CL-08': 'noteSubjectCodes',
   'BR-CL-10': 'icdCodes',

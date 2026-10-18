@@ -399,9 +399,13 @@ export const EN16931_RULES = [
     bt: ['BT-6', 'BT-111'],
     autoFixable: false,
     summary: 'When a VAT accounting currency is given, the VAT total in that currency is present.',
+    // As in CEN UBL: when BT-6 is the invoice currency, BT-110 is the VAT total in BT-6. CEN CII
+    // rejects BT-6 = BT-5 outright, so the CII builder leaves such a BT-6 out (cii.ts).
     check: (inv) =>
       when(
-        present(inv.vatCurrency) && inv.totals.taxTotalAccountingCurrency === undefined,
+        present(inv.vatCurrency) &&
+          inv.totals.taxTotalAccountingCurrency === undefined &&
+          !(inv.vatCurrency === inv.currency && inv.totals.taxTotal !== undefined),
         'totals.taxTotalAccountingCurrency',
       ),
   }),

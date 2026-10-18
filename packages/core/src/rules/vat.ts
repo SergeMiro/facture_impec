@@ -255,6 +255,8 @@ function familyRules(spec: CategorySpec): Rule[] {
         breakdowns(inv).flatMap(({ b, path }): Finding[] => {
           if (b.taxableAmount === undefined) return [];
           if (code === 'S') {
+            // Checked per rate, as in CEN: without a rate there is nothing to compare (BR-48 says so).
+            if (!present(b.rate)) return [];
             const exists =
               inv.lines.some((l) => l.vat.category === 'S' && sameRate(l.vat.rate, b.rate)) ||
               [...inv.allowances, ...inv.charges].some(
