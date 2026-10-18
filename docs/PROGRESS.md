@@ -109,3 +109,54 @@ Gate on 2026-10-18: `pnpm verify` green — core 472 + oracle 276, db 8, pdp-ada
 api 39 (25 routes, 8 workers, 6 scenarios), shared 7. Manual smoke with the real entry points
 (`apps/mock-pdp/src/server.ts` + `apps/api/src/server.ts`, PGlite on disk, webhooks on): tenant created
 over HTTP, one invoice sent, `paid` 35 s later; a wrong key answered the French 401.
+
+## M3 — Add-in (started 2026-10-18)
+
+Plan §11: « Screens 1–4 and 6 of §5. MappingAgent + ExplainAgent + TestAgent live. Mode test with
+scenario panel. Acceptance: Playwright E2E on Excel on the web passes; a new user can, in < 10 minutes
+without docs, map a sheet, fix two errors by clicking the cell links, run a rehearsal, and see « Prêt à
+envoyer ». »
+
+How each criterion is read here:
+
+- **Screens 1–4 and 6** (plan §5): Connexion (magic link or tenant key, token in `OfficeRuntime.storage`),
+  Détection (proposed mapping, header row, multi-line invoices grouped by number, confirmed by the user,
+  saved in the workbook settings and on the server), Tableau de bord (one row per invoice with its status
+  and « Voir »; the add-in owns two columns `FI_Statut` / `FI_Détail` and never writes the user's own
+  cells), Fiche facture (timeline, issues with fix hints, « Corriger dans la feuille » selects the cell,
+  Envoyer, Relancer, Voir le XML, Voir le PDF), Réglages (review/autopilot, chasing cadence,
+  pseudonymization, PDP connection, Mode test). Settings whose feature lands later (autopilot sending,
+  chasing: M5) are shown as such, not as switches that do nothing.
+- Technical rules of §5: one `SheetReader` returning rows with cell addresses (`Feuil1!C14`), writes
+  only through `StatusWriter` (at most one `context.sync()` per 500 ms), retry + timeout around every
+  `Excel.run`, local validation only as a hint, offline actions queued with « en attente de connexion »,
+  manifest with the ribbon group « Facture Impec » (Ouvrir / Vérifier / Envoyer / Mode test),
+  `pnpm dev:addin` on HTTPS, `scripts/sideload.*` documented in `docs/RUNBOOK.md`.
+- **Agents live** (plan §6): MappingAgent, ExplainAgent and TestAgent run through the orchestrator
+  (deterministic routing, per-tenant and per-invoice locks, token and daily cost caps, 3 retries, a failed
+  run never changes an invoice status, every run in `agent_runs`), on any provider of
+  `docs/AI_PROVIDERS.md`, after pseudonymization. Each prompt has an eval: MappingAgent ≥ 95 % on the 8
+  core fields over 20 messy sheets; ExplainAgent checked for forbidden auto-fixes.
+- **Mode test**: `is_test` invoices numbered `TEST-…`, routed to the test platform, an orange banner on
+  every screen, and the scenario panel « Simuler un rejet PDP », « Simuler un refus client », « Simuler
+  paiement à J+45 », « Simuler SIREN inconnu », played by the mock PDP or faked by the API's
+  `ScenarioInjector` where the platform cannot.
+- **E2E on Excel on the web**: needs a Microsoft account that can sideload an add-in, and the add-in and
+  API served on public HTTPS. The same Playwright flow also runs on every `pnpm verify`-adjacent run
+  against the task pane in a local browser with an in-memory workbook, so the flow is proven even when
+  Excel on the web is out of reach.
+- **New user in < 10 minutes**: the scripted E2E path (connect, confirm mapping, fix two errors from
+  their cell links, rehearse, « Prêt à envoyer ») has no step that needs the docs, and is timed.
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Screen 1 Connexion (magic link, tenant key, token storage) | ⏳ | |
+| Screen 2 Détection (MappingAgent, confirmation, saved mapping) | ⏳ | |
+| Screen 3 Tableau de bord (`FI_Statut`, `FI_Détail`, « Voir ») | ⏳ | |
+| Screen 4 Fiche facture (timeline, issues, cell links, actions) | ⏳ | |
+| Screen 6 Réglages | ⏳ | |
+| §5 technical rules (SheetReader, StatusWriter, retry/timeout, offline, manifest, HTTPS dev, sideload) | ⏳ | |
+| MappingAgent + ExplainAgent + TestAgent live, through the orchestrator, with evals | ⏳ | |
+| Mode test + scenario panel + `ScenarioInjector` | ⏳ | |
+| Playwright E2E on Excel on the web | ⏳ | |
+| New user: map, fix two errors from cell links, rehearse, « Prêt à envoyer » in < 10 min | ⏳ | |
