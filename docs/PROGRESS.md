@@ -167,3 +167,42 @@ pdp-adapter 12, db 8, shared 16, site 11. Bug found by the E2E and fixed: the ta
 the pane offered no e-mail sign-in and every call failed; Node tests could not see it
 (`api.test.ts` « calls the global fetch unbound, as a browser requires »). Found while writing the contract
 test: switching Mode test on showed the orange banner even when the company had test invoices off.
+
+## M4 — B2Brouter sandbox (started 2026-10-18)
+
+Plan §11: « Real adapter, sandbox contract tests green, status mapping, inbound polling. Acceptance: one
+invoice goes Excel → B2Brouter sandbox → status visible in the sheet without manual steps. »
+
+How each criterion is read here:
+
+- **Real adapter**: `createB2BrouterAdapter` implements `PdpAdapter` on B2Brouter's documented API
+  (`docs/B2BROUTER.md`, OpenAPI 2026-06-26): import the XML, then send it (never in one call); no blind
+  retry of a POST (B2Brouter has no idempotency key for invoices): look the number up first, and reuse
+  the invoice the platform already holds when its original file is ours byte for byte; directory lookup
+  with the 202 polling; payment through `POST /accounts/{account}/payments`; webhook HMAC and both
+  payload shapes. Every behaviour the docs leave open has a `TODO(verify)` pointing to
+  `docs/B2BROUTER.md` §11.
+- **Sandbox contract tests green**: `@fi/pdp-adapter/contract` (10 tests) runs on every `pnpm verify`
+  against a local stand-in that speaks B2Brouter's documented protocol (both shapes where the docs
+  disagree), and against the real B2Brouter sandbox with the owner's `test_` key, behind a manual flag
+  (plan §9: « nightly, manual flag »).
+- **Status mapping**: B2Brouter states → our platform statuses → state machine, in code with tests
+  (`docs/B2BROUTER.md` §7); a state we do not know is kept raw on the timeline and changes nothing.
+- **Inbound polling**: the sweep asks each company's platform for received invoices and stores each one
+  once, unparsed; triage and the Réception screen are M6.
+- **Credentials**: one operator key for the B2Brouter integration group (one key serves every account,
+  `docs/B2BROUTER.md` §2), from the environment, never in the database or a log line; `FI_ENV=sandbox`
+  accepts only `test_` keys.
+- **Excel → sandbox → sheet without manual steps**: a company on B2Brouter sends an invoice from the task
+  pane; the API imports and sends it; the webhook or the sweep brings the status back; the pane writes it
+  in `FI_Statut` without a click. Proven by an E2E against the stand-in on every run, and against the
+  real sandbox once the owner's key is set.
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Real adapter on the documented API | ⏳ | |
+| Contract suite green on the stand-in and on the sandbox | ⏳ | |
+| Status mapping in code with tests | ⏳ | |
+| Inbound polling | ⏳ | |
+| Operator key from the environment, checked against the environment | ⏳ | |
+| Excel → B2Brouter sandbox → status in the sheet, no manual step | ⏳ | |
