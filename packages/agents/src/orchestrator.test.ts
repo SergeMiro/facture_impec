@@ -44,11 +44,12 @@ const apiError = (statusCode: number, isRetryable: boolean) =>
 
 describe('Orchestrator', () => {
   it('routes phases to agents deterministically', () => {
-    expect([routeFor('detect'), routeFor('explain'), routeFor('rehearse')]).toEqual([
-      'mapping',
-      'explain',
-      'test',
-    ]);
+    expect([
+      routeFor('detect'),
+      routeFor('explain'),
+      routeFor('rehearse'),
+      routeFor('monitor'),
+    ]).toEqual(['mapping', 'explain', 'test', 'monitor']);
   });
 
   it('records a successful run with its tokens', async () => {

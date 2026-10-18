@@ -48,16 +48,19 @@ describe('migrations', () => {
       'agent_runs',
       'api_keys',
       'audit_events',
+      'chase_plans',
       'inbound_queue',
       'invoice_events',
       'invoices',
       'magic_links',
+      'payment_reports',
       'pdp_submissions',
       'sessions',
       'sheet_mappings',
       'tenants',
       'users',
       'validation_results',
+      'weekly_reports',
     ]);
   });
 });

@@ -4,6 +4,7 @@ import { detectMapping } from '@fi/core';
 import { describe, expect, it } from 'vitest';
 import { EXPLAIN_PROMPT_HASH, explainIssues } from '../src/explain';
 import { MAPPING_PROMPT_HASH, proposeMapping } from '../src/mapping';
+import { adviseNext, MONITOR_PROMPT_HASH } from '../src/monitor';
 import {
   failingModel,
   handleFor,
@@ -14,6 +15,7 @@ import {
 import { EXPLAIN_FIXTURES } from './explain.fixtures';
 import { loadRecordings, ratio, scoreMapping } from './harness';
 import { MAPPING_FIXTURES } from './mapping.fixtures';
+import { MONITOR_FIXTURES } from './monitor.fixtures';
 
 const replayModel = (answer: unknown) =>
   answer === null
@@ -93,6 +95,45 @@ describe('ExplainAgent eval fixtures', () => {
           total += result.explanations.length;
         }
         if (rec.gate) expect(explained / total).toBeGreaterThanOrEqual(0.9);
+      });
+    });
+  }
+});
+
+describe('MonitorAgent eval fixtures', () => {
+  it('cover the three proposals, coded and free-text reasons, and no reason at all', () => {
+    expect(new Set(MONITOR_FIXTURES.map((f) => f.expected)).size).toBe(3);
+    expect(MONITOR_FIXTURES.some((f) => f.reason?.code && !f.reason.text)).toBe(true);
+    expect(MONITOR_FIXTURES.some((f) => f.reason?.text && !f.reason.code)).toBe(true);
+    expect(MONITOR_FIXTURES.some((f) => f.reason === null)).toBe(true);
+  });
+
+  for (const rec of loadRecordings('monitor')) {
+    describe(`recording ${rec.label} (${rec.provider} / ${rec.model})`, () => {
+      it('was made with the current prompt', () => {
+        expect(rec.promptHash, 'prompts/monitor.md or its schema changed: re-record').toBe(
+          MONITOR_PROMPT_HASH,
+        );
+      });
+
+      it(`proposes the expected next step ${rec.gate ? '≥ 85 %' : '(not gating)'}, never a wrong amount`, async () => {
+        let right = 0;
+        for (const f of MONITOR_FIXTURES) {
+          const { orchestrator } = testOrchestrator({ retries: 0 });
+          const { advice } = await adviseNext(
+            f.invoice,
+            { kind: 'refusal', reason: f.reason },
+            {
+              tenantId: 't',
+              orchestrator,
+              ai: handleFor(replayModel(rec.answers[f.name] ?? null), false),
+            },
+          );
+          // Whatever the model wrote, the draft the user sees carries no amount but the invoice's own.
+          expect(advice.draft?.body, f.name).toBeTruthy();
+          if (advice.proposal === f.expected) right++;
+        }
+        if (rec.gate) expect(right / MONITOR_FIXTURES.length).toBeGreaterThanOrEqual(0.85);
       });
     });
   }

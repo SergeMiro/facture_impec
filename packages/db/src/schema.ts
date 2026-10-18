@@ -1,8 +1,9 @@
-// Postgres schema (plan §4), the part M4 needs. Tables of later milestones (parties, chase_plans)
-// arrive with them (docs/DEFERRED.md).
+// Postgres schema (plan §4), the part M5 needs. Tables of later milestones (parties) arrive with them
+// (docs/DEFERRED.md).
 // Change it, then `pnpm --filter @fi/db generate` writes the migration into drizzle/.
 import type {
   Address,
+  ChaseStep,
   Invoice,
   InvoiceDefaultsInput,
   InvoiceDraft,
@@ -59,7 +60,7 @@ export const tenants = pgTable('tenants', {
     .$type<InvoiceDefaultsInput>()
     .notNull()
     .default({}),
-  /** Chasing steps in days from the due date (plan §6 CollectAgent; used from M5). */
+  /** Chasing steps in days from the due date (plan §6 CollectAgent). */
   chaseCadence: jsonb('chase_cadence_json')
     .$type<number[]>()
     .notNull()
@@ -344,6 +345,77 @@ export const inboundQueue = pgTable(
   ],
 );
 
+/**
+ * The chasing plan of one invoice (plan §4, §6 CollectAgent): its steps with their dates, what was
+ * done and the e-mail drafts. Created once the customer has the invoice; « Relancer » shows it.
+ */
+export const chasePlans = pgTable(
+  'chase_plans',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    invoiceId: uuid('invoice_id')
+      .notNull()
+      .unique()
+      .references(() => invoices.id),
+    /** The cadence and due date the pending steps come from: when either changes, they move. */
+    cadence: jsonb('cadence_json').$type<number[]>().notNull(),
+    dueDate: date('due_date', { mode: 'string' }).notNull(),
+    steps: jsonb('steps_json').$type<ChaseStep[]>().notNull(),
+    /** Plan §4 `next_action_at`, as a day: a step is acted on from 9:00 Paris on its day. */
+    nextStepOn: date('next_step_on', { mode: 'string' }),
+    /** A refusal or a dispute is open (plan §6): nothing goes out. */
+    paused: boolean('paused').notNull().default(false),
+    /** The customer promised to pay by this day: steps wait until the day after (recordPromise). */
+    promisedUntil: date('promised_until', { mode: 'string' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('chase_plans_next').on(t.nextStepOn)],
+);
+
+/**
+ * « Encaissée » (status 212) reported to the platform after the user recorded a payment. Written
+ * before the platform is called; one per invoice, so the payment is reported once.
+ */
+export const paymentReports = pgTable('payment_reports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  invoiceId: uuid('invoice_id')
+    .notNull()
+    .unique()
+    .references(() => invoices.id),
+  provider: text('provider', { enum: PDP_PROVIDERS }).notNull(),
+  amount: cents('amount').notNull(),
+  paidOn: date('paid_on', { mode: 'string' }).notNull(),
+  status: text('status', { enum: ['pending', 'reported', 'failed'] })
+    .notNull()
+    .default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/** One weekly report per company and ISO week (`2026-W43`), claimed before it is mailed. */
+export const weeklyReports = pgTable(
+  'weekly_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    week: text('week').notNull(),
+    recipients: integer('recipients').notNull(),
+    sentAt: timestamp('sent_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex('weekly_reports_week').on(t.tenantId, t.week)],
+);
+
 export type TenantRow = typeof tenants.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type AgentRunRow = typeof agentRuns.$inferSelect;
@@ -352,3 +424,5 @@ export type InvoiceRow = typeof invoices.$inferSelect;
 export type InvoiceEventRow = typeof invoiceEvents.$inferSelect;
 export type PdpSubmissionRow = typeof pdpSubmissions.$inferSelect;
 export type InboundRow = typeof inboundQueue.$inferSelect;
+export type ChasePlanRow = typeof chasePlans.$inferSelect;
+export type PaymentReportRow = typeof paymentReports.$inferSelect;

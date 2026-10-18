@@ -29,6 +29,13 @@
       "when": 1792314821593,
       "tag": "0003_inbound",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792317633596,
+      "tag": "0004_chasing",
+      "breakpoints": true
     }
   ]
 }

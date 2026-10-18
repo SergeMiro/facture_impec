@@ -3,16 +3,18 @@
 //
 //   EVAL_PROVIDER=openai-compatible EVAL_BASE_URL=http://127.0.0.1:47821/v1 EVAL_API_KEY=… \
 //   EVAL_MODEL='auto - Smart models - Hermes' EVAL_LABEL=llmfp-smart \
-//   pnpm --filter @fi/agents eval:record [mapping|explain]
+//   pnpm --filter @fi/agents eval:record [mapping|explain|monitor]
 //
 // EVAL_GATE=true marks the recording as the one the plan's thresholds apply to.
 
 import { EXPLAIN_FIXTURES } from '../evals/explain.fixtures';
 import { type Recording, ratio, saveRecording, scoreMapping } from '../evals/harness';
 import { MAPPING_FIXTURES } from '../evals/mapping.fixtures';
+import { MONITOR_FIXTURES } from '../evals/monitor.fixtures';
 import { aiHandle } from '../src/ai';
 import { EXPLAIN_PROMPT_HASH, explainIssues } from '../src/explain';
 import { MAPPING_PROMPT_HASH, proposeMapping } from '../src/mapping';
+import { adviseNext, MONITOR_PROMPT_HASH } from '../src/monitor';
 import {
   MemoryRunStore,
   Orchestrator,
@@ -107,5 +109,34 @@ if (which === 'all' || which === 'explain') {
   });
   console.log(
     `explain: ${agent}/${total} explained by the agent, rejected ${JSON.stringify(rejected)} → ${file.pathname}`,
+  );
+}
+
+if (which === 'all' || which === 'monitor') {
+  const answers: Recording['answers'] = {};
+  let right = 0;
+  const rejected = { unknownTokens: 0, wrongAmount: 0, tooLong: 0 };
+  for (const f of MONITOR_FIXTURES) {
+    const r = await adviseNext(
+      f.invoice,
+      { kind: 'refusal', reason: f.reason },
+      { tenantId: 'eval', orchestrator, ai },
+    );
+    answers[f.name] = orchestrator.last;
+    if (r.advice.proposal === f.expected) right++;
+    for (const k of Object.keys(rejected) as (keyof typeof rejected)[])
+      rejected[k] += r.rejected[k];
+    console.log(
+      `${f.name}: ${r.advice.proposal ?? '—'} (expected ${f.expected})${r.advice.degraded ? ` (${r.advice.degraded})` : ''}`,
+    );
+  }
+  const file = saveRecording({
+    agent: 'monitor',
+    promptHash: MONITOR_PROMPT_HASH,
+    answers,
+    ...base,
+  });
+  console.log(
+    `monitor: ${right}/${MONITOR_FIXTURES.length} expected proposals, rejected ${JSON.stringify(rejected)} → ${file.pathname}`,
   );
 }

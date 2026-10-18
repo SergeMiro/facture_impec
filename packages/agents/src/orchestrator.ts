@@ -6,7 +6,12 @@ import { APICallError } from 'ai';
 import type { Usage } from './llm';
 import { AiDisabledError } from './providers/models';
 
-export const PHASES = { detect: 'mapping', explain: 'explain', rehearse: 'test' } as const;
+export const PHASES = {
+  detect: 'mapping',
+  explain: 'explain',
+  rehearse: 'test',
+  monitor: 'monitor',
+} as const;
 export type Phase = keyof typeof PHASES;
 export type AgentName = (typeof PHASES)[Phase];
 

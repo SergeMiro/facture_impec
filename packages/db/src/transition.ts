@@ -48,6 +48,8 @@ export interface ApplyInput {
   /** The platform event this transition comes from; a second application of it is refused. */
   pdpEventId?: string;
   patch?: TransitionPatch;
+  /** When it happened in business time (the chasing run's clock); the database clock otherwise. */
+  at?: Date;
 }
 
 export type ApplyResult = TransitionResult | { ok: false; reason: 'not_found' };
@@ -74,6 +76,7 @@ export async function applyTransition(tx: Tx, input: ApplyInput): Promise<ApplyR
     toStatus: result.to,
     pdpEventId: input.pdpEventId ?? null,
     payload: input.payload ?? {},
+    ...(input.at && { at: input.at }),
   });
   await audit(tx, {
     tenantId: row.tenantId,
