@@ -14,8 +14,9 @@ validator, the CII and UBL 2.1 builders and parsers, and Factur-X (profile EN 16
 2. **Oracle = the CEN 1.3.17 XSLT, run in Node by SaxonJS 2.7.0.** It needs no Java. It passes
    all 1,142 assertions of the CEN unit tests. A run takes about 56 ms per CII file and 103 ms
    per UBL file. Saxon-HE 12.10 in Docker gives the same result and serves as the cross-check.
-3. **Factur-X: we write the embedder ourselves on `@cantoo/pdf-lib` + `@cantoo/fontkit`.** We
-   prove it with veraPDF (PDF/A-3b) and the Akretion extractor. Nobody publishes a licence for the
+3. **Factur-X: we draw the PDF ourselves on `@cantoo/pdf-lib` + `@cantoo/fontkit` and attach the
+   XML with its `embedFacturX` (M1 update, §3.3).** We prove it with veraPDF (PDF/A-3b) and the
+   Akretion extractor. Nobody publishes a licence for the
    official Factur-X XSD and schematron, so do not commit them. Fetch them pinned by sha256.
 4. **Code lists: generate them from the vendored CEN `*-codes.sch`.** That is the simplest
    source, and it matches the oracle by construction (§4).
@@ -392,8 +393,16 @@ requires it. Revisit once F2 is closed.
   - `@cantoo/pdf-lib` alone: 596,849 B (251,388 gzip);
   - with `@cantoo/fontkit`: 978,859 B (405,938 gzip).
 
-  Load it with a dynamic `import()` only when the user exports a Factur-X file (our decision).
-  [verified (ran), 2026-10-17]
+  Load it with a dynamic `import()` only when the user exports a Factur-X file (our decision):
+  it lives behind its own entry, `@fi/core/pdf`. [verified (ran), 2026-10-17]
+- **M1 update (2026-10-18): no embedder of our own.** 2.11.1 ships `embedFacturX(doc, xml, options)`
+  (`src/api/pdfa/facturx.ts`): it calls `convertToPDFA({ conformance: '3B' })` (sRGB output
+  intent, `/ID`, XMP with `pdfaid` and Info kept in sync), adds the `fx:` properties and the PDF/A
+  extension schema, and attaches the XML with `/AF` and `/AFRelationship` (default `Alternative`).
+  That is P1 and P3–P7 of §3.2. We only draw the page, embed DejaVu subsets (P2) and replace the
+  random `/ID` with a hash of the XML and the date, so the same invoice gives the same bytes
+  (`fixtures/golden/pdf.sha256`). Code: `packages/core/src/pdf/`. [verified (ran): veraPDF 3b and
+  the Akretion extractor pass on the 25 golden invoices, `pnpm --filter @fi/core pdf:check`]
 - `@pdf-lib/fontkit` 1.1.1 does **not** work with `@cantoo/pdf-lib`: it crashes while subsetting
   ("reading 'pos'"). [verified (ran), 2026-10-17]
 - Not chosen:
@@ -431,6 +440,11 @@ python -I "$VENV/bin/facturx-pdfextractxml" -l debug invoice.facturx.pdf extract
 
   A pdf-lib read-back test asserts P4–P7.
   [our decision; each tool verified (ran) above]
+
+  As built in M1: `src/pdf/pdf.test.ts` reads every golden PDF back (XML equals `toCii`, P4–P7,
+  hashes); the oracle runs the XSD and XSLTs on the same XML (`test/oracle/`); veraPDF and the
+  extractor run from `scripts/pdf-check.ts`, outside `pnpm verify` because both are outside
+  `node_modules` (Docker image, Python venv).
 
 ---
 

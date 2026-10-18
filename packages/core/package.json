@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./pdf": "./src/pdf/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -12,7 +13,8 @@
     "test:oracle": "vitest run --project oracle",
     "codelists": "tsx scripts/codelists.ts",
     "gen:docs": "tsx scripts/generate-docs.ts",
-    "oracle:fetch": "tsx scripts/oracle-fetch.ts"
+    "oracle:fetch": "tsx scripts/oracle-fetch.ts",
+    "pdf:check": "tsx scripts/pdf-check.ts"
   },
   "dependencies": {
     "@cantoo/fontkit": "^2.0.12",

@@ -101,3 +101,6 @@ export function buildCase(c: InvalidCase): { invoice: Invoice; context: ContextI
       : mutate(computeGolden(base), c);
   return { invoice, context: { today: TODAY, ...base.context, ...c.context } };
 }
+
+/** The date written in the golden PDFs, so their bytes (and fixtures/golden/pdf-sha256.json) are stable. */
+export const PDF_DATE = new Date(`${TODAY}T10:00:00Z`);

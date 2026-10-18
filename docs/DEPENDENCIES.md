@@ -11,3 +11,8 @@ Rule 7 of `CLAUDE.md`: any dependency over 1 MB installed, or under 1k weekly do
 | `vitest` (dev) | Test runner for every package; the plan's chosen unit-test tool. |
 | `esbuild` (transitive, via `tsx`/`vitest`) | Native transpiler behind `tsx` and Vitest; its install script is allowed in `pnpm-workspace.yaml`. |
 | `react-dom` (add-in) | Required renderer for React 18, the plan's UI library. |
+| `zod` (core, shared) | Schema checks at every boundary (plan §1, rule 4); 7.5 MB installed, most of it locales and source maps that no bundle ships. |
+| `@cantoo/pdf-lib` (core) | Draws the Factur-X PDF and makes it PDF/A-3 with the XML attached (`embedFacturX`); maintained pdf-lib fork, 28 MB installed, about 600 KB in a bundle, so only `@fi/core/pdf` imports it (`docs/research/FORMATS.md` §3.3). |
+| `@cantoo/fontkit` (core) | Embeds the TrueType subsets PDF/A requires; 12 MB installed. The only fontkit that subsets with `@cantoo/pdf-lib` (`@pdf-lib/fontkit` crashes). |
+| `saxon-js` (dev, core) | Runs the official CEN and Factur-X schematrons (XSLT 2/3) in Node without Java: the test oracle (FORMATS §2.2). 2.4 MB. |
+| DejaVu Sans fonts (`packages/core/fonts/`, 1.5 MB, not a package) | PDF/A forbids non-embedded fonts; DejaVu covers French and the euro sign, Bitstream Vera licence (`fonts/LICENSE.txt`). |
