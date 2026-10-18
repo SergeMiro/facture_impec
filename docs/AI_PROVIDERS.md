@@ -95,9 +95,24 @@ claiming a residency for a provider in the product, record the provider's own pa
 
 ## Default for "included"
 
-Decided in M3 with the evals, not before. Candidates: Mistral (EU residency, the strongest message for
+Decided with the evals, not before. Candidates: Mistral (EU residency, the strongest message for
 French SMEs) and Anthropic Claude (the plan's original choice; current ids `claude-sonnet-5-5` and
 `claude-haiku-5-5`). The eval scores and the cost per action decide, and the result is recorded here.
+Paying for either is the owner's decision (CLAUDE.md rule 9); until then `AI_PROVIDER` stays empty and
+every agent gives its deterministic answer.
+
+### Eval results so far
+
+MappingAgent, 20 messy sheets of `evals/mapping.fixtures.ts`, the 8 core fields (gate: ≥ 95 %).
+Recorded with `pnpm --filter @fi/agents eval:record` on synthetic data only; replayed by `pnpm verify`.
+
+| Date | Provider / model | Core fields | Notes |
+|---|---|---|---|
+| 2026-10-18 | none (dictionary only, `detectMapping`) | 91.3 % | the floor every agent answer must beat |
+| 2026-10-18 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 98.1 % | 15/20 answered by the model, 5 fell back to the dictionary after 3 retries (free routing has no JSON schema mode); `mapping.llmfp-smart.json`, not a gate |
+
+Not recorded yet: Mistral and Claude (need a paid key: owner), and ExplainAgent against a live model
+(its guardrail tests run on scripted answers).
 
 ## Open points
 

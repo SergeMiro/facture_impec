@@ -1,0 +1,761 @@
+{
+  "agent": "mapping",
+  "promptHash": "edb39a3205a9e579",
+  "answers": {
+    "01-clean": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": []
+    },
+    "02-title-rows": {
+      "headerRow": 5,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": []
+    },
+    "03-english": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "H",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "D",
+          "confidence": 0.85
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": [
+        "Le numéro SIREN du client est associé avec une confiance de 0,85 ; veuillez vérifier.",
+        "Certaines colonnes attendues (par exemple, Total TTC, Montant HT de la ligne) sont absentes."
+      ]
+    },
+    "04-abbreviations": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": []
+    },
+    "05-multiline-blank-number": null,
+    "06-multiline-repeated-number": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "buyerName",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "number",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": "C",
+      "warnings": [
+        "Colonnes manquantes : montant HT de la ligne, total TTC, adresse, email, etc."
+      ]
+    },
+    "07-two-row-header": {
+      "headerRow": 2,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": []
+    },
+    "08-extra-columns": null,
+    "09-vat-amount-and-rate": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "H",
+          "confidence": 0.95
+        },
+        {
+          "field": "totalInclVat",
+          "column": "J",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": [
+        "Colonne I “TVA” contient des montants de TVA mais n'est pas mappée ; vérifier si elle devrait être utilisée pour un champ de TVA dedicacé ou pour le montant HT de la ligne."
+      ]
+    },
+    "10-net-and-ttc": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "lineNet",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "H",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "I",
+          "confidence": 0.95
+        },
+        {
+          "field": "totalInclVat",
+          "column": "J",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": []
+    },
+    "11-no-siren-nine-digit-code": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": []
+    },
+    "12-siret-only": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiret",
+          "column": "D",
+          "confidence": 0.9
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": "A",
+      "warnings": []
+    },
+    "13-reordered-with-gap": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "issueDate",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "H",
+          "confidence": 0.95
+        },
+        {
+          "field": "number",
+          "column": "I",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": []
+    },
+    "14-fraction-rates": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": []
+    },
+    "15-client-ref-and-name": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "buyerName",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "number",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "H",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "I",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": [
+        "Le montant HT de la ligne (lineNet) et le total TTC (totalInclVat) sont absents et doivent être calculés.",
+        "Adresse, e-mail et autres informations du client sont manquantes."
+      ]
+    },
+    "16-item-code-and-label": null,
+    "17-line-number-column": null,
+    "18-many-dates": null,
+    "19-totals-and-blank-rows": {
+      "headerRow": 2,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "H",
+          "confidence": 0.95
+        },
+        {
+          "field": "lineNet",
+          "column": "I",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": "A",
+      "warnings": [
+        "Colonne manquante : Date d'échéance",
+        "Colonne manquante : Total TTC",
+        "Colonne manquante : N° de TVA du client",
+        "Colonne manquante : Adresse du client",
+        "Colonne manquante : E-mail du client",
+        "Colonne manquante : Code postal du client",
+        "Colonne manquante : Ville du client",
+        "Colonne manquante : Pays du client",
+        "Colonne manquante : N° de bon de commande",
+        "Colonne manquante : Conditions de paiement",
+        "Colonne manquante : Devise",
+        "Colonne manquante : Unité",
+        "Colonne manquante : Catégorie de TVA",
+        "Colonne manquante : Bien ou service"
+      ]
+    },
+    "20-conversational-headers": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "D",
+          "confidence": 0.85
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": []
+    }
+  },
+  "label": "llmfp-smart",
+  "provider": "openai-compatible",
+  "model": "auto - Smart models - Hermes",
+  "recordedAt": "2026-10-18",
+  "gate": false
+}
