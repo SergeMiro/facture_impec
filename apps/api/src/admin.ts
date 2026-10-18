@@ -1,5 +1,6 @@
 // The operator's routes (Bearer ADMIN_TOKEN): list and create companies, set one's platform account and
-// switch it live in prod, give it a firm's brand or the pilot status, and the local outbox. Every change is audited as `admin`.
+// switch it live in prod, give it a firm's brand or the pilot status, check its archive, and the local
+// outbox. Every change is audited as `admin`.
 import { Address, isValidSiren } from '@fi/core';
 import {
   and,
@@ -16,12 +17,13 @@ import {
 import { TRIAL_DAYS, WhiteLabel } from '@fi/shared';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { verifyArchive } from './archive';
 import { adminAuth, newApiKey } from './auth';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { body, Email, uuid } from './http';
 import { OutboxMailer } from './mail';
-import { homeProvider } from './platform';
+import { adapterFor, homeProvider } from './platform';
 import { insertTenant } from './tenants';
 import { tenantView } from './views';
 
@@ -139,7 +141,7 @@ export function adminRoutes(deps: ApiDeps) {
       throw new ApiError(409, 'confirm_mismatch');
     if (!live) return c.json(tenantView(await update(before, 'tenant.offline', { liveAt: null })));
     if (before.liveAt) return c.json(tenantView(before));
-    const adapter = deps.pdp[before.pdpProvider];
+    const adapter = adapterFor(deps, before, before.pdpProvider);
     if (!adapter) throw new ApiError(409, 'pdp_not_configured');
     try {
       // The cheapest call that needs the account to exist and our key to reach it.
@@ -179,6 +181,17 @@ export function adminRoutes(deps: ApiDeps) {
     return c.json(
       tenantView(await update(before, 'tenant.billing', { billingStatus: status, trialEndsAt })),
     );
+  });
+
+  /**
+   * « Vérifier l'archive » (plan §10): every hash and chain of the company recomputed, oldest first. A
+   * deleted company too: its archive stays for ten years.
+   */
+  admin.get('/tenants/:id/archive', async (c) => {
+    const id = uuid(c.req.param('id'));
+    const [row] = await deps.db.select({ id: tenants.id }).from(tenants).where(eq(tenants.id, id));
+    if (!row) throw new ApiError(404, 'tenant_not_found');
+    return c.json(await verifyArchive(deps.db, id));
   });
 
   // Local only: the mails the outbox kept (src/mail.ts), for the E2E run, scenarios and the developer.

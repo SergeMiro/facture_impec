@@ -22,6 +22,7 @@ import {
   lt,
   magicLinks,
   or,
+  parties,
   paymentReports,
   pdpSubmissions,
   sessions,
@@ -35,12 +36,14 @@ import {
   weeklyReports,
 } from '@fi/db';
 import { z } from 'zod';
+import { archiveRegister } from './archive';
 import { isOwner, type Principal } from './auth';
 import { cancelSubscription } from './billing';
 import { chaseView } from './collect';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { exportView } from './inbound';
+import { partyView } from './parties';
 import { settingsView } from './settings';
 import { eventView, invoiceSummary, tenantView } from './views';
 
@@ -57,49 +60,65 @@ function assertOwner(principal: Principal) {
 export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: Principal) {
   assertOwner(principal);
   const db = deps.db;
-  const [people, keys, mappings, rows, runs, log, received, plans, payments, reports, sent, usage] =
-    await Promise.all([
-      db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
-      db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
-      db.select().from(sheetMappings).where(eq(sheetMappings.tenantId, tenant.id)),
-      db
-        .select()
-        .from(invoices)
-        .where(eq(invoices.tenantId, tenant.id))
-        .orderBy(asc(invoices.createdAt)),
-      db
-        .select()
-        .from(agentRuns)
-        .where(eq(agentRuns.tenantId, tenant.id))
-        .orderBy(asc(agentRuns.id)),
-      db
-        .select()
-        .from(auditEvents)
-        .where(eq(auditEvents.tenantId, tenant.id))
-        .orderBy(asc(auditEvents.id)),
-      db
-        .select()
-        .from(inboundQueue)
-        .where(eq(inboundQueue.tenantId, tenant.id))
-        .orderBy(asc(inboundQueue.receivedAt)),
-      db.select().from(chasePlans).where(eq(chasePlans.tenantId, tenant.id)),
-      db.select().from(paymentReports).where(eq(paymentReports.tenantId, tenant.id)),
-      db
-        .select()
-        .from(weeklyReports)
-        .where(eq(weeklyReports.tenantId, tenant.id))
-        .orderBy(asc(weeklyReports.week)),
-      db
-        .select()
-        .from(inboundExports)
-        .where(eq(inboundExports.tenantId, tenant.id))
-        .orderBy(asc(inboundExports.createdAt)),
-      db
-        .select()
-        .from(billingUsage)
-        .where(eq(billingUsage.tenantId, tenant.id))
-        .orderBy(asc(billingUsage.sentAt)),
-    ]);
+  const [
+    people,
+    keys,
+    mappings,
+    rows,
+    runs,
+    log,
+    received,
+    plans,
+    payments,
+    reports,
+    sent,
+    usage,
+    customers,
+    archive,
+  ] = await Promise.all([
+    db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
+    db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
+    db.select().from(sheetMappings).where(eq(sheetMappings.tenantId, tenant.id)),
+    db
+      .select()
+      .from(invoices)
+      .where(eq(invoices.tenantId, tenant.id))
+      .orderBy(asc(invoices.createdAt)),
+    db.select().from(agentRuns).where(eq(agentRuns.tenantId, tenant.id)).orderBy(asc(agentRuns.id)),
+    db
+      .select()
+      .from(auditEvents)
+      .where(eq(auditEvents.tenantId, tenant.id))
+      .orderBy(asc(auditEvents.id)),
+    db
+      .select()
+      .from(inboundQueue)
+      .where(eq(inboundQueue.tenantId, tenant.id))
+      .orderBy(asc(inboundQueue.receivedAt)),
+    db.select().from(chasePlans).where(eq(chasePlans.tenantId, tenant.id)),
+    db.select().from(paymentReports).where(eq(paymentReports.tenantId, tenant.id)),
+    db
+      .select()
+      .from(weeklyReports)
+      .where(eq(weeklyReports.tenantId, tenant.id))
+      .orderBy(asc(weeklyReports.week)),
+    db
+      .select()
+      .from(inboundExports)
+      .where(eq(inboundExports.tenantId, tenant.id))
+      .orderBy(asc(inboundExports.createdAt)),
+    db
+      .select()
+      .from(billingUsage)
+      .where(eq(billingUsage.tenantId, tenant.id))
+      .orderBy(asc(billingUsage.sentAt)),
+    db
+      .select()
+      .from(parties)
+      .where(eq(parties.tenantId, tenant.id))
+      .orderBy(asc(parties.legalName)),
+    archiveRegister(db, tenant.id),
+  ]);
   const ids = rows.map((r) => r.id);
   const events = ids.length
     ? await db
@@ -173,6 +192,9 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       reportedAt: u.reportedAt?.toISOString() ?? null,
     })),
     accountantExports: sent.map((e) => ({ ...exportView(e), fec: e.fec, csv: e.csv })),
+    customers: customers.map(partyView),
+    /** The ten-year register; the documents themselves are the invoices above and their XML. */
+    archive,
     agentRuns: runs.map((r) => ({
       agent: r.agent,
       provider: r.provider,
@@ -271,6 +293,8 @@ export async function deleteTenant(
     if (userIds.length) await tx.delete(magicLinks).where(inArray(magicLinks.userId, userIds));
     await tx.delete(users).where(eq(users.tenantId, tenant.id));
     await tx.delete(sheetMappings).where(eq(sheetMappings.tenantId, tenant.id));
+    // The customer directory holds contacts (an e-mail may name a person); the invoices keep their buyer.
+    await tx.delete(parties).where(eq(parties.tenantId, tenant.id));
     await tx.delete(agentRuns).where(eq(agentRuns.tenantId, tenant.id));
     await tx
       .update(apiKeys)
@@ -282,6 +306,8 @@ export async function deleteTenant(
         aiSettings: null,
         aiKeySealed: null,
         aiKeyHint: null,
+        pdpKeySealed: null,
+        pdpKeyHint: null,
         invoiceDefaults: {},
         whiteLabel: null,
         ...(tenant.billingStatus !== 'pilot' && { billingStatus: 'ended' as const }),

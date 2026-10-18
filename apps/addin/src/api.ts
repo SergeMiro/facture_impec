@@ -181,6 +181,12 @@ const InvoiceSummary = z.object({
   payable: z.number().nullable(),
   pdpRef: z.string().nullable(),
   isTest: z.boolean(),
+  /** The customer of the fiche clients this invoice was matched to; null: none yet. */
+  partyId: z.string().nullable().default(null),
+  /** « Envoi automatique »: when it leaves by itself, or held for good by « Annuler ». */
+  autopilot: z
+    .object({ at: z.string().nullable(), held: z.boolean() })
+    .default({ at: null, held: false }),
   excelBinding: z
     .object({
       sheet: z.string(),
@@ -282,7 +288,15 @@ export const Settings = z.object({
     paymentDays: z.number().optional(),
     operationCategory: z.enum(['goods', 'services', 'mixed']).optional(),
   }),
-  pdp: z.object({ provider: z.string(), account: z.string(), connected: z.boolean() }),
+  pdp: z.object({
+    provider: z.string(),
+    account: z.string(),
+    connected: z.boolean(),
+    /** The company's own platform key: where the server offers it, and the end of the one saved. */
+    ownKey: z
+      .object({ available: z.boolean(), hint: z.string().nullable() })
+      .default({ available: false, hint: null }),
+  }),
   ai: z.object({
     mode: z.enum(['included', 'off', 'byok']),
     includedProvider: z.string().nullable(),
@@ -302,6 +316,48 @@ export type SettingsPatch = Partial<{
   mode: Settings['mode'];
   autopilotMaxAmount: number | null;
 }>;
+
+/** A customer of the fiche clients, confirmed against the company directory (plan §4 parties). */
+export const Party = z.object({
+  id: z.string(),
+  legalName: z.string(),
+  siren: z.string(),
+  vatId: z.string().nullable(),
+  address: PostalAddress.nullable(),
+  email: z.string().nullable(),
+  names: z.array(z.string()),
+  /** What the platform's directory said when the customer was confirmed. */
+  routing: z.object({ found: z.boolean(), checkedAt: z.string() }).nullable(),
+  autopilot: z.boolean(),
+  verifiedAt: z.string(),
+});
+export type Party = z.infer<typeof Party>;
+
+/** One company « Chercher dans l'annuaire » found (PartyAgent). */
+export const PartyCandidate = z.object({
+  siren: z.string(),
+  name: z.string().nullable(),
+  address: PostalAddress.nullable(),
+  vatId: z.string().nullable(),
+  /** Null: the platform could not be asked. */
+  routing: z.boolean().nullable(),
+  refusal: z.enum(['closed', 'duplicate']).nullable(),
+  keptSiren: z.string().nullable(),
+  /** Already in the fiche clients. */
+  partyId: z.string().nullable(),
+});
+export type PartyCandidate = z.infer<typeof PartyCandidate>;
+
+export const PartyFinding = z.object({ question: z.string(), candidates: z.array(PartyCandidate) });
+export type PartyFinding = z.infer<typeof PartyFinding>;
+
+export interface PartyQuery {
+  name?: string;
+  siren?: string;
+  postCode?: string;
+}
+
+export type PartyPatch = Partial<{ email: string | null; autopilot: boolean }>;
 
 /** The weekly report (Tableau de bord card): numbers first, then what to do. */
 export const WeeklyReport = z.object({
@@ -529,6 +585,23 @@ export class ApiClient {
     this.#json(Settings, '/settings', { method: 'PATCH', body: patch });
   saveAi = (choice: AiChoice) =>
     this.#json(Settings, '/settings/ai', { method: 'PUT', body: choice });
+  savePdpKey = (body: { apiKey: string; account?: string }) =>
+    this.#json(Settings, '/settings/pdp', { method: 'PUT', body });
+  removePdpKey = () => this.#json(Settings, '/settings/pdp', { method: 'DELETE' });
+
+  parties = () => this.#json(z.object({ parties: z.array(Party) }), '/parties');
+  searchParties = (query: PartyQuery) =>
+    this.#json(PartyFinding, '/parties/search', { method: 'POST', body: query });
+  confirmParty = (siren: string, name?: string) =>
+    this.#json(Party, '/parties', { method: 'POST', body: { siren, ...(name && { name }) } });
+  patchParty = (id: string, patch: PartyPatch) =>
+    this.#json(Party, `/parties/${id}`, { method: 'PATCH', body: patch });
+  deleteParty = async (id: string) => {
+    await this.#send(`/parties/${id}`, { method: 'DELETE' });
+  };
+  /** « Annuler l'envoi automatique »: the invoice waits for « Envoyer » for good. */
+  cancelAutopilot = (id: string) =>
+    this.#json(InvoiceDetail, `/invoices/${id}/autopilot/cancel`, { method: 'POST' });
   exportData = async () => (await this.#send('/tenant/export')).blob();
 
   inbound = (test: boolean) =>

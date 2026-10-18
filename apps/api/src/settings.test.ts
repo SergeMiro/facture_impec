@@ -59,7 +59,12 @@ interface Settings {
   pseudonymizeLlm: boolean;
   chaseCadence: number[];
   invoiceDefaults: Record<string, unknown>;
-  pdp: { provider: string; account: string; connected: boolean };
+  pdp: {
+    provider: string;
+    account: string;
+    connected: boolean;
+    ownKey: { available: boolean; hint: string | null };
+  };
   ai: Record<string, unknown>;
 }
 
@@ -86,7 +91,12 @@ describe('settings', () => {
       pseudonymizeLlm: true,
       chaseCadence: [-3, 1, 8, 15, 30],
       invoiceDefaults: {},
-      pdp: { provider: 'mock', account: t.account, connected: true },
+      pdp: {
+        provider: 'mock',
+        account: t.account,
+        connected: true,
+        ownKey: { available: false, hint: null },
+      },
       ai: { mode: 'included', includedProvider: null, byokAvailable: true },
     } satisfies Settings);
   });

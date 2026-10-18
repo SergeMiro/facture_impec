@@ -22,6 +22,7 @@ import { z } from 'zod';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { label } from './invoices';
+import { adapterFor } from './platform';
 import type { WorkerDeps } from './workers';
 
 export const PaymentBody = z.object({
@@ -96,13 +97,22 @@ export async function recordPayment(
 /** Reports one recorded payment to the platform. Throws to be retried while the platform is down. */
 export async function runReportPayment(deps: WorkerDeps, invoiceId: string): Promise<void> {
   const [job] = await deps.db
-    .select({ report: paymentReports, pdpRef: invoices.pdpRef, account: tenants.pdpAccount })
+    .select({
+      report: paymentReports,
+      pdpRef: invoices.pdpRef,
+      isTest: invoices.isTest,
+      account: tenants.pdpAccount,
+      pdpProvider: tenants.pdpProvider,
+      pdpKeySealed: tenants.pdpKeySealed,
+    })
     .from(paymentReports)
     .innerJoin(invoices, eq(invoices.id, paymentReports.invoiceId))
     .innerJoin(tenants, eq(tenants.id, paymentReports.tenantId))
     .where(eq(paymentReports.invoiceId, invoiceId));
   if (job?.report.status !== 'pending' || !job.pdpRef) return;
-  const adapter = deps.pdp[job.report.provider];
+  const adapter = job.isTest
+    ? deps.pdp[job.report.provider]
+    : adapterFor(deps, job, job.report.provider);
   const mark = (status: 'pending' | 'reported' | 'failed', error: string | null) =>
     deps.db.transaction(async (tx) => {
       await tx

@@ -334,6 +334,58 @@ Tests: `apps/api/src/onboarding.test.ts`, `billing.test.ts`, `operator.test.ts`,
 | API runtime | One image running `tsx`, workers in the same process | No bundler to maintain for a pilot; a bundle is in `docs/DEFERRED.md` if start-up or size matters. |
 | Stripe from Excel | Browser window (desktop) or a dialog on our own page (web), only Stripe's hosts | Stripe advises against iframes; no AppDomain needed; 1100.4 asks for the user's click. |
 
+## What M8 added: customers, autopilot send, the archive, a company's own platform key
+
+M8 closes what plan §0.2, §4, §6 and §10 asked for and M0–M7 had left in `docs/DEFERRED.md`
+(criteria in `docs/PROGRESS.md` M8).
+
+```
+Clients « Chercher dans l'annuaire » ─► POST /parties/search ─► PartyAgent ─► Annuaire (name or SIREN)
+                                                                   └─► PDP lookupRecipient (reach)
+   « C'est ce client » ─► POST /parties ─► lookup again ─► parties (verified, names as the sheet writes them)
+sync ─► each invoice's buyer completed from its customer (sheet wins) ─► invoices.party_id
+validated + customer opted in + autopilot ceiling ─► autopilot_at = last change + 15 min
+sweep ─► runAutopilot (every check again) ─► approve (actor system) ─► send queue | cancelled + reason
+real deposit / real received invoice ─► invoice_archive (XML, PDF, SHA-256, chain, keep 10 years)
+Réglages « Connecter votre compte B2Brouter » ─► PUT /settings/pdp ─► probe ─► tenants.pdp_key_sealed
+```
+
+| Path | What it does |
+|---|---|
+| `packages/agents/src/party.ts` | The PartyAgent (plan §6 ENRICH): `findParty` (three letters, post code then without, five candidates, exact name first, reach asked of the platform) and `confirmParty` (never a SIREN the directory does not vouch for now: invalid, unknown, closed, duplicate). Deterministic, no model, no customer name to a model. |
+| `packages/core/src/party.ts` | `completeBuyer`: fills what the sheet leaves empty (name, SIREN, VAT number, address, e-mail); a sheet SIREN of another company fills nothing. `partyKey` matches names without case, accents or punctuation. |
+| `apps/api/src/parties.ts` | Routes `/parties*`, the agent run in `agent_runs` (no tokens), the customers read once per sync, the note in FI_Détail. |
+| `apps/api/src/autopilot.ts` | `autopilotBlocker` (mode and ceiling, validated without warning, invoice in euros under the ceiling, confirmed customer opted in, a first invoice to it sent by hand and delivered), `planAutopilot` after every change, `holdAutopilot`, `runAutopilot` in the sweep (platform, go-live, billing and directory checked again when due). |
+| `apps/api/src/archive.ts` | `archiveSent` after a real deposit, `archiveReceived` in the transaction that stores a real supplier invoice, `runArchive` catching up in the sweep, `archivedPdf` for « Voir le PDF », `verifyArchive` for the operator, `archiveRegister` for the RGPD export. |
+| `apps/api/src/platform.ts` | `adapterFor`: a company with its own key uses it for real invoices; a key saved that this deployment cannot open stops real sends rather than falling back to ours. |
+| `apps/api/src/settings.ts`, `runtime.ts` | `savePdpKey` / `removePdpKey` (owner only, probe first); `ownPdpFromEnv` builds a company's adapter, refusing a key of another environment. |
+| `apps/addin/src/ui/CustomersView.tsx` | The Clients tab: search, candidates with their reach, « C'est ce client », e-mail and « Envoi automatique » per customer. The fiche gains « Trouver ce client » and the planned send with « Annuler l'envoi automatique ». |
+
+Tables (migration `0007_gaps.sql`): new `parties` (one row per company and SIREN, the names the sheets
+use, routing, the autopilot switch) and `invoice_archive` (written once: a trigger refuses any update,
+truncate, and any delete before `keep_until`); `invoices` gains `party_id`, `autopilot_at`,
+`autopilot_fingerprint`, `autopilot_held`; `tenants` gains `pdp_key_sealed`, `pdp_key_hint`.
+
+Tests: `packages/agents/src/party.test.ts`, `packages/core/src/party.test.ts`,
+`apps/api/src/parties.test.ts`, `autopilot.test.ts`, `archive.test.ts`, `own-platform.test.ts`,
+`runtime.test.ts` › company keys, `packages/db/src/db.test.ts` › invoice_archive,
+`controller.test.ts` › customers and › autopilot hold.
+
+### Decisions taken in M8
+
+| Topic | Decision | Why |
+|---|---|---|
+| PartyAgent and models | Deterministic; the directory and the platform answer, the agent only orders and guards | Whether a company exists is a fact to look up, and plan §0 keeps names away from models by default. |
+| What the directory receives | Only what the user typed in the search (or « Trouver ce client », which fills it with the sheet's name) | No sheet is sent to a third party without a click. |
+| A customer and the sheet | The sheet always wins; only empty cells are filled, and a different SIREN means another customer | The user's own cells are the truth (plan §5); the directory completes, it never corrects. |
+| When an invoice leaves by itself | Opt-in per customer and a ceiling per company (plan §0.2), checked again when due, never a credit note or another currency, never past a warning | A wrong automatic send is a real invoice in a real customer's platform; the expensive cases stay with a person. |
+| Trial period | The first invoice to each customer is sent by hand and must be delivered before the autopilot takes the next ones | The customer's platform address and the content are seen working once by the user. |
+| Grace before an automatic send | 15 minutes after the last change, shown in the sheet and on the fiche, cancellable | The sheet syncs while the user types; a half-typed invoice must not leave. |
+| The archive | In Postgres, written once by trigger, a SHA-256 per file and a hash chain per company; it leaves the machine with the backup | Plan §10's ten years without an object-storage bucket yet (`docs/DEFERRED.md`); the chain shows a changed row. |
+| RGPD deletion and the archive | The archive stays for its ten years; customers and the company's key go | The legal retention of invoices outweighs erasure (art. 17.3.b), the rest has no such basis (`docs/RGPD.md`). |
+| A company's own key | Sealed with AES-256-GCM under `PDP_KEY_SEALING_KEY`, tested before it is saved, shown by its last four characters, used for real invoices only | A secret the company gave us must be useless if the database leaks, and « Mode test » must never reach its real account. |
+| A key the deployment cannot open | Real sends stop (« Envoyer » answers `pdp_not_configured`, the invoice stays); we never fall back to our own key | Sending a company's invoices from our account would be an invoice from the wrong sender. |
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

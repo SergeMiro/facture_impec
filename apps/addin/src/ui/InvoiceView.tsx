@@ -1,5 +1,6 @@
 // Screen 4, Fiche facture (plan §5): what to fix and where, the rehearsal, sending, the XML and PDF,
-// « Relancer », the MonitorAgent's next step, the timeline, and in Mode test the scenario panel.
+// « Relancer », the MonitorAgent's next step, the timeline, and in Mode test the scenario panel. An
+// invoice the autopilot will send says when, with « Annuler l'envoi automatique ».
 import { frDate, frMoney } from '@fi/core';
 import { isMessageKey, type MessageKey, t } from '@fi/shared';
 import {
@@ -22,7 +23,7 @@ import { useState } from 'react';
 import { type InvoiceEvent, MONITOR_PROPOSALS, SCENARIOS, type Scenario } from '../api';
 import type { OpenInvoice } from '../controller';
 import { ChasePanel, dayLabel, kindLabel, NextStepCard, stepStatus } from './ChasePanel';
-import { parisDateTime, useFi } from './context';
+import { parisDateTime, parisTime, useFi } from './context';
 import { TEST_ORANGE } from './theme';
 
 const useStyles = makeStyles({
@@ -108,8 +109,15 @@ function eventText(e: InvoiceEvent): string {
   } else if (e.type === 'note' && e.event === 'scenario_planned') {
     const status = 'status' in payload && typeof payload.status === 'string' ? payload.status : '';
     text = t('addin.invoice.event.planned', { status: statusLabel(status) });
+  } else if (e.type === 'note' && e.event === 'autopilot_cancelled') {
+    text = t('addin.invoice.event.autopilotCancelled');
+  } else if (e.type === 'note' && e.event === 'autopilot_held') {
+    text = t('addin.invoice.event.autopilotHeld');
   } else if (e.toStatus) {
-    text = statusLabel(e.toStatus);
+    const auto = 'autopilot' in payload && payload.autopilot === true;
+    text = auto
+      ? t('addin.invoice.event.autopilot', { status: statusLabel(e.toStatus) })
+      : statusLabel(e.toStatus);
   } else {
     text = t('addin.invoice.event.platform');
   }
@@ -171,9 +179,34 @@ export function InvoiceView() {
       </div>
       <div className={styles.facts}>
         {d.buyerName && <Text>{t('addin.invoice.buyer', { name: d.buyerName })}</Text>}
+        {d.buyerName && !d.partyId && (
+          <Link onClick={() => void fi.findCustomer()} data-testid="find-customer">
+            {t('addin.invoice.findCustomer')}
+          </Link>
+        )}
         {amount && <Text>{t('addin.invoice.amount', { amount })}</Text>}
         {d.dueDate && <Text>{t('addin.invoice.due', { date: frDate(d.dueDate) })}</Text>}
       </div>
+
+      {d.autopilot.at && (
+        <MessageBar intent="info" layout="multiline" data-testid="autopilot-banner">
+          <MessageBarBody>
+            {t('addin.autopilot.planned', { time: parisTime(d.autopilot.at) })}
+          </MessageBarBody>
+          <MessageBarActions>
+            <Button
+              size="small"
+              disabled={state.busy.includes('autopilot')}
+              onClick={() => void fi.cancelAutopilot()}
+            >
+              {t('addin.autopilot.cancel')}
+            </Button>
+          </MessageBarActions>
+        </MessageBar>
+      )}
+      {d.autopilot.held && d.status === 'validated' && (
+        <Caption1 className={styles.muted}>{t('addin.autopilot.heldHint')}</Caption1>
+      )}
 
       {d.nextStep && <NextStepCard next={d.nextStep} />}
 

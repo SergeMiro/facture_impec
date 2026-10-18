@@ -697,6 +697,38 @@ close with one call using the owner's sandbox key (`test_`). Items marked "stagi
 | T20 | The sandbox's default path is `sent → registered` and only Peppol invoices go further (§1): does a French invoice sent to a SIREN follow it, and how fast? Must the invoice's seller be the account's own company? | The E2E and the contract accept any status after the deposit; the demo seller is used | The live contract and E2E with the owner's key (docs/RUNBOOK.md § B2Brouter sandbox) |
 | T21 | `POST /payments` has no idempotency key: after a lost answer (timeout, connection cut once B2Brouter has the request), does a second call for the same invoice record a second payment, answer an error, or stay one? | One `payment_reports` row per invoice; the job retries only outages, so a lost answer can repeat the call once per retry. A refusal (4xx) is `failed`, never retried | Sandbox: post the same payment twice, then read the invoice and its payments |
 | T22 | What `{account}` in `/accounts/{account}/…` is: B2Brouter's own account id, or can it be the company's SIREN? And does a company keep the same id in the sandbox and in production (keys and accounts are not shared between environments, §1)? | A company's account defaults to its SIREN; the operator sets B2Brouter's id with `PUT /admin/tenants/:id/platform` before the go-live (`docs/RUNBOOK.md` § Pilot), and the go-live call checks it answers. Mode test in prod uses the same id on the sandbox key: if the ids differ, a second column (sandbox account) is needed (`docs/DEFERRED.md`) | Owner's first sandbox and production accounts: `GET /accounts` with each key |
+| T23 | What a valid key answers on an account it cannot reach (another company's id, a typo): 404, 403, or an empty list? | The probe of §12 reads 404 as « wrong account » and 401/403 as « wrong key » (§2); anything else as « not accepted », and nothing is saved either way | Owner's sandbox key: `GET /accounts/<wrong id>/invoices?type=ReceivedInvoice` once |
 
 **Closed during this research:** Annuaire publication delay = nightly batch, live the next
 morning [verified, S14, 2026-10-17].
+
+## 12. Company keys (M8)
+
+A company that already has a B2Brouter account can connect its own key in Réglages (plan §4
+`pdp_credentials_enc`, §5 « PDP connection »). Code: `apps/api/src/settings.ts` (`savePdpKey`,
+`removePdpKey`), `apps/api/src/runtime.ts` (`ownPdpFromEnv`), `apps/api/src/platform.ts` (`adapterFor`);
+tests `apps/api/src/own-platform.test.ts`, `runtime.test.ts` › company keys.
+
+- **Only where the deployment seals keys.** Without `PDP_KEY_SEALING_KEY` (32 bytes, base64) the form is
+  not shown and the API answers 409 `pdp_key_disabled`.
+- **Environment rule** (§1, §2): outside local, a sandbox deployment accepts only `test_` keys and a
+  production one refuses them; a `stag_` key is refused outside staging by the same host check as the
+  deployment's key (§3.4). The refusal is 422 `pdp_key_refused` and nothing is saved.
+- **Probe before saving.** The key is tried with `listInbound` on the company's account (the one typed, else
+  the company's account, by default its SIREN, T22) from now, which reads and changes nothing. 401/403
+  (§2) → the key is not accepted (`pdpKey.problem.key`); 404 → the key does not open that account
+  (`pdpKey.problem.account`, `TODO(verify)` T23); a timeout or 5xx → B2Brouter did not answer
+  (`pdpKey.problem.unavailable`). On any refusal the key, the account and the tenant stay as they were.
+- **At rest.** AES-256-GCM under `PDP_KEY_SEALING_KEY` (the same sealing as the AI keys,
+  `packages/agents/src/providers/seal.ts`); only `…` and the last four characters are kept in clear for
+  the pane. The key is never returned, exported, logged or written to the audit (the audit has the hint
+  and the account).
+- **Which key serves what.** Real invoices of that company (send, status sync, received invoices,
+  payment reports, go-live check) go through its key; test invoices keep the deployment's test platform,
+  so « Mode test » never reaches the company's real account. A key the deployment can no longer open
+  (sealing key changed) stops real sends; it never falls back to our key.
+- **Webhooks.** A webhook's `signing_secret` is returned only when the webhook is created (§3.1, §4).
+  We register none with a company's key and hold no secret for its account, so its invoices get their
+  statuses from the sweep's polling (`docs/DEFERRED.md`).
+- **Once live.** The account no longer changes and the key cannot be removed; it can be replaced by one
+  that passes the probe on the same account (rotation). RGPD deletion clears it.

@@ -3,6 +3,7 @@
 // reuse the idempotency key, platform events are applied once per event id, advice is written once
 // per event, a payment is reported once, and each chasing step is claimed before it is mailed.
 import { toCii } from '@fi/core';
+import type { FacturXOptions } from '@fi/core/pdf';
 import {
   and,
   applyTransition,
@@ -29,15 +30,25 @@ import { eventFor, type PdpAdapter, PdpUnavailableError, type SendResult } from 
 import type { FiEnv } from '@fi/shared/env';
 import type { PgBoss } from 'pg-boss';
 import { z } from 'zod';
+import { archiveReceived, archiveSent, runArchive } from './archive';
+import { runAutopilot } from './autopilot';
 import { type Billing, recordUsage, runUsageReport } from './billing';
 import { runCollect } from './collect';
-import type { AiDeps, Jobs, Mailer, PdpRegistry, SyncTarget, TestPlatform } from './deps';
+import type {
+  AiDeps,
+  Jobs,
+  Mailer,
+  OwnPlatform,
+  PdpRegistry,
+  SyncTarget,
+  TestPlatform,
+} from './deps';
 import { INJECTED_PREFIX, triagePending } from './inbound';
 import { idempotencyKey } from './invoices';
 import { QUEUES } from './jobs';
 import { ADVISED, awaitingAdvice, runMonitor } from './monitor';
 import { runReportPayment } from './payments';
-import { awaitsGoLive, routeFor } from './platform';
+import { adapterFor, awaitsGoLive, routeFor } from './platform';
 import { runWeeklyReports } from './report';
 import { purgeExpired } from './rgpd';
 
@@ -47,11 +58,15 @@ export interface WorkerDeps {
   db: Db;
   pdp: PdpRegistry;
   test: TestPlatform | null;
+  /** Company platform keys (src/platform.ts adapterFor); absent: every company uses ours. */
+  ownPdp?: OwnPlatform | null;
   jobs: Jobs;
   ai: AiDeps;
   mailer: Mailer | null;
   /** Counts real sends and reports those beyond the quota (src/billing.ts). */
   billing?: Billing | null;
+  /** For the archived PDF (src/archive.ts); absent: the bundled fonts. */
+  fonts?: FacturXOptions['fonts'];
   now: () => Date;
 }
 
@@ -173,6 +188,10 @@ export async function runSend(deps: WorkerDeps, invoiceId: string): Promise<void
     }
   });
   if (result.outcome === 'rejected') await deps.jobs.enqueueMonitor(invoiceId);
+  // Into the ten-year archive right away; if this fails, the sweep archives it (runArchive).
+  if (result.outcome === 'deposited' && !claim.isTest) {
+    await archiveSent(deps, invoiceId).catch(() => false);
+  }
 }
 
 /**
@@ -181,11 +200,14 @@ export async function runSend(deps: WorkerDeps, invoiceId: string): Promise<void
  * disposition », both `delivered` for us) is kept on the timeline as a platform event.
  */
 export async function runSync(deps: WorkerDeps, target: SyncTarget): Promise<void> {
-  const adapter: PdpAdapter | undefined = deps.pdp[target.provider];
-  if (!adapter) throw new NotReadyError(`no ${target.provider} adapter configured`);
   // The submission says which platform holds the invoice: test invoices sit on the test platform.
   const [found] = await deps.db
-    .select({ id: invoices.id })
+    .select({
+      id: invoices.id,
+      isTest: invoices.isTest,
+      pdpProvider: tenants.pdpProvider,
+      pdpKeySealed: tenants.pdpKeySealed,
+    })
     .from(invoices)
     .innerJoin(tenants, eq(tenants.id, invoices.tenantId))
     .innerJoin(
@@ -202,6 +224,11 @@ export async function runSync(deps: WorkerDeps, target: SyncTarget): Promise<voi
   // A webhook can beat the send job's answer: the reference is not stored yet. Retry shortly.
   if (!found)
     throw new NotReadyError(`no invoice with ${target.provider} reference ${target.pdpRef}`);
+  // A real invoice is followed with the key it was sent with: the company's own, when it has one.
+  const adapter: PdpAdapter | undefined = found.isTest
+    ? deps.pdp[target.provider]
+    : adapterFor(deps, found, target.provider);
+  if (!adapter) throw new NotReadyError(`no ${target.provider} adapter configured`);
 
   const history = await adapter.getStatus({ account: target.account, pdpRef: target.pdpRef });
   let advise = false;
@@ -305,6 +332,7 @@ export async function runInboundPoll(
       id: tenants.id,
       provider: tenants.pdpProvider,
       account: tenants.pdpAccount,
+      pdpKeySealed: tenants.pdpKeySealed,
       sandboxEnabled: tenants.sandboxEnabled,
       liveAt: tenants.liveAt,
       createdAt: tenants.createdAt,
@@ -318,10 +346,11 @@ export async function runInboundPoll(
     const providers = new Set<PdpProvider>(awaitsGoLive(deps, company) ? [] : [company.provider]);
     if (company.sandboxEnabled && deps.test) providers.add(deps.test.provider);
     for (const provider of providers) {
-      const adapter = deps.pdp[provider];
+      const isTest = provider !== company.provider;
+      const keyed = { pdpProvider: company.provider, pdpKeySealed: company.pdpKeySealed };
+      const adapter = isTest ? deps.pdp[provider] : adapterFor(deps, keyed, provider);
       if (!adapter) continue;
       try {
-        const isTest = provider !== company.provider;
         stored += await pollOne(deps, adapter, { ...company, provider, isTest });
       } catch (e) {
         failed++;
@@ -378,6 +407,13 @@ async function pollOne(
         objectId: row.id,
         after: r.xml,
       });
+      if (!company.isTest) {
+        await archiveReceived(
+          tx,
+          { tenantId: company.id, inboundId: row.id, xml: r.xml },
+          deps.now(),
+        );
+      }
     });
   }
   return stored;
@@ -407,7 +443,9 @@ export async function startWorkers(
     if (job) await runSync(deps, SyncJob.parse(job.data));
   });
   await boss.work(QUEUES.sweep, polling, async () => {
+    await runAutopilot(deps, options.log);
     await runSweep(deps);
+    await runArchive(deps, options.log);
     await runInboundPoll(deps, options.log);
     await runUsageReport(deps, options.log);
   });

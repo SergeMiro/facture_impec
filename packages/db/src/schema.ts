@@ -1,5 +1,4 @@
-// Postgres schema (plan §4), the part M6 needs. Tables of later milestones (parties) arrive with them
-// (docs/DEFERRED.md).
+// Postgres schema (plan §4). Tables nothing reads yet stay out (docs/DEFERRED.md).
 // Change it, then `pnpm --filter @fi/db generate` writes the migration into drizzle/.
 import type {
   Address,
@@ -55,6 +54,12 @@ export const tenants = pgTable('tenants', {
   pdpProvider: text('pdp_provider', { enum: TENANT_PROVIDERS }).notNull(),
   /** The tenant's account at the PDP: B2Brouter keeps one per SIREN (docs/B2BROUTER.md §3.2). */
   pdpAccount: text('pdp_account').notNull(),
+  /**
+   * A company that brings its own B2Brouter key (plan §4 `pdp_credentials_enc`): sealed AES-256-GCM
+   * under PDP_KEY_SEALING_KEY, never stored in clear; null = the deployment's key.
+   */
+  pdpKeySealed: text('pdp_key_sealed'),
+  pdpKeyHint: text('pdp_key_hint'),
   mode: text('mode', { enum: ['review', 'autopilot'] })
     .notNull()
     .default('review'),
@@ -240,6 +245,50 @@ export const apiKeys = pgTable('api_keys', {
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
 });
 
+/** What the platform's directory said about a customer when it was confirmed (plan §4 `pdp_routing_json`). */
+export interface PartyRouting {
+  /** The platform can deliver to this SIREN. */
+  found: boolean;
+  checkedAt: string;
+}
+
+/**
+ * The company's customers (plan §4 `parties`), each one confirmed by the user against the public directory
+ * (PartyAgent, plan §6): never saved with a SIREN the directory does not know. A sync fills what the
+ * sheet leaves empty from here, finding the customer by its SIREN or by a name the sheet uses for it.
+ */
+export const parties = pgTable(
+  'parties',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    kind: text('kind', { enum: ['customer', 'supplier'] })
+      .notNull()
+      .default('customer'),
+    legalName: text('legal_name').notNull(),
+    siren: text('siren').notNull(),
+    /** Only a number DGFiP lists: a computed one could be wrong on the customer's invoice. */
+    vatId: text('vat_id'),
+    address: jsonb('address_json').$type<Address>(),
+    /** Where chasing e-mails go when the sheet has no e-mail column. */
+    email: text('email'),
+    /** The names the sheet gives this customer, as core partyKey writes them; one name, one customer. */
+    names: jsonb('names_json').$type<string[]>().notNull().default([]),
+    routing: jsonb('pdp_routing_json').$type<PartyRouting>(),
+    /** « Envoi automatique » (plan §0.2): opted in for the autopilot, under the company's ceiling. */
+    autopilot: boolean('autopilot').notNull().default(false),
+    source: text('source', { enum: ['sirene'] })
+      .notNull()
+      .default('sirene'),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('parties_siren').on(t.tenantId, t.kind, t.siren)],
+);
+
 export interface ExcelBinding {
   workbookId: string;
   sheet: string;
@@ -280,6 +329,15 @@ export const invoices = pgTable(
       .notNull()
       .default('api'),
     excelBinding: jsonb('excel_binding_json').$type<ExcelBinding>(),
+    /** The confirmed customer the buyer was completed from (plan §4 `party_id`). */
+    partyId: uuid('party_id').references(() => parties.id, { onDelete: 'set null' }),
+    /**
+     * Autopilot send (plan §0.2): when it leaves, for the content it had then. A change of content
+     * starts the wait again; « Annuler l'envoi automatique » holds the invoice for good.
+     */
+    autopilotAt: timestamp('autopilot_at', { withTimezone: true }),
+    autopilotFingerprint: text('autopilot_fingerprint'),
+    autopilotHeld: boolean('autopilot_held').notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -290,6 +348,7 @@ export const invoices = pgTable(
       .where(sql`${t.direction} = 'out' and ${t.status} <> 'cancelled'`),
     index('invoices_tenant_status').on(t.tenantId, t.status),
     index('invoices_pdp_ref').on(t.pdpRef),
+    index('invoices_autopilot').on(t.autopilotAt).where(sql`${t.autopilotAt} is not null`),
   ],
 );
 
@@ -546,6 +605,42 @@ export const billingUsage = pgTable(
   (t) => [index('billing_usage_month').on(t.tenantId, t.month)],
 );
 
+/**
+ * Ten-year archive (plan §10): the XML of every invoice sent for real as the platform got it, with our PDF,
+ * and the XML of every real invoice received. Written once; a trigger refuses any change, and any
+ * deletion before `keep_until`. Each row chains the company's previous one, so a row changed or
+ * removed behind the trigger's back shows (src/archive.ts in the API).
+ */
+export const invoiceArchive = pgTable(
+  'invoice_archive',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    direction: text('direction', { enum: ['out', 'in'] }).notNull(),
+    invoiceId: uuid('invoice_id').references(() => invoices.id),
+    inboundId: uuid('inbound_id').references(() => inboundQueue.id),
+    number: text('number'),
+    issueDate: date('issue_date', { mode: 'string' }),
+    /** The legal original: the structured invoice. */
+    xml: text('xml').notNull(),
+    xmlSha256: text('xml_sha256').notNull(),
+    /** Base64 of our Factur-X PDF of a sent invoice; received ones have none (not fetched). */
+    pdf: text('pdf_base64'),
+    pdfSha256: text('pdf_sha256'),
+    /** SHA-256 of the company's previous chain, this XML's hash and this PDF's hash. */
+    chain: text('chain').notNull(),
+    archivedAt: timestamp('archived_at', { withTimezone: true }).notNull(),
+    keepUntil: date('keep_until', { mode: 'string' }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('invoice_archive_invoice').on(t.invoiceId).where(sql`${t.invoiceId} is not null`),
+    uniqueIndex('invoice_archive_inbound').on(t.inboundId).where(sql`${t.inboundId} is not null`),
+    index('invoice_archive_tenant').on(t.tenantId, t.id),
+  ],
+);
+
 /** Stripe events already applied: an endpoint may receive the same event twice (docs/BILLING.md). */
 export const stripeEvents = pgTable('stripe_events', {
   id: text('id').primaryKey(),
@@ -564,3 +659,5 @@ export type InboundRow = typeof inboundQueue.$inferSelect;
 export type InboundExportRow = typeof inboundExports.$inferSelect;
 export type ChasePlanRow = typeof chasePlans.$inferSelect;
 export type PaymentReportRow = typeof paymentReports.$inferSelect;
+export type PartyRow = typeof parties.$inferSelect;
+export type ArchiveRow = typeof invoiceArchive.$inferSelect;

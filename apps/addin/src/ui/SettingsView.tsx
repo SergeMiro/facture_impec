@@ -1,6 +1,7 @@
-// Screen 6, Réglages (plan §5): mode (Review, or the chasing autopilot with its ceiling), chasing
-// cadence, pseudonymization, PDP connection, Mode test, the invoice defaults, the AI choice, the
-// subscription, the RGPD export and the account's deletion.
+// Screen 6, Réglages (plan §5): mode (Review, or the autopilot with its ceiling: chasing, and invoices
+// to the customers opted in), chasing cadence, pseudonymization, PDP connection and the company's own
+// platform key, Mode test, the invoice defaults, the AI choice, the subscription, the RGPD export and
+// the account's deletion.
 import { isMessageKey, t } from '@fi/shared';
 import {
   Badge,
@@ -211,7 +212,64 @@ function General({ settings }: { settings: Settings }) {
           </Badge>
         </span>
       </Field>
+      {settings.pdp.ownKey.available && <PdpKey settings={settings} />}
     </div>
+  );
+}
+
+/** « Votre propre clé B2Brouter »: the server tries it on the account before saving it. */
+function PdpKey({ settings }: { settings: Settings }) {
+  const styles = useStyles();
+  const [state, fi] = useFi();
+  const [apiKey, setApiKey] = useState('');
+  const [account, setAccount] = useState('');
+  const hint = settings.pdp.ownKey.hint;
+  const busy = state.busy.includes('pdpKey');
+  const owner = !state.me?.user || state.me.user.role === 'owner';
+
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    void fi.savePdpKey(apiKey.trim(), account.trim() || undefined).then((ok) => {
+      if (ok) {
+        setApiKey('');
+        setAccount('');
+      }
+    });
+  };
+
+  return (
+    <form className={styles.form} onSubmit={save} data-testid="pdp-key">
+      <Field
+        label={t('addin.settings.pdpKey')}
+        hint={hint ? t('addin.settings.pdpKeySavedHint', { hint }) : t('addin.settings.pdpKeyHint')}
+      >
+        <Input
+          type="password"
+          value={apiKey}
+          disabled={!owner}
+          onChange={(_, d) => setApiKey(d.value)}
+        />
+      </Field>
+      <Field label={t('addin.settings.pdpAccount')} hint={t('addin.settings.pdpAccountHint')}>
+        <Input value={account} disabled={!owner} onChange={(_, d) => setAccount(d.value)} />
+      </Field>
+      {!owner && <Caption1>{t('api.error.owner_only')}</Caption1>}
+      <span className={styles.row}>
+        <Button type="submit" disabled={!owner || busy || apiKey.trim().length < 8}>
+          {t('addin.settings.pdpKeySave')}
+        </Button>
+        {hint && (
+          <Button
+            appearance="subtle"
+            disabled={!owner || busy}
+            onClick={() => void fi.removePdpKey()}
+          >
+            {t('addin.settings.pdpKeyRemove')}
+          </Button>
+        )}
+        {busy && <Spinner size="tiny" />}
+      </span>
+    </form>
   );
 }
 

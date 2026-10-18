@@ -1,7 +1,7 @@
 import { B2BROUTER_HOSTS } from '@fi/pdp-adapter';
 import { ServerEnvSchema } from '@fi/shared/env';
 import { describe, expect, it } from 'vitest';
-import { pdpFromEnv, testPlatformFromEnv } from './runtime';
+import { ownPdpFromEnv, pdpFromEnv, testPlatformFromEnv } from './runtime';
 
 const outside = { DATABASE_URL: 'postgres://fi@db/fi', ADMIN_TOKEN: 'x'.repeat(24) };
 const env = (values: Record<string, string>) => ServerEnvSchema.parse(values);
@@ -60,5 +60,32 @@ describe('platforms from the environment', () => {
         env({ B2BROUTER_API_KEY: 'test_abc', B2BROUTER_BASE_URL: B2BROUTER_HOSTS.staging }),
       ),
     ).toThrow(/B2BROUTER_API_KEY: a sandbox key/);
+  });
+
+  it('takes company keys only with PDP_KEY_SEALING_KEY, and only keys of its own environment', () => {
+    expect(ownPdpFromEnv(env({}), {})).toBeNull();
+    expect(() => env({ PDP_KEY_SEALING_KEY: 'c2hvcnQ=' })).toThrow(/32 bytes/);
+    const sealing = { PDP_KEY_SEALING_KEY: Buffer.alloc(32, 9).toString('base64') };
+    const local = env(sealing);
+    const pdp = pdpFromEnv(local);
+    const own = ownPdpFromEnv(local, pdp);
+    expect(own?.adapter('mock', 'any_key_1234')).toBe(pdp.mock);
+    expect(own?.adapter('b2brouter_test', 'test_company')).toBeNull();
+
+    const sandbox = env({
+      ...outside,
+      ...sealing,
+      FI_ENV: 'sandbox',
+      B2BROUTER_API_KEY: 'test_abc',
+    });
+    const inSandbox = ownPdpFromEnv(sandbox, pdpFromEnv(sandbox));
+    expect(inSandbox?.adapter('b2brouter', 'test_company')?.provider).toBe('b2brouter');
+    expect(() => inSandbox?.adapter('b2brouter', 'prod_company')).toThrow(/sandbox key/);
+    const prod = env({ ...outside, ...sealing, FI_ENV: 'prod', B2BROUTER_API_KEY: 'prod_abc' });
+    const inProd = ownPdpFromEnv(prod, pdpFromEnv(prod));
+    expect(() => inProd?.adapter('b2brouter', 'test_company')).toThrow(/production key/);
+    expect(() => inProd?.adapter('b2brouter', 'stag_company')).toThrow(
+      /company key: a staging key/,
+    );
   });
 });

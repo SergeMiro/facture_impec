@@ -172,7 +172,7 @@ describe('the company lookup', () => {
       masked: false,
     });
     expect(asked).toBe(
-      'https://recherche-entreprises.api.gouv.fr/search?q=552081317&minimal=true&include=siege%2Ctva&per_page=1',
+      'https://recherche-entreprises.api.gouv.fr/search?q=552081317&per_page=1&minimal=true&include=siege%2Ctva',
     );
     expect(computedVatId('552081317')).toBe('FR03552081317');
   });
@@ -364,5 +364,33 @@ describe('the directory client', () => {
     );
     await expect(directory.lookup('552081317')).rejects.toMatchObject({ retryAfter: 3 });
     expect(await directory.lookup('552081317')).toBeNull();
+  });
+
+  it('searches active companies by name, at most 25, narrowed by a post code (docs/ONBOARDING.md §1.4)', async () => {
+    const asked: URL[] = [];
+    const directory = new RechercheEntreprises(
+      'http://d.test',
+      inProcess({
+        request: (path) => {
+          asked.push(new URL(path, 'http://d.test'));
+          return Response.json({ results: [], total_results: 0 });
+        },
+      }),
+    );
+    expect(await directory.search({ name: 'ab' }, 5)).toEqual([]);
+    expect(asked).toEqual([]);
+    await directory.search({ name: ' Électricité de France ', postCode: '75008' }, 100);
+    await directory.search({ name: 'EDF', postCode: 'Paris' }, 5);
+    expect(asked.map((u) => Object.fromEntries(u.searchParams))).toEqual([
+      {
+        q: 'Électricité de France',
+        per_page: '25',
+        etat_administratif: 'A',
+        code_postal: '75008',
+        minimal: 'true',
+        include: 'siege,tva',
+      },
+      { q: 'EDF', per_page: '5', etat_administratif: 'A', minimal: 'true', include: 'siege,tva' },
+    ]);
   });
 });

@@ -17,7 +17,7 @@ import type { PgBoss } from 'pg-boss';
 import { createAiDeps } from './ai';
 import { createApp } from './app';
 import { type Billing, billingFromEnv } from './billing';
-import type { AiDeps, ApiDeps, Mailer, PdpRegistry, TestPlatform } from './deps';
+import type { AiDeps, ApiDeps, Mailer, OwnPlatform, PdpRegistry, TestPlatform } from './deps';
 import { bossJobs, createBoss, ensureQueues } from './jobs';
 import { type Listening, listen } from './listen';
 import { OutboxMailer, SmtpMailer } from './mail';
@@ -41,6 +41,8 @@ export interface ApiOptions {
   billing?: Billing | null;
   /** Default: the Annuaire des entreprises at SIRENE_URL. */
   directory?: Directory | null;
+  /** Default: ownPdpFromEnv (PDP_KEY_SEALING_KEY). */
+  ownPdp?: OwnPlatform | null;
   pollingIntervalSeconds?: number;
   /** Chasing timer (real seconds); default COLLECT_EVERY_SECONDS. */
   collectEverySeconds?: number;
@@ -57,10 +59,15 @@ export interface RunningApi {
 }
 
 /** A B2Brouter adapter for one key; a key that does not fit its host stops the API at startup. */
-function b2brouterAdapter(env: ServerEnv, apiKey: string, webhookSecret: string | undefined) {
+function b2brouterAdapter(
+  env: ServerEnv,
+  apiKey: string,
+  webhookSecret: string | undefined,
+  name = 'B2BROUTER_API_KEY',
+) {
   const baseUrl = env.B2BROUTER_BASE_URL ?? B2BROUTER_HOSTS.production;
   const problem = keyProblem(apiKey, baseUrl);
-  if (problem) throw new Error(`B2BROUTER_API_KEY: ${problem}`);
+  if (problem) throw new Error(`${name}: ${problem}`);
   if (env.FI_ENV !== 'local' && !isB2BrouterHost(baseUrl)) {
     throw new Error(
       `B2BROUTER_BASE_URL: only local may use a stand-in (${new URL(baseUrl).origin})`,
@@ -93,6 +100,31 @@ export function pdpFromEnv(env: ServerEnv): PdpRegistry {
     );
   }
   return pdp;
+}
+
+/**
+ * Company keys (docs/B2BROUTER.md §12): only with PDP_KEY_SEALING_KEY. A B2Brouter key must be one
+ * of this environment (test_… in sandbox, never in prod) and fit B2BROUTER_BASE_URL; the mock takes
+ * no key, so in local a company key on it changes nothing but proves the path.
+ */
+export function ownPdpFromEnv(env: ServerEnv, pdp: PdpRegistry): OwnPlatform | null {
+  const sealingKey = env.PDP_KEY_SEALING_KEY;
+  if (!sealingKey) return null;
+  return {
+    sealingKey,
+    adapter(provider, apiKey) {
+      if (provider === 'mock') return pdp.mock ?? null;
+      if (provider !== 'b2brouter') return null;
+      if (env.FI_ENV !== 'local' && apiKey.startsWith('test_') !== (env.FI_ENV === 'sandbox')) {
+        throw new Error(
+          env.FI_ENV === 'sandbox' ? 'a sandbox key (test_…)' : 'a production key, not test_…',
+        );
+      }
+      // Company webhooks are signed with the company's own secret, which we do not hold: their news
+      // comes from the sweep (docs/DEFERRED.md).
+      return b2brouterAdapter(env, apiKey, undefined, 'company key');
+    },
+  };
 }
 
 /**
@@ -158,6 +190,7 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
       options.directory === undefined
         ? new RechercheEntreprises(env.SIRENE_URL)
         : options.directory,
+    ownPdp: options.ownPdp === undefined ? ownPdpFromEnv(env, pdp) : options.ownPdp,
     fonts: bundledFonts(),
     now,
   };

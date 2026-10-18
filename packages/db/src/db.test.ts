@@ -4,7 +4,14 @@ import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Database, openDatabase, rows } from './client';
 import { hashOf, stableJson } from './hash';
-import { auditEvents, inboundQueue, invoiceEvents, invoices, tenants } from './schema';
+import {
+  auditEvents,
+  inboundQueue,
+  invoiceArchive,
+  invoiceEvents,
+  invoices,
+  tenants,
+} from './schema';
 import { applyInboundTransition, applyTransition } from './transition';
 
 let database: Database;
@@ -52,9 +59,11 @@ describe('migrations', () => {
       'chase_plans',
       'inbound_exports',
       'inbound_queue',
+      'invoice_archive',
       'invoice_events',
       'invoices',
       'magic_links',
+      'parties',
       'payment_reports',
       'pdp_submissions',
       'sessions',
@@ -255,6 +264,36 @@ describe('audit_events', () => {
     await expect(db().update(auditEvents).set({ action: 'x' })).rejects.toSatisfy(refused);
     await expect(db().delete(auditEvents)).rejects.toSatisfy(refused);
     await expect(db().execute(sql`truncate audit_events`)).rejects.toSatisfy(refused);
+  });
+});
+
+describe('invoice_archive', () => {
+  it('refuses any change, and any deletion before keep_until', async () => {
+    const t = await tenant();
+    const row = (keepUntil: string) => ({
+      tenantId: t.id,
+      direction: 'out' as const,
+      xml: '<x/>',
+      xmlSha256: 'h',
+      chain: 'c',
+      archivedAt: new Date(),
+      keepUntil,
+    });
+    await db()
+      .insert(invoiceArchive)
+      .values([row('2036-10-18'), row('2020-01-01')]);
+    const refused = (e: unknown) => message(e).includes('kept unchanged until keep_until');
+    await expect(db().update(invoiceArchive).set({ xml: '<y/>' })).rejects.toSatisfy(refused);
+    await expect(
+      db().delete(invoiceArchive).where(eq(invoiceArchive.keepUntil, '2036-10-18')),
+    ).rejects.toSatisfy(refused);
+    await expect(db().execute(sql`truncate invoice_archive`)).rejects.toSatisfy(refused);
+    // Ten years on, the row may go.
+    const gone = await db()
+      .delete(invoiceArchive)
+      .where(eq(invoiceArchive.keepUntil, '2020-01-01'))
+      .returning();
+    expect(gone).toHaveLength(1);
   });
 });
 

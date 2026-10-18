@@ -56,6 +56,29 @@ three are read as « none ».
 What we do: any field equal to `[NON-DIFFUSIBLE]` is empty, for the person to type. An individual
 entrepreneur in partial diffusion therefore types their own name and street.
 
+### 1.4 Search by name (Clients, M8)
+
+The same endpoint serves the PartyAgent's « Chercher dans l'annuaire » (`apps/api/src/sirene.ts`
+`search`, `packages/agents/src/party.ts`). Read 2026-10-18 from openapi.json and live calls (EDF).
+
+| Fact | Source |
+|---|---|
+| A `q` that is not 9 digits is a text search; we send the name the user typed. | openapi.json `/search` `q` |
+| `q` needs **at least 3 characters**, else 400 `{"erreur":"3 caractères minimum pour les termes de la requête (ou utilisez au moins un filtre)"}`. No parameter at all is 400 « Veuillez indiquer au moins un paramètre de recherche. » | live calls |
+| `per_page` is **at most 25**, with `page` for the next ones; the answer carries `total_results`, `page`, `per_page`, `total_pages`. | openapi.json; live call |
+| `etat_administratif=A` keeps active companies; `code_postal` filters on the post code of any establishment, not only the head office. | openapi.json |
+| `include` still needs `minimal=true` (400 « Veuillez indiquer si vous souhaitez une réponse minimale avec le filtre `minimal=True`… » otherwise). | live call |
+| `q=electricite de france` returns EDF (552081317, VAT FR03552081317 in `tva`) first. | live call |
+
+What we do: `per_page` = min(limit, 25), `etat_administratif=A`, `code_postal` only when it is 5 digits,
+`minimal=true&include=siege,tva`, and the results in the directory's order. The PartyAgent asks for three
+letters before calling, asks again without the post code when the post code narrows to nothing, keeps
+five candidates with the exact name first, and asks the platform's directory (`lookupRecipient`) whether
+each one can be reached. « C'est ce client » looks the SIREN up again (§1.1) and saves only an active
+company that is not a duplicate. The directory receives the words the user typed in the search and
+nothing else; no customer name from a sheet is sent unless the user clicks « Trouver ce client », which
+fills the search with it.
+
 ## 2. The VAT number
 
 | Fact | Source |

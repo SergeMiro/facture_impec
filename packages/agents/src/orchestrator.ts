@@ -8,6 +8,7 @@ import { AiDisabledError } from './providers/models';
 
 export const PHASES = {
   detect: 'mapping',
+  enrich: 'party',
   explain: 'explain',
   rehearse: 'test',
   monitor: 'monitor',

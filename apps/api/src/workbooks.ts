@@ -25,9 +25,11 @@ import {
 import { t } from '@fi/shared';
 import { z } from 'zod';
 import { tenantAi } from './ai';
+import { autopilotNote } from './autopilot';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { createInvoice, EDITABLE, invoiceDetailData, updateInvoice } from './invoices';
+import { filledNote, PartyBook } from './parties';
 import { routeFor } from './platform';
 
 /** Rows one request may carry; a bigger sheet is read in parts (docs/DEFERRED.md). */
@@ -111,9 +113,15 @@ async function rowStatus(
   deps: ApiDeps,
   row: InvoiceRow,
   sheetInvoice: SheetInvoice,
+  notes: string[] = [],
 ): Promise<RowStatus> {
   const { issues } = await invoiceDetailData(deps, row);
-  const problems = sheetInvoice.problems.map((p) => p.messageFr);
+  const planned = autopilotNote(row);
+  const problems = [
+    ...sheetInvoice.problems.map((p) => p.messageFr),
+    ...notes,
+    ...(planned ? [planned] : []),
+  ];
   return {
     rowKey: sheetInvoice.rowKey,
     rows: sheetInvoice.rows,
@@ -151,14 +159,17 @@ async function upsert(
   draft: InvoiceDraft,
   binding: ExcelBinding,
   isTest: boolean,
-): Promise<InvoiceRow> {
+  parties: PartyBook,
+): Promise<{ row: InvoiceRow; notes: string[] }> {
   const found = await findBound(deps, tenant, binding, isTest);
-  if (!found) {
-    return (await createInvoice(deps, tenant, { draft, excelBinding: binding, isTest })).row;
-  }
+  const input = { draft, excelBinding: binding, parties };
   // Already on its way: the sheet may change, the invoice the customer has does not.
-  if (!EDITABLE.includes(found.status)) return found;
-  return (await updateInvoice(deps, tenant, found.id, { draft, excelBinding: binding })).row;
+  if (found && !EDITABLE.includes(found.status)) return { row: found, notes: [] };
+  const { row, filled } = found
+    ? await updateInvoice(deps, tenant, found.id, input)
+    : await createInvoice(deps, tenant, { ...input, isTest });
+  const note = filledNote(filled);
+  return { row, notes: note ? [note] : [] };
 }
 
 export async function syncSheet(
@@ -175,6 +186,7 @@ export async function syncSheet(
     address: tenant.address,
     defaults: tenant.invoiceDefaults,
   });
+  const parties = await PartyBook.load(deps.db, tenant.id);
   const rows: RowStatus[] = [];
   for (const sheetInvoice of reading.invoices) {
     const binding: ExcelBinding = {
@@ -185,8 +197,15 @@ export async function syncSheet(
       cells: sheetInvoice.cells,
     };
     try {
-      const row = await upsert(deps, tenant, sheetInvoice.draft, binding, input.test);
-      rows.push(await rowStatus(deps, row, sheetInvoice));
+      const { row, notes } = await upsert(
+        deps,
+        tenant,
+        sheetInvoice.draft,
+        binding,
+        input.test,
+        parties,
+      );
+      rows.push(await rowStatus(deps, row, sheetInvoice, notes));
     } catch (e) {
       if (!(e instanceof ApiError)) throw e;
       rows.push({

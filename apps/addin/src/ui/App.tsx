@@ -1,5 +1,5 @@
 // The task pane: banners on every screen (Mode test, offline, the last notice), then one screen.
-// No router: office.js breaks the history API (docs/OFFICE.md §8), and the pane has six screens.
+// No router: office.js breaks the history API (docs/OFFICE.md §8), and the pane has eight screens.
 import { t } from '@fi/shared';
 import {
   Button,
@@ -16,6 +16,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import type { Controller } from '../controller';
+import { CustomersView } from './CustomersView';
 import { ControllerContext, useFi } from './context';
 import { Dashboard } from './Dashboard';
 import { Detection } from './Detection';
@@ -144,6 +145,7 @@ function Pane() {
               name === 'dashboard' ||
               name === 'detect' ||
               name === 'reception' ||
+              name === 'customers' ||
               name === 'settings'
             ) {
               fi.navigate({ name });
@@ -154,6 +156,7 @@ function Pane() {
           <Tab value="dashboard">{t('addin.nav.dashboard')}</Tab>
           <Tab value="detect">{t('addin.nav.columns')}</Tab>
           <Tab value="reception">{t('addin.nav.reception')}</Tab>
+          <Tab value="customers">{t('addin.nav.customers')}</Tab>
           <Tab value="settings">{t('addin.nav.settings')}</Tab>
         </TabList>
       )}
@@ -188,6 +191,8 @@ function Screen() {
       return <InvoiceView />;
     case 'reception':
       return <ReceptionView />;
+    case 'customers':
+      return <CustomersView />;
     case 'settings':
       return <SettingsView />;
   }

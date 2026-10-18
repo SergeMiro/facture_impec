@@ -1,6 +1,6 @@
 // Réglages (plan §5 screen 6): test mode, chasing cadence and its autopilot, the defaults every sheet
-// invoice reuses, the PDP connection (read only) and the AI. A tenant's own AI key is tested before it
-// is saved, sealed at rest, and only its last four characters ever come back.
+// invoice reuses, the PDP connection and the AI. A tenant's own AI key, like its own platform key, is
+// tested before it is saved, sealed at rest, and only its last four characters ever come back.
 import {
   AiSettings,
   byokUrlProblem,
@@ -11,10 +11,14 @@ import {
 } from '@fi/agents';
 import { InvoiceDefaults } from '@fi/core';
 import { audit, eq, type TenantRow, tenants } from '@fi/db';
+import { PdpRequestError, PdpUnavailableError } from '@fi/pdp-adapter';
 import { t } from '@fi/shared';
 import { z } from 'zod';
+import { isOwner, type Principal } from './auth';
+import { planAll, unplanAll } from './autopilot';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
+import { adapterFor } from './platform';
 
 export const ChaseCadence = z
   .array(z.number().int().min(-30).max(120))
@@ -27,9 +31,12 @@ export const SettingsPatch = z
     sandboxEnabled: z.boolean(),
     chaseCadence: ChaseCadence,
     invoiceDefaults: InvoiceDefaults,
-    /** Autopilot covers chasing only (plan §0.2, §6); invoices still leave on « Envoyer ». */
+    /**
+     * Autopilot (plan §0.2, §6): chasing e-mails go by themselves, and so do invoices to the customers
+     * opted in for « Envoi automatique » (src/autopilot.ts). Review: everything waits for a click.
+     */
     mode: z.enum(['review', 'autopilot']),
-    /** Cents; the highest invoice amount the autopilot chases by itself. */
+    /** Cents; the highest invoice amount the autopilot sends and chases by itself. */
     autopilotMaxAmount: z.number().int().min(0).max(100_000_000).nullable(),
   })
   .partial()
@@ -52,6 +59,24 @@ export const AiChoice = z.discriminatedUnion('mode', [
 ]);
 export type AiChoice = z.infer<typeof AiChoice>;
 
+/** « Votre propre clé B2Brouter » (docs/B2BROUTER.md §12). */
+export const PdpKeyBody = z
+  .object({
+    apiKey: z.string().trim().min(8).max(200),
+    /** The company's account id under that key; omitted: keep the current one. */
+    account: z.string().trim().min(1).max(100).optional(),
+  })
+  .strict();
+
+/** Whether a sealed key still opens and gives an adapter: false hides nothing, it stops sends. */
+function reachable(deps: ApiDeps, tenant: TenantRow): boolean {
+  try {
+    return Boolean(adapterFor(deps, tenant, tenant.pdpProvider));
+  } catch {
+    return false;
+  }
+}
+
 export function settingsView(deps: ApiDeps, tenant: TenantRow) {
   const stored = tenant.aiSettings;
   const own = stored && stored.mode !== 'off' ? AiSettings.safeParse(stored) : undefined;
@@ -70,7 +95,8 @@ export function settingsView(deps: ApiDeps, tenant: TenantRow) {
     pdp: {
       provider: tenant.pdpProvider,
       account: tenant.pdpAccount,
-      connected: Boolean(deps.pdp[tenant.pdpProvider]),
+      connected: reachable(deps, tenant),
+      ownKey: { available: Boolean(deps.ownPdp), hint: tenant.pdpKeyHint },
     },
     ai: {
       mode: !stored ? 'included' : byok ? 'byok' : stored.mode === 'off' ? 'off' : 'included',
@@ -93,6 +119,7 @@ async function save(
   patch: Partial<typeof tenants.$inferInsert>,
   action: string,
   after: unknown,
+  actor: 'user' | 'api' = 'user',
 ) {
   if (Object.keys(patch).length === 0) return before;
   return deps.db.transaction(async (tx) => {
@@ -100,12 +127,17 @@ async function save(
     if (!row) throw new ApiError(404, 'not_found');
     await audit(tx, {
       tenantId: row.id,
-      actor: 'user',
+      actor,
       action,
       objectType: 'tenant',
       objectId: row.id,
       after,
     });
+    // The autopilot's switch or ceiling moved: what leaves by itself is decided again.
+    if (row.mode !== before.mode || row.autopilotMaxAmount !== before.autopilotMaxAmount) {
+      if (row.mode === 'autopilot') await planAll(tx, deps.now(), row);
+      else await unplanAll(tx, row.id);
+    }
     return row;
   });
 }
@@ -163,5 +195,80 @@ export async function saveAi(deps: ApiDeps, tenant: TenantRow, choice: AiChoice)
     },
     'ai.settings',
     stored,
+  );
+}
+
+const probeProblem = (e: unknown): 'unavailable' | 'key' | 'account' | 'other' => {
+  if (e instanceof PdpUnavailableError) return 'unavailable';
+  if (e instanceof PdpRequestError && (e.status === 401 || e.status === 403)) return 'key';
+  // TODO(verify) docs/B2BROUTER.md §12: an account the key cannot reach is assumed to answer 404.
+  if (e instanceof PdpRequestError && e.status === 404) return 'account';
+  return 'other';
+};
+
+/**
+ * The company's own platform key: tried on its account before anything is saved, so a wrong key or
+ * account never stops sends. Once live, the account is fixed (its invoices are followed there) and a
+ * key can only be replaced by one that reaches the same account.
+ */
+export async function savePdpKey(
+  deps: ApiDeps,
+  tenant: TenantRow,
+  principal: Principal,
+  input: z.infer<typeof PdpKeyBody>,
+) {
+  if (!isOwner(principal)) throw new ApiError(403, 'owner_only');
+  const own = deps.ownPdp;
+  if (!own) throw new ApiError(409, 'pdp_key_disabled');
+  const account = input.account ?? tenant.pdpAccount;
+  if (tenant.liveAt && account !== tenant.pdpAccount) throw new ApiError(409, 'tenant_live');
+  let adapter: ReturnType<typeof own.adapter>;
+  try {
+    adapter = own.adapter(tenant.pdpProvider, input.apiKey);
+  } catch (e) {
+    const details = e instanceof Error ? e.message : String(e);
+    throw new ApiError(
+      422,
+      'pdp_key_refused',
+      { problem: t('pdpKey.problem.environment') },
+      details,
+    );
+  }
+  if (!adapter) throw new ApiError(409, 'pdp_key_unsupported');
+  try {
+    // The cheapest call that needs both the key and the account (the same as « passer en réel »).
+    await adapter.listInbound({ account, since: deps.now() });
+  } catch (e) {
+    const details = e instanceof Error ? e.message : String(e);
+    const problem = t(`pdpKey.problem.${probeProblem(e)}`);
+    throw new ApiError(422, 'pdp_key_refused', { problem }, details);
+  }
+  const hint = keyHint(input.apiKey);
+  return save(
+    deps,
+    tenant,
+    {
+      pdpKeySealed: sealSecret(input.apiKey, own.sealingKey),
+      pdpKeyHint: hint,
+      pdpAccount: account,
+    },
+    'settings.pdp_key',
+    { hint, account },
+    principal.kind === 'key' ? 'api' : 'user',
+  );
+}
+
+/** Back to the operator key; not once live, where the invoices sit under the company's own key. */
+export async function removePdpKey(deps: ApiDeps, tenant: TenantRow, principal: Principal) {
+  if (!isOwner(principal)) throw new ApiError(403, 'owner_only');
+  if (!tenant.pdpKeySealed) return tenant;
+  if (tenant.liveAt) throw new ApiError(409, 'tenant_live');
+  return save(
+    deps,
+    tenant,
+    { pdpKeySealed: null, pdpKeyHint: null },
+    'settings.pdp_key_remove',
+    { hint: tenant.pdpKeyHint },
+    principal.kind === 'key' ? 'api' : 'user',
   );
 }

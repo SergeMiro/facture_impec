@@ -70,6 +70,14 @@ export const ServerEnvSchema = z
     // prod only: a sandbox key (test_…) of the same integration, where « Mode test » sends.
     B2BROUTER_SANDBOX_API_KEY: optionalText(),
     B2BROUTER_SANDBOX_WEBHOOK_SECRET: optionalText(),
+    // Seals the platform keys companies bring themselves (docs/B2BROUTER.md §12); empty: none.
+    PDP_KEY_SEALING_KEY: z.preprocess(
+      blank,
+      z
+        .string()
+        .refine((v) => Buffer.from(v, 'base64').length === 32, '32 bytes in base64')
+        .optional(),
+    ),
     // Sign-in links, chasing e-mails and the weekly report outside local (src/mail.ts in the API).
     MAIL_SMTP_URL: optionalText(),
     MAIL_FROM: optionalText(),

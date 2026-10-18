@@ -32,6 +32,16 @@ export function parisHour(now: Date = new Date()): number {
   );
 }
 
+/** The time of day in Europe/Paris as "HH:MM". */
+export function parisTime(at: Date): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(at);
+}
+
 /** `iso` plus `days` calendar days (negative goes back). */
 export function addDays(iso: string, days: number): string {
   return new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);

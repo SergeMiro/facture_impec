@@ -19,8 +19,10 @@ import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { z } from 'zod';
 import { adminRoutes } from './admin';
+import { archivedPdf } from './archive';
 import { explainInvoice, invoicePdf, rehearseInvoice } from './assist';
 import { type TenantEnv, tenantAuth } from './auth';
+import { holdAutopilot } from './autopilot';
 import { billingPages, billingRoutes, handleStripeWebhook } from './billing';
 import { markStepSent, prepareChase, recordPromise } from './collect';
 import type { ApiDeps } from './deps';
@@ -65,12 +67,31 @@ import {
 } from './limits';
 import { loginRoutes } from './login';
 import { onboardingRoutes } from './onboarding';
+import {
+  confirmCustomer,
+  deleteParty,
+  listParties,
+  PartyConfirm,
+  PartyPatch,
+  PartySearch,
+  searchParties,
+  updateParty,
+} from './parties';
 import { PaymentBody, recordPayment } from './payments';
 import { awaitsGoLive } from './platform';
 import { reportFor } from './report';
 import { DeleteBody, deleteTenant, exportTenant } from './rgpd';
 import { playScenario, SCENARIOS } from './sandbox';
-import { AiChoice, SettingsPatch, saveAi, settingsView, updateSettings } from './settings';
+import {
+  AiChoice,
+  PdpKeyBody,
+  removePdpKey,
+  SettingsPatch,
+  saveAi,
+  savePdpKey,
+  settingsView,
+  updateSettings,
+} from './settings';
 import { invoiceDetail, invoiceSummary, tenantView } from './views';
 import {
   assertTestMode,
@@ -228,6 +249,8 @@ export function createApp(deps: ApiDeps) {
     '/invoices/*',
     '/inbound',
     '/inbound/*',
+    '/parties',
+    '/parties/*',
     '/report',
     '/billing',
     '/billing/checkout',
@@ -271,6 +294,17 @@ export function createApp(deps: ApiDeps) {
 
   api.put('/settings/ai', async (c) => {
     const row = await saveAi(deps, c.get('tenant'), await body(c, AiChoice));
+    return c.json(settingsView(deps, row));
+  });
+
+  api.put('/settings/pdp', async (c) => {
+    const input = await body(c, PdpKeyBody);
+    const row = await savePdpKey(deps, c.get('tenant'), c.get('principal'), input);
+    return c.json(settingsView(deps, row));
+  });
+
+  api.delete('/settings/pdp', async (c) => {
+    const row = await removePdpKey(deps, c.get('tenant'), c.get('principal'));
     return c.json(settingsView(deps, row));
   });
 
@@ -382,6 +416,14 @@ export function createApp(deps: ApiDeps) {
     return c.json({ ...invoiceSummary(row), alreadySent }, 202);
   });
 
+  api.post('/invoices/:id/autopilot/cancel', async (c) => {
+    const tenant = c.get('tenant');
+    const id = uuid(c.req.param('id'));
+    await holdAutopilot(deps, tenant, id);
+    const row = await getInvoice(deps, tenant, id);
+    return c.json(invoiceDetail(row, await invoiceDetailData(deps, row)));
+  });
+
   api.post('/invoices/:id/cancel', async (c) => {
     const row = await cancelInvoice(deps, c.get('tenant'), uuid(c.req.param('id')));
     return c.json(invoiceSummary(row));
@@ -397,7 +439,9 @@ export function createApp(deps: ApiDeps) {
 
   api.get('/invoices/:id/pdf', async (c) => {
     const row = await getInvoice(deps, c.get('tenant'), uuid(c.req.param('id')));
-    const pdf = await invoicePdf(deps, row.document);
+    // A sent invoice shows the PDF archived when it left; any other is drawn now.
+    const pdf =
+      (await archivedPdf(deps.db, row.tenantId, row.id)) ?? (await invoicePdf(deps, row.document));
     return c.body(new Uint8Array(pdf), 200, {
       'content-type': 'application/pdf',
       'content-disposition': `inline; filename="${fileName(row, 'pdf')}"`,
@@ -461,6 +505,31 @@ export function createApp(deps: ApiDeps) {
   });
 
   api.get('/report', async (c) => c.json(await reportFor(deps, c.get('tenant'))));
+
+  // ── Customers (plan §4 parties, §6 PartyAgent): « Trouver ce client », « Envoi automatique » ─────
+  const partyId = (value: string) => {
+    if (!z.uuid().safeParse(value).success) throw new ApiError(404, 'party_missing');
+    return value;
+  };
+
+  api.get('/parties', async (c) => c.json({ parties: await listParties(deps, c.get('tenant')) }));
+
+  api.post('/parties/search', async (c) =>
+    c.json(await searchParties(deps, c.get('tenant'), await body(c, PartySearch))),
+  );
+
+  api.post('/parties', async (c) =>
+    c.json(await confirmCustomer(deps, c.get('tenant'), await body(c, PartyConfirm)), 201),
+  );
+
+  api.patch('/parties/:id', async (c) => {
+    const id = partyId(c.req.param('id'));
+    return c.json(await updateParty(deps, c.get('tenant'), id, await body(c, PartyPatch)));
+  });
+
+  api.delete('/parties/:id', async (c) =>
+    c.json(await deleteParty(deps, c.get('tenant'), partyId(c.req.param('id')))),
+  );
 
   // ── Supplier invoices (plan §3 screen 5, §6 InboundAgent) ─────────────────────────────────────────
   // Paths with a fixed word come before /inbound/:id.

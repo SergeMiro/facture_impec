@@ -7,6 +7,7 @@ import {
   isoWeek,
   isoWeekday,
   parisHour,
+  parisTime,
   parisToday,
   toCiiDate,
 } from './dates';
@@ -30,6 +31,8 @@ describe('dates', () => {
     expect(parisHour(new Date('2026-10-17T07:00:00Z'))).toBe(9);
     expect(parisHour(new Date('2026-12-17T07:00:00Z'))).toBe(8);
     expect(parisHour(new Date('2026-10-17T22:30:00Z'))).toBe(0);
+    expect(parisTime(new Date('2026-10-17T22:05:00Z'))).toBe('00:05');
+    expect(parisTime(new Date('2026-12-17T13:45:00Z'))).toBe('14:45');
   });
 
   it('adds calendar days across months, years and the clock change', () => {

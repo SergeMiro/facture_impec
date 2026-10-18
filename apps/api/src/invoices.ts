@@ -3,6 +3,7 @@
 // applyTransition only.
 import {
   computeInvoice,
+  type FilledField,
   hasErrors,
   type Invoice,
   type InvoiceDraft,
@@ -32,10 +33,12 @@ import {
   validationResults,
 } from '@fi/db';
 import { t } from '@fi/shared';
+import { planAutopilot } from './autopilot';
 import { assertMaySend } from './billing';
 import { chasePlanOf } from './collect';
 import type { ApiDeps } from './deps';
 import { ApiError, isUniqueViolation } from './errors';
+import { PartyBook } from './parties';
 import { awaitsGoLive, routeFor } from './platform';
 
 export const EDITABLE: readonly InvoiceState[] = ['draft', 'needs_fix', 'validated'];
@@ -169,6 +172,8 @@ async function findByNumber(
 export interface CreateResult {
   row: InvoiceRow;
   created: boolean;
+  /** What the buyer got from its customer in the directory. */
+  filled: FilledField[];
 }
 
 /**
@@ -180,6 +185,14 @@ export interface InvoiceInput {
   excelBinding?: ExcelBinding | undefined;
   /** « Mode test »: numbered TEST-…, sent to the test platform only. */
   isTest?: boolean | undefined;
+  /** The company's customers, when the caller already read them (a sync reads them once). */
+  parties?: PartyBook | undefined;
+}
+
+/** The buyer completed from its confirmed customer (plan §6 phase 2): the sheet always wins. */
+async function enrich(deps: ApiDeps, tenant: TenantRow, input: InvoiceInput) {
+  const book = input.parties ?? (await PartyBook.load(deps.db, tenant.id));
+  return book.enrich(input.draft);
 }
 
 export async function createInvoice(
@@ -188,7 +201,8 @@ export async function createInvoice(
   input: InvoiceInput,
 ): Promise<CreateResult> {
   const isTest = input.isTest ?? false;
-  const computed = compute(tenant, isTest ? testDraft(input.draft) : input.draft);
+  const { draft, partyId, filled } = await enrich(deps, tenant, input);
+  const computed = compute(tenant, isTest ? testDraft(draft) : draft);
   const number = computed.document.number ?? null;
   const existing = async (): Promise<CreateResult> => {
     const row = await findByNumber(deps, tenant, number, isTest);
@@ -196,7 +210,7 @@ export async function createInvoice(
     if (row.fingerprint !== computed.fingerprint) {
       throw new ApiError(409, 'number_taken', { number: number ?? '' });
     }
-    return { row, created: false };
+    return { row, created: false, filled };
   };
   if (await findByNumber(deps, tenant, number, isTest)) return existing();
 
@@ -210,6 +224,7 @@ export async function createInvoice(
           isTest,
           source: input.excelBinding ? 'excel' : 'api',
           excelBinding: input.excelBinding ?? null,
+          partyId,
         })
         .returning();
       if (!inserted) throw new Error('insert returned nothing');
@@ -219,12 +234,13 @@ export async function createInvoice(
         action: 'invoice.create',
         objectType: 'invoice',
         objectId: inserted.id,
-        after: { fingerprint: computed.fingerprint, isTest },
+        after: { fingerprint: computed.fingerprint, isTest, partyId },
       });
       await runValidation(tx, inserted, tenant, deps.now());
+      await planAutopilot(tx, deps.now(), tenant, inserted.id);
       return inserted;
     });
-    return { row: await reload(deps, row.id), created: true };
+    return { row: await reload(deps, row.id), created: true, filled };
   } catch (e) {
     // Two identical requests at once: the second one lost the race on the unique number.
     if (isUniqueViolation(e)) return existing();
@@ -274,8 +290,9 @@ export async function updateInvoice(
   tenant: TenantRow,
   id: string,
   input: InvoiceInput,
-): Promise<{ row: InvoiceRow; issues: Issue[] }> {
+): Promise<{ row: InvoiceRow; issues: Issue[]; filled: FilledField[] }> {
   let number: string | null = null;
+  const { draft, partyId, filled } = await enrich(deps, tenant, input);
   try {
     const issues = await deps.db.transaction(async (tx) => {
       const row = await lockOwn(tx, tenant, id);
@@ -283,13 +300,14 @@ export async function updateInvoice(
         throw new ApiError(409, 'not_editable', { status: label(row.status) });
       }
       // A test invoice stays a test invoice, and a real one stays real.
-      const computed = compute(tenant, row.isTest ? testDraft(input.draft) : input.draft);
+      const computed = compute(tenant, row.isTest ? testDraft(draft) : draft);
       number = computed.document.number ?? null;
       const [updated] = await tx
         .update(invoices)
         .set({
           ...columns(computed),
           ...(input.excelBinding && { excelBinding: input.excelBinding }),
+          partyId,
           updatedAt: deps.now(),
         })
         .where(eq(invoices.id, row.id))
@@ -301,12 +319,14 @@ export async function updateInvoice(
         action: 'invoice.update',
         objectType: 'invoice',
         objectId: row.id,
-        before: { fingerprint: row.fingerprint },
-        after: { fingerprint: computed.fingerprint },
+        before: { fingerprint: row.fingerprint, partyId: row.partyId },
+        after: { fingerprint: computed.fingerprint, partyId },
       });
-      return runValidation(tx, updated, tenant, deps.now());
+      const issues = await runValidation(tx, updated, tenant, deps.now());
+      await planAutopilot(tx, deps.now(), tenant, row.id);
+      return issues;
     });
-    return { row: await reload(deps, id), issues };
+    return { row: await reload(deps, id), issues, filled };
   } catch (e) {
     if (isUniqueViolation(e)) throw new ApiError(409, 'number_taken', { number: number ?? '' });
     throw e;
@@ -319,7 +339,9 @@ export async function revalidateInvoice(deps: ApiDeps, tenant: TenantRow, id: st
     if (!EDITABLE.includes(row.status)) {
       throw new ApiError(409, 'not_editable', { status: label(row.status) });
     }
-    return runValidation(tx, row, tenant, deps.now());
+    const issues = await runValidation(tx, row, tenant, deps.now());
+    await planAutopilot(tx, deps.now(), tenant, row.id);
+    return issues;
   });
   return { row: await reload(deps, id), issues };
 }
@@ -344,6 +366,12 @@ export async function requestSend(deps: ApiDeps, tenant: TenantRow, id: string) 
     if (!row.isTest && awaitsGoLive(deps, tenant)) throw new ApiError(409, 'not_live');
     if (!row.isTest) await assertMaySend(deps, tx, tenant);
     await applyTransition(tx, { invoiceId: row.id, event: 'approve', actor: 'user' });
+    if (row.autopilotAt) {
+      await tx
+        .update(invoices)
+        .set({ autopilotAt: null, autopilotFingerprint: null })
+        .where(eq(invoices.id, row.id));
+    }
     return false;
   });
   const row = await reload(deps, id);

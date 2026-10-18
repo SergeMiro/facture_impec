@@ -53,6 +53,9 @@ export function invoiceSummary(row: InvoiceRow) {
     isTest: row.isTest,
     source: row.source,
     excelBinding: row.excelBinding,
+    partyId: row.partyId,
+    /** Autopilot send (plan §0.2): when it leaves by itself, and whether the user held it. */
+    autopilot: { at: row.autopilotAt?.toISOString() ?? null, held: row.autopilotHeld },
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

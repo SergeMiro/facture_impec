@@ -7,6 +7,7 @@ export * from './ids';
 export * from './inbound';
 export * from './model';
 export * from './money';
+export * from './party';
 export { frDate, frDecimal, frMoney, frPrice, NBSP } from './pdf/format';
 export * from './rules';
 export * from './sheet';

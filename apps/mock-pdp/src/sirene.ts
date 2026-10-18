@@ -1,7 +1,8 @@
 // A stand-in for the Annuaire des entreprises search API (docs/ONBOARDING.md §1), served at /sirene:
-// GET /search?q=<siren>&minimal=true&include=siege,tva, answered as the real one answers a direct
-// SIREN lookup. Synthetic companies only: any valid SIREN gets a made-up one, and a few SIRENs play the
-// cases the wizard must handle. No real company, no real person.
+// GET /search?q=<siren or name>&minimal=true&include=siege,tva, answered as the real one answers a
+// direct SIREN lookup or a search by name. Synthetic companies only: any valid SIREN gets a made-up one,
+// a name gets three made-up companies around it (the same ones on a later SIREN lookup), and a few
+// SIRENs play the cases the wizard must handle. No real company, no real person.
 import { Hono } from 'hono';
 
 /** SIRENs that play a case (Luhn-valid, in no register we know of). */
@@ -34,14 +35,35 @@ const vat = (siren: string) =>
 
 const ND = '[NON-DIFFUSIBLE]';
 
-function company(siren: string) {
+/** A search by name whose words contain this finds nothing. */
+export const SIRENE_NOBODY = 'inconnu';
+/** The only post code the made-up companies have an establishment in. */
+export const SIRENE_POST_CODE = '21000';
+
+/** A Luhn-valid SIREN starting with 998 for a seed, the same seed always giving the same SIREN. */
+export function sirenFor(seed: string): string {
+  let h = 0;
+  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) % 100_000;
+  const base = `998${String(h).padStart(5, '0')}`;
+  for (let d = 0; d < 10; d++) if (luhn(`${base}${d}`)) return `${base}${d}`;
+  throw new Error('unreachable');
+}
+
+/** The three companies a search by name finds, best first. */
+export const namesFor = (q: string) => {
+  const name = q.trim().toUpperCase();
+  return [name, `${name} ET FILS`, `BOULANGERIE ${name}`];
+};
+
+function company(siren: string, named?: string) {
   const withheld = siren === SIRENE_CASES.withheld;
   const n = Number(siren.slice(-3));
+  const name = named ?? `ENTREPRISE DE DEMONSTRATION ${siren.slice(-4)}`;
   return {
     siren,
     siren_conserve: siren === SIRENE_CASES.duplicate ? SIRENE_CASES.kept : null,
-    nom_complet: `ENTREPRISE DE DEMONSTRATION ${siren.slice(-4)}`,
-    nom_raison_sociale: `ENTREPRISE DE DEMONSTRATION ${siren.slice(-4)}`,
+    nom_complet: name,
+    nom_raison_sociale: name,
     etat_administratif: siren === SIRENE_CASES.closed ? 'C' : 'A',
     statut_diffusion: withheld ? 'P' : 'O',
     tva: siren === SIRENE_CASES.noVat ? [] : [vat(siren)],
@@ -71,8 +93,11 @@ function company(siren: string) {
 
 export function sireneStandIn(): Hono {
   const app = new Hono();
+  /** Names given by a search, so that a SIREN lookup afterwards describes the same company. */
+  const named = new Map<string, string>();
   app.get('/search', (c) => {
-    const q = (c.req.query('q') ?? '').replace(/\s/g, '');
+    const raw = c.req.query('q') ?? '';
+    const q = raw.replace(/\s/g, '');
     if (!q) return c.json({ erreur: 'Veuillez indiquer au moins un paramètre de recherche.' }, 400);
     if (c.req.query('include') && c.req.query('minimal') !== 'true') {
       return c.json({ erreur: 'Veuillez indiquer si vous souhaitez une réponse minimale.' }, 400);
@@ -80,8 +105,32 @@ export function sireneStandIn(): Hono {
     if (q === SIRENE_CASES.busy) {
       return c.json({ erreur: 'Too Many Requests' }, 429, { 'retry-after': '2' });
     }
-    const found = /^\d{9}$/.test(q) && luhn(q) && q !== SIRENE_CASES.unknown;
-    const results = found ? [company(q)] : [];
+    let results: ReturnType<typeof company>[];
+    if (/^\d+$/.test(q)) {
+      const found = q.length === 9 && luhn(q) && q !== SIRENE_CASES.unknown;
+      results = found ? [company(q, named.get(q))] : [];
+    } else {
+      if (raw.trim().length < 3) {
+        return c.json(
+          {
+            erreur:
+              '3 caractères minimum pour les termes de la requête (ou utilisez au moins un filtre)',
+          },
+          400,
+        );
+      }
+      const postCode = c.req.query('code_postal');
+      const nobody =
+        raw.toLowerCase().includes(SIRENE_NOBODY) || (postCode && postCode !== SIRENE_POST_CODE);
+      results = nobody
+        ? []
+        : namesFor(raw).map((name) => {
+            const siren = sirenFor(name);
+            named.set(siren, name);
+            return company(siren, name);
+          });
+      results = results.slice(0, Number(c.req.query('per_page') ?? 10));
+    }
     return c.json({
       results,
       total_results: results.length,

@@ -413,3 +413,62 @@ How each criterion is read here:
 
 Filled in every morning of the pilot (`docs/RUNBOOK.md` § Pilot): date, invoices per company (test /
 real), P1 and P2 found, the commit that fixed them. Empty until the pilot starts.
+
+## M8 — Plan gaps (started 2026-10-18)
+
+The plan ends at M7. On 2026-10-18 the owner chose M8 as « close the gaps of the plan »: what plan §0, §4,
+§6 and §10 ask for and M0–M7 left in `docs/DEFERRED.md`, none of which needs the owner's keys. Criteria,
+written here before the work:
+
+- **Customer directory and PartyAgent** (plan §4 `parties`, §6 phase 2 ENRICH): from the pane the user
+  looks a customer up in the public company directory by name (at least 3 characters, a post code to
+  narrow) or by SIREN; each candidate shows its legal name, head office, VAT number and whether the
+  platform's directory can deliver to it. The user confirms one: the API looks it up again itself and
+  saves it as verified, with the name as the sheet writes it. A closed, duplicate or unknown SIREN is
+  never saved (guardrail « never create a party with an unverified SIREN »). Every sync then fills what
+  the sheet leaves empty (SIREN, VAT number, address, e-mail, name) from the confirmed customer, found by
+  the sheet's SIREN or by the name as written; the sheet's own values always win, and the invoice keeps
+  its `party_id`. No customer name goes to a model: the agent is deterministic, and the directory
+  receives only what the user typed in the search.
+- **Autopilot for sending** (plan §0.2 « opt-in per client and per amount threshold »): an invoice leaves
+  without a click only when the company is in autopilot with a ceiling, the customer is confirmed and
+  opted in (« Envoi automatique »), the invoice is checked without error or warning, is an invoice (not a
+  credit note) in euros at or under the ceiling, and an earlier invoice to that customer was sent by hand
+  and delivered (the first sends to a customer are always the user's, the trial period). It leaves 15
+  minutes after its last change: the sheet says when, any change starts the wait again, « Annuler l'envoi
+  automatique » holds it, and when the time comes every check runs again, the platform's directory
+  included; a check that fails cancels the send with a line on the timeline. It works the same in « Mode
+  test », so it can be rehearsed. Real sends still wait for go-live in prod and for a plan once the trial
+  is over.
+- **Ten-year archive** (plan §10): every invoice sent for real (the XML handed to the platform and its
+  PDF) and every real invoice received (its XML) is archived once, with its SHA-256, a per-company hash
+  chain and a keep-until date ten years ahead. The table refuses any change, and any deletion before the
+  date, RGPD deletion and the purge included. « Voir le PDF » of a sent invoice shows the archived PDF.
+  The operator can check a company's chain. Object storage with an immutability flag waits for the
+  owner's bucket (`docs/DEFERRED.md`); until then the archive leaves the machine with the database backup.
+- **A company's own platform key** (plan §4 `pdp_credentials_enc`, §5 Réglages « PDP connection », §10):
+  a company that already has a B2Brouter account can connect its key in Réglages (owner only). The key is
+  tested before it is saved, sealed at rest (AES-256-GCM under `PDP_KEY_SEALING_KEY`), shown only by its
+  last four characters, never logged, exported or returned, and removed at deletion. Its real sends,
+  statuses, received invoices and payments then go through its key; « Mode test » keeps the deployment's
+  test platform. Once the company is live its account no longer changes, its key can (rotation).
+
+### Evidence (2026-10-18)
+
+| Criterion | Evidence |
+|---|---|
+| Customer directory and PartyAgent | `packages/agents/src/party.test.ts` (exact name first, closed last and not asked of the platform, post code dropped when it narrows to nothing, three letters, five at most, withheld names, a bad or unknown SIREN refused before any search, reach unknown when the platform cannot tell; `confirmParty` refuses invalid, unknown, closed, duplicate); `apps/api/src/parties.test.ts` › « Trouver ce client », › « C'est ce client » (looked up again by SIREN, only a DGFiP VAT number kept, one name for one customer, e-mail and switch, other companies' customers out of reach), › sync: the sheet completed from the customer (only empty cells, by name or SIREN, `party_id`, the note in FI_Détail); `packages/core/src/party.test.ts` (`completeBuyer`, `partyKey`); `controller.test.ts` › finds the fiche's customer in the directory, saves it, then opts it in for the autopilot; `docs/ONBOARDING.md` §1.4 (search facts read 2026-10-18). |
+| Autopilot for sending | `apps/api/src/autopilot.test.ts` › who goes by itself (a first invoice by hand and delivered first; over the ceiling, a credit note, a buyer who is not a confirmed customer, Review mode left alone), › the wait (sent when due with the system as approver, FI_Détail says when, every change starts again, « Annuler l'envoi automatique » holds for good), › checked again when due (platform no longer knows the customer → cancelled with the reason, back to Review or opted out → plan forgotten, ceiling lowered → cancelled); `controller.test.ts` › holds an invoice for good on « Annuler l'envoi automatique ». |
+| Ten-year archive | `packages/db/src/db.test.ts` › invoice_archive (no update, no truncate, no deletion before `keep_until`); `apps/api/src/archive.test.ts` › what is archived (real sent invoice with XML, PDF and ten years; no test invoice or draft; real supplier invoice as received; the sweep catches up), › the chain (operator check, a row changed behind the trigger is found), › RGPD (register in the export, deletion leaves the archive whole); `docs/RUNBOOK.md` § The ten-year archive. |
+| A company's own platform key | `apps/api/src/own-platform.test.ts` (probe then sealed, only the end shown, never in the export; 401 / 404 / wrong environment save nothing; owner only, and only with `PDP_KEY_SEALING_KEY`; real invoices through the company key, test invoices through ours; a key the deployment cannot open stops real sends; once live the account is fixed and the key replaceable, deletion forgets it); `runtime.test.ts` › company keys only with PDP_KEY_SEALING_KEY, and only keys of its own environment; `controller.test.ts` › loads the settings (form hidden without sealing key); `docs/B2BROUTER.md` §12. |
+| Gate | `pnpm verify` green on 2026-10-18: api 185, core 526 + oracle 276, agents 88 (branches 91.4 %), add-in 53, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. |
+
+### What the plan still asks for after M8
+
+| Plan | State | Where |
+|---|---|---|
+| §10 archive « S3 Object Lock or equivalent » | Postgres write-once table with a hash chain; object storage waits for the owner's EU bucket | `docs/DEFERRED.md` (object storage) |
+| §11 M7 pilot: 3 companies, 5 days without P1, one live | Rehearsed in `pilot.test.ts`; the real pilot waits for the owner (hosting, B2Brouter keys, mail, CGU, customers) | M7 above, `docs/RUNBOOK.md` § Pilot |
+| §6 PartyAgent for foreign customers (VIES) | French companies only (SIREN) | `docs/DEFERRED.md` (VIES) |
+| §4 `parties` for suppliers | Column ready, only customers written | `docs/DEFERRED.md` (suppliers) |
+| `TODO(verify)` on B2Brouter | T1–T23, closed with the owner's sandbox key | `docs/B2BROUTER.md` §11 |

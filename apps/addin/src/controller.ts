@@ -17,6 +17,10 @@ import {
   type Me,
   type Offer,
   Offline,
+  type Party,
+  type PartyFinding,
+  type PartyPatch,
+  type PartyQuery,
   type PostalAddress,
   type Rehearsal,
   type RowStatus,
@@ -48,6 +52,7 @@ export type Screen =
   | { name: 'dashboard' }
   | { name: 'invoice'; id: string; confirmSend: boolean }
   | { name: 'reception' }
+  | { name: 'customers' }
   | { name: 'settings' };
 
 export interface Notice {
@@ -84,6 +89,15 @@ export interface Reception {
   exports: InboundExport[];
 }
 
+/** Clients: the fiche clients, and the last « Chercher dans l'annuaire » with what was asked. */
+export interface Customers {
+  parties: Party[];
+  query: PartyQuery;
+  finding: PartyFinding | null;
+  /** The buyer's name on the sheet, when « Trouver ce client » started the search. */
+  sheetName: string | null;
+}
+
 export interface FiState {
   booted: boolean;
   /** Office could not start in this window (opened outside Excel, or blocked). */
@@ -101,6 +115,8 @@ export interface FiState {
   /** The weekly card of the Tableau de bord; null until loaded, or where it could not be. */
   report: WeeklyReport | null;
   reception: Reception | null;
+  /** Clients; null until loaded. */
+  customers: Customers | null;
   /** Actions running now ('sync', 'detect', 'send', …): their buttons show a spinner. */
   busy: string[];
   /** null when online; otherwise the actions waiting for the connection. */
@@ -177,6 +193,7 @@ const INITIAL: FiState = {
   settings: null,
   report: null,
   reception: null,
+  customers: null,
   busy: [],
   offline: null,
   notice: null,
@@ -262,6 +279,7 @@ export class Controller {
     }
     if (screen.name === 'dashboard') void this.loadReport();
     if (screen.name === 'reception') void this.loadReception();
+    if (screen.name === 'customers') void this.loadCustomers();
   };
 
   /** The connection is back (browser `online` event). */
@@ -586,6 +604,10 @@ export class Controller {
       detection: null,
       sync: null,
       settings: null,
+      // Another company may sign in next on this pane: nothing of this one stays on screen.
+      report: null,
+      reception: null,
+      customers: null,
       offline: null,
       link: null,
       signup: null,
@@ -972,6 +994,24 @@ export class Controller {
       (d) => t('addin.chase.markedSent', { number: d.number ?? '' }),
     );
 
+  /** « Annuler l'envoi automatique »: this invoice now waits for « Envoyer », even after a change. */
+  cancelAutopilot = async (): Promise<void> => {
+    const id = this.#state.invoice?.detail.id;
+    if (!id) return;
+    const detail = await this.#act('autopilot', () => this.api.cancelAutopilot(id));
+    if (!detail || this.#state.invoice?.detail.id !== id) return;
+    this.#patchInvoice({ detail });
+    this.notify('success', t('addin.autopilot.held', { number: detail.number ?? '' }));
+    void this.sync();
+  };
+
+  /** « Trouver ce client »: Clients, searching the directory for the fiche's buyer. */
+  findCustomer = async (): Promise<void> => {
+    const name = this.#state.invoice?.detail.buyerName ?? '';
+    this.navigate({ name: 'customers' });
+    if (name.trim().length >= 3) await this.searchCustomers({ name }, name);
+  };
+
   viewXml = async (): Promise<void> => {
     const id = this.#state.invoice?.detail.id;
     if (!id) return;
@@ -1090,6 +1130,90 @@ export class Controller {
     this.notify('info', t('addin.reception.testReceived'));
   };
 
+  // ── Clients (plan §4 parties, §6 PartyAgent) ──────────────────────────────────────────────────
+  loadCustomers = async (): Promise<void> => {
+    const loaded = await this.#act('customers', () => this.api.parties());
+    if (!loaded) return;
+    const c = this.#state.customers;
+    this.#set({
+      customers: { query: {}, finding: null, sheetName: null, ...c, parties: loaded.parties },
+    });
+  };
+
+  #customers(patch: Partial<Customers>): void {
+    const c = this.#state.customers ?? { parties: [], query: {}, finding: null, sheetName: null };
+    this.#set({ customers: { ...c, ...patch } });
+  }
+
+  #putParty(party: Party): void {
+    const parties = (this.#state.customers?.parties ?? []).filter((p) => p.id !== party.id);
+    parties.push(party);
+    parties.sort((a, b) => a.legalName.localeCompare(b.legalName, 'fr'));
+    const finding = this.#state.customers?.finding;
+    this.#customers({
+      parties,
+      ...(finding && {
+        finding: {
+          ...finding,
+          candidates: finding.candidates.map((c) =>
+            c.siren === party.siren ? { ...c, partyId: party.id } : c,
+          ),
+        },
+      }),
+    });
+  }
+
+  /** « Chercher dans l'annuaire »: by SIREN, or by name (and post code). */
+  searchCustomers = async (query: PartyQuery, sheetName: string | null = null): Promise<void> => {
+    this.#customers({ query, finding: null, sheetName });
+    const finding = await this.#act('partySearch', () => this.api.searchParties(query));
+    if (finding) this.#customers({ query, finding });
+  };
+
+  /**
+   * « C'est ce client »: saved to the fiche clients under the sheet's name for it too, so the next
+   * syncs find it by that name and fill the sheet's blanks. `name` is the one typed for a company
+   * whose name the directory withholds.
+   */
+  confirmCustomer = async (siren: string, name?: string): Promise<void> => {
+    const party = await this.#act(`party:${siren}`, () => this.api.confirmParty(siren, name));
+    if (!party) return;
+    this.#putParty(party);
+    this.notify('success', t('addin.customers.confirmed', { name: party.legalName }));
+    void this.sync();
+  };
+
+  updateCustomer = async (id: string, patch: PartyPatch): Promise<boolean> => {
+    const party = await this.#act(`party:${id}`, () => this.api.patchParty(id, patch));
+    if (!party) return false;
+    this.#putParty(party);
+    this.notify(
+      'success',
+      patch.autopilot === undefined
+        ? t('addin.customers.saved', { name: party.legalName })
+        : t(patch.autopilot ? 'addin.customers.autopilotOn' : 'addin.customers.autopilotOff', {
+            name: party.legalName,
+          }),
+    );
+    if (patch.autopilot !== undefined) void this.sync();
+    return true;
+  };
+
+  removeCustomer = async (id: string): Promise<void> => {
+    const party = this.#state.customers?.parties.find((p) => p.id === id);
+    const done = await this.#act(`party:${id}`, async () => {
+      await this.api.deleteParty(id);
+      return true;
+    });
+    if (!done) return;
+    this.#customers({
+      parties: (this.#state.customers?.parties ?? []).filter((p) => p.id !== id),
+      finding: null,
+    });
+    this.notify('success', t('addin.customers.removed', { name: party?.legalName ?? '' }));
+    void this.sync();
+  };
+
   // ── Réglages ──────────────────────────────────────────────────────────────────────────────────
   loadSettings = async (): Promise<void> => {
     const settings = await this.#act('settings', () => this.api.settings());
@@ -1114,6 +1238,24 @@ export class Controller {
     this.#set({ settings });
     this.notify('success', t('addin.settings.aiSaved'));
     return true;
+  };
+
+  /** « Votre propre clé B2Brouter »: tried by the server before it is saved. */
+  savePdpKey = async (apiKey: string, account?: string): Promise<boolean> => {
+    const settings = await this.#act('pdpKey', () =>
+      this.api.savePdpKey({ apiKey, ...(account && { account }) }),
+    );
+    if (!settings) return false;
+    this.#set({ settings });
+    this.notify('success', t('addin.settings.pdpKeySaved'));
+    return true;
+  };
+
+  removePdpKey = async (): Promise<void> => {
+    const settings = await this.#act('pdpKey', () => this.api.removePdpKey());
+    if (!settings) return;
+    this.#set({ settings });
+    this.notify('success', t('addin.settings.pdpKeyRemoved'));
   };
 
   exportData = (): Promise<Blob | undefined> => this.#act('export', () => this.api.exportData());

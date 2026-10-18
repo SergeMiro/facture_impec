@@ -334,7 +334,8 @@ An accounting firm's brand, if a pilot comes through one:
 ### P1, P2
 
 A **P1** is any of: an invoice sent twice, or to the wrong customer or platform; a real invoice leaving
-without the user's « Envoyer » or while the company is not live; an amount, VAT or date in the XML that
+without the user's « Envoyer » (or the autopilot the user switched on for that customer, under the
+ceiling) or while the company is not live; an amount, VAT or date in the XML that
 differs from the sheet; an invoice lost or stuck (no platform answer, no error shown) for more than a
 business day; personal data of one company visible to another; the pane unusable for a pilot (cannot
 sign in, cannot send a test invoice) for more than an hour. A P1 resets the 5-day clock once fixed.
@@ -380,6 +381,33 @@ reason otherwise, nothing changed) and records `tenant.live` in the audit log. F
 longer says « Votre compte est en cours d'activation… », « Mode test » off sends for real, and the inbox is read.
 Watch its first real invoice to « Déposée » and beyond the same day. `{"live":false,…}` closes real
 sends again (audit `tenant.offline`); invoices already sent keep being followed.
+
+### The ten-year archive (M8)
+
+Every real invoice sent or received is in `invoice_archive` (`docs/ARCHITECTURE.md` M8). Check one
+company's archive, a deleted one included, after a restore or once a month:
+
+```bash
+curl -s -H "$AUTH" "$API/admin/tenants/<id>/archive"
+# {"rows":12,"ok":true,"broken":null,"lastChain":"…"}
+```
+
+`ok: false` names the first row whose XML, PDF or chain no longer matches (`broken.id`, `problem`): treat
+it as a P1, restore that company's rows from the last backup that checks out, and find out who could
+write to the database. Keep each month's `lastChain` somewhere outside the server (a note, a mail):
+it is what shows that the newest rows were not removed (`docs/DEFERRED.md`). Real invoices that left
+before M8 are archived by the sweep as it catches up, 100 per pass. Supplier invoices are archived
+only as they are stored, so one received for real before M8 is not; no company was live before M8.
+
+### A company's own B2Brouter key (M8)
+
+Offered in Réglages only when `PDP_KEY_SEALING_KEY` is set (`docs/DEPLOY.md` §2). The owner of the
+company pastes the key (and B2Brouter's account id if it is not the SIREN); the API tries it before
+saving (`docs/B2BROUTER.md` §12). What the operator sees: audit `settings.pdp_key` / `settings.pdp_key_remove`
+with the key's last four characters and the account. If a company's real sends stop with
+`pdp_not_configured` (« La connexion à votre plateforme… n'est pas encore configurée ») after a change
+of `PDP_KEY_SEALING_KEY`, the owner pastes the key again;
+« Revenir à notre connexion » is refused once the company is live (it can only replace the key).
 
 ## Legacy MVP
 

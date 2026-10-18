@@ -10,6 +10,20 @@ import type { Directory } from './sirene';
 /** The adapters this deployment can use; a tenant on a missing provider cannot send yet. */
 export type PdpRegistry = Partial<Record<PdpProvider, PdpAdapter>>;
 
+/**
+ * Companies that bring their own platform key (docs/B2BROUTER.md §12): their real invoices, statuses,
+ * inbox and payments go through it instead of the deployment's key; « Mode test » does not.
+ */
+export interface OwnPlatform {
+  /** PDP_KEY_SEALING_KEY: company keys are sealed with it at rest. */
+  sealingKey: string;
+  /**
+   * An adapter calling the platform with this company key. Throws on a key this deployment cannot use
+   * (another environment's); null: the provider takes no company key.
+   */
+  adapter(provider: PdpProvider, apiKey: string): PdpAdapter | null;
+}
+
 /** An invoice at a platform: what a webhook or the sweep asks the sync job to refresh. */
 export interface SyncTarget {
   provider: PdpProvider;
@@ -85,6 +99,8 @@ export interface ApiDeps {
   billing?: Billing | null;
   /** The company directory behind « Créer un compte » (src/sirene.ts); absent: no sign-up. */
   directory?: Directory | null;
+  /** Company platform keys (PDP_KEY_SEALING_KEY); absent or null: every company uses ours. */
+  ownPdp?: OwnPlatform | null;
   /** Request counters (src/limits.ts); default: fresh ones per app. */
   limits?: RequestWindows;
   now: () => Date;

@@ -332,6 +332,11 @@ describe('a new user on the demo sheet', () => {
     expect(state().settings).toMatchObject({ mode: 'autopilot', autopilotMaxAmount: 150_000 });
     expect(await controller.saveSettings({ mode: 'review' })).toBe(true);
     expect(state().settings?.mode).toBe('review');
+
+    // This deployment seals no company platform key: the form is hidden, and the API says why.
+    expect(state().settings?.pdp.ownKey).toEqual({ available: false, hint: null });
+    expect(await controller.savePdpKey('test_company_key_1234')).toBe(false);
+    expect(state().notice?.text).toBe(t('api.error.pdp_key_disabled'));
   });
 
   it('chases the accepted invoice from its fiche, records a promise, then « Encaissée »', async () => {
@@ -427,6 +432,57 @@ describe('a new user on the demo sheet', () => {
     await controller.setTestMode(false);
     await until(() => state().reception?.test === false, 'the real received invoices');
     expect(state().reception).toEqual({ test: false, inbound: [], exports: [] });
+  });
+
+  it("finds the fiche's customer in the directory, saves it, then opts it in for the autopilot", async () => {
+    const id = row(3)?.invoiceId;
+    if (!id) throw new Error('row 3 has no invoice');
+    await controller.openInvoice(id);
+    expect(state().invoice?.detail).toMatchObject({ buyerName: 'Garage Dupont', partyId: null });
+    await controller.findCustomer();
+    expect(state().screen.name).toBe('customers');
+    const finding = state().customers?.finding;
+    expect(finding?.question).toBe(t('party.question.many', { count: 3 }));
+    const first = finding?.candidates[0];
+    if (!first) throw new Error('no candidate');
+    expect(first).toMatchObject({ name: 'GARAGE DUPONT', routing: true, partyId: null });
+
+    await controller.confirmCustomer(first.siren, state().customers?.sheetName ?? undefined);
+    const party = state().customers?.parties[0];
+    if (!party) throw new Error('no customer saved');
+    expect(party).toMatchObject({
+      legalName: 'GARAGE DUPONT',
+      siren: first.siren,
+      autopilot: false,
+    });
+    expect(state().customers?.finding?.candidates[0]?.partyId).toBe(party.id);
+    expect(state().notice?.text).toBe(t('addin.customers.confirmed', { name: 'GARAGE DUPONT' }));
+
+    expect(await controller.updateCustomer(party.id, { email: 'compta@garage.example' })).toBe(
+      true,
+    );
+    expect(await controller.updateCustomer(party.id, { autopilot: true })).toBe(true);
+    expect(state().customers?.parties[0]).toMatchObject({
+      email: 'compta@garage.example',
+      autopilot: true,
+    });
+    expect(state().notice?.text).toBe(t('addin.customers.autopilotOn', { name: 'GARAGE DUPONT' }));
+
+    await controller.removeCustomer(party.id);
+    expect(state().customers?.parties).toEqual([]);
+  });
+
+  it("holds an invoice for good on « Annuler l'envoi automatique »", async () => {
+    const id = row(3)?.invoiceId;
+    if (!id) throw new Error('row 3 has no invoice');
+    await controller.openInvoice(id);
+    expect(state().invoice?.detail.autopilot).toEqual({ at: null, held: false });
+    await controller.cancelAutopilot();
+    expect(state().invoice?.detail.autopilot).toEqual({ at: null, held: true });
+    expect(state().invoice?.detail.events.at(-1)).toMatchObject({ event: 'autopilot_held' });
+    expect(state().notice?.text).toBe(
+      t('addin.autopilot.held', { number: state().invoice?.detail.number ?? '' }),
+    );
   });
 });
 

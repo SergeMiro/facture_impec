@@ -1,28 +1,19 @@
-// The public company directory behind « Créer un compte » (docs/ONBOARDING.md §1): the Annuaire des
-// entreprises API of the DINUM, no key, read 2026-10-18. One SIREN in, the legal name, the head office
-// and the VAT number DGFiP lists out. The directory says what it knows; the person confirms or types.
+// The public company directory behind « Créer un compte » and the PartyAgent (docs/ONBOARDING.md §1):
+// the Annuaire des entreprises API of the DINUM, no key, read 2026-10-18. A SIREN or a name in; the legal
+// name, the head office and the VAT number DGFiP lists out. The directory says what it knows; the person
+// confirms or types.
+import type { DirectoryCompany } from '@fi/agents';
 import { type Address, isValidSiren } from '@fi/core';
 import { z } from 'zod';
 
-/** What « Créer un compte » prefills. Null fields are for the person to type. */
-export interface DirectoryCompany {
-  siren: string;
-  name: string | null;
-  address: Address | null;
-  /** From DGFiP's list of active numbers; else the usual key computed from the SIREN, to confirm. */
-  vatId: string | null;
-  vatSource: 'dgfip' | 'computed';
-  /** The company has ceased trading (`etat_administratif` C). */
-  closed: boolean;
-  /** This SIREN is a duplicate; the one to use instead (`siren_conserve`). */
-  keptSiren: string | null;
-  /** Some fields were withheld at the company's request (partial diffusion). */
-  masked: boolean;
-}
+/** What « Créer un compte » prefills and the PartyAgent shows. Null fields are for the person to type. */
+export type { DirectoryCompany };
 
 export interface Directory {
   /** Null: no company has this SIREN. Throws DirectoryUnavailable when the directory cannot answer. */
   lookup(siren: string): Promise<DirectoryCompany | null>;
+  /** Active companies matching a name, the directory's best first (docs/ONBOARDING.md §1.4). */
+  search(query: { name: string; postCode?: string }, limit: number): Promise<DirectoryCompany[]>;
 }
 
 export class DirectoryUnavailable extends Error {
@@ -74,6 +65,7 @@ const Result = z.object({
 });
 
 const Answer = z.object({ results: z.array(Result), total_results: z.number() });
+type Result = z.infer<typeof Result>;
 
 /**
  * The usual key of a French VAT number, `FR` + (12 + 3 × (SIREN mod 97)) mod 97 + SIREN. It matched
@@ -107,9 +99,28 @@ function address(siege: z.infer<typeof Siege> | null | undefined): Address | nul
   return a.line1 || a.city ? a : null;
 }
 
+function companyOf(found: Result): DirectoryCompany {
+  const siren = found.siren;
+  const name = text.parse(found.nom_raison_sociale) ?? text.parse(found.nom_complet);
+  const listed = found.tva?.find((v) => /^FR[0-9A-Z]{2}\d{9}$/.test(v) && v.endsWith(siren));
+  return {
+    siren,
+    name,
+    address: address(found.siege),
+    vatId: listed ?? computedVatId(siren),
+    vatSource: listed ? 'dgfip' : 'computed',
+    closed: found.etat_administratif === 'C',
+    keptSiren: found.siren_conserve && found.siren_conserve !== siren ? found.siren_conserve : null,
+    masked:
+      found.statut_diffusion === 'P' ||
+      found.nom_raison_sociale === WITHHELD ||
+      found.nom_complet === WITHHELD,
+  };
+}
+
 const USER_AGENT = 'FactureImpec/1.0 (inscription; +https://facture-impec.vercel.app)';
 
-/** GET /search?q=<siren>&minimal=true&include=siege,tva (docs/ONBOARDING.md §1.1). */
+/** GET /search?…&minimal=true&include=siege,tva (docs/ONBOARDING.md §1.1, §1.4). */
 export class RechercheEntreprises implements Directory {
   constructor(
     private readonly baseUrl: string,
@@ -118,11 +129,33 @@ export class RechercheEntreprises implements Directory {
 
   async lookup(siren: string): Promise<DirectoryCompany | null> {
     if (!isValidSiren(siren)) return null;
+    const results = await this.#search({ q: siren, per_page: '1' });
+    // Not found is a 200 with no result; a direct lookup returns that SIREN or nothing.
+    const found = results.find((r) => r.siren === siren);
+    return found ? companyOf(found) : null;
+  }
+
+  async search(
+    query: { name: string; postCode?: string },
+    limit: number,
+  ): Promise<DirectoryCompany[]> {
+    // The directory refuses fewer than 3 characters (400); PartyAgent asks for 3 letters first.
+    const q = query.name.trim();
+    if (q.length < 3) return [];
+    const results = await this.#search({
+      q,
+      per_page: String(Math.min(Math.max(limit, 1), 25)),
+      etat_administratif: 'A',
+      ...(query.postCode && /^\d{5}$/.test(query.postCode) && { code_postal: query.postCode }),
+    });
+    return results.map(companyOf);
+  }
+
+  async #search(params: Record<string, string>): Promise<Result[]> {
     const url = new URL('/search', this.baseUrl);
-    url.searchParams.set('q', siren);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     url.searchParams.set('minimal', 'true');
     url.searchParams.set('include', 'siege,tva');
-    url.searchParams.set('per_page', '1');
     let res: Response;
     try {
       res = await this.fetcher(url, {
@@ -139,24 +172,6 @@ export class RechercheEntreprises implements Directory {
     if (!res.ok) throw new DirectoryUnavailable(`directory: ${res.status}`);
     const parsed = Answer.safeParse(await res.json().catch(() => null));
     if (!parsed.success) throw new DirectoryUnavailable('directory: unexpected answer');
-    // Not found is a 200 with no result; a direct lookup returns that SIREN or nothing.
-    const found = parsed.data.results.find((r) => r.siren === siren);
-    if (!found) return null;
-    const name = text.parse(found.nom_raison_sociale) ?? text.parse(found.nom_complet);
-    const listed = found.tva?.find((v) => /^FR[0-9A-Z]{2}\d{9}$/.test(v) && v.endsWith(siren));
-    return {
-      siren,
-      name,
-      address: address(found.siege),
-      vatId: listed ?? computedVatId(siren),
-      vatSource: listed ? 'dgfip' : 'computed',
-      closed: found.etat_administratif === 'C',
-      keptSiren:
-        found.siren_conserve && found.siren_conserve !== siren ? found.siren_conserve : null,
-      masked:
-        found.statut_diffusion === 'P' ||
-        found.nom_raison_sociale === WITHHELD ||
-        found.nom_complet === WITHHELD,
-    };
+    return parsed.data.results;
   }
 }
