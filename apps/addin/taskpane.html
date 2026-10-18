@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Facture Impec</title>
+    <!-- office.js sets history.pushState / replaceState to null (docs/OFFICE.md §8): keep them. -->
+    <script>
+      window.__fiHistory = {
+        pushState: window.history.pushState,
+        replaceState: window.history.replaceState,
+      };
+    </script>
+    <!-- Marketplace requires the Microsoft-hosted file, in <head>, never bundled (§8). -->
+    <script src="https://officeapis.public.onecdn.static.microsoft/1/office.js"></script>
+    <script>
+      window.history.pushState = window.__fiHistory.pushState;
+      window.history.replaceState = window.__fiHistory.replaceState;
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

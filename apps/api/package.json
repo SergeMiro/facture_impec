@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./scenarios": "./src/scenarios/index.ts"
+    "./scenarios": "./src/scenarios/index.ts",
+    "./testing": "./src/test-helpers.ts"
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",

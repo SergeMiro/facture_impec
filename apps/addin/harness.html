@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Facture Impec — banc d'essai</title>
+    <!-- Dev only: the task pane beside an in-memory sheet, no Excel (docs/RUNBOOK.md § Add-in). -->
+    <style>
+      body { margin: 0; font: 13px 'Segoe UI', system-ui, sans-serif; background: #f3f3f3; }
+      .harness { display: grid; grid-template: auto 1fr / 1fr 380px; height: 100vh; }
+      .ribbon { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; padding: 6px 12px;
+        background: #fff; border-bottom: 1px solid #ddd; }
+      .ribbon button { padding: 4px 10px; }
+      .sheet { overflow: hidden; display: flex; }
+      .grid-wrap { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+      .formula { display: flex; gap: 6px; padding: 4px 6px; background: #fff; border-bottom: 1px solid #ddd; }
+      .formula output { width: 60px; padding: 3px 6px; border: 1px solid #ccc; }
+      .formula input { flex: 1; padding: 3px 6px; }
+      .grid-scroll { overflow: auto; flex: 1; background: #fff; }
+      .grid { border-collapse: collapse; }
+      .grid th { background: #f0f0f0; color: #555; font-weight: 400; padding: 2px 6px; border: 1px solid #ddd;
+        position: sticky; top: 0; }
+      .grid td { border: 1px solid #e3e3e3; padding: 0; min-width: 70px; max-width: 220px; height: 20px; }
+      .grid .cell { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: 20px;
+        padding: 2px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: cell; }
+      .grid td.active { outline: 2px solid #107c41; outline-offset: -2px; }
+      .tabs { display: flex; gap: 2px; padding: 2px 6px; background: #f0f0f0; border-top: 1px solid #ddd; }
+      .tab { border: 0; background: transparent; padding: 4px 12px; }
+      .tab.current { background: #fff; color: #107c41; font-weight: 600; }
+      .pane { overflow: auto; border-left: 1px solid #ddd; background: #fff; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/harness/main.tsx"></script>
+  </body>
+</html>

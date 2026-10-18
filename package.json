@@ -16,11 +16,15 @@
     "lint": "biome ci .",
     "format": "biome check --write .",
     "verify": "pnpm lint && pnpm typecheck && turbo run test test:oracle",
-    "scenario": "tsx scripts/run-scenario.ts"
+    "scenario": "tsx scripts/run-scenario.ts",
+    "test:e2e": "pnpm --filter @fi/addin test:e2e",
+    "seed:demo": "pnpm --filter @fi/addin seed:demo",
+    "addin:icons": "tsx scripts/addin-icons.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
     "@fi/api": "workspace:*",
+    "@fi/shared": "workspace:*",
     "@types/node": "^22.20.5",
     "turbo": "^2.11.9",
     "tsx": "^4.23.15",
