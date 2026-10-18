@@ -1,0 +1,5 @@
+{
+  "description": "Ten valid invoices go out and follow the default platform timeline (received, delivered, accepted after 2 days, paid after 30 days) at a day per second.",
+  "invoices": 10,
+  "expect": { "status": "paid", "withinSeconds": 60 }
+}

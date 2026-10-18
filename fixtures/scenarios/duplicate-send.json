@@ -1,0 +1,15 @@
+{
+  "description": "Each invoice is created twice and « Envoyer » is pressed five times at once; the platform loses its first answer, so the send is retried. The platform holds each invoice once and our timeline shows one deposit.",
+  "invoices": 3,
+  "platform": {
+    "timeline": [
+      { "status": "received_by_platform", "after": "PT5M" },
+      { "status": "delivered", "after": "PT1H" },
+      { "status": "accepted", "after": "P1D" },
+      { "status": "payment_received", "after": "P3D" }
+    ],
+    "failNext": { "count": 1, "mode": "drop-response" }
+  },
+  "repeat": { "create": 2, "send": 5 },
+  "expect": { "status": "paid", "withinSeconds": 30 }
+}

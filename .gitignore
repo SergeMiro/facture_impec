@@ -26,3 +26,6 @@ pnpm-debug.log*
 # Astro / Vercel build output (apps/site)
 .astro
 .vercel
+
+# Local PGlite database (PGLITE_DIR, apps/api)
+.data/

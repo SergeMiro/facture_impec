@@ -10,16 +10,20 @@
     "dev": "turbo run dev",
     "dev:addin": "turbo run dev --filter=@fi/addin",
     "build": "turbo run build",
-    "typecheck": "turbo run typecheck",
+    "typecheck": "turbo run typecheck && tsc -p tsconfig.json",
     "test": "turbo run test",
     "test:oracle": "turbo run test:oracle",
     "lint": "biome ci .",
     "format": "biome check --write .",
-    "verify": "pnpm lint && pnpm typecheck && turbo run test test:oracle"
+    "verify": "pnpm lint && pnpm typecheck && turbo run test test:oracle",
+    "scenario": "tsx scripts/run-scenario.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
+    "@fi/api": "workspace:*",
+    "@types/node": "^22.20.5",
     "turbo": "^2.11.9",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   }

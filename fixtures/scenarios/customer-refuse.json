@@ -1,0 +1,16 @@
+{
+  "description": "The customer receives the invoice and refuses it the next day, with a reason (« Refusée »).",
+  "invoices": 2,
+  "platform": {
+    "timeline": [
+      { "status": "received_by_platform", "after": "PT5M" },
+      { "status": "delivered", "after": "PT1H" },
+      {
+        "status": "refused",
+        "after": "P1D",
+        "reason": { "code": "REF", "text": "Prestation non conforme au devis." }
+      }
+    ]
+  },
+  "expect": { "status": "refused_by_customer", "withinSeconds": 15 }
+}
