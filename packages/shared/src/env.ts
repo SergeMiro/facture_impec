@@ -35,6 +35,7 @@ export const ServerEnvSchema = z
     MOCK_PDP_WEBHOOK_URL: z.preprocess(blank, z.url().optional()),
     MOCK_PDP_WEBHOOK_SECRET: z.string().min(16).default('local-mock-pdp-webhook-secret'),
     MOCK_PDP_SPEED: z.coerce.number().positive().default(86_400),
+    MOCK_PDP_B2BROUTER_WEBHOOK_URL: z.preprocess(blank, z.url().optional()),
     // One operator key for every company account of our B2Brouter integration (docs/B2BROUTER.md §1).
     B2BROUTER_API_KEY: optionalText(),
     // Empty: B2Brouter's API host, which serves the sandbox to `test_` keys.

@@ -7,8 +7,10 @@ export interface SeedOptions {
   api: string;
   adminToken: string;
   email?: string;
-  /** The account on the mock platform; one per company. */
+  /** The company's account on its platform; one per company. */
   account?: string;
+  /** Default: the mock platform. */
+  provider?: 'mock' | 'b2brouter';
 }
 
 export interface SeededCompany {
@@ -31,7 +33,7 @@ export async function seedDemo(options: SeedOptions): Promise<SeededCompany> {
   const email = options.email ?? DEMO_OWNER;
   const created = (await call(`${options.api}/admin/tenants`, options.adminToken, 'POST', {
     ...DEMO_SELLER,
-    pdpProvider: 'mock',
+    pdpProvider: options.provider ?? 'mock',
     pdpAccount: options.account ?? `demo-${Date.now()}`,
     ownerEmail: email,
   })) as { tenant: { id: string }; apiKey: string };

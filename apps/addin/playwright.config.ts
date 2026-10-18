@@ -1,9 +1,11 @@
-// E2E (plan §11, M3): the task pane against the real API, mock platform and Vite dev server, in the
-// server's local Chrome (browser: local). `pnpm test:e2e` starts the three on ports of their own.
+// E2E (plan §11, M3–M4): the task pane against the real API, mock platform and Vite dev server, in
+// the server's local Chrome (browser: local). `pnpm test:e2e` starts the three on ports of their own.
 // e2e/harness.spec.ts drives the harness page (a sheet in the browser, no Excel);
+// e2e/b2brouter.spec.ts sends through the B2Brouter adapter: to the stand-in in apps/mock-pdp, or to
+// B2Brouter's sandbox with the owner's key (FI_E2E_B2BROUTER_*, docs/RUNBOOK.md § E2E);
 // e2e/excel-web.spec.ts drives Excel on the web and runs only with an account (docs/RUNBOOK.md).
 import { defineConfig } from '@playwright/test';
-import { E2E, E2E_DB } from './e2e/env';
+import { E2E, E2E_DB, LIVE } from './e2e/env';
 
 const api = `http://localhost:${E2E.api}`;
 
@@ -33,6 +35,8 @@ export default defineConfig({
         MOCK_PDP_WEBHOOK_URL: `${api}/webhooks/pdp/mock`,
         // One business second per second: a sent test invoice stays « Déposée » for the scenarios.
         MOCK_PDP_SPEED: '1',
+        MOCK_PDP_B2BROUTER_WEBHOOK_URL: `${api}/webhooks/pdp/b2brouter`,
+        B2BROUTER_WEBHOOK_SECRET: E2E.b2brouterWebhookSecret,
       },
       reuseExistingServer: false,
     },
@@ -47,6 +51,12 @@ export default defineConfig({
         API_PUBLIC_URL: api,
         ADDIN_ORIGINS: `https://localhost:${E2E.addin}`,
         MOCK_PDP_URL: `http://localhost:${E2E.mock}`,
+        // A test_ key makes B2Brouter the test platform. Live: B2Brouter's own host, and no
+        // webhooks (they cannot reach this server), so the sweep brings the news.
+        B2BROUTER_API_KEY: LIVE?.key ?? E2E.standInKey,
+        B2BROUTER_BASE_URL: LIVE ? '' : `http://localhost:${E2E.mock}/b2brouter`,
+        B2BROUTER_WEBHOOK_SECRET: LIVE ? '' : E2E.b2brouterWebhookSecret,
+        PDP_SYNC_INTERVAL_SECONDS: '10',
         // No AI: the agents' deterministic answers, the same on every run.
         AI_PROVIDER: '',
       },

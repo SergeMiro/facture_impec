@@ -1,42 +1,18 @@
 // M3 acceptance on the harness page (plan §11): a new user signs in with the e-mailed link, maps
 // the demo sheet, fixes its two errors from the « Corriger dans la feuille » buttons, rehearses and
-// sees « Prêt à envoyer »; then sends a test invoice and plays « Simuler un rejet PDP ».
+// sees « Prêt à envoyer »; then sends a test invoice and plays « Simuler un rejet PDP ». Since M4
+// the test platform is B2Brouter's stand-in (a test_ key), which cannot play scenarios: the API
+// writes the rejection as the platform would have (apps/api/src/sandbox.ts).
 // browser: local (Chrome of this server; Browserbase cannot reach localhost).
 import { t } from '@fi/shared';
-import { expect, type Locator, type Page, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { DEMO_OWNER } from '../src/harness/demo';
 import { seedDemo } from '../src/harness/seed';
-import { E2E } from './env';
+import { E2E, LIVE } from './env';
+import { api, row, signIn, typeInSelectedCell } from './helpers';
 
-const api = `http://localhost:${E2E.api}`;
-
-/** The sign-in link of the last mail the local outbox kept for this address. */
-async function linkFor(email: string): Promise<string> {
-  let url: string | undefined;
-  await expect
-    .poll(async () => {
-      const res = await fetch(`${api}/admin/outbox`, {
-        headers: { authorization: `Bearer ${E2E.adminToken}` },
-      });
-      const { mails } = (await res.json()) as { mails: { to: string; text: string }[] };
-      const mail = mails.filter((m) => m.to === email).at(-1);
-      url = /https?:\/\/\S+\/auth\/magic-link\/confirm\?token=\S+/.exec(mail?.text ?? '')?.[0];
-      return url;
-    })
-    .toBeTruthy();
-  return url ?? '';
-}
-
-/** Types into a cell the way a user does: select it, type in the formula bar, press Enter. */
-async function typeInSelectedCell(page: Page, cell: string, text: string) {
-  await expect(page.getByTestId('name-box')).toHaveText(cell);
-  const bar = page.getByTestId('formula-bar');
-  await bar.fill(text);
-  await bar.press('Enter');
-}
-
-const row = (pane: Locator, number: string) =>
-  pane.locator('[data-testid^="row-"]').filter({ hasText: number });
+// The live run is b2brouter.spec.ts alone: this one needs the stand-in's account and SIRENs.
+test.skip(LIVE !== null, 'live B2Brouter run');
 
 test('a new user maps the sheet, fixes two errors, rehearses and plays a test scenario', async ({
   page,
@@ -48,14 +24,7 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
   const started = Date.now();
 
   await test.step('Connexion: the e-mailed link signs the pane in', async () => {
-    await pane.getByLabel(t('addin.login.email')).fill(DEMO_OWNER);
-    await pane.getByRole('button', { name: t('addin.login.sendLink') }).click();
-    await expect(pane.getByTestId('link-waiting')).toBeVisible();
-    const mail = await context.newPage();
-    await mail.goto(await linkFor(DEMO_OWNER));
-    await mail.getByRole('button', { name: t('login.page.button') }).click();
-    await expect(mail.getByText(t('login.page.done'))).toBeVisible();
-    await mail.close();
+    await signIn(pane, context, DEMO_OWNER);
   });
 
   await test.step('Détection: the proposed columns are confirmed', async () => {
