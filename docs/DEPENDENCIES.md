@@ -27,3 +27,6 @@ Rule 7 of `CLAUDE.md`: any dependency over 1 MB installed, or under 1k weekly do
 | `@astrojs/check` (dev, site) | Type-checks `.astro` files; it pins TypeScript ≤ 6, so the site has its own `typescript@6` dev dependency. |
 | `tailwindcss`, `@tailwindcss/vite` (dev, site) | Utility CSS with the brand tokens in one `@theme` block; the native engine is over 1 MB. |
 | `@fontsource-variable/fraunces`, `@fontsource-variable/inter` (site) | Self-hosted font files (RGPD: no request to Google Fonts); each package is over 1 MB because it ships every subset. |
+| `ai` (agents) | Vercel AI SDK: one `generateText` + structured output + tool API over every provider the owner asked for (`docs/AI_PROVIDERS.md`); 9.8 MB installed, Node only (the add-in never imports `@fi/agents`). |
+| `@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/google` (agents) | The providers' official adapters for the AI SDK, 2.5–3.3 MB each; imported only by `packages/agents/src/providers/models.ts`. |
+| `fast-check` (dev, agents) | Property tests for the pseudonymizer round trip (plan §6); 1.2 MB, dev only. |

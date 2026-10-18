@@ -36,7 +36,7 @@ structured output, which fits "Zod at every boundary". Versions on npm, checked 
 
 The OpenAI-compatible package covers Scaleway Generative APIs, OVHcloud AI Endpoints, OpenRouter,
 Groq, Together, DeepSeek, vLLM, Ollama and LM Studio, so no community provider packages are needed.
-Each provider package is only imported by `packages/agents/src/providers/<id>.ts`.
+Provider packages are only imported by `packages/agents/src/providers/models.ts`.
 
 ## Model
 
@@ -49,7 +49,9 @@ interface AiSettings {                     // one row per tenant, Zod-validated
   mode: 'included' | 'byok' | 'off';
   provider: ProviderId;
   models: Record<Role, string>;            // e.g. { agent: 'mistral-medium-latest', classify: 'mistral-small-latest' }
-  baseUrl?: string;                        // openai-compatible and azure only, https required
+  baseUrl?: string;                        // openai-compatible and azure only; BYOK: public https (providers/net.ts)
+  apiVersion?: string;                     // azure only; the provider default when absent
+  structuredOutputs?: boolean;             // openai-compatible: endpoint accepts json_schema
   headers?: Record<string, string>;        // openai-compatible extras (e.g. OpenRouter attribution)
   keyRef?: string;                         // id of the sealed key, never the key itself
   capabilities?: { tools: boolean; json: boolean; checkedAt: string };
@@ -100,5 +102,4 @@ French SMEs) and Anthropic Claude (the plan's original choice; current ids `clau
 ## Open points
 
 - Exact EU-residency terms of each hosted provider (TODO(verify) before M3 ships BYOK).
-- Whether Azure needs `resourceName` + `apiVersion` fields in the settings form or a full base URL only.
 - Per-tenant spend limit for BYOK calls made by background agents (the reminder agent runs unattended).

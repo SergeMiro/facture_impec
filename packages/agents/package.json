@@ -8,7 +8,8 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --coverage",
+    "eval:record": "tsx scripts/record-evals.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.82",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "@vitest/coverage-v8": "^5.0.5",
     "fast-check": "4.10.2",
     "tsx": "^4.23.15"
   }

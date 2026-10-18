@@ -5,7 +5,7 @@ import { cellForPath, readSheet, type SheetInvoice } from './build';
 import { cellAddress, columnIndex, columnLetters, isBlank, parseAddress } from './cells';
 import { detectMapping, headerScore, normalizeHeader } from './detect';
 import { CORE_FIELDS, type SellerProfile, SheetMapping } from './fields';
-import { grid } from './test-grid';
+import { grid } from './grid';
 import {
   dateFromText,
   dateOf,

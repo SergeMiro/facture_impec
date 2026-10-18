@@ -412,26 +412,31 @@ export function detectMapping(snapshot: SheetSnapshot): SheetMapping {
     usedCols.add(c.col);
   }
 
-  const warnings = CORE_FIELDS.filter((f) => !mapping[f] && !(f === 'unitPrice' && mapping.lineNet))
-    .filter((f) => !(f === 'quantity' && mapping.lineNet))
-    .map((f) => t('sheet.warning.missing', { field: t(`sheet.field.${f}`) }));
-
   return {
     sheet: snapshot.sheet,
     headerRow,
     mapping,
-    grouping: groupingFor(mapping.number?.column, below),
-    warnings,
+    grouping: detectGrouping(snapshot, headerRow, mapping.number?.column),
+    warnings: missingFieldWarnings(mapping),
     source: 'heuristic',
   };
 }
 
+/** « Colonne introuvable » notes for the core fields; a line total stands in for price and quantity. */
+export function missingFieldWarnings(mapping: SheetMapping['mapping']): string[] {
+  return CORE_FIELDS.filter((f) => !mapping[f])
+    .filter((f) => !((f === 'unitPrice' || f === 'quantity') && mapping.lineNet))
+    .map((f) => t('sheet.warning.missing', { field: t(`sheet.field.${f}`) }));
+}
+
 /** Group by the number column when a number repeats or a line row leaves it blank. */
-function groupingFor(
+export function detectGrouping(
+  snapshot: SheetSnapshot,
+  headerRow: number,
   col: string | undefined,
-  rows: SheetSnapshot['rows'],
 ): SheetMapping['grouping'] {
   if (!col) return null;
+  const rows = snapshot.rows.filter((r) => r.row > headerRow).slice(0, SAMPLE_ROWS);
   const seen = new Set<string>();
   let started = false;
   for (const row of rows) {

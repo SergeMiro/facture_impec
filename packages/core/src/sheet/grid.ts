@@ -1,4 +1,4 @@
-// Test helper: a worksheet written as a grid, the way the add-in's SheetReader would send it.
+// A worksheet written as a grid, the way the add-in's SheetReader sends it: tests, evals and fakes.
 import { columnLetters, type RawCell, type SheetSnapshot } from './cells';
 
 /** A cell as Excel holds it: plain values, or `{ v, t, f }` for a value with its text and format. */
