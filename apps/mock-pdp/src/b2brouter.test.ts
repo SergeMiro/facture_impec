@@ -8,6 +8,7 @@ import { pdpAdapterContract } from '@fi/pdp-adapter/contract';
 import { describe, expect, it } from 'vitest';
 import { createMockPdp } from './app';
 import { ManualClock } from './clock';
+import { WEBHOOK_RETRY_MS } from './engine';
 import { cii, draft } from './test-invoice';
 
 const SECRET = 'b2brouter-stand-in-secret';
@@ -209,6 +210,18 @@ describe('B2Brouter stand-in', () => {
       });
     }
     expect(JSON.parse(sent[0]?.body ?? '{}').data.state).toBe('sent');
+  });
+
+  it('retries a failed webhook like the mock does', async () => {
+    const { call, clock, engine, imported, sent } = setup({ webhooks: true });
+    engine.setControl({ webhookFailures: 1 });
+    const id = await imported('B2B-12');
+    await call(`/invoices/send_invoice/${id}`, { method: 'POST' });
+    expect(sent).toEqual([]);
+    await clock.advance(WEBHOOK_RETRY_MS[0] ?? 0);
+    // Half a real second is half a business day: later events went out meanwhile, first time.
+    const deposit = sent.filter((s) => JSON.parse(s.body).data.state === 'sent');
+    expect(deposit.map((s) => s.headers.get(B2BROUTER_HEADERS.deliveryAttempt))).toEqual(['2']);
   });
 
   it('sends flat webhook bodies in the alternate shape', async () => {

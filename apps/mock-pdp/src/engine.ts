@@ -52,11 +52,20 @@ interface Stored extends MockInvoice {
   sellerSiren: string | undefined;
   timers: (() => void)[];
   /** Replaces the mock webhook for this invoice (the B2Brouter stand-in sends its own). */
-  notify: ((event: MockEvent) => void) | undefined;
+  notify: DepositOptions['notify'];
+}
+
+/** A webhook to push, retried with backoff and subject to `webhookFailures` like the mock's own. */
+export interface Delivery {
+  /** Read at every attempt: unset, the delivery stops. */
+  url: () => string | undefined;
+  body: string;
+  headers: (attempt: number) => Record<string, string>;
 }
 
 export interface DepositOptions {
-  notify?: (event: MockEvent) => void;
+  /** The webhook for each event of this invoice instead of the mock's; undefined sends none. */
+  notify?: (event: MockEvent) => Delivery | undefined;
 }
 
 export interface EngineOptions {
@@ -373,15 +382,31 @@ export class MockPdpEngine {
 
   #notify(invoice: Stored, event: MockEvent): void {
     if (invoice.notify) {
-      invoice.notify(event);
+      const delivery = invoice.notify(event);
+      if (delivery) this.#deliver(delivery, event.id, 1);
       return;
     }
     if (!this.#webhookUrl) return;
-    this.#deliver(this.#webhookBody(invoice, event), event.id, 1);
+    const body = this.#webhookBody(invoice, event);
+    this.#deliver(
+      {
+        url: () => this.#webhookUrl,
+        body,
+        headers: (attempt) => ({
+          'content-type': 'application/json',
+          // Transport signature: real time, whatever the business clock says.
+          [MOCK_HEADERS.signature]: signWebhook(this.#options.webhookSecret, body),
+          [MOCK_HEADERS.deliveryId]: event.id,
+          [MOCK_HEADERS.deliveryAttempt]: String(attempt),
+        }),
+      },
+      event.id,
+      1,
+    );
   }
 
-  #deliver(body: string, deliveryId: string, attempt: number): void {
-    const url = this.#webhookUrl;
+  #deliver(target: Delivery, deliveryId: string, attempt: number): void {
+    const url = target.url();
     if (!url) return;
     const delivery = (async () => {
       let delivered = false;
@@ -391,14 +416,8 @@ export class MockPdpEngine {
         try {
           const res = await this.#fetch(url, {
             method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              // Transport signature: real time, whatever the business clock says.
-              [MOCK_HEADERS.signature]: signWebhook(this.#options.webhookSecret, body),
-              [MOCK_HEADERS.deliveryId]: deliveryId,
-              [MOCK_HEADERS.deliveryAttempt]: String(attempt),
-            },
-            body,
+            headers: target.headers(attempt),
+            body: target.body,
             signal: AbortSignal.timeout(5_000),
           });
           delivered = res.ok;
@@ -414,7 +433,7 @@ export class MockPdpEngine {
       }
       const cancel = this.#clock.setTimeout(() => {
         this.#timers.delete(cancel);
-        this.#deliver(body, deliveryId, attempt + 1);
+        this.#deliver(target, deliveryId, attempt + 1);
       }, delay);
       this.#timers.add(cancel);
     })();

@@ -104,9 +104,7 @@ export function createApp(
 
 export interface MockPdpOptions extends EngineOptions {
   /** B2Brouter's API over the same engine, at /b2brouter (./b2brouter.ts). */
-  b2brouter?: Omit<B2BrouterStandInOptions, 'webhookSecret' | 'fetch' | 'log'> & {
-    webhookSecret?: string;
-  };
+  b2brouter?: Omit<B2BrouterStandInOptions, 'webhookSecret'> & { webhookSecret?: string };
 }
 
 export function createMockPdp(options: MockPdpOptions) {
@@ -116,8 +114,6 @@ export function createMockPdp(options: MockPdpOptions) {
   const b2brouter = new B2BrouterStandIn(engine, {
     ...standIn,
     webhookSecret: standIn?.webhookSecret ?? options.webhookSecret,
-    ...(options.fetch && { fetch: options.fetch }),
-    ...(options.log && { log: options.log }),
   });
   app.route('/b2brouter', b2brouter.app);
   return { engine, app, b2brouter };

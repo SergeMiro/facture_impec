@@ -14,7 +14,13 @@ import {
 } from '@fi/pdp-adapter';
 import { type Context, Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
-import { MockConflict, MockNotFound, type MockPdpEngine, MockUnavailable } from './engine';
+import {
+  type Delivery,
+  MockConflict,
+  MockNotFound,
+  type MockPdpEngine,
+  MockUnavailable,
+} from './engine';
 
 export interface B2BrouterStandInOptions {
   /** Signs the stand-in's webhooks (header X-B2Brouter-Signature). */
@@ -23,8 +29,6 @@ export interface B2BrouterStandInOptions {
   webhookUrl?: string;
   /** The other shape where the docs disagree: flat webhooks, top-level list counts, directory. */
   alternate?: boolean;
-  fetch?: typeof fetch;
-  log?: (message: string) => void;
 }
 
 type MockStatus = MockInvoice['status'];
@@ -75,10 +79,12 @@ export class B2BrouterStandIn {
   #inbound = new Map<number, { account: string; inboundId: string }>();
   #looked = new Set<string>();
   #seq = { id: FIRST_ID, request: 0 };
+  #webhookUrl: string | undefined;
 
   constructor(engine: MockPdpEngine, options: B2BrouterStandInOptions) {
     this.#engine = engine;
     this.#options = options;
+    this.#webhookUrl = options.webhookUrl;
     engine.onReset(() => {
       this.#drafts.clear();
       this.#inbound.clear();
@@ -287,7 +293,7 @@ export class B2BrouterStandIn {
   #send(draft: Draft): void {
     // The engine's idempotency key: a send whose answer was lost finds the same invoice again.
     const { response } = this.#engine.deposit(draft.account, draft.xml, `b2brouter:${draft.id}`, {
-      notify: (event) => this.#notify(draft, event),
+      notify: (event) => this.#delivery(draft, event),
     });
     if (response.status === 'rejected') {
       throw new Answer(422, { errors: response.errors.map((e) => `${e.rule}: ${e.message}`) });
@@ -358,21 +364,24 @@ export class B2BrouterStandIn {
     };
   }
 
-  #notify(draft: Draft, event: MockEvent): void {
-    const url = this.#options.webhookUrl;
-    if (!url) return;
+  /** Where webhooks go; the in-process stack sets it once the API has a port. */
+  setWebhookUrl(url: string | undefined): void {
+    this.#webhookUrl = url;
+  }
+
+  #delivery(draft: Draft, event: MockEvent): Delivery | undefined {
+    if (!this.#webhookUrl) return undefined;
     const body = this.#webhookBody(draft, event);
-    // One attempt: B2Brouter retries for a week, the API's sweep covers what is missed here.
-    void (this.#options.fetch ?? fetch)(url, {
-      method: 'POST',
-      headers: {
+    // Retried by the engine like the mock's own webhooks; B2Brouter retries for a week.
+    return {
+      url: () => this.#webhookUrl,
+      body,
+      headers: (attempt) => ({
         'content-type': 'application/json',
         [B2BROUTER_HEADERS.signature]: signWebhook(this.#options.webhookSecret, body),
         [B2BROUTER_HEADERS.deliveryId]: event.id,
-        [B2BROUTER_HEADERS.deliveryAttempt]: '1',
-      },
-      body,
-      signal: AbortSignal.timeout(5_000),
-    }).catch((e: unknown) => this.#options.log?.(`b2brouter webhook ${event.id}: ${String(e)}`));
+        [B2BROUTER_HEADERS.deliveryAttempt]: String(attempt),
+      }),
+    };
   }
 }

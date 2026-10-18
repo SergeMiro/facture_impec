@@ -1,12 +1,15 @@
 // Runs one scenario as a client would: HTTP to the API (admin, then tenant key), HTTP to the mock's
 // control endpoints, then checks the end state on both sides.
 import type { InvoiceState } from '@fi/core';
+import type { PdpProvider } from '@fi/db';
 import { MOCK_HEADERS, MockInvoice } from '@fi/pdp-adapter';
 import { z } from 'zod';
 import { SCENARIO_SELLER, scenarioDraft } from './invoice';
 import type { Scenario } from './scenario';
 
 export interface Endpoints {
+  /** The adapter the scenario's company uses (default the mock's); both reach the same engine. */
+  provider?: PdpProvider;
   apiUrl: string;
   mockUrl: string;
   adminToken: string;
@@ -81,7 +84,11 @@ export async function runScenario(
   const { apiKey } = await call(z.object({ apiKey: z.string() }), `${at.apiUrl}/admin/tenants`, {
     method: 'POST',
     token: at.adminToken,
-    body: JSON.stringify({ ...SCENARIO_SELLER, pdpProvider: 'mock', pdpAccount: account }),
+    body: JSON.stringify({
+      ...SCENARIO_SELLER,
+      pdpProvider: at.provider ?? 'mock',
+      pdpAccount: account,
+    }),
   });
   const api = <T>(schema: z.ZodType<T>, path: string, init: RequestInit = {}) =>
     call(schema, `${at.apiUrl}${path}`, { ...init, token: apiKey });

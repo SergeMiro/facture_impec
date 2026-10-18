@@ -1,4 +1,7 @@
-// `pnpm scenario <name>…` (scripts/run-scenario.ts). Each scenario gets its own in-process stack.
+// `pnpm scenario [--provider b2brouter] <name>…` (scripts/run-scenario.ts). Each scenario gets its
+// own in-process stack.
+import { PDP_PROVIDERS, type PdpProvider } from '@fi/db';
+import { z } from 'zod';
 import { runScenario, type ScenarioReport } from './runner';
 import { loadScenario, scenarioNames } from './scenario';
 import { startStack } from './stack';
@@ -16,8 +19,23 @@ function print(report: ScenarioReport): void {
   for (const f of report.failures) console.log(`  ✗ ${f}`);
 }
 
-/** Returns the process exit code. */
-export async function main(args: string[]): Promise<number> {
+/** Returns the process exit code. `--provider b2brouter` goes through the B2Brouter adapter. */
+export async function main(argv: string[]): Promise<number> {
+  const args = [...argv];
+  let provider: PdpProvider = 'mock';
+  const flag = args.findIndex((a) => a === '--provider' || a.startsWith('--provider='));
+  if (flag >= 0) {
+    const [option = ''] = args.splice(flag, 1);
+    const value = option.includes('=')
+      ? option.slice(option.indexOf('=') + 1)
+      : args.splice(flag, 1)[0];
+    const parsed = z.enum(PDP_PROVIDERS).safeParse(value);
+    if (!parsed.success) {
+      console.error(`--provider takes one of: ${PDP_PROVIDERS.join(', ')}`);
+      return 2;
+    }
+    provider = parsed.data;
+  }
   const available = scenarioNames();
   const names = args.length === 0 ? ['happy'] : args.includes('all') ? available : args;
   const unknown = names.filter((n) => !available.includes(n));
@@ -27,9 +45,10 @@ export async function main(args: string[]): Promise<number> {
     );
     return 2;
   }
+  console.log(`platform adapter: ${provider}`);
   let failed = 0;
   for (const name of names) {
-    const stack = await startStack();
+    const stack = await startStack({ provider });
     try {
       const report = await runScenario(name, loadScenario(name), stack, (line) =>
         console.log(line),
