@@ -210,3 +210,67 @@ How each criterion is read here:
 M4's code is done; the two live runs need the owner's B2Brouter sandbox key, account id and a SIREN the
 sandbox directory knows (`docs/RUNBOOK.md` § B2Brouter sandbox). Their results close
 `docs/B2BROUTER.md` §11 T1, T3–T5, T10, T19, T20.
+
+## M5 — Monitor + Collect + Report (started 2026-10-18)
+
+Plan §11: « MonitorAgent, CollectAgent with chasing plans and email drafts, ReportAgent weekly, overdue
+cron, k6 batch test. Acceptance: late-payment scenario produces the right chase steps on the right days
+with the accelerated clock; mise en demeure is never auto-sent (test asserts it). »
+
+How each criterion is read here:
+
+- **Overdue cron**: a recurring job moves an invoice whose due date (Europe/Paris) has passed without a
+  payment from `delivered`/`accepted` to `overdue` (actor `system`). It runs every few minutes and is
+  idempotent, so a server that was down at midnight catches up.
+- **CollectAgent, chasing plans, e-mail drafts** (plan §4 `chase_plans`, §6): once an invoice has reached
+  the customer with a due date, its plan lists the steps of the company's cadence (default J-3 courtesy,
+  J+1, J+8, J+15 firm, J+30 formal notice draft), each with its date. On its day, from 9:00 Paris, a step
+  produces an e-mail draft in plain French (vouvoiement) whose number, amount and dates are written by
+  code. The first step after the due date moves `overdue` → `chasing`. A step missed meanwhile is skipped,
+  never sent late in a burst; a new cadence reschedules the steps not done yet. A payment (from the
+  platform, or recorded by the user and reported to the platform as « Encaissée »), a write-off or a
+  credit note ends the plan; a refusal or dispute pauses it; a payment promise recorded by the user holds
+  the steps until its date. Drafts are deterministic templates: no model writes amounts or legal text.
+- **Sending**: in Review mode (default) every step is a draft the user sends from their own mailbox
+  (copy, or open in the mail app) and marks as sent. In Autopilot (opt-in per company, with an amount
+  ceiling, plan §0.2) the agent sends the courtesy, reminder and firm steps itself through the
+  deployment's mail service: never for a test invoice, never above the ceiling, never without a recipient
+  address. **The formal notice (mise en demeure) is always a draft, whatever the mode** (plan §6).
+  Autopilot covers chasing only; invoices still leave on « Envoyer ».
+- **MonitorAgent** (plan §6): on every platform rejection or customer refusal, a note on the timeline says
+  what to do next. For a rejection: the rule ids found in the platform's answer (deterministic) and « fix
+  and resend ». For a refusal: the reason and one proposal among fix and resend / credit note / contact
+  the customer, with a drafted message, chosen by a model after pseudonymization; all three options when
+  the AI is off. It never resends and never changes a status. Prompt in `prompts/monitor.md`, with an eval.
+- **ReportAgent weekly**: every Monday from 8:00 Paris, an e-mail to the company's owners (where the
+  deployment has a mail service), and the same card in the task pane: at most 10 lines, numbers first
+  (sent, paid, overdue, at risk), then the three things the user must do. Deterministic: the numbers and
+  the priorities are facts computed from the invoices.
+- **k6 batch test** (plan §9 « 1 000 invoices / tenant batch send »): a k6 script creates and sends 1 000
+  invoices for one company against a local stack and checks that each was deposited once; throughput and
+  p95 are recorded here.
+- **Late-payment scenario on the accelerated clock**: `fixtures/scenarios/late-payment.json`, run by
+  `pnpm scenario late-payment` and in `pnpm verify`. The API and the mock platform share one accelerated
+  business clock; the customer pays 45 days after the due date. The run checks that each chase step
+  happened on its own business day (due date + offset) with the expected outcome (sent by the autopilot up
+  to « firm », formal notice drafted), and that the payment ended the plan.
+- **Mise en demeure never auto-sent**: a test with the autopilot on, a mail service, an amount under the
+  ceiling and a recipient address asserts that the formal notice step ends as a draft and that no mail
+  carries it; the scenario checks the outbox too.
+- **Screens**: « Relancer » on the fiche opens the plan (dates and outcomes, the current draft to copy or
+  open in the mail app, « Marquer comme envoyée », « Préparer une relance maintenant »), with « Encaissée »
+  and « Promesse de paiement »; Réglages switch the autopilot on, with its ceiling, where the deployment
+  can send mail; the Tableau de bord shows the weekly card.
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Overdue cron | ⏳ | |
+| CollectAgent: chasing plans from the company's cadence, e-mail drafts | ⏳ | |
+| Autopilot for chasing: ceiling, never a test invoice, never the formal notice | ⏳ | |
+| Payment recorded by the user and reported to the platform; payment promise | ⏳ | |
+| MonitorAgent: next action on rejections and refusals, with its eval | ⏳ | |
+| ReportAgent weekly (e-mail + task-pane card) | ⏳ | |
+| k6 batch test (1 000 invoices, one company) | ⏳ | |
+| late-payment scenario: right chase steps on the right days, accelerated clock | ⏳ | |
+| Mise en demeure never auto-sent (test asserts it) | ⏳ | |
+| Fiche « Relancer », Réglages autopilot, weekly card | ⏳ | |
