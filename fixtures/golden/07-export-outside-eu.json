@@ -1,0 +1,100 @@
+{
+  "description": "Exportation vers la Suisse : exonération de TVA à l’export.",
+  "draft": {
+    "processType": "B1",
+    "number": "F2026-0047",
+    "issueDate": "2026-10-15",
+    "typeCode": "380",
+    "currency": "EUR",
+    "dueDate": "2026-11-14",
+    "paymentTerms": "Paiement à 30 jours par virement.",
+    "notes": [
+      {
+        "subjectCode": "PMT",
+        "text": "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €."
+      },
+      {
+        "subjectCode": "PMD",
+        "text": "Pénalités de retard : trois fois le taux d'intérêt légal."
+      },
+      {
+        "subjectCode": "AAB",
+        "text": "Escompte pour paiement anticipé : néant."
+      }
+    ],
+    "seller": {
+      "name": "Atelier Dupont SARL",
+      "ids": [
+        {
+          "id": "10000000900017",
+          "scheme": "0009"
+        }
+      ],
+      "legalId": {
+        "id": "100000009",
+        "scheme": "0002"
+      },
+      "vatId": "FR88100000009",
+      "electronicAddress": {
+        "id": "100000009",
+        "scheme": "0225"
+      },
+      "address": {
+        "line1": "12 rue des Lilas",
+        "city": "Dijon",
+        "postCode": "21000",
+        "country": "FR"
+      }
+    },
+    "buyer": {
+      "name": "Helvetia Trading SA",
+      "electronicAddress": {
+        "id": "factures@helvetia-trading.example",
+        "scheme": "EM"
+      },
+      "address": {
+        "line1": "Rue du Rhône 40",
+        "city": "Genève",
+        "postCode": "1204",
+        "country": "CH"
+      }
+    },
+    "delivery": {
+      "date": "2026-10-10"
+    },
+    "payment": {
+      "meansCode": "30",
+      "accounts": [
+        {
+          "iban": "FR7630006000011234567890189",
+          "name": "Atelier Dupont SARL"
+        }
+      ]
+    },
+    "vatExemptions": [
+      {
+        "category": "G",
+        "code": "VATEX-EU-G",
+        "reason": "Exonération de TVA, article 262 I du CGI"
+      }
+    ],
+    "lines": [
+      {
+        "id": "1",
+        "quantity": "40",
+        "unitCode": "XCT",
+        "price": {
+          "net": "96.00"
+        },
+        "vat": {
+          "category": "G",
+          "rate": "0"
+        },
+        "item": {
+          "name": "Vin de Bourgogne, carton de 6 bouteilles"
+        },
+        "nature": "goods"
+      }
+    ]
+  }
+}

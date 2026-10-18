@@ -1,0 +1,97 @@
+{
+  "description": "Association non assujettie : cotisation hors champ de la TVA.",
+  "warnings": ["DGFIP-G2.32"],
+  "draft": {
+    "processType": "S1",
+    "number": "COT-2026-031",
+    "issueDate": "2026-10-15",
+    "typeCode": "380",
+    "currency": "EUR",
+    "dueDate": "2026-11-14",
+    "paymentTerms": "Paiement à 30 jours par virement.",
+    "notes": [
+      {
+        "subjectCode": "PMT",
+        "text": "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €."
+      },
+      {
+        "subjectCode": "PMD",
+        "text": "Pénalités de retard : trois fois le taux d'intérêt légal."
+      },
+      {
+        "subjectCode": "AAB",
+        "text": "Escompte pour paiement anticipé : néant."
+      }
+    ],
+    "seller": {
+      "name": "Association Les Amis du Vélo",
+      "legalId": {
+        "id": "400000006",
+        "scheme": "0002"
+      },
+      "electronicAddress": {
+        "id": "400000006",
+        "scheme": "0225"
+      },
+      "address": {
+        "line1": "2 allée des Cyclistes",
+        "city": "Dijon",
+        "postCode": "21000",
+        "country": "FR"
+      }
+    },
+    "buyer": {
+      "name": "Boulangerie Martin SAS",
+      "legalId": {
+        "id": "200000008",
+        "scheme": "0002"
+      },
+      "electronicAddress": {
+        "id": "200000008",
+        "scheme": "0225"
+      },
+      "address": {
+        "line1": "3 place du Marché",
+        "city": "Beaune",
+        "postCode": "21200",
+        "country": "FR"
+      }
+    },
+    "delivery": {
+      "date": "2026-10-10"
+    },
+    "payment": {
+      "meansCode": "30",
+      "accounts": [
+        {
+          "iban": "FR7630006000011234567890189",
+          "name": "Les Amis du Vélo"
+        }
+      ]
+    },
+    "vatExemptions": [
+      {
+        "category": "O",
+        "code": "VATEX-EU-O",
+        "reason": "Non soumis à la TVA"
+      }
+    ],
+    "lines": [
+      {
+        "id": "1",
+        "quantity": "1",
+        "unitCode": "C62",
+        "price": {
+          "net": "120.00"
+        },
+        "vat": {
+          "category": "O"
+        },
+        "item": {
+          "name": "Cotisation annuelle 2027 — adhésion entreprise"
+        },
+        "nature": "services"
+      }
+    ]
+  }
+}

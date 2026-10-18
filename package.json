@@ -12,9 +12,10 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:oracle": "turbo run test:oracle",
     "lint": "biome ci .",
     "format": "biome check --write .",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test"
+    "verify": "pnpm lint && pnpm typecheck && turbo run test test:oracle"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

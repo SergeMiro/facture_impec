@@ -1,0 +1,99 @@
+{
+  "description": "Micro-entrepreneur en franchise en base : TVA non applicable, art. 293 B du CGI.",
+  "draft": {
+    "processType": "S1",
+    "number": "2026-018",
+    "issueDate": "2026-10-15",
+    "typeCode": "380",
+    "currency": "EUR",
+    "dueDate": "2026-11-14",
+    "paymentTerms": "Paiement à 30 jours par virement.",
+    "notes": [
+      {
+        "subjectCode": "PMT",
+        "text": "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €."
+      },
+      {
+        "subjectCode": "PMD",
+        "text": "Pénalités de retard : trois fois le taux d'intérêt légal."
+      },
+      {
+        "subjectCode": "AAB",
+        "text": "Escompte pour paiement anticipé : néant."
+      }
+    ],
+    "seller": {
+      "name": "Julie Bernard EI",
+      "legalId": {
+        "id": "300000007",
+        "scheme": "0002"
+      },
+      "taxRegistrationId": "300000007",
+      "electronicAddress": {
+        "id": "300000007",
+        "scheme": "0225"
+      },
+      "address": {
+        "line1": "5 impasse des Tilleuls",
+        "city": "Dole",
+        "postCode": "39100",
+        "country": "FR"
+      }
+    },
+    "buyer": {
+      "name": "Boulangerie Martin SAS",
+      "legalId": {
+        "id": "200000008",
+        "scheme": "0002"
+      },
+      "vatId": "FR37200000008",
+      "electronicAddress": {
+        "id": "200000008",
+        "scheme": "0225"
+      },
+      "address": {
+        "line1": "3 place du Marché",
+        "city": "Beaune",
+        "postCode": "21200",
+        "country": "FR"
+      }
+    },
+    "delivery": {
+      "date": "2026-10-10"
+    },
+    "payment": {
+      "meansCode": "30",
+      "accounts": [
+        {
+          "iban": "FR7630006000011234567890189",
+          "name": "Julie Bernard"
+        }
+      ]
+    },
+    "vatExemptions": [
+      {
+        "category": "E",
+        "code": "VATEX-FR-FRANCHISE",
+        "reason": "TVA non applicable, art. 293 B du CGI"
+      }
+    ],
+    "lines": [
+      {
+        "id": "1",
+        "quantity": "1",
+        "unitCode": "C62",
+        "price": {
+          "net": "650.00"
+        },
+        "vat": {
+          "category": "E",
+          "rate": "0"
+        },
+        "item": {
+          "name": "Création de logo et charte graphique"
+        },
+        "nature": "services"
+      }
+    ]
+  }
+}

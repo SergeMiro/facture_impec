@@ -8,9 +8,9 @@ chaque problème en français simple.
 > Réception obligatoire pour toutes les entreprises assujetties depuis le 1er septembre 2026 ;
 > émission obligatoire pour les TPE/PME au 1er septembre 2027.
 
-**État : M0 — audit et socle technique.** Le complément Excel n'est pas encore utilisable.
-L'ancien prototype (Rust + Next.js) reste consultable dans `legacy/rust-mvp/` et sur
-https://facture-impec.vercel.app jusqu'à son remplacement.
+**État : M1 — le moteur est prêt** (règles EN 16931 et françaises, Factur-X, UBL). Le complément
+Excel n'est pas encore utilisable. L'ancien prototype (Rust + Next.js) reste consultable dans la
+branche `archive/rust-mvp-v1` et sur https://facture-impec.vercel.app jusqu'à son remplacement.
 
 ## Pour les développeurs
 
