@@ -144,7 +144,7 @@ Verdict: **port.** The third criterion fails, and keeping Rust would mean two la
 for the add-in and a second runtime binding for the Node API, for a rule set we can rewrite in under
 two days. The plan forbids dual implementations, so Rust stops being a source of truth today:
 
-- the branch `archive/rust-mvp-v1` points at `4c6b294` and keeps the whole MVP (Rust crates, Next.js add-in, docs);
+- the tag `archive/rust-mvp-v1` (a branch until 2026-10-18) points at `4c6b294` and keeps the whole MVP (Rust crates, Next.js add-in, docs);
 - `legacy/rust-mvp/` held a read-only copy during M1, so the port could be checked rule by rule;
 - once every Rust rule id had a TypeScript equivalent and a fixture (`docs/PROGRESS.md`), `legacy/` was deleted.
 

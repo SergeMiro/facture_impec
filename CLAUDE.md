@@ -12,7 +12,7 @@ like "plan §7" refer to it. Where this file and the plan disagree, the plan win
 - Layout: `apps/{addin,api,mock-pdp,site}`, `packages/{core,agents,pdp-adapter,db,shared}`, `fixtures/`, `docs/`, `scripts/`.
 - `apps/site` is the marketing site (Astro + Vercel, green brand). Its copy lives in `apps/site/src/content/`;
   rule 6 below is about product UI. Never put unverified claims, fake testimonials or customer counts on it.
-- The previous Rust/Next.js MVP was ported to `packages/core` in M1 and removed; the branch
+- The previous Rust/Next.js MVP was ported to `packages/core` in M1 and removed; the tag
   `archive/rust-mvp-v1` keeps it with its history. Never build on it.
 - Progress and evidence: `docs/PROGRESS.md`. Things consciously postponed: `docs/DEFERRED.md`.
 
@@ -25,6 +25,10 @@ pnpm verify           # biome ci + typecheck + tests — the gate before every c
 pnpm format           # biome check --write
 ```
 
+Branches: work on `dev` (the default branch). Promote by merging `dev` → `preprod` with `pnpm verify` green,
+then `preprod` → `prod` when everything is OK; fast-forward only, never commit on `preprod` or `prod`
+directly (`docs/RUNBOOK.md` § Branches).
+
 GitHub Actions is disabled on this account (billing), so a green check on GitHub proves nothing and a
 missing one means nothing. `pnpm verify` run locally is the gate; `.github/workflows/ci.yml` mirrors it.
 
@@ -32,7 +36,7 @@ missing one means nothing. `pnpm verify` run locally is the gate; `.github/workf
 
 1. Work milestone by milestone. Before starting a milestone, restate its acceptance criteria in
    `docs/PROGRESS.md` and check them off at the end with evidence (test names, screenshots).
-2. One PR per milestone section; conventional commits; every PR must leave `pnpm verify` green.
+2. One PR (or one series of commits on `dev`) per milestone section; conventional commits; every merge must leave `pnpm verify` green.
 3. Never invent external API details. If B2Brouter, SIRENE, annuaire or Office.js behaviour is unknown,
    read the docs, record the source and date in `docs/`, and if still unknown, implement against the
    mock and add a `TODO(verify)`.

@@ -45,7 +45,7 @@ How each criterion is read here:
 | Every rule has a failing and a passing fixture | ✅ | `rules.test.ts` « has a failing fixture / a passing golden invoice for every rule checked on the model »; the one import-stage rule, BR-FR-DEC-01, fails in `xml.test.ts` « reading amounts » and passes on every golden |
 | Generated XML passes the official validation artefacts: CEN EN 16931 1.3.17 (CII and UBL), Factur-X 1.09.2 EN16931 XSD and schematron, CII D16B and UBL 2.1 XSD | ✅ | `test/oracle/golden.oracle.test.ts`: 25 goldens and 33 CEN examples, both syntaxes (116 tests), in `pnpm verify`. The FNFE BR-FR XSLT is not an oracle (origin and licence unknown, FORMATS F5): the French rules stay in our code. |
 | Coverage ≥ 90 % on `packages/core` | ✅ | `pnpm --filter @fi/core test` (threshold 90 enforced): statements 99.15 %, branches 94.34 %, functions 99.27 %, lines 99.69 % (472 tests, 2026-10-18) |
-| Every Rust rule has an equivalent (table below), then `legacy/` is deleted | ✅ | table below; `legacy/` removed, full history on branch `archive/rust-mvp-v1` |
+| Every Rust rule has an equivalent (table below), then `legacy/` is deleted | ✅ | table below; `legacy/` removed, full history on tag `archive/rust-mvp-v1` |
 
 ### Rust rules → TypeScript
 

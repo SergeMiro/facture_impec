@@ -118,6 +118,32 @@ compiles three stylesheets (about 45 s), then works offline from `.oracle-cache/
 When the PDF layout, the fonts or pdf-lib change, the hashes in `fixtures/golden/pdf.sha256` change
 too: run `pdf:check` on the new files, then `pnpm --filter @fi/core exec vitest run --project unit -u`.
 
+## Branches and promotion
+
+Three long-lived branches, nothing else lives on GitHub (the old MVP is the tag `archive/rust-mvp-v1`):
+
+| Branch | Role |
+|---|---|
+| `dev` | Default branch. All work lands here: commits directly, or short-lived branches merged in. |
+| `preprod` | What is about to ship. Only ever updated by merging `dev`. |
+| `prod` | What is shipped. Only ever updated by merging `preprod`. |
+
+```bash
+pnpm verify                                    # on dev: green, or stop
+git switch preprod && git pull --ff-only
+git merge --ff-only dev && pnpm verify         # still green on this exact commit
+git push origin preprod
+git switch prod && git pull --ff-only
+git merge --ff-only preprod && git push origin prod
+git switch dev
+```
+
+Promotions are fast-forward only, so the three branches point at the same commits and « what is in
+prod » is always a commit of `dev`. A fast-forward that fails means someone committed on `preprod` or
+`prod` directly: stop and bring that commit back through `dev`. No branch deploys anything by itself
+today (the Vercel project is not linked to git); when the sandbox (M4) and production (M7) deployments
+exist, `preprod` deploys to sandbox and `prod` to production.
+
 ## CI
 
 GitHub Actions is disabled on the account since 2026-09-17 (billing). `.github/workflows/ci.yml`
@@ -129,6 +155,6 @@ Arrives in M3, with the HTTPS dev server and `scripts/sideload.*`, for Excel on 
 
 ## Legacy MVP
 
-The Rust/Next.js MVP was removed from `main` at the end of M1; its code and history stay on the branch
+The Rust/Next.js MVP was removed at the end of M1; its code and history stay on the tag
 `archive/rust-mvp-v1`. Its deployment is still live at https://facture-impec.vercel.app until the
 add-in replaces it (M3).

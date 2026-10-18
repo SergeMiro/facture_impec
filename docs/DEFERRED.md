@@ -5,7 +5,7 @@ Each line says where it came from and what would bring it back.
 
 | Item | Origin | Bring back when |
 |---|---|---|
-| Import of PDF invoices (text extraction + regex field extractor, `/api/import`) | MVP Phase 5 (`crates/facture-backend/src/ocr` on branch `archive/rust-mvp-v1`) | A pilot customer keeps invoices as PDFs instead of Excel rows. |
+| Import of PDF invoices (text extraction + regex field extractor, `/api/import`) | MVP Phase 5 (`crates/facture-backend/src/ocr` on tag `archive/rust-mvp-v1`) | A pilot customer keeps invoices as PDFs instead of Excel rows. |
 | Word documents as input | MVP Phase 6 idea | Never for emission (a .docx is not structured); maybe extraction, on demand. |
 | Turborepo remote cache | M0 scaffold | CI runs on GitHub again and builds get slow. |
 | Golden input as `.xlsx` (plan §2 `fixtures/golden/*.xlsx`) | M1: the golden input is the invoice model as JSON | M3, with the MappingAgent: the spreadsheet → model step is its job. |
