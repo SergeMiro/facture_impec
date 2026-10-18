@@ -588,8 +588,8 @@ are [verified, S14, 2026-10-17]. The last three are [our decision].
 ## 10. Discrepancies with the old Rust prototype
 
 The old prototype is in `crates/facture-backend/src/pdp/b2brouter.rs` and `.../config.rs`, which
-are being moved under `legacy/rust-mvp/`. It was described by `docs/PDP_INTEGRATION.md`,
-`legacy/rust-mvp/AGENT_PLAN.md` and `legacy/rust-mvp/docs/DEPLOIEMENT.md`. All rows were checked
+now live only on the branch `archive/rust-mvp-v1`. It was described by `docs/PDP_INTEGRATION.md`,
+`AGENT_PLAN.md` and `docs/DEPLOIEMENT.md` on that branch. All rows were checked
 on 2026-10-17.
 
 **Wrong or outdated:**

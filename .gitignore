@@ -7,11 +7,6 @@ coverage/
 npm-debug.log*
 pnpm-debug.log*
 
-# ── Legacy Rust MVP (frozen in legacy/rust-mvp, see its README) ─
-target/
-legacy/rust-mvp/crates/facture-wasm/pkg/
-legacy/rust-mvp/addin/.next/
-
 # ── Secrets / env (never commit) ───────────────────────────────
 .env
 .env.*

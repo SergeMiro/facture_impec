@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!!legacy", "!!packages/core/vendor"]
+    "includes": ["**", "!!packages/core/vendor"]
   },
   "formatter": {
     "indentStyle": "space",
