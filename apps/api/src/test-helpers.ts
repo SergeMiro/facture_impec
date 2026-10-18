@@ -1,5 +1,5 @@
 // Shared by the API tests: an in-memory database, recorded jobs, a tenant with its key.
-import { type InvoiceDraft, parisToday } from '@fi/core';
+import { type InvoiceDraft, parisHour, parisToday } from '@fi/core';
 import { bundledFonts } from '@fi/core/fonts';
 import { type Database, openDatabase } from '@fi/db';
 import type { PdpAdapter } from '@fi/pdp-adapter';
@@ -9,27 +9,41 @@ import type { ApiDeps, Jobs, PdpRegistry, SyncTarget } from './deps';
 import { OutboxMailer } from './mail';
 import { SCENARIO_SELLER, scenarioDraft } from './scenarios/invoice';
 
+import { runSend, runSync, type WorkerDeps } from './workers';
+
 // The task pane's tests move invoices as the workers would.
-export { runSend, runSync, type WorkerDeps } from './workers';
+export { runSend, runSync, type WorkerDeps };
 
 export const ADMIN_TOKEN = 'test-admin-token-0123456789abcdef';
 
 export interface RecordedJobs extends Jobs {
   sends: string[];
   syncs: SyncTarget[];
+  monitors: string[];
+  payments: string[];
 }
 
 export function recordedJobs(): RecordedJobs {
   const sends: string[] = [];
   const syncs: SyncTarget[] = [];
+  const monitors: string[] = [];
+  const payments: string[] = [];
   return {
     sends,
     syncs,
+    monitors,
+    payments,
     async enqueueSend(id) {
       sends.push(id);
     },
     async enqueueSync(target) {
       syncs.push(target);
+    },
+    async enqueueMonitor(id) {
+      monitors.push(id);
+    },
+    async enqueueReportPayment(id) {
+      payments.push(id);
     },
   };
 }
@@ -70,7 +84,8 @@ export function testApi(
   overrides: Partial<Omit<ApiDeps, 'env' | 'db' | 'jobs' | 'pdp'>> = {},
 ) {
   const jobs = recordedJobs();
-  const mailer = new OutboxMailer();
+  // Stamped with the business clock, as in the API process.
+  const mailer = new OutboxMailer(undefined, () => deps.now());
   const deps: ApiDeps = {
     env: {
       FI_ENV: 'local',
@@ -138,6 +153,16 @@ export const draft = (index: number, change: (d: InvoiceDraft) => void = () => {
 
 export const today = () => parisToday();
 
+/** The instant `date` at `hour`:30, Europe/Paris: for tests that move the business clock. */
+export function paris(date: string, hour: number): Date {
+  const [y, m, d] = date.split('-').map(Number);
+  for (const offset of [1, 2]) {
+    const at = new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1, hour - offset, 30));
+    if (parisToday(at) === date && parisHour(at) === hour) return at;
+  }
+  throw new Error(`no ${hour}:30 on ${date} in Paris`);
+}
+
 /** A PdpAdapter whose answers each test scripts. */
 export function fakeAdapter(overrides: Partial<PdpAdapter> = {}): PdpAdapter {
   const fail = () => {
@@ -179,4 +204,49 @@ export function linkToken(mailer: OutboxMailer, email: string): string {
   const match = /token=([\w-]+)/.exec(mail?.text ?? '');
   if (!match?.[1]) throw new Error(`no link mailed to ${email}`);
   return match[1];
+}
+
+let pdpRefs = 0;
+
+/**
+ * Creates the invoice and has a scripted platform take it to `delivered` (made available to the
+ * customer), as the send and sync jobs would.
+ */
+export async function deliveredInvoice(
+  api: ReturnType<typeof testApi>,
+  tenant: { apiKey: string; account: string },
+  invoice: InvoiceDraft,
+): Promise<{ id: string; pdpRef: string }> {
+  const res = await api.request('/invoices', {
+    method: 'POST',
+    token: tenant.apiKey,
+    body: { draft: invoice },
+  });
+  const { id } = (await res.json()) as { id: string };
+  await api.request(`/invoices/${id}/send`, { method: 'POST', token: tenant.apiKey });
+  const pdpRef = `inv_delivered_${++pdpRefs}`;
+  const worker = (adapter: PdpAdapter): WorkerDeps => ({
+    db: api.deps.db,
+    pdp: { mock: adapter },
+    test: null,
+    jobs: recordedJobs(),
+    ai: api.deps.ai,
+    mailer: null,
+    now: api.deps.now,
+  });
+  await runSend(
+    worker(fakeAdapter({ sendInvoice: async () => ({ outcome: 'deposited', pdpRef }) })),
+    id,
+  );
+  const at = api.deps.now().toISOString();
+  const history = [
+    { id: `${pdpRef}_1`, status: 'deposited' as const, raw: 'Déposée', at },
+    { id: `${pdpRef}_2`, status: 'delivered' as const, raw: 'Mise à disposition', at },
+  ];
+  await runSync(worker(fakeAdapter({ getStatus: async () => history })), {
+    provider: 'mock',
+    account: tenant.account,
+    pdpRef,
+  });
+  return { id, pdpRef };
 }

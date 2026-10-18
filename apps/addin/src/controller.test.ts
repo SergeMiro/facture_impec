@@ -254,6 +254,8 @@ describe('a new user on the demo sheet', () => {
       pdp: { mock: adapter },
       test: api.deps.test,
       jobs: api.jobs,
+      ai: api.deps.ai,
+      mailer: null,
       now: () => new Date(),
     };
     const sheetSays = (status: string) =>

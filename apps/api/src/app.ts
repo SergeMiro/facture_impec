@@ -1,7 +1,15 @@
 // HTTP API (plan §1): tenants, invoices, validation, platform webhooks, and the add-in's routes
 // (sign-in, sheet sync, settings, Mode test, RGPD). Business rules live in the modules next to this
 // file and in @fi/core; this file reads requests (Zod) and shapes answers.
-import { Address, InvoiceDraft, isValidSiren, SheetMapping, STATES, toCii } from '@fi/core';
+import {
+  Address,
+  InvoiceDraft,
+  isIsoDate,
+  isValidSiren,
+  SheetMapping,
+  STATES,
+  toCii,
+} from '@fi/core';
 import {
   and,
   apiKeys,
@@ -12,6 +20,7 @@ import {
   invoices,
   PDP_PROVIDERS,
   sha256,
+  type TenantRow,
   tenants,
   users,
 } from '@fi/db';
@@ -21,6 +30,7 @@ import { cors } from 'hono/cors';
 import { z } from 'zod';
 import { explainInvoice, invoicePdf, rehearseInvoice } from './assist';
 import { adminAuth, newApiKey, type TenantEnv, tenantAuth } from './auth';
+import { markStepSent, prepareChase, recordPromise } from './collect';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { body, Email, parse, uuid } from './http';
@@ -36,6 +46,8 @@ import {
 } from './invoices';
 import { loginRoutes } from './login';
 import { OutboxMailer } from './mail';
+import { PaymentBody, recordPayment } from './payments';
+import { reportFor } from './report';
 import { DeleteBody, deleteTenant, exportTenant } from './rgpd';
 import { playScenario, SCENARIOS } from './sandbox';
 import { AiChoice, SettingsPatch, saveAi, settingsView, updateSettings } from './settings';
@@ -89,6 +101,8 @@ const ListQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });
+
+const PromiseBody = z.object({ until: z.string().refine(isIsoDate, 'YYYY-MM-DD').nullable() });
 
 const fileName = (row: { number: string | null; id: string }, ext: string) =>
   `${(row.number ?? row.id).replace(/[^\w.-]/g, '_')}.${ext}`;
@@ -227,6 +241,7 @@ export function createApp(deps: ApiDeps) {
     '/workbooks/*',
     '/invoices',
     '/invoices/*',
+    '/report',
   ]) {
     api.use(path, tenantAuth(deps));
   }
@@ -328,8 +343,7 @@ export function createApp(deps: ApiDeps) {
     const { test, ...input } = await body(c, NewInvoice);
     if (test) assertTestMode(deps, tenant);
     const { row, created } = await createInvoice(deps, tenant, { ...input, isTest: test });
-    const { issues, events } = await invoiceDetailData(deps, row);
-    return c.json(invoiceDetail(row, issues, events), created ? 201 : 200);
+    return c.json(invoiceDetail(row, await invoiceDetailData(deps, row)), created ? 201 : 200);
   });
 
   api.get('/invoices', async (c) => {
@@ -353,8 +367,7 @@ export function createApp(deps: ApiDeps) {
 
   api.get('/invoices/:id', async (c) => {
     const row = await getInvoice(deps, c.get('tenant'), uuid(c.req.param('id')));
-    const { issues, events } = await invoiceDetailData(deps, row);
-    return c.json(invoiceDetail(row, issues, events));
+    return c.json(invoiceDetail(row, await invoiceDetailData(deps, row)));
   });
 
   api.put('/invoices/:id', async (c) => {
@@ -364,14 +377,12 @@ export function createApp(deps: ApiDeps) {
       uuid(c.req.param('id')),
       await body(c, InvoiceBody),
     );
-    const { issues, events } = await invoiceDetailData(deps, row);
-    return c.json(invoiceDetail(row, issues, events));
+    return c.json(invoiceDetail(row, await invoiceDetailData(deps, row)));
   });
 
   api.post('/invoices/:id/validate', async (c) => {
     const { row } = await revalidateInvoice(deps, c.get('tenant'), uuid(c.req.param('id')));
-    const { issues, events } = await invoiceDetailData(deps, row);
-    return c.json(invoiceDetail(row, issues, events));
+    return c.json(invoiceDetail(row, await invoiceDetailData(deps, row)));
   });
 
   api.post('/invoices/:id/send', async (c) => {
@@ -418,9 +429,46 @@ export function createApp(deps: ApiDeps) {
     const { scenario } = await body(c, z.object({ scenario: z.enum(SCENARIOS) }));
     const row = await getInvoice(deps, tenant, uuid(c.req.param('id')));
     const after = await playScenario(deps, tenant, row, scenario);
-    const { issues, events } = await invoiceDetailData(deps, after);
-    return c.json(invoiceDetail(after, issues, events), 202);
+    return c.json(invoiceDetail(after, await invoiceDetailData(deps, after)), 202);
   });
+
+  // ── Getting paid (plan §6 CollectAgent): « Relancer », « Encaissée », the weekly report ────────────
+  const detailOf = async (tenant: TenantRow, id: string) => {
+    const row = await getInvoice(deps, tenant, id);
+    return invoiceDetail(row, await invoiceDetailData(deps, row));
+  };
+
+  api.post('/invoices/:id/payment', async (c) => {
+    const tenant = c.get('tenant');
+    const id = uuid(c.req.param('id'));
+    await recordPayment(deps, tenant, id, await body(c, PaymentBody));
+    return c.json(await detailOf(tenant, id));
+  });
+
+  api.post('/invoices/:id/promise', async (c) => {
+    const tenant = c.get('tenant');
+    const id = uuid(c.req.param('id'));
+    const { until } = await body(c, PromiseBody);
+    await recordPromise(deps, tenant, id, until);
+    return c.json(await detailOf(tenant, id));
+  });
+
+  api.post('/invoices/:id/chase', async (c) => {
+    const tenant = c.get('tenant');
+    const id = uuid(c.req.param('id'));
+    await prepareChase(deps, tenant, id);
+    return c.json(await detailOf(tenant, id));
+  });
+
+  api.post('/invoices/:id/chase/steps/:offset/sent', async (c) => {
+    const tenant = c.get('tenant');
+    const id = uuid(c.req.param('id'));
+    const offset = parse(z.coerce.number().int().min(-60).max(365), c.req.param('offset'));
+    await markStepSent(deps, tenant, id, offset);
+    return c.json(await detailOf(tenant, id));
+  });
+
+  api.get('/report', async (c) => c.json(await reportFor(deps, c.get('tenant'))));
 
   app.route('/', api);
   return app;

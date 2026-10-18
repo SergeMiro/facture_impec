@@ -36,6 +36,8 @@ export interface ApiOptions {
   /** Default: the outbox in local, none elsewhere (docs/DEFERRED.md). */
   mailer?: Mailer | null;
   pollingIntervalSeconds?: number;
+  /** Chasing timer (real seconds); default COLLECT_EVERY_SECONDS. */
+  collectEverySeconds?: number;
   now?: () => Date;
   log?: (message: string) => void;
 }
@@ -125,7 +127,7 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
     mailer:
       options.mailer === undefined
         ? env.FI_ENV === 'local'
-          ? new OutboxMailer(log)
+          ? new OutboxMailer(log, now)
           : null
         : options.mailer,
     fonts: bundledFonts(),
@@ -137,6 +139,7 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
         ...(options.pollingIntervalSeconds && {
           pollingIntervalSeconds: options.pollingIntervalSeconds,
         }),
+        ...(options.collectEverySeconds && { collectEverySeconds: options.collectEverySeconds }),
         log,
       })
     : () => {};

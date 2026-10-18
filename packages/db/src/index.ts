@@ -2,6 +2,7 @@
 export {
   and,
   asc,
+  between,
   count,
   desc,
   eq,
@@ -11,6 +12,7 @@ export {
   isNotNull,
   isNull,
   lt,
+  lte,
   max,
   ne,
   notInArray,

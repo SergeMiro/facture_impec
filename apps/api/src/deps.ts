@@ -18,6 +18,10 @@ export interface SyncTarget {
 export interface Jobs {
   enqueueSend(invoiceId: string): Promise<void>;
   enqueueSync(target: SyncTarget): Promise<void>;
+  /** MonitorAgent: advice after a rejection or a refusal (src/monitor.ts). */
+  enqueueMonitor(invoiceId: string): Promise<void>;
+  /** Report a payment the user recorded to the platform (src/payments.ts). */
+  enqueueReportPayment(invoiceId: string): Promise<void>;
 }
 
 export interface AiDeps {
@@ -58,7 +62,10 @@ export interface ApiDeps {
   /** Null: this deployment offers no test platform, and « Mode test » is unavailable. */
   test: TestPlatform | null;
   ai: AiDeps;
-  /** Null: sign-in links cannot be sent (no mail provider yet outside local, docs/DEFERRED.md). */
+  /**
+   * Null: no sign-in links, no chasing e-mail sent by the autopilot, no weekly report by mail (no
+   * mail provider yet outside local, docs/DEFERRED.md).
+   */
   mailer: Mailer | null;
   fonts: FacturXOptions['fonts'];
   now: () => Date;

@@ -11,6 +11,10 @@ export const QUEUES = {
   sync: 'invoice.sync',
   /** Safety net: refresh invoices in flight, queue sends that never finished. */
   sweep: 'pdp.sweep',
+  /** MonitorAgent advice after a rejection or a refusal. One per invoice at a time. */
+  monitor: 'invoice.monitor',
+  /** « Encaissée » reported to the platform. */
+  reportPayment: 'invoice.report_payment',
 } as const;
 
 export function createBoss(database: Database): PgBoss {
@@ -37,6 +41,22 @@ export async function ensureQueues(boss: PgBoss): Promise<void> {
     expireInSeconds: 60,
   });
   await boss.createQueue(QUEUES.sweep, { policy: 'short', retryLimit: 0, expireInSeconds: 300 });
+  // An agent call takes up to the orchestrator's timeout, retries included.
+  await boss.createQueue(QUEUES.monitor, {
+    policy: 'stately',
+    retryLimit: 3,
+    retryDelay: 5,
+    retryBackoff: true,
+    expireInSeconds: 600,
+  });
+  await boss.createQueue(QUEUES.reportPayment, {
+    policy: 'exclusive',
+    retryLimit: 8,
+    retryDelay: 5,
+    retryBackoff: true,
+    retryDelayMax: 600,
+    expireInSeconds: 120,
+  });
 }
 
 export const syncKey = (target: SyncTarget) =>
@@ -49,6 +69,12 @@ export function bossJobs(boss: PgBoss): Jobs {
     },
     async enqueueSync(target) {
       await boss.send(QUEUES.sync, target, { singletonKey: syncKey(target) });
+    },
+    async enqueueMonitor(invoiceId) {
+      await boss.send(QUEUES.monitor, { invoiceId }, { singletonKey: invoiceId });
+    },
+    async enqueueReportPayment(invoiceId) {
+      await boss.send(QUEUES.reportPayment, { invoiceId }, { singletonKey: invoiceId });
     },
   };
 }

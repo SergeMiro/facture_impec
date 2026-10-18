@@ -1,6 +1,7 @@
-// Background work (plan §6 phases 6–7): send to the platform, apply its events, sweep what was
-// missed. Each job is safe to run twice: sends reuse the idempotency key, platform events are
-// applied once per event id.
+// Background work (plan §6 phases 6–9): send to the platform, apply its events, advise on rejections
+// and refusals, report payments, chase, sweep what was missed. Each job is safe to run twice: sends
+// reuse the idempotency key, platform events are applied once per event id, advice is written once
+// per event, a payment is reported once, and each chasing step is claimed before it is mailed.
 import { toCii } from '@fi/core';
 import {
   and,
@@ -18,6 +19,7 @@ import {
   max,
   PDP_PROVIDERS,
   type PdpProvider,
+  paymentReports,
   pdpSubmissions,
   sql,
   tenants,
@@ -25,20 +27,27 @@ import {
 import { eventFor, type PdpAdapter, PdpUnavailableError, type SendResult } from '@fi/pdp-adapter';
 import type { PgBoss } from 'pg-boss';
 import { z } from 'zod';
-import type { Jobs, PdpRegistry, SyncTarget, TestPlatform } from './deps';
+import { runCollect } from './collect';
+import type { AiDeps, Jobs, Mailer, PdpRegistry, SyncTarget, TestPlatform } from './deps';
 import { idempotencyKey } from './invoices';
 import { QUEUES } from './jobs';
+import { ADVISED, awaitingAdvice, runMonitor } from './monitor';
+import { runReportPayment } from './payments';
 import { routeFor } from './platform';
+import { runWeeklyReports } from './report';
 
 export interface WorkerDeps {
   db: Db;
   pdp: PdpRegistry;
   test: TestPlatform | null;
   jobs: Jobs;
+  ai: AiDeps;
+  mailer: Mailer | null;
   now: () => Date;
 }
 
 const SendJob = z.object({ invoiceId: z.uuid() });
+const InvoiceJob = SendJob;
 const SyncJob = z.object({
   provider: z.enum(PDP_PROVIDERS),
   account: z.string().min(1),
@@ -151,6 +160,7 @@ export async function runSend(deps: WorkerDeps, invoiceId: string): Promise<void
       });
     }
   });
+  if (result.outcome === 'rejected') await deps.jobs.enqueueMonitor(invoiceId);
 }
 
 /**
@@ -182,6 +192,7 @@ export async function runSync(deps: WorkerDeps, target: SyncTarget): Promise<voi
     throw new NotReadyError(`no invoice with ${target.provider} reference ${target.pdpRef}`);
 
   const history = await adapter.getStatus({ account: target.account, pdpRef: target.pdpRef });
+  let advise = false;
   await deps.db.transaction(async (tx) => {
     const row = await lockInvoice(tx, found.id);
     if (!row) return;
@@ -203,6 +214,7 @@ export async function runSync(deps: WorkerDeps, target: SyncTarget): Promise<voi
             payload,
           })
         : null;
+      if (result?.ok && (ADVISED as readonly string[]).includes(result.to)) advise = true;
       if (!result?.ok) {
         await tx.insert(invoiceEvents).values({
           invoiceId: row.id,
@@ -219,10 +231,16 @@ export async function runSync(deps: WorkerDeps, target: SyncTarget): Promise<voi
       await tx.update(invoices).set({ pdpStatusRaw: last.raw }).where(eq(invoices.id, row.id));
     }
   });
+  if (advise) await deps.jobs.enqueueMonitor(found.id);
 }
 
-/** Refreshes every invoice the platform still has news about and re-queues unfinished sends. */
-export async function runSweep(deps: WorkerDeps): Promise<{ synced: number; sends: number }> {
+/**
+ * Refreshes every invoice the platform still has news about, re-queues unfinished sends, and queues
+ * the advice and payment reports whose job was lost.
+ */
+export async function runSweep(
+  deps: WorkerDeps,
+): Promise<{ synced: number; sends: number; advice: number; payments: number }> {
   const inFlight = await deps.db
     .select({
       pdpRef: invoices.pdpRef,
@@ -244,7 +262,19 @@ export async function runSweep(deps: WorkerDeps): Promise<{ synced: number; send
     .from(invoices)
     .where(inArray(invoices.status, ['ready_to_send', 'sending']));
   for (const i of unfinished) await deps.jobs.enqueueSend(i.id);
-  return { synced: inFlight.length, sends: unfinished.length };
+  const advice = await awaitingAdvice(deps);
+  for (const id of advice) await deps.jobs.enqueueMonitor(id);
+  const payments = await deps.db
+    .select({ id: paymentReports.invoiceId })
+    .from(paymentReports)
+    .where(eq(paymentReports.status, 'pending'));
+  for (const p of payments) await deps.jobs.enqueueReportPayment(p.id);
+  return {
+    synced: inFlight.length,
+    sends: unfinished.length,
+    advice: advice.length,
+    payments: payments.length,
+  };
 }
 
 /**
@@ -331,10 +361,14 @@ async function pollOne(
 export interface WorkerOptions {
   pollingIntervalSeconds?: number;
   sweepEverySeconds: number;
+  /** How often chasing and the weekly report run (real seconds); default 5 minutes. */
+  collectEverySeconds?: number;
   log?: (message: string) => void;
 }
 
-/** Registers the workers and the periodic sweep; returns a function that stops the sweep timer. */
+export const COLLECT_EVERY_SECONDS = 300;
+
+/** Registers the workers, the periodic sweep and chasing; returns a function that stops the timers. */
 export async function startWorkers(
   boss: PgBoss,
   deps: WorkerDeps,
@@ -351,6 +385,12 @@ export async function startWorkers(
     await runSweep(deps);
     await runInboundPoll(deps, options.log);
   });
+  await boss.work(QUEUES.monitor, { ...polling, localConcurrency: 2 }, async ([job]) => {
+    if (job) await runMonitor(deps, InvoiceJob.parse(job.data).invoiceId);
+  });
+  await boss.work(QUEUES.reportPayment, polling, async ([job]) => {
+    if (job) await runReportPayment(deps, InvoiceJob.parse(job.data).invoiceId);
+  });
   const tick = () =>
     boss
       .send(QUEUES.sweep, {}, { singletonSeconds: options.sweepEverySeconds })
@@ -358,5 +398,31 @@ export async function startWorkers(
   void tick();
   const timer = setInterval(tick, options.sweepEverySeconds * 1000);
   timer.unref();
-  return () => clearInterval(timer);
+
+  // Chasing runs on its own timer rather than through the queue: it must see each business day,
+  // and the scenario stack's accelerated clock turns a day into a fraction of a second. Plans are
+  // locked row by row, so instances running it at once do not act twice.
+  let collecting = false;
+  const collect = async () => {
+    if (collecting) return;
+    collecting = true;
+    try {
+      await runCollect(deps, options.log);
+      await runWeeklyReports(deps, options.log);
+    } catch (e) {
+      options.log?.(`chasing run failed: ${message(e)}`);
+    } finally {
+      collecting = false;
+    }
+  };
+  void collect();
+  const collectTimer = setInterval(
+    collect,
+    (options.collectEverySeconds ?? COLLECT_EVERY_SECONDS) * 1000,
+  );
+  collectTimer.unref();
+  return () => {
+    clearInterval(timer);
+    clearInterval(collectTimer);
+  };
 }

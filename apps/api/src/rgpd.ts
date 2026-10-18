@@ -9,6 +9,7 @@ import {
   asc,
   audit,
   auditEvents,
+  chasePlans,
   eq,
   inArray,
   inboundQueue,
@@ -17,6 +18,7 @@ import {
   isNull,
   magicLinks,
   or,
+  paymentReports,
   pdpSubmissions,
   sessions,
   sheetMappings,
@@ -25,9 +27,11 @@ import {
   tenants,
   users,
   validationResults,
+  weeklyReports,
 } from '@fi/db';
 import { z } from 'zod';
 import { isOwner, type Principal } from './auth';
+import { chaseView } from './collect';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { settingsView } from './settings';
@@ -43,27 +47,39 @@ function assertOwner(principal: Principal) {
 export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: Principal) {
   assertOwner(principal);
   const db = deps.db;
-  const [people, keys, mappings, rows, runs, log, received] = await Promise.all([
-    db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
-    db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
-    db.select().from(sheetMappings).where(eq(sheetMappings.tenantId, tenant.id)),
-    db
-      .select()
-      .from(invoices)
-      .where(eq(invoices.tenantId, tenant.id))
-      .orderBy(asc(invoices.createdAt)),
-    db.select().from(agentRuns).where(eq(agentRuns.tenantId, tenant.id)).orderBy(asc(agentRuns.id)),
-    db
-      .select()
-      .from(auditEvents)
-      .where(eq(auditEvents.tenantId, tenant.id))
-      .orderBy(asc(auditEvents.id)),
-    db
-      .select()
-      .from(inboundQueue)
-      .where(eq(inboundQueue.tenantId, tenant.id))
-      .orderBy(asc(inboundQueue.receivedAt)),
-  ]);
+  const [people, keys, mappings, rows, runs, log, received, plans, payments, reports] =
+    await Promise.all([
+      db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
+      db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
+      db.select().from(sheetMappings).where(eq(sheetMappings.tenantId, tenant.id)),
+      db
+        .select()
+        .from(invoices)
+        .where(eq(invoices.tenantId, tenant.id))
+        .orderBy(asc(invoices.createdAt)),
+      db
+        .select()
+        .from(agentRuns)
+        .where(eq(agentRuns.tenantId, tenant.id))
+        .orderBy(asc(agentRuns.id)),
+      db
+        .select()
+        .from(auditEvents)
+        .where(eq(auditEvents.tenantId, tenant.id))
+        .orderBy(asc(auditEvents.id)),
+      db
+        .select()
+        .from(inboundQueue)
+        .where(eq(inboundQueue.tenantId, tenant.id))
+        .orderBy(asc(inboundQueue.receivedAt)),
+      db.select().from(chasePlans).where(eq(chasePlans.tenantId, tenant.id)),
+      db.select().from(paymentReports).where(eq(paymentReports.tenantId, tenant.id)),
+      db
+        .select()
+        .from(weeklyReports)
+        .where(eq(weeklyReports.tenantId, tenant.id))
+        .orderBy(asc(weeklyReports.week)),
+    ]);
   const ids = rows.map((r) => r.id);
   const events = ids.length
     ? await db
@@ -96,6 +112,20 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       ...invoiceSummary(r),
       document: r.document,
       events: events.filter((e) => e.invoiceId === r.id).map(eventView),
+      chase: chaseView(plans.find((p) => p.invoiceId === r.id)),
+      payment: (({ amount, paidOn, status, provider }) => ({ amount, paidOn, status, provider }))(
+        payments.find((p) => p.invoiceId === r.id) ?? {
+          amount: null,
+          paidOn: null,
+          status: null,
+          provider: null,
+        },
+      ),
+    })),
+    weeklyReports: reports.map((w) => ({
+      week: w.week,
+      recipients: w.recipients,
+      sentAt: w.sentAt.toISOString(),
     })),
     receivedInvoices: received.map((r) => ({
       provider: r.provider,
@@ -155,7 +185,20 @@ export async function deleteTenant(
         ),
       );
     const ids = gone.map((r) => r.id);
+    // Chasing drafts quote the customer: no plan outlives the deletion, and the advice notes kept
+    // on transmitted invoices lose their drafted reply.
+    await tx.delete(chasePlans).where(eq(chasePlans.tenantId, tenant.id));
+    await tx
+      .update(invoiceEvents)
+      .set({ payload: sql`${invoiceEvents.payload} - 'draft'` })
+      .where(
+        and(
+          eq(invoiceEvents.event, 'monitor'),
+          sql`${invoiceEvents.invoiceId} in (select id from ${invoices} where ${invoices.tenantId} = ${tenant.id})`,
+        ),
+      );
     if (ids.length) {
+      await tx.delete(paymentReports).where(inArray(paymentReports.invoiceId, ids));
       await tx.delete(validationResults).where(inArray(validationResults.invoiceId, ids));
       await tx.delete(invoiceEvents).where(inArray(invoiceEvents.invoiceId, ids));
       await tx.delete(pdpSubmissions).where(inArray(pdpSubmissions.invoiceId, ids));

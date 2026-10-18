@@ -32,6 +32,7 @@ import {
   validationResults,
 } from '@fi/db';
 import { t } from '@fi/shared';
+import { chasePlanOf } from './collect';
 import type { ApiDeps } from './deps';
 import { ApiError, isUniqueViolation } from './errors';
 import { routeFor } from './platform';
@@ -55,7 +56,7 @@ const ON_ITS_WAY: readonly InvoiceState[] = [
   'paid',
 ];
 
-const label = (status: InvoiceState) => t(`invoice.status.${status}`);
+export const label = (status: InvoiceState) => t(`invoice.status.${status}`);
 
 export const TEST_PREFIX = 'TEST-';
 
@@ -257,7 +258,7 @@ export async function invoiceDetailData(deps: ApiDeps, row: InvoiceRow) {
     .from(invoiceEvents)
     .where(eq(invoiceEvents.invoiceId, row.id))
     .orderBy(invoiceEvents.id);
-  return { issues: last?.issues ?? [], events };
+  return { issues: last?.issues ?? [], events, plan: await chasePlanOf(deps.db, row.id) };
 }
 
 /** Locks the tenant's invoice for the rest of the transaction. */

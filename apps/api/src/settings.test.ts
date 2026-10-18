@@ -3,7 +3,7 @@
 import { randomBytes } from 'node:crypto';
 import type { ResolvedAi } from '@fi/agents';
 import type { Database } from '@fi/db';
-import { auditEvents, eq, invoices, tenants, users } from '@fi/db';
+import { auditEvents, chasePlans, eq, invoiceEvents, invoices, tenants, users } from '@fi/db';
 import { createMockPdpAdapter } from '@fi/pdp-adapter';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { resolveAi } from './ai';
@@ -53,6 +53,7 @@ interface ErrorBody {
 interface Settings {
   mode: string;
   autopilotAvailable: boolean;
+  autopilotMaxAmount: number | null;
   sandboxEnabled: boolean;
   testPlatform: boolean;
   pseudonymizeLlm: boolean;
@@ -78,7 +79,8 @@ describe('settings', () => {
     const res = await request('/settings', { token: t.apiKey });
     expect(await res.json()).toEqual({
       mode: 'review',
-      autopilotAvailable: false,
+      autopilotAvailable: true,
+      autopilotMaxAmount: null,
       sandboxEnabled: true,
       testPlatform: true,
       pseudonymizeLlm: true,
@@ -106,12 +108,43 @@ describe('settings', () => {
         currency: 'EUR',
       },
     });
-    for (const bad of [{ chaseCadence: [8, 1] }, { chaseCadence: [] }, { mode: 'autopilot' }]) {
+    for (const bad of [
+      { chaseCadence: [8, 1] },
+      { chaseCadence: [] },
+      { mode: 'autopilot' },
+      { pseudonymizeLlm: false },
+    ]) {
       const refused = await patch(t.apiKey, bad);
       expect(refused.status, JSON.stringify(bad)).toBe(400);
     }
     const log = await database.db.select().from(auditEvents).where(eq(auditEvents.tenantId, t.id));
     expect(log.map((a) => a.action)).toContain('settings.update');
+  });
+
+  it('turns the chasing autopilot on only with a ceiling, and only where mail can be sent', async () => {
+    const t = await newTenant(request);
+    const refused = await patch(t.apiKey, { mode: 'autopilot' });
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as ErrorBody).error.code).toBe('autopilot_needs_ceiling');
+
+    const on = await patch(t.apiKey, { mode: 'autopilot', autopilotMaxAmount: 200_000 });
+    expect(await on.json()).toMatchObject({ mode: 'autopilot', autopilotMaxAmount: 200_000 });
+    // The ceiling cannot be removed while the autopilot runs; back in review it may.
+    expect((await patch(t.apiKey, { autopilotMaxAmount: null })).status).toBe(400);
+    const off = await patch(t.apiKey, { mode: 'review', autopilotMaxAmount: null });
+    expect(await off.json()).toMatchObject({ mode: 'review', autopilotMaxAmount: null });
+
+    const mailless = testApi(database, { mock }, undefined, { mailer: null });
+    const other = await newTenant(mailless.request);
+    const view = await mailless.request('/settings', { token: other.apiKey });
+    expect(await view.json()).toMatchObject({ autopilotAvailable: false });
+    const unavailable = await mailless.request('/settings', {
+      method: 'PATCH',
+      token: other.apiKey,
+      body: { mode: 'autopilot', autopilotMaxAmount: 100_000 },
+    });
+    expect(unavailable.status).toBe(409);
+    expect(((await unavailable.json()) as ErrorBody).error.code).toBe('autopilot_unavailable');
   });
 });
 
@@ -211,6 +244,34 @@ describe('RGPD', () => {
     const sent = await create(3);
     // A platform holds this one: the law keeps it.
     await database.db.update(invoices).set({ pdpRef: 'inv_kept' }).where(eq(invoices.id, sent));
+    // Its chasing draft and the MonitorAgent's reply quote the customer's address.
+    const reply = { to: 'compta@client.test', subject: 'Facture', body: 'Bonjour' };
+    await database.db.insert(chasePlans).values({
+      tenantId: t.id,
+      invoiceId: sent,
+      cadence: [1],
+      dueDate: '2026-11-14',
+      steps: [
+        {
+          offset: 1,
+          kind: 'reminder',
+          date: '2026-11-15',
+          status: 'drafted',
+          at: null,
+          by: null,
+          reason: 'review',
+          draft: reply,
+        },
+      ],
+      nextStepOn: null,
+    });
+    await database.db.insert(invoiceEvents).values({
+      invoiceId: sent,
+      type: 'note',
+      actor: 'agent:monitor',
+      event: 'monitor',
+      payload: { for: 0, proposal: 'contact_customer', draft: reply },
+    });
     return { ...t, email, drafted, test, sent };
   }
 
@@ -223,6 +284,10 @@ describe('RGPD', () => {
     const data = JSON.parse(text) as Record<string, unknown[]>;
     expect(data.users).toMatchObject([{ email: t.email, role: 'owner' }]);
     expect(data.invoices).toHaveLength(3);
+    expect(data.invoices).toContainEqual(
+      expect.objectContaining({ chase: expect.objectContaining({ dueDate: '2026-11-14' }) }),
+    );
+    expect(data.weeklyReports).toEqual([]);
     expect(data.auditEvents?.length).toBeGreaterThan(3);
     expect(text).not.toContain(KEY);
     expect(text).not.toMatch(/fik_|"hash"|aiKeySealed/);
@@ -248,6 +313,18 @@ describe('RGPD', () => {
     expect(await res.json()).toEqual({ deleted: { invoices: 2, users: 1 }, keptInvoices: 1 });
     const left = await database.db.select().from(invoices).where(eq(invoices.tenantId, t.id));
     expect(left.map((r) => r.id)).toEqual([t.sent]);
+    expect(
+      await database.db.select().from(chasePlans).where(eq(chasePlans.tenantId, t.id)),
+    ).toEqual([]);
+    const notes = await database.db
+      .select()
+      .from(invoiceEvents)
+      .where(eq(invoiceEvents.invoiceId, t.sent));
+    expect(notes.find((n) => n.event === 'monitor')?.payload).toEqual({
+      for: 0,
+      proposal: 'contact_customer',
+    });
+    expect(JSON.stringify(notes)).not.toContain('compta@client.test');
     expect(await database.db.select().from(users).where(eq(users.tenantId, t.id))).toEqual([]);
     expect((await request('/tenant', { token: t.apiKey })).status).toBe(401);
     expect((await request('/tenant', { token: session })).status).toBe(401);

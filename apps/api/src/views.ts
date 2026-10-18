@@ -1,7 +1,9 @@
 // What the API returns. Internal columns (drafts, hashes of keys) stay inside.
 import type { Issue } from '@fi/core';
-import type { InvoiceEventRow, InvoiceRow, TenantRow } from '@fi/db';
+import type { ChasePlanRow, InvoiceEventRow, InvoiceRow, TenantRow } from '@fi/db';
 import { t } from '@fi/shared';
+import { chaseView } from './collect';
+import { ADVISED } from './monitor';
 
 export function tenantView(row: TenantRow) {
   return {
@@ -12,6 +14,7 @@ export function tenantView(row: TenantRow) {
     address: row.address,
     pdpProvider: row.pdpProvider,
     mode: row.mode,
+    autopilotMaxAmount: row.autopilotMaxAmount,
     sandboxEnabled: row.sandboxEnabled,
     pseudonymizeLlm: row.pseudonymizeLlm,
     vatOnDebits: row.vatOnDebits,
@@ -54,11 +57,31 @@ export function eventView(row: InvoiceEventRow) {
   };
 }
 
-export function invoiceDetail(row: InvoiceRow, issues: Issue[], events: InvoiceEventRow[]) {
+/** The MonitorAgent's advice on the latest rejection or refusal, while it is still open. */
+function nextStep(row: InvoiceRow, events: InvoiceEventRow[]) {
+  if (![...ADVISED, 'disputed'].includes(row.status)) return null;
+  const last = events.findLast(
+    (e) => e.type === 'transition' && (ADVISED as readonly string[]).includes(e.toStatus ?? ''),
+  );
+  const advice =
+    last &&
+    events.findLast((e) => e.type === 'note' && e.event === 'monitor' && e.payload.for === last.id);
+  return advice ? advice.payload : null;
+}
+
+export interface DetailData {
+  issues: Issue[];
+  events: InvoiceEventRow[];
+  plan?: ChasePlanRow | undefined;
+}
+
+export function invoiceDetail(row: InvoiceRow, { issues, events, plan }: DetailData) {
   return {
     ...invoiceSummary(row),
     document: row.document,
     issues,
     events: events.map(eventView),
+    chase: chaseView(plan),
+    nextStep: nextStep(row, events),
   };
 }

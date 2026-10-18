@@ -149,6 +149,8 @@ const worker = (test: TestPlatform | null = api.deps.test): WorkerDeps => ({
   pdp: { mock: pdp.adapter },
   test,
   jobs: recordedJobs(),
+  ai: api.deps.ai,
+  mailer: null,
   now: () => new Date(),
 });
 

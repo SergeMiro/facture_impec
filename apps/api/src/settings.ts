@@ -1,6 +1,6 @@
-// Réglages (plan §5 screen 6): test mode, chasing cadence, the defaults every sheet invoice reuses,
-// the PDP connection (read only) and the AI. A tenant's own AI key is tested before it is saved,
-// sealed at rest, and only its last four characters ever come back.
+// Réglages (plan §5 screen 6): test mode, chasing cadence and its autopilot, the defaults every sheet
+// invoice reuses, the PDP connection (read only) and the AI. A tenant's own AI key is tested before it
+// is saved, sealed at rest, and only its last four characters ever come back.
 import {
   AiSettings,
   byokUrlProblem,
@@ -27,9 +27,13 @@ export const SettingsPatch = z
     sandboxEnabled: z.boolean(),
     chaseCadence: ChaseCadence,
     invoiceDefaults: InvoiceDefaults,
+    /** Autopilot covers chasing only (plan §0.2, §6); invoices still leave on « Envoyer ». */
+    mode: z.enum(['review', 'autopilot']),
+    /** Cents; the highest invoice amount the autopilot chases by itself. */
+    autopilotMaxAmount: z.number().int().min(0).max(100_000_000).nullable(),
   })
   .partial()
-  // The autopilot and pseudonymization switches are not settable yet (docs/DEFERRED.md).
+  // The pseudonymization switch is not settable yet (docs/DEFERRED.md).
   .strict();
 
 export const AiChoice = z.discriminatedUnion('mode', [
@@ -54,8 +58,9 @@ export function settingsView(deps: ApiDeps, tenant: TenantRow) {
   const byok = own?.success && own.data.mode === 'byok' ? own.data : undefined;
   return {
     mode: tenant.mode,
-    /** Sending without a click arrives with the autopilot policy (docs/DEFERRED.md). */
-    autopilotAvailable: false,
+    /** The autopilot sends chasing e-mails itself: only where the deployment can send mail. */
+    autopilotAvailable: Boolean(deps.mailer),
+    autopilotMaxAmount: tenant.autopilotMaxAmount,
     sandboxEnabled: tenant.sandboxEnabled,
     testPlatform: deps.test !== null,
     /** Always on during the pilot (docs/DEFERRED.md). */
@@ -105,11 +110,20 @@ async function save(
   });
 }
 
-export const updateSettings = (
+export function updateSettings(
   deps: ApiDeps,
   tenant: TenantRow,
   patch: z.infer<typeof SettingsPatch>,
-) => save(deps, tenant, patch, 'settings.update', patch);
+) {
+  if ((patch.mode ?? tenant.mode) === 'autopilot') {
+    if (patch.mode === 'autopilot' && !deps.mailer)
+      throw new ApiError(409, 'autopilot_unavailable');
+    const ceiling =
+      patch.autopilotMaxAmount === undefined ? tenant.autopilotMaxAmount : patch.autopilotMaxAmount;
+    if (ceiling === null) throw new ApiError(400, 'autopilot_needs_ceiling');
+  }
+  return save(deps, tenant, patch, 'settings.update', patch);
+}
 
 export async function saveAi(deps: ApiDeps, tenant: TenantRow, choice: AiChoice) {
   const cleared = { aiKeySealed: null, aiKeyHint: null };

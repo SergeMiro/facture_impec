@@ -16,7 +16,15 @@ import {
   type SendInput,
 } from '@fi/pdp-adapter';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { draft, fakeAdapter, newTenant, recordedJobs, testApi, testDatabase } from './test-helpers';
+import {
+  draft,
+  fakeAdapter,
+  newTenant,
+  recordedJobs,
+  testAi,
+  testApi,
+  testDatabase,
+} from './test-helpers';
 import {
   NotReadyError,
   runInboundPoll,
@@ -42,6 +50,8 @@ const worker = (adapter: PdpAdapter, jobs = recordedJobs()): WorkerDeps => ({
   pdp: { mock: adapter },
   test: null,
   jobs,
+  ai: testAi(database),
+  mailer: null,
   now: () => new Date(),
 });
 
