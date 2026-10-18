@@ -330,6 +330,17 @@ describe('readSheet', () => {
     expect(errors(one(first).draft).map((i) => i.ruleId)).toEqual(['BR-10']);
   });
 
+  it('points a missing value at its empty cell, so the fix lands where it belongs', () => {
+    const blank = grid('Factures', [
+      ['N° Facture', 'Date', 'Client', 'SIREN', 'Désignation', 'Qté', 'P.U. HT', 'TVA'],
+      ['F2026-0050', '15/10/2026', 'Boulangerie Martin SAS', null, 'Conseil', 1, null, '20 %'],
+    ]);
+    const [invoice] = readSheet(blank, detectMapping(blank), SELLER).invoices;
+    expect(invoice?.draft.buyer?.legalId).toBeUndefined();
+    expect(one(invoice).cells['buyer.legalId.id']).toBe('Factures!D2');
+    expect(cellForPath(one(invoice).cells, 'lines[0].price.net')).toBe('Factures!G2');
+  });
+
   it('builds a draft with no blocking issue when the sheet has every column', () => {
     const full = grid('Feuil1', [
       [

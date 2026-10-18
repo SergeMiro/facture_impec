@@ -209,6 +209,11 @@ export function readSheet(
     const cell = cellOf(row, field);
     return cell ? cellAddress(sheet, cell.col, row.row) : undefined;
   };
+  // The cell where a missing value belongs: « Corriger dans la feuille » selects the empty cell.
+  const slot = (row: Row, field: InvoiceField) => {
+    const m = mapping.mapping[field];
+    return m ? cellAddress(sheet, m.column, row.row) : undefined;
+  };
   const hasLine = (row: Row) => LINE_FIELDS.some((f) => cellOf(row, f));
   const hasAny = (row: Row) =>
     Object.keys(mapping.mapping).some((f) => cellOf(row, f as InvoiceField));
@@ -242,7 +247,7 @@ export function readSheet(
   }
 
   const invoices = [...groups.entries()].map(([rowKey, group]) =>
-    buildInvoice(rowKey, group, { read, address, hasLine, defaults, seller }),
+    buildInvoice(rowKey, group, { read, address, slot, hasLine, defaults, seller }),
   );
   return { invoices, ignoredRows };
 }
@@ -250,6 +255,8 @@ export function readSheet(
 interface BuildContext {
   read: (row: Row, field: InvoiceField) => string | undefined;
   address: (row: Row, field: InvoiceField) => string | undefined;
+  /** The mapped column's cell on that row, even when blank. */
+  slot: (row: Row, field: InvoiceField) => string | undefined;
   hasLine: (row: Row) => boolean;
   defaults: InvoiceDefaults;
   seller: SellerProfile;
@@ -278,6 +285,13 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
           cell: address(row, field) ?? '',
           messageFr: t('sheet.problem.group_conflict', { first: found.value, value }),
         });
+      }
+    }
+    const top = group[0];
+    if (!found && top) {
+      for (const path of INVOICE_PATHS[field] ?? []) {
+        const at = ctx.slot(top, field);
+        if (at) cells[path] = at;
       }
     }
     return found?.value;
@@ -320,7 +334,7 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
   const lines = lineRows.map((row, i): Omit<Line, 'netAmount'> => {
     const at = (field: InvoiceField) => address(row, field);
     for (const [field, path] of Object.entries(LINE_PATHS)) {
-      const cell = at(field as InvoiceField);
+      const cell = at(field as InvoiceField) ?? ctx.slot(row, field as InvoiceField);
       if (cell) cells[`lines[${i}].${path}`] = cell;
     }
     let quantity = read(row, 'quantity');

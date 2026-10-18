@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./pdf": "./src/pdf/index.ts",
+    "./fonts": "./fonts/index.ts",
     "./testing": "./test/fixtures.ts"
   },
   "scripts": {

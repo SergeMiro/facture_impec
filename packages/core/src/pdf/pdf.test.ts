@@ -1,7 +1,6 @@
 // The real PDF: the XML inside, the PDF/A-3 and Factur-X structure veraPDF and the Factur-X
 // extractor look for (their own run: pnpm --filter @fi/core pdf:check), and stable bytes.
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   decodePDFRawStream,
@@ -12,12 +11,12 @@ import {
   PDFRawStream,
 } from '@cantoo/pdf-lib';
 import { describe, expect, it } from 'vitest';
+import { bundledFonts } from '../../fonts';
 import { computeGolden, FIXTURES, golden, goldens, PDF_DATE } from '../../test/fixtures';
 import { toCii } from '../xml';
 import { FACTUR_X_FILE, FacturXPdfError, readFacturXPdf, toFacturXPdf } from './index';
 
-const font = (file: string) => readFileSync(new URL(`../../fonts/${file}`, import.meta.url));
-const fonts = { regular: font('DejaVuSans.ttf'), bold: font('DejaVuSans-Bold.ttf') };
+const fonts = bundledFonts();
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
 describe('golden invoices as Factur-X', () => {
