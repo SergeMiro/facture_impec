@@ -6,3 +6,4 @@ export * from './model';
 export * from './money';
 export * from './rules';
 export * from './state';
+export * from './xml';

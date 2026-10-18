@@ -159,8 +159,10 @@ export const Invoice = z.object({
 
 export type Identifier = z.infer<typeof Identifier>;
 export type Address = z.infer<typeof Address>;
+export type Contact = z.infer<typeof Contact>;
 export type Party = z.infer<typeof Party>;
 export type Note = z.infer<typeof Note>;
+export type Period = z.infer<typeof Period>;
 export type AllowanceCharge = z.infer<typeof AllowanceCharge>;
 export type Line = z.infer<typeof Line>;
 export type VatBreakdown = z.infer<typeof VatBreakdown>;
