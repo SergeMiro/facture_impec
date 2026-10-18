@@ -41,6 +41,8 @@
   "api.error.link_expired": "Ce lien de connexion a expiré ou a déjà servi. Rien n'a été modifié. Demandez un nouveau lien.",
   "api.error.test_mode_disabled": "Le mode test n'est pas activé pour votre entreprise. Aucune facture n'a été créée. Activez-le dans Réglages.",
   "api.error.test_platform_missing": "Aucune plateforme de test n'est disponible sur ce serveur. Aucune facture n'a été envoyée. Réessayez plus tard ou contactez-nous.",
+  "pdp.refused.numberTaken": "Le numéro {number} est déjà utilisé sur la plateforme pour une autre facture. Votre facture n'est pas partie. Donnez-lui un nouveau numéro, puis renvoyez-la.",
+  "pdp.refused.platform": "La plateforme a refusé la facture : {detail}. Elle n'est pas partie ; corrigez-la, puis renvoyez-la.",
   "api.error.not_test": "Les simulations ne fonctionnent que sur les factures du mode test. Cette facture n'a pas été modifiée.",
   "api.error.scenario_needs_send": "Envoyez d'abord cette facture de test : la simulation joue la réponse de la plateforme. La facture n'a pas été modifiée.",
   "api.error.scenario_too_late": "La plateforme de test a déjà donné sa réponse finale pour cette facture. Rien n'a été modifié. Envoyez une nouvelle facture de test pour simuler autre chose.",

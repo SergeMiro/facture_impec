@@ -51,6 +51,12 @@ interface Stored extends MockInvoice {
   issueDate: string;
   sellerSiren: string | undefined;
   timers: (() => void)[];
+  /** Replaces the mock webhook for this invoice (the B2Brouter stand-in sends its own). */
+  notify: ((event: MockEvent) => void) | undefined;
+}
+
+export interface DepositOptions {
+  notify?: (event: MockEvent) => void;
 }
 
 export interface EngineOptions {
@@ -84,6 +90,7 @@ export class MockPdpEngine {
   #inbound: (MockInbound & { account: string })[] = [];
   #timers = new Set<() => void>();
   #deliveries = new Set<Promise<void>>();
+  #onReset: (() => void)[] = [];
   #seq = { invoice: 0, event: 0, inbound: 0 };
 
   constructor(options: EngineOptions) {
@@ -92,6 +99,11 @@ export class MockPdpEngine {
     this.#fetch = options.fetch ?? fetch;
     this.#webhookUrl = options.webhookUrl;
     this.#control = this.#defaults();
+  }
+
+  /** The platform's clock: what « now » is for its timeline and its answers. */
+  now(): Date {
+    return this.#clock.now();
   }
 
   /** Where webhooks go; the in-process stack sets it once the API has a port. */
@@ -118,6 +130,11 @@ export class MockPdpEngine {
     return this.control;
   }
 
+  /** Called on every reset, after the engine forgot its invoices. */
+  onReset(listener: () => void): void {
+    this.#onReset.push(listener);
+  }
+
   reset(): void {
     for (const cancel of this.#timers) cancel();
     this.#timers.clear();
@@ -125,12 +142,14 @@ export class MockPdpEngine {
     this.#byKey.clear();
     this.#inbound = [];
     this.#control = this.#defaults();
+    for (const listener of this.#onReset) listener();
   }
 
   deposit(
     account: string,
     xml: string,
     idempotencyKey?: string,
+    options: DepositOptions = {},
   ): { response: MockSendResponse; created: boolean } {
     const failure = this.#control.failNext;
     const failing = failure.count > 0;
@@ -143,7 +162,7 @@ export class MockPdpEngine {
       return { response: { status: 'deposited', id: known.id }, created: false };
     }
 
-    const checked = this.#check(account, xml);
+    const checked = this.check(account, xml);
     if (!checked.ok) {
       if (failing) throw new MockUnavailable('failNext: drop-response');
       return { response: { status: 'rejected', errors: checked.errors }, created: false };
@@ -159,6 +178,7 @@ export class MockPdpEngine {
       issueDate: parsed.issueDate ?? '',
       sellerSiren: parsed.seller.legalId?.id,
       timers: [],
+      notify: options.notify,
     };
     this.#invoices.set(invoice.id, invoice);
     if (idempotencyKey) this.#byKey.set(`${account}\u0000${idempotencyKey}`, invoice);
@@ -170,7 +190,7 @@ export class MockPdpEngine {
   }
 
   /** The same validator as the API (plan §3), plus the platform's own history of numbers. */
-  #check(
+  check(
     account: string,
     xml: string,
   ): { ok: true; invoice: Invoice } | { ok: false; errors: PdpRejection[] } {
@@ -352,6 +372,10 @@ export class MockPdpEngine {
   }
 
   #notify(invoice: Stored, event: MockEvent): void {
+    if (invoice.notify) {
+      invoice.notify(event);
+      return;
+    }
     if (!this.#webhookUrl) return;
     this.#deliver(this.#webhookBody(invoice, event), event.id, 1);
   }

@@ -3,6 +3,7 @@
 import { MOCK_HEADERS, MockControl, MockScenario } from '@fi/pdp-adapter';
 import { type Context, Hono } from 'hono';
 import { z } from 'zod';
+import { B2BrouterStandIn, type B2BrouterStandInOptions } from './b2brouter';
 import {
   type EngineOptions,
   MockConflict,
@@ -101,7 +102,23 @@ export function createApp(
   return app;
 }
 
-export function createMockPdp(options: EngineOptions) {
-  const engine = new MockPdpEngine(options);
-  return { engine, app: createApp(engine) };
+export interface MockPdpOptions extends EngineOptions {
+  /** B2Brouter's API over the same engine, at /b2brouter (./b2brouter.ts). */
+  b2brouter?: Omit<B2BrouterStandInOptions, 'webhookSecret' | 'fetch' | 'log'> & {
+    webhookSecret?: string;
+  };
+}
+
+export function createMockPdp(options: MockPdpOptions) {
+  const { b2brouter: standIn, ...engineOptions } = options;
+  const engine = new MockPdpEngine(engineOptions);
+  const app = createApp(engine);
+  const b2brouter = new B2BrouterStandIn(engine, {
+    ...standIn,
+    webhookSecret: standIn?.webhookSecret ?? options.webhookSecret,
+    ...(options.fetch && { fetch: options.fetch }),
+    ...(options.log && { log: options.log }),
+  });
+  app.route('/b2brouter', b2brouter.app);
+  return { engine, app, b2brouter };
 }
