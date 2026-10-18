@@ -2,6 +2,7 @@ import { STATES, transition } from '@fi/core';
 import { describe, expect, it } from 'vitest';
 import {
   createMockPdpAdapter,
+  createMockScenarioPort,
   DEFAULT_TIMELINE,
   eventFor,
   MOCK_HEADERS,
@@ -10,6 +11,7 @@ import {
   PdpRequestError,
   PdpUnavailableError,
   parseDuration,
+  ScenarioConflict,
   SIGNATURE_TOLERANCE_SECONDS,
   signWebhook,
   verifyWebhookSignature,
@@ -131,5 +133,43 @@ describe('mock adapter errors', () => {
     expect(result).toEqual({ outcome: 'deposited', pdpRef: 'inv_1' });
     expect(seen[0]?.get(MOCK_HEADERS.account)).toBe('acc');
     expect(seen[0]?.get(MOCK_HEADERS.idempotencyKey)).toBe('k1');
+  });
+});
+
+describe('mock scenario port', () => {
+  const port = (respond: (url: string, body: unknown) => Response) => {
+    const calls: { url: string; body: unknown }[] = [];
+    const scenarios = createMockScenarioPort({
+      baseUrl: 'http://mock.test',
+      fetch: async (url, init) => {
+        const call = { url: String(url), body: JSON.parse(String(init?.body)) };
+        calls.push(call);
+        return respond(call.url, call.body);
+      },
+    });
+    return { scenarios, calls };
+  };
+  const input = { account: 'acc', pdpRef: 'inv 1', status: 'rejected' as const };
+
+  it('posts the scenario for the invoice, with its reason and delay', async () => {
+    const { scenarios, calls } = port(() => Response.json({}));
+    await scenarios.force({ ...input, reason: { code: 'X', text: 'Simulé' }, after: 'P3D' });
+    expect(calls).toEqual([
+      {
+        url: 'http://mock.test/scenarios/inv%201',
+        body: { status: 'rejected', reason: { code: 'X', text: 'Simulé' }, after: 'P3D' },
+      },
+    ]);
+  });
+
+  it('tells a final invoice from an outage and from a bad request', async () => {
+    const answering = (status: number) => port(() => new Response('', { status })).scenarios;
+    await expect(answering(409).force(input)).rejects.toBeInstanceOf(ScenarioConflict);
+    await expect(answering(503).force(input)).rejects.toBeInstanceOf(PdpUnavailableError);
+    await expect(answering(400).force(input)).rejects.toBeInstanceOf(PdpRequestError);
+    const down = port(() => {
+      throw new TypeError('fetch failed');
+    }).scenarios;
+    await expect(down.force(input)).rejects.toBeInstanceOf(PdpUnavailableError);
   });
 });

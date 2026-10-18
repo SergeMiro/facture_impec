@@ -225,13 +225,7 @@ export class MockPdpEngine {
     };
     invoice.status = status;
     invoice.events.push(event);
-    if (FINAL.has(status)) {
-      for (const cancel of invoice.timers) {
-        cancel();
-        this.#timers.delete(cancel);
-      }
-      invoice.timers = [];
-    }
+    if (FINAL.has(status)) this.#cancelTimers(invoice);
     this.#notify(invoice, event);
     return event;
   }
@@ -256,14 +250,38 @@ export class MockPdpEngine {
     return { id: invoiceIdOut, account, number, status, events: [...events] };
   }
 
-  /** POST /scenarios/:id — moves the invoice now, whatever the timeline says. */
+  /**
+   * POST /scenarios/:id — moves the invoice now, whatever the timeline says; with `after`, at that
+   * business delay instead, and the rest of the timeline is dropped (« paiement à J+45 »).
+   */
   force(invoiceId: string, scenario: MockScenario): MockInvoice {
     const invoice = this.#get(invoiceId);
     if (FINAL.has(invoice.status)) {
       throw new MockConflict(`invoice ${invoiceId} is already ${invoice.status}`);
     }
-    this.#record(invoice, scenario.status, scenario.reason);
+    if (scenario.after === undefined) {
+      this.#record(invoice, scenario.status, scenario.reason);
+      return this.status(invoice.account, invoiceId);
+    }
+    this.#cancelTimers(invoice);
+    const cancel = this.#clock.setTimeout(
+      () => {
+        this.#timers.delete(cancel);
+        if (!FINAL.has(invoice.status)) this.#record(invoice, scenario.status, scenario.reason);
+      },
+      (parseDuration(scenario.after) * 1000) / this.#control.speed,
+    );
+    invoice.timers.push(cancel);
+    this.#timers.add(cancel);
     return this.status(invoice.account, invoiceId);
+  }
+
+  #cancelTimers(invoice: Stored): void {
+    for (const cancel of invoice.timers) {
+      cancel();
+      this.#timers.delete(cancel);
+    }
+    invoice.timers = [];
   }
 
   /** « Encaissée »: the seller reports the payment. Reporting it twice changes nothing. */

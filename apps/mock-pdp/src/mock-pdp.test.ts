@@ -6,9 +6,9 @@ import {
   verifyWebhookSignature,
 } from '@fi/pdp-adapter';
 import { pdpAdapterContract } from '@fi/pdp-adapter/contract';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createMockPdp } from './app';
-import { ManualClock } from './clock';
+import { MAX_TIMEOUT_MS, ManualClock, systemClock } from './clock';
 import { WEBHOOK_RETRY_MS } from './engine';
 import { cii, draft, ubl } from './test-invoice';
 
@@ -186,6 +186,31 @@ describe('lifecycle', () => {
       (await call('/scenarios/inv_999999', { method: 'POST', body: '{"status":"accepted"}' }))
         .status,
     ).toBe(404);
+  });
+
+  it('plays a delayed scenario on the business clock, instead of the rest of the timeline', async () => {
+    const { send, status, clock, call } = setup();
+    const { id } = (await (await send(cii(draft('F2026-0117')), 'k')).json()) as { id: string };
+    await call(`/scenarios/${id}`, { method: 'POST', body: '{"status":"accepted"}' });
+    const late = await call(`/scenarios/${id}`, {
+      method: 'POST',
+      body: JSON.stringify({ status: 'payment_received', after: 'P75D', reason: { text: 'J+45' } }),
+    });
+    expect(late.status).toBe(200);
+    await clock.advance(ms(74 * 86_400));
+    expect((await status(id)).status).toBe('accepted');
+    await clock.advance(ms(2 * 86_400));
+    expect((await status(id)).events.map((e) => e.status)).toEqual([
+      'deposited',
+      'accepted',
+      'payment_received',
+    ]);
+    expect(clock.pending).toBe(0);
+    const bad = await call(`/scenarios/${id}`, {
+      method: 'POST',
+      body: '{"status":"accepted","after":"soon"}',
+    });
+    expect(bad.status).toBe(400);
   });
 
   it('never moves an invoice backwards', async () => {
@@ -375,4 +400,25 @@ pdpAdapterContract('mock-pdp', async () => {
     settle: () => clock.advance(ms(40 * 86_400)),
     signedWebhook: (pdpRef) => engine.webhookFor(pdpRef),
   };
+});
+
+describe('system clock', () => {
+  it('waits longer than Node allows in one timeout (a 30-day step at real speed)', async () => {
+    vi.useFakeTimers();
+    try {
+      const fired: number[] = [];
+      systemClock.setTimeout(() => fired.push(1), MAX_TIMEOUT_MS + 60_000);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(fired).toEqual([]);
+      await vi.advanceTimersByTimeAsync(MAX_TIMEOUT_MS);
+      expect(fired).toEqual([1]);
+      const cancel = systemClock.setTimeout(() => fired.push(2), MAX_TIMEOUT_MS * 2);
+      await vi.advanceTimersByTimeAsync(MAX_TIMEOUT_MS + 1);
+      cancel();
+      await vi.advanceTimersByTimeAsync(MAX_TIMEOUT_MS);
+      expect(fired).toEqual([1]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

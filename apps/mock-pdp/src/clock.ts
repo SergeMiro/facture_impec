@@ -6,11 +6,19 @@ export interface Clock {
   setTimeout(fn: () => void, ms: number): () => void;
 }
 
+/** Node fires a longer timeout at once (TimeoutOverflowWarning): longer waits go in steps. */
+export const MAX_TIMEOUT_MS = 2_147_483_647;
+
 export const systemClock: Clock = {
   now: () => new Date(),
   setTimeout(fn, ms) {
-    const handle = setTimeout(fn, ms);
-    handle.unref();
+    let handle: NodeJS.Timeout;
+    const wait = (left: number) => {
+      const step = Math.min(left, MAX_TIMEOUT_MS);
+      handle = setTimeout(() => (left > step ? wait(left - step) : fn()), step);
+      handle.unref();
+    };
+    wait(Math.max(0, ms));
     return () => clearTimeout(handle);
   },
 };

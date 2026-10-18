@@ -120,5 +120,7 @@ export type MockControl = z.infer<typeof MockControl>;
 export const MockScenario = z.object({
   status: MockStatus.exclude(['deposited']),
   reason: Reason.optional(),
+  /** Business delay: the status arrives then, and replaces what was left of the timeline. */
+  after: Duration.optional(),
 });
 export type MockScenario = z.infer<typeof MockScenario>;
