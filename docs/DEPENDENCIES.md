@@ -30,3 +30,6 @@ Rule 7 of `CLAUDE.md`: any dependency over 1 MB installed, or under 1k weekly do
 | `ai` (agents) | Vercel AI SDK: one `generateText` + structured output + tool API over every provider the owner asked for (`docs/AI_PROVIDERS.md`); 9.8 MB installed, Node only (the add-in never imports `@fi/agents`). |
 | `@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/google` (agents) | The providers' official adapters for the AI SDK, 2.5–3.3 MB each; imported only by `packages/agents/src/providers/models.ts`. |
 | `fast-check` (dev, agents) | Property tests for the pseudonymizer round trip (plan §6); 1.2 MB, dev only. |
+| `@fluentui/react-components` (add-in) | Microsoft's Fluent UI v9, the look of Office itself, so the pane feels like part of Excel. 2 MB, and about 350 MB installed with its transitive `@fluentui/react-icons` (icon sources); bundles keep only what is imported: the whole pane is 889 kB minified, 255 kB gzipped. |
+| `@types/office-js` (dev, add-in) | The office.js type definitions Learn points to; 8.5 MB of `.d.ts`, types only. |
+| `@playwright/test` → `playwright-core` (dev, add-in) | The E2E runner of plan §11; 14 MB. It drives the machine's Chrome (`channel: 'chrome'`), no browser download. |

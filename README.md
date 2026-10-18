@@ -8,17 +8,19 @@ chaque problème en français simple.
 > Réception obligatoire pour toutes les entreprises assujetties depuis le 1er septembre 2026 ;
 > émission obligatoire pour les TPE/PME au 1er septembre 2027.
 
-**État : M2 — le moteur et l'API sont prêts** (règles EN 16931 et françaises, Factur-X, UBL ; API,
-envoi et suivi des statuts contre une plateforme simulée). Le complément Excel n'est pas encore
-utilisable. L'ancien prototype (Rust + Next.js) reste consultable dans le tag `archive/rust-mvp-v1`
-et sur https://facture-impec.vercel.app jusqu'à son remplacement.
+**État : M3 — le complément Excel fonctionne en développement** : connexion, détection des colonnes,
+tableau de bord dans la feuille, fiche facture avec « Corriger dans la feuille », répétition, mode test
+et scénarios, contre une plateforme simulée. Il n'est pas encore hébergé ni publié : on le charge
+depuis sa machine (voir `docs/RUNBOOK.md`). L'ancien prototype (Rust + Next.js) reste consultable dans
+le tag `archive/rust-mvp-v1` et sur https://facture-impec.vercel.app jusqu'à son remplacement.
 
 ## Pour les développeurs
 
 ```bash
 corepack enable && pnpm install
-pnpm dev       # API :4000, PDP simulée :4010, complément :3000, site :4321
+pnpm dev       # API :4000, PDP simulée :4010, complément https://localhost:3000, site :4321
 pnpm verify    # lint + types + tests
+pnpm test:e2e  # le parcours du complément dans Chrome
 ```
 
 Branches : on développe sur `dev`, on fusionne `dev` → `preprod`, puis `preprod` → `prod` quand tout

@@ -322,6 +322,10 @@ non-secret per-workbook state, such as the "Mode test" flag.
 **Inference:** our own highlight writes (`format.fill.color`) also fire `onChanged`. Filter them with
 `triggerSource` (ExcelApi 1.14) or switch off `enableEvents` around the write.
 
+**Implemented (M3):** the add-in ignores a change whose address lies entirely inside its two own columns
+(`FI_Statut` / `FI_Détail`, `apps/addin/src/controller.ts`), which works on every ExcelApi 1.7 host;
+`triggerSource` would need 1.14. Checked by `controller.test.ts`: one edit by the user, exactly one sync.
+
 ---
 
 ## 6. Sideloading and HTTPS
@@ -344,6 +348,7 @@ non-secret per-workbook state, such as the "Mode test" flag.
 | Learn's sample flow for a local self-signed cert is `npx office-addin-dev-certs install`. | https://learn.microsoft.com/en-us/samples/officedev/office-add-in-samples/excel-add-in-hello-world |
 | README (npm, not Learn): `install` creates a `localhost` cert signed by a developer CA and installs the CA "so that the certificates are trusted". Files live in `~/.office-addin-dev-certs`. Valid **30 days** by default (`--days`). `--machine` installs for all users (admin). | npm README `office-addin-dev-certs` |
 | Whether each platform's webview (Windows, Mac, web) accepts a self-signed cert without installing the CA. | **not documented** |
+| In this repo (M3): `vite.config.ts` calls the package's `generateCertificates(caPath, certPath, keyPath, days)` into `~/.office-addin-dev-certs`, which does **not** install the CA, so no sudo; the browser asks once. Its `getHttpsServerOptions()` would run `install`, which needs sudo on Linux. Version 3.0.1 sends no telemetry (the class is a no-op). | read in `node_modules/office-addin-dev-certs` 3.0.1, 2026-10-18 |
 
 ---
 

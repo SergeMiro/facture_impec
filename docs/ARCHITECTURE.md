@@ -128,6 +128,45 @@ packages/db: Drizzle schema + migrations, PGlite (local) or Postgres (DATABASE_U
 | Auth | Tenant API keys `fik_…` (24 random bytes, sha256 at rest, revocable) created by an admin token | Enough for the add-in and the scenarios in M2; magic link for people arrives with the add-in (M3). |
 | Errors | `{error:{code, message, details?}}`, message from `fr.json` | Rule 10 of `CLAUDE.md`; the code is stable for the add-in, the message is for the user. |
 
+## What M3 added: agents, the add-in routes, the task pane
+
+```
+Excel ── office.js ── apps/addin (task pane, React + Fluent UI)
+                         │  ExcelPort: SheetReader → RawRow[] with addresses, StatusWriter (FI_Statut / FI_Détail)
+                         │  Controller: one state for five screens, OfflineQueue, auto-sync on cell changes
+                         ▼  /api (Vite proxy in dev)
+                      apps/api ── packages/agents (orchestrator → MappingAgent, ExplainAgent, TestAgent)
+```
+
+| Path | What it does |
+|---|---|
+| `packages/agents` | Plan §6. Providers (Mistral, Anthropic, OpenAI, Google, Azure, any OpenAI-compatible endpoint; the subscription's or the tenant's own sealed key), the pseudonymizer (names, identifiers, IBAN, e-mails, phones, street lines → stable tokens, re-hydrated in the answer), the orchestrator (one run per invoice, two per tenant, token caps, 3 retries, every run in `agent_runs`, a failed run falls back to the deterministic answer). MappingAgent proposes the columns (header dictionary as fallback), ExplainAgent turns rule issues into plain French with the cell to fix and never proposes a forbidden auto-fix, TestAgent is the deterministic rehearsal checklist. Prompts in `prompts/`, evals in `evals/`. |
+| `apps/api` (M3 routes) | Sign-in links (`/auth/magic-link`, confirm page, poll → session token `fis_…`), `/me`, `/settings` (+ `/settings/ai`), `/detect`, sheet mappings per workbook, `POST /workbooks/:id/sync` (the sheet's rows → drafts → validated invoices, one status per row, test invoices numbered `TEST-…` when asked), `/invoices/:id/{explain,rehearse,scenario,pdf}`, RGPD export and deletion (`docs/RGPD.md`). The local `OutboxMailer` keeps sign-in mails (`GET /admin/outbox`). |
+| `apps/addin/src/excel` | The only code that touches Excel. `office.ts` implements `ExcelPort` with office.js (retry + timeout around every `Excel.run`); `fake.ts` implements it in memory for tests and the harness. `reader.ts` returns rows with addresses and leaves out the two owned columns; `writer.ts` batches status writes, at most one per 500 ms, newest wins. |
+| `apps/addin/src/controller.ts` | Every action of the five screens, independent of React: sign-in, detection, sync, fiche, rehearsal, send (always behind a confirmation), Mode test, scenarios, settings. Actions that need the network go through `OfflineQueue` when it is down (« en attente de connexion ») and run when it is back. A cell change re-syncs after 1.5 s; the add-in's own status writes are filtered out. |
+| `apps/addin/src/ui` | Connexion, Détection, Tableau de bord, Fiche facture, Réglages; the orange Mode test banner on every screen. Strings only from `fr.json`. |
+| `apps/addin/src/harness` | A dev page with a sheet in the browser, the ribbon and the real pane (`/harness.html`), the demo sheet and `seedDemo`. |
+| `apps/addin/manifest.xml` | Classic XML manifest, shared runtime, ribbon group « Facture Impec » on the Home tab (`docs/OFFICE.md` §2). |
+
+Tests: `controller.test.ts` runs the pane's whole flow against the real API in memory (PGlite) with a
+scripted platform; `e2e/harness.spec.ts` runs it in Chrome against the real API, mock PDP and dev
+server (`docs/RUNBOOK.md` § E2E).
+
+### Decisions taken in M3
+
+| Topic | Decision | Why |
+|---|---|---|
+| Manifest | Classic XML manifest, not the unified JSON one | The unified one does not install on perpetual Office for Windows nor from a network share, so an XML version would be needed anyway (`docs/OFFICE.md` §1). |
+| Ribbon buttons with the pane closed | « Vérifier » writes the statuses in the sheet; « Envoyer » asks to open the pane | `showAsTaskpane` is ignored for Marketplace add-ins since 2026-02-23 (`docs/OFFICE.md` §3): a result must be readable without the pane. |
+| Ribbon « Envoyer » | Opens the fiche with the confirmation; never sends by itself | Plan §0: nothing goes to a platform without an explicit decision; a ribbon click is too easy to make by mistake. |
+| No router | The controller holds the current screen | office.js breaks the history API (`docs/OFFICE.md` §8); five screens do not need URLs. |
+| Session storage | `OfficeRuntime.storage`, then `localStorage` partitioned by `Office.context.partitionKey`, then memory | `docs/OFFICE.md` §4: the shared runtime has `OfficeRuntime.storage`; Excel on the web needs the partition key. |
+| Workbook identity | A random id in the document settings, the mapping in the document and on the server | The same file reopened elsewhere keeps its mapping; a copy of a sheet does not inherit another company's. |
+| Mode test switch | Turned on only when the company allows test invoices and a test platform exists | The banner must never promise a test that the server would refuse. |
+| Status columns | Two columns after the user's data, found again by their headers | Plan §5: never write in the user's own cells. |
+| Contract tests | The pane against the real API in memory, not mocked HTTP | The pane and the API change together; a mocked API would drift. |
+| E2E target | The harness page in local Chrome on every run; Excel on the web only with an account | Excel on the web needs a Microsoft account that can upload add-ins (owner, `docs/DEFERRED.md`). |
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

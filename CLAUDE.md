@@ -23,6 +23,7 @@ pnpm install          # Node 22, pnpm 11 (corepack)
 pnpm dev              # api :4000, mock-pdp :4010, add-in :3000, site :4321
 pnpm verify           # biome ci + typecheck + tests — the gate before every commit
 pnpm format           # biome check --write
+pnpm test:e2e         # add-in E2E in local Chrome, own ports (docs/RUNBOOK.md § E2E); not part of verify
 ```
 
 Branches: work on `dev` (the default branch). Promote by merging `dev` → `preprod` with `pnpm verify` green,

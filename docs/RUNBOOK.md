@@ -20,7 +20,7 @@ pnpm dev
 |---|---|---|
 | API | http://localhost:4000 | `curl localhost:4000/health` → `{"ok":true,"service":"api","env":"local"}` |
 | Mock PDP | http://localhost:4010 | `curl localhost:4010/health` → `{"ok":true,"service":"mock-pdp"}` |
-| Add-in (task pane) | http://localhost:3000 | page titled « Facture Impec » |
+| Add-in (task pane) | https://localhost:3000/taskpane.html | « Ouvrez Facture Impec depuis Excel » outside Excel; the harness at `/harness.html` (§ Add-in) |
 | Marketing site | http://localhost:4321 | landing page; `/presentation`, `/api/trial` |
 
 Stop with Ctrl+C. Ports come from `.env` (`API_PORT`, `MOCK_PDP_PORT`, `ADDIN_PORT`, `SITE_PORT`).
@@ -149,9 +149,65 @@ exist, `preprod` deploys to sandbox and `prod` to production.
 GitHub Actions is disabled on the account since 2026-09-17 (billing). `.github/workflows/ci.yml`
 describes the same gate as `pnpm verify`, but nothing runs on GitHub: verify locally.
 
-## Sideloading into Excel
+## Add-in
 
-Arrives in M3, with the HTTPS dev server and `scripts/sideload.*`, for Excel on the web, Windows and Mac.
+The task pane (`apps/addin`) is a Vite page. Office only loads add-ins over HTTPS, so `pnpm dev` and
+`pnpm dev:addin` serve it on **https://localhost:3000** with a localhost certificate kept in
+`~/.office-addin-dev-certs` (created, and renewed when it has less than a day left, by `vite.config.ts`).
+The CA is not installed (that needs sudo): the first time, open https://localhost:3000/taskpane.html in
+the browser that runs Excel and accept the certificate; or run `npx office-addin-dev-certs install`
+once on your own machine to trust it for good. The pane calls the API through the dev server's `/api`
+proxy, so there is no CORS to set up.
+
+### Without Excel: the harness page
+
+https://localhost:3000/harness.html is a dev-only page (never built): a sheet in the browser with
+three demo invoices, the ribbon's four buttons, and the real task pane next to it, talking to the real
+API. It is what the E2E drives, and the quickest way to try a change.
+
+```bash
+echo "ADMIN_TOKEN=$(openssl rand -hex 16)" >> .env    # once
+pnpm dev
+pnpm seed:demo [email]       # the demo company; prints its access key
+```
+
+Sign in with the key, or with the e-mail: in local the sign-in mail is not sent but printed in the
+API's log (and kept at `GET /admin/outbox`). Open its link and click « Me connecter ».
+
+### Sideloading into Excel
+
+`apps/addin/manifest.xml` is the development manifest (every URL on https://localhost:3000,
+validated in `docs/OFFICE.md` §2). `pnpm dev` must be running on the same machine as Excel.
+
+| Excel | How | Remove |
+|---|---|---|
+| On the web | `scripts/sideload.sh web` prints the steps: Home > Add-ins > More Settings > Upload My Add-in > the manifest. The manifest lives in that browser's storage. | Clear the browser's cache. |
+| Windows | `scripts\sideload.ps1` (registers the manifest with `office-addin-debugging` and opens Excel). Without the tool: a shared-folder catalog (`docs/OFFICE.md` §6). | `scripts\sideload.ps1 -Stop`, always. |
+| Mac | `scripts/sideload.sh mac` copies the manifest into `~/Library/Containers/com.microsoft.Excel/Data/Documents/wef`; restart Excel. | `scripts/sideload.sh remove`. |
+
+The ribbon group « Facture Impec » appears on the Home tab: Ouvrir, Vérifier, Envoyer (opens the
+confirmation, never sends by itself), Mode test. The Windows and Mac scripts follow Microsoft's guides
+but have not been run on those systems yet. `pnpm addin:icons` redraws the four icons.
+
+### E2E
+
+```bash
+pnpm test:e2e
+```
+
+Playwright starts its own mock PDP (:4110), API (:4100, throwaway PGlite database, no AI) and dev
+server (:3100), so it runs next to `pnpm dev`, and drives the harness page in the machine's Chrome
+(`/usr/bin/google-chrome`; on this VPS that is the right browser: Browserbase cannot reach localhost).
+`e2e/harness.spec.ts` is the M3 acceptance path: sign in by link, confirm the columns, fix the two
+errors from « Corriger dans la feuille », rehearse, « Prêt à envoyer », Mode test, send a test invoice,
+« Simuler un rejet PDP ». About 30 s. It is not part of `pnpm verify` (it needs Chrome and free ports).
+
+`e2e/excel-web.spec.ts` runs the pane inside Excel on the web and is skipped unless both are set:
+
+- `FI_E2E_EXCEL_URL`: a workbook in OneDrive opened in Excel on the web;
+- `FI_E2E_STORAGE`: a Playwright storage state signed in to that Microsoft account, recorded once with
+  `pnpm --filter @fi/addin exec playwright codegen --save-storage=e2e/.auth/microsoft.json https://www.office.com`
+  (the `.auth` folder is git-ignored; never commit it).
 
 ## Legacy MVP
 
