@@ -16,3 +16,8 @@ Rule 7 of `CLAUDE.md`: any dependency over 1 MB installed, or under 1k weekly do
 | `@cantoo/fontkit` (core) | Embeds the TrueType subsets PDF/A requires; 12 MB installed. The only fontkit that subsets with `@cantoo/pdf-lib` (`@pdf-lib/fontkit` crashes). |
 | `saxon-js` (dev, core) | Runs the official CEN and Factur-X schematrons (XSLT 2/3) in Node without Java: the test oracle (FORMATS §2.2). 2.4 MB. |
 | DejaVu Sans fonts (`packages/core/fonts/`, 1.5 MB, not a package) | PDF/A forbids non-embedded fonts; DejaVu covers French and the euro sign, Bitstream Vera licence (`fonts/LICENSE.txt`). |
+| `hono` (api, mock-pdp) | The HTTP framework of plan §1; 1.3 MB installed, mostly per-runtime adapters we do not load. |
+| `@electric-sql/pglite` (db) | Postgres compiled to WASM: dev, tests and scenarios run on real Postgres SQL without Docker. 34 MB installed (the WASM build); never used when `DATABASE_URL` is set. |
+| `drizzle-orm` (db) | Typed SQL and migrations over both PGlite and `pg`; 10 MB installed, one dialect loaded at run time. |
+| `drizzle-kit` (dev, db) | Generates the SQL migration files from the schema; 9.7 MB, dev only. |
+| `pg-boss` (api) | The job queue of plan §1, in Postgres (works on PGlite too); 1.3 MB. |

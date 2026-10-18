@@ -23,3 +23,17 @@ Each line says where it came from and what would bring it back.
 | PDF design (logo, colours, tenant layout) and the product font choice | M1: one plain A4 layout in DejaVu Sans | M3, with the add-in's « Voir le PDF ». |
 | A table row taller than a page in the PDF | M1 render.ts: a row is never split | A line description longer than about 60 lines. |
 | `MINIMUM` / `BASIC WL` Factur-X profiles (AFRelationship `Data`) | M1: only EN 16931 is written | A PDP asks for a lighter profile. |
+| « Mode test » banner, `TEST-` number prefix, setting `invoices.is_test` (plan §0) | M2: the column exists and keeps test numbers apart in the unique index, but the API always writes `false`; only the mock platform exists | M3, with the add-in banner; mandatory before the B2Brouter sandbox (M4). |
+| Parties (customers/suppliers) table and the buyer context for rules | M2 schema: the buyer lives inside the invoice document | M3, when the add-in picks customers from a list. |
+| Magic-link login for people | M2: tenant API keys created by an admin token | M3, with the add-in. |
+| B2Brouter adapter (import then send, search-then-retry, webhook secret per account) | M2: mock adapter only; facts in `docs/B2BROUTER.md` | M4, against the sandbox, with the same contract suite. |
+| A payment recorded by the user and the `reportPayment` job (« Encaissée », status 212) | M2: the adapter method and the mock route exist, nothing calls them | M5, with chasing and the autopilot. |
+| `late-payment` scenario (plan §9), `overdue`/`chasing` states driven by due dates | M2: no due-date clock yet | M5. |
+| Autopilot (sending without a click when every check is green) | M2: Review mode only, a send always comes from a user's « Envoyer » | M5. |
+| Inbound invoices polled into an `inbound_queue` | M2: the mock serves `GET /inbound`, the API does not poll it | M6. |
+| Remaining plan §4 tables (`agent_runs`, `inbound_queue`, `mappings`, …) | M2: only the tables its routes and jobs use | The milestone whose feature writes them. |
+| Encryption of PDP credentials at rest | M2: the mock needs none; `pdpAccount` is an id, not a secret | M4, before the first B2Brouter API key is stored. |
+| Rate limiting and request size limits on the API | M2: local only | Before the API is reachable from the internet (M7). |
+| Bundled API image (esbuild/tsup + Docker), listening beyond 127.0.0.1 (`API_HOST`) | M2: `tsx` and `127.0.0.1` | M7, deployment to the EU VPS. |
+| Scenarios against servers already running (`pnpm dev`, sandbox) | M2: each scenario starts its own in-process stack | M4, to replay the scenarios on the B2Brouter sandbox. |
+| Listing invoices beyond `limit`/`offset` (search, date range, sort) | M2: status filter only | M3, when the add-in shows a list. |

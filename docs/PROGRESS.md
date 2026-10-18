@@ -70,3 +70,42 @@ Carried over from M0. Renamed ids follow `FR_RULES.md`; the rule behind them is 
 | AI-VAT-RATE | FF-RATE-02 (warning) | legal but unusual rates; illegal ones are BR-FR-16 |
 | AI-ROUND-AMOUNT | dropped | flags every legitimate flat fee of 1 000 €; no rule behind it |
 | AI-LLM (soft warnings from an LLM) | none in core | an LLM never decides validity (plan §0); explanations come from the ExplainAgent in M3 |
+
+## M2 — Mock PDP + API skeleton (started 2026-10-18, done 2026-10-18)
+
+Plan §11: « `apps/mock-pdp` per §3; `apps/api` with auth, tenants, invoices CRUD, validate endpoint,
+PdpAdapter wired to mock, pg-boss workers, webhooks. Acceptance: `scripts/run-scenario.ts happy` sends
+10 invoices and reaches `paid` in < 60 s using the accelerated clock; `duplicate-send` scenario proves
+idempotency. »
+
+How each criterion is read here:
+
+- **Mock PDP per §3**: `POST /invoices` (CII or UBL, same `@fi/core` validator), the scripted lifecycle
+  in business time sped up by a factor, `POST /scenarios/:id`, `GET /invoices/:id/status`, signed
+  webhook push when a webhook URL is set, `POST /inbound`, an injectable clock.
+- **PdpAdapter wired to the mock**: the API only talks to `PdpAdapter`; a conformance suite in
+  `@fi/pdp-adapter/contract` runs against the mock (and against the B2Brouter sandbox in M4).
+- **Auth**: tenant API keys (`Bearer fik_…`, stored hashed) created by an admin token. Magic link
+  belongs to the add-in (M3).
+- **Accelerated clock**: one real second = `MOCK_PDP_SPEED` business seconds (default 86 400, a day per
+  second), so the 32-day default lifecycle runs in about 32 s.
+- **Idempotency**: the same invoice sent twice — same API request, double click, a retry after a lost
+  answer — gives one deposit at the platform and one `deposited` transition.
+- Scenarios run in-process (PGlite + both apps on ephemeral ports) so they are part of `pnpm verify`.
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| `apps/mock-pdp` per plan §3 | ✅ | `apps/mock-pdp/src/{engine,app,clock}.ts`; `mock-pdp.test.ts` (32 tests): « deposits a valid CII invoice », « deposits a valid UBL invoice and checks it with the same rules », « refuses an invoice with blocking errors, with the core rule ids and French messages », « deposits once per idempotency key, and refuses the same number under another key », « plays the default timeline in business time, sped up » (`ManualClock`), « forces a transition through /scenarios… », « pushes every event, signed, with a delivery id », « retries a failed delivery with backoff, then gives up », « stores an inbound invoice and lists it since a date ». |
+| `PdpAdapter` + mock implementation + conformance suite | ✅ | `packages/pdp-adapter`: interface, mapping, signature, `createMockPdpAdapter`; `@fi/pdp-adapter/contract` (10 tests) runs against the mock in `mock-pdp.test.ts` « PdpAdapter contract: mock »; `pdp-adapter.test.ts` (10 tests: mapping, signature, error classes) |
+| `apps/api`: auth, tenants | ✅ | `src/auth.ts`, `src/app.ts`; `api.test.ts` « creates a tenant and shows its key once, storing only the hash », « needs the admin token » (403 / 503), « refuses a bad SIREN and a platform this server cannot reach », « refuses a missing, unknown or revoked key with a calm French message », « updates the tenant settings and audits the change » |
+| `apps/api`: invoices CRUD + validate endpoint | ✅ | `src/invoices.ts`; `api.test.ts` « runs the core rules on a draft and stores nothing », « creates and validates an invoice, with its timeline and audit », « returns the same invoice when it is created twice, even at the same moment », « refuses another invoice under a number already used », « refuses an invoice issued in another company's name », « lists, filters and keeps tenants apart », « edits a draft and validates it again », « cancels before sending and frees the number », « does not cancel an invoice the platform may already hold », « serves the CII XML » (25 tests). `packages/db` `db.test.ts` (8 tests): status written only through `applyTransition`, audit append-only |
+| pg-boss workers (send, status sync) | ✅ | `src/jobs.ts`, `src/workers.ts`; `workers.test.ts` (8 tests): « deposits the CII with the tenant account and the idempotency key », « goes back to ready_to_send on an outage and retries with the same key », « records a platform rejection with its reasons », « applies each platform event once, and keeps the ones that change nothing », « waits when the webhook arrives before the deposit answer », « re-queues unfinished sends and refreshes invoices still awaiting the platform » |
+| Webhooks (signed, idempotent per platform event) | ✅ | `POST /webhooks/pdp/:provider`; `api.test.ts` « queues a status sync for a signed webhook », « refuses an unsigned or tampered webhook, an unknown provider and an unreadable body »; once per event: `workers.test.ts` above and the unique index `invoice_events_pdp_event` (`db.test.ts` « applies one platform event once ») |
+| `scripts/run-scenario.ts happy`: 10 invoices reach `paid` in < 60 s | ✅ | 2026-10-18 `pnpm scenario all`: « PASS happy — 34.0 s (limit 60 s) », 10 × `validated → ready_to_send → sending → deposited → delivered → accepted → paid`, 1 deposit each at the platform. In `pnpm verify`: `scenarios.test.ts` « happy: 10 invoices reach paid in < 60 s at a day per second » |
+| `duplicate-send` proves idempotency | ✅ | « PASS duplicate-send — 5.1 s »: each invoice created twice at once and « Envoyer » pressed five times at once, the platform's first answer lost → the platform holds each invoice once, one `deposited` transition each; F2026-0001 shows the retry (`sending → ready_to_send → sending → deposited`). `scenarios.test.ts` « duplicate-send: double creation, five « Envoyer » and a lost answer deposit once » |
+| Other §9 scenarios that M2 can already run (pdp-reject, customer-refuse, network-flap) | ✅ | « PASS pdp-reject — 1.1 s », « PASS customer-refuse — 1.9 s », « PASS network-flap — 5.1 s » (three lost answers and four failed webhooks, still one deposit and `paid`); plus « customer-refuse without webhooks: the sweep alone brings the news ». `late-payment` needs due-date tracking: M5 (`DEFERRED.md`) |
+
+Gate on 2026-10-18: `pnpm verify` green — core 472 + oracle 276, db 8, pdp-adapter 10, mock-pdp 32,
+api 39 (25 routes, 8 workers, 6 scenarios), shared 7. Manual smoke with the real entry points
+(`apps/mock-pdp/src/server.ts` + `apps/api/src/server.ts`, PGlite on disk, webhooks on): tenant created
+over HTTP, one invoice sent, `paid` 35 s later; a wrong key answered the French 401.
