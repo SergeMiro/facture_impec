@@ -35,6 +35,22 @@ export const ServerEnvSchema = z
     MOCK_PDP_WEBHOOK_URL: z.preprocess(blank, z.url().optional()),
     MOCK_PDP_WEBHOOK_SECRET: z.string().min(16).default('local-mock-pdp-webhook-secret'),
     MOCK_PDP_SPEED: z.coerce.number().positive().default(86_400),
+    API_PUBLIC_URL: z.url().default('http://localhost:4000'),
+    ADDIN_ORIGINS: z.string().default('https://localhost:3000'),
+    AI_PROVIDER: optionalText(),
+    AI_MODEL_AGENT: optionalText(),
+    AI_MODEL_CLASSIFY: optionalText(),
+    AI_BASE_URL: z.preprocess(blank, z.url().optional()),
+    AI_API_KEY: optionalText(),
+    AI_KEY_SEALING_KEY: z.preprocess(
+      blank,
+      z
+        .string()
+        .refine((v) => Buffer.from(v, 'base64').length === 32, '32 bytes in base64')
+        .optional(),
+    ),
+    AI_RUN_TOKENS: z.coerce.number().int().positive().default(30_000),
+    AI_DAILY_TOKENS: z.coerce.number().int().positive().default(300_000),
   })
   .superRefine((env, ctx) => {
     if (env.FI_ENV === 'local') return;
@@ -46,6 +62,9 @@ export const ServerEnvSchema = z
   .transform((env) => ({
     ...env,
     PGLITE_DIR: isAbsolute(env.PGLITE_DIR) ? env.PGLITE_DIR : resolve(REPO_ROOT, env.PGLITE_DIR),
+    ADDIN_ORIGINS: env.ADDIN_ORIGINS.split(',')
+      .map((o) => o.trim())
+      .filter(Boolean),
   }));
 export type ServerEnv = z.infer<typeof ServerEnvSchema>;
 

@@ -45,12 +45,17 @@ describe('migrations', () => {
       sql`select table_name from information_schema.tables where table_schema = 'public' order by 1`,
     );
     expect(tables.map((r) => r.table_name)).toEqual([
+      'agent_runs',
       'api_keys',
       'audit_events',
       'invoice_events',
       'invoices',
+      'magic_links',
       'pdp_submissions',
+      'sessions',
+      'sheet_mappings',
       'tenants',
+      'users',
       'validation_results',
     ]);
   });

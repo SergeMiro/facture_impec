@@ -16,6 +16,10 @@ describe('ServerEnvSchema', () => {
       MOCK_PDP_URL: 'http://localhost:4010',
       MOCK_PDP_WEBHOOK_SECRET: 'local-mock-pdp-webhook-secret',
       MOCK_PDP_SPEED: 86_400,
+      API_PUBLIC_URL: 'http://localhost:4000',
+      ADDIN_ORIGINS: ['https://localhost:3000'],
+      AI_RUN_TOKENS: 30_000,
+      AI_DAILY_TOKENS: 300_000,
     });
   });
 
@@ -25,6 +29,15 @@ describe('ServerEnvSchema', () => {
     expect(env.API_WORKERS).toBe(false);
     expect(env.DATABASE_URL).toBeUndefined();
     expect(ServerEnvSchema.parse({ PGLITE_DIR: '/var/fi' }).PGLITE_DIR).toBe('/var/fi');
+    expect(
+      ServerEnvSchema.parse({ ADDIN_ORIGINS: 'https://a.fr, https://b.fr,' }).ADDIN_ORIGINS,
+    ).toEqual(['https://a.fr', 'https://b.fr']);
+  });
+
+  it('accepts only a 32-byte sealing key', () => {
+    expect(() => ServerEnvSchema.parse({ AI_KEY_SEALING_KEY: 'c2hvcnQ=' })).toThrow(/32 bytes/);
+    const key = Buffer.alloc(32, 7).toString('base64');
+    expect(ServerEnvSchema.parse({ AI_KEY_SEALING_KEY: key }).AI_KEY_SEALING_KEY).toBe(key);
   });
 
   it('rejects an unknown environment', () => {
@@ -45,6 +58,7 @@ describe('ServerEnvSchema', () => {
     // apps/addin/vite.config.ts and the astro:env schema of apps/site/astro.config.mjs.
     const elsewhere = [
       'ADDIN_PORT',
+      'ADDIN_API_URL',
       'SITE_PORT',
       'PUBLIC_SITE_URL',
       'PUBLIC_CONTACT_EMAIL',

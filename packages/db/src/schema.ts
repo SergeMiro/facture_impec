@@ -1,7 +1,14 @@
-// Postgres schema (plan §4), the part M2 needs. Tables of later milestones (users, parties,
-// agent_runs, chase_plans, inbound_queue) arrive with them (docs/DEFERRED.md).
+// Postgres schema (plan §4), the part M3 needs. Tables of later milestones (parties, chase_plans,
+// inbound_queue) arrive with them (docs/DEFERRED.md).
 // Change it, then `pnpm --filter @fi/db generate` writes the migration into drizzle/.
-import type { Address, Invoice, InvoiceDraft, Issue } from '@fi/core';
+import type {
+  Address,
+  Invoice,
+  InvoiceDefaultsInput,
+  InvoiceDraft,
+  Issue,
+  SheetMapping,
+} from '@fi/core';
 import { STATES } from '@fi/core';
 import { sql } from 'drizzle-orm';
 import {
@@ -27,6 +34,9 @@ const cents = (name: string) => bigint(name, { mode: 'number' });
 export const PDP_PROVIDERS = ['mock', 'b2brouter'] as const;
 export type PdpProvider = (typeof PDP_PROVIDERS)[number];
 
+/** J-3 courtesy, J+1, J+8, J+15 firm, J+30 formal notice draft (plan §6 CollectAgent). */
+export const DEFAULT_CHASE_CADENCE = [-3, 1, 8, 15, 30] as const;
+
 export const tenants = pgTable('tenants', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
@@ -44,8 +54,121 @@ export const tenants = pgTable('tenants', {
   pseudonymizeLlm: boolean('pseudonymize_llm').notNull().default(true),
   /** Option pour le paiement de la TVA d'après les débits: the context of rule FF-DEB-01. */
   vatOnDebits: boolean('vat_on_debits').notNull().default(false),
+  /** What every invoice of a sheet reuses (IBAN, payment terms, mentions): core InvoiceDefaults. */
+  invoiceDefaults: jsonb('invoice_defaults_json')
+    .$type<InvoiceDefaultsInput>()
+    .notNull()
+    .default({}),
+  /** Chasing steps in days from the due date (plan §6 CollectAgent; used from M5). */
+  chaseCadence: jsonb('chase_cadence_json')
+    .$type<number[]>()
+    .notNull()
+    .default([...DEFAULT_CHASE_CADENCE]),
+  /**
+   * The tenant's own AI settings (@fi/agents AiSettings, read through Zod in the API); null = the
+   * AI included in the subscription. The BYOK key is sealed (AES-256-GCM), never stored in clear.
+   */
+  aiSettings: jsonb('ai_settings_json').$type<Record<string, unknown>>(),
+  aiKeySealed: text('ai_key_sealed'),
+  aiKeyHint: text('ai_key_hint'),
+  /** RGPD deletion (plan §10): personal data is gone, the invoices the law keeps stay. */
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
   createdAt: createdAt(),
 });
+
+export const USER_ROLES = ['owner', 'member', 'accountant'] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    /** Lower case. */
+    email: text('email').notNull(),
+    role: text('role', { enum: USER_ROLES }).notNull().default('owner'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('users_tenant_email').on(t.tenantId, t.email),
+    index('users_email').on(t.email),
+  ],
+);
+
+/**
+ * « Recevez un lien de connexion »: the e-mailed link confirms the request, and the task pane, which
+ * holds a second secret, collects the session. Both secrets are stored as SHA-256.
+ */
+export const magicLinks = pgTable('magic_links', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** Null when nobody uses this address: the request looks the same and never confirms. */
+  userId: uuid('user_id').references(() => users.id),
+  linkHash: text('link_hash').notNull().unique(),
+  pollHash: text('poll_hash').notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+/** Task pane sessions (`fis_…`), stored as SHA-256 like tenant keys. */
+export const sessions = pgTable('sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  hash: text('hash').notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+/** The column mapping of one sheet (plan §5 Détection); the workbook keeps a copy in its settings. */
+export const sheetMappings = pgTable(
+  'sheet_mappings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    workbookId: text('workbook_id').notNull(),
+    sheet: text('sheet').notNull(),
+    mapping: jsonb('mapping_json').$type<SheetMapping>().notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('sheet_mappings_sheet').on(t.tenantId, t.workbookId, t.sheet)],
+);
+
+/** Every agent run, skipped and failed ones included (plan §6). Never holds invoice data. */
+export const agentRuns = pgTable(
+  'agent_runs',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    invoiceId: uuid('invoice_id'),
+    agent: text('agent').notNull(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    promptHash: text('prompt_hash').notNull(),
+    status: text('status', { enum: ['ok', 'failed', 'skipped'] }).notNull(),
+    reason: text('reason'),
+    attempts: integer('attempts').notNull(),
+    inputTokens: integer('input_tokens').notNull(),
+    outputTokens: integer('output_tokens').notNull(),
+    error: text('error'),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [index('agent_runs_tenant').on(t.tenantId, t.startedAt)],
+);
 
 /** Tenant keys, stored as SHA-256: the key itself is shown once, at creation. */
 export const apiKeys = pgTable('api_keys', {
@@ -63,6 +186,9 @@ export interface ExcelBinding {
   workbookId: string;
   sheet: string;
   rowKey: string;
+  /** Sheet rows of the invoice, and model path → cell address, as of the last sync. */
+  rows?: number[];
+  cells?: Record<string, string>;
 }
 
 export const invoices = pgTable(
@@ -192,6 +318,9 @@ export const pdpSubmissions = pgTable('pdp_submissions', {
 });
 
 export type TenantRow = typeof tenants.$inferSelect;
+export type UserRow = typeof users.$inferSelect;
+export type AgentRunRow = typeof agentRuns.$inferSelect;
+export type SheetMappingRow = typeof sheetMappings.$inferSelect;
 export type InvoiceRow = typeof invoices.$inferSelect;
 export type InvoiceEventRow = typeof invoiceEvents.$inferSelect;
 export type PdpSubmissionRow = typeof pdpSubmissions.$inferSelect;
