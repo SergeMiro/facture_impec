@@ -91,6 +91,9 @@ export function demoSheet(): Record<string, FakeCell | string | number> {
 
 export const DEMO_SHEET = 'Factures';
 
+/** The header row and the three invoices, cells as the harness holds them. */
+export const demoTable = (): (string | number | FakeCell)[][] => [HEADERS, ...ROWS];
+
 /** The company the demo sheet invoices from: invented, the SIREN of the API's scenarios. */
 export const DEMO_SELLER = {
   name: 'Atelier Dupont SARL',

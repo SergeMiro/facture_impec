@@ -8,18 +8,16 @@ chaque problème en français simple.
 > Réception obligatoire pour toutes les entreprises assujetties depuis le 1er septembre 2026 ;
 > émission obligatoire pour les TPE/PME au 1er septembre 2027.
 
-**État : M6 — réception des factures fournisseurs** : le complément Excel (connexion, détection des
-colonnes, tableau de bord dans la feuille, fiche facture avec « Corriger dans la feuille », répétition,
-mode test) envoie par l'adaptateur B2Brouter, et le statut revient seul dans la feuille. Une fois la
-facture chez le client, un plan de relances suit l'échéance (brouillons à envoyer soi-même, ou pilote
-automatique avec plafond ; la mise en demeure reste toujours un brouillon), et « Encaissée » clôt la
-facture. L'écran « Réception » montre les factures des fournisseurs avec ce que l'agent a remarqué
-(doublon, RIB modifié, montants faux), « Bon pour paiement » ou « Contester », puis « Exporter vers le
-comptable » (fichier FEC et CSV, importé sans erreur dans le logiciel comptable Paheko). C'est prouvé
-contre une réplique locale de l'API B2Brouter ; l'essai sur le bac à sable B2Brouter attend la clé du
-propriétaire. Rien n'est encore hébergé ni publié, sauf le site de présentation
-(https://facture-impec-site.vercel.app) : on charge le complément depuis sa machine (voir
-`docs/RUNBOOK.md`). L'ancien prototype (Rust + Next.js) reste consultable dans le tag `archive/rust-mvp-v1` et sur
+**État : M7 — prêt pour un pilote** : on crée son compte depuis Excel avec son SIREN (raison sociale,
+siège et numéro de TVA repris de l'annuaire public des entreprises), on vérifie et envoie ses factures,
+on les suit jusqu'au paiement, on reçoit celles des fournisseurs et on les exporte pour le comptable.
+L'essai dure 30 jours ; ensuite une formule s'achète par Stripe, depuis Réglages. Un cabinet comptable
+peut proposer le complément sous son nom. Tout est prouvé par des tests contre des répliques locales
+(B2Brouter, Stripe, annuaire) ; l'image Docker de l'API et le dossier de soumission au Microsoft
+Marketplace sont prêts. Rien n'est encore hébergé ni publié, sauf le site de présentation
+(https://facture-impec-site.vercel.app) : le pilote attend l'hébergement, les clés B2Brouter et Stripe,
+un service d'e-mail et les conditions générales du propriétaire (voir `docs/RUNBOOK.md` § Pilot).
+L'ancien prototype (Rust + Next.js) reste consultable dans le tag `archive/rust-mvp-v1` et sur
 https://facture-impec.vercel.app jusqu'à son remplacement.
 
 ## Pour les développeurs
@@ -34,7 +32,9 @@ pnpm test:e2e  # le parcours du complément dans Chrome
 Branches : on développe sur `dev`, on fusionne `dev` → `preprod`, puis `preprod` → `prod` quand tout
 est vert (voir `CLAUDE.md`).
 
-- `docs/RUNBOOK.md` — installation et commandes
+- `docs/RUNBOOK.md` — installation, commandes, pilote
+- `docs/DEPLOY.md` — image Docker de l'API et hébergement
+- `docs/APPSOURCE.md` — soumission au Microsoft Marketplace
 - `docs/ARCHITECTURE.md` — architecture et décisions
 - `docs/PROGRESS.md` — avancement par jalon
 - `CLAUDE.md` — règles de travail pour les agents de code

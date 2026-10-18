@@ -12,6 +12,7 @@ import {
   MockUnavailable,
   MockUnreadable,
 } from './engine';
+import { sireneStandIn } from './sirene';
 import { StripeStandIn, type StripeStandInOptions } from './stripe';
 
 const Payment = z.object({ amount: z.number().int().nonnegative() });
@@ -125,5 +126,6 @@ export function createMockPdp(options: MockPdpOptions) {
     ...stripeOptions,
   });
   app.route('/stripe', stripe.app);
+  app.route('/sirene', sireneStandIn());
   return { engine, app, b2brouter, stripe };
 }

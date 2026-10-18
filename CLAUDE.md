@@ -27,6 +27,9 @@ pnpm test:e2e         # add-in E2E in local Chrome, own ports (docs/RUNBOOK.md ย
 pnpm scenario [--provider b2brouter] all   # plan ยง9 scenarios, in-process; through the B2Brouter adapter
 pnpm load             # k6 batch test, 1 000 invoices on a throwaway Postgres (Docker); not part of verify
 pnpm accounting:check [file]   # accountant FEC imported into Paheko (Docker); not part of verify
+pnpm appsource:package --addin <url> --support <url> --version a.b.c.d [--validate]   # store package (docs/APPSOURCE.md)
+pnpm addin:icons      # redraw the add-in's icons
+docker compose -f deploy/compose.yaml up -d --build   # API + Postgres, settings in deploy/.env (docs/DEPLOY.md)
 ```
 
 B2Brouter: nothing in `pnpm verify` reaches it; the stand-in in `apps/mock-pdp` (`/b2brouter`) answers in

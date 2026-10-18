@@ -19,6 +19,8 @@ export function routeFor(
 ): Route | null {
   if (isTest && !deps.test) return null;
   const provider = isTest && deps.test ? deps.test.provider : tenant.pdpProvider;
+  // TODO(verify) docs/B2BROUTER.md T22: in prod a test invoice goes to the sandbox under the same
+  // account id as real ones; if B2Brouter gives a company another id there, store both.
   return { provider, account: tenant.pdpAccount, adapter: deps.pdp[provider] };
 }
 

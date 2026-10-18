@@ -179,10 +179,17 @@ export async function runWeeklyReports(
       return Boolean(row);
     });
     if (!claimed || owners.length === 0) continue;
-    const report = weeklyReport(await weekFacts(deps, tenant, now));
+    // An accounting firm's full white label: its name in the subject and as the sender.
+    const firm = tenant.whiteLabel?.full ? tenant.whiteLabel.firmName : undefined;
+    const report = weeklyReport(await weekFacts(deps, tenant, now), firm);
     for (const { email } of owners) {
       try {
-        await mailer.send({ to: email, subject: report.subject, text: report.text });
+        await mailer.send({
+          to: email,
+          subject: report.subject,
+          text: report.text,
+          ...(firm && { fromName: firm }),
+        });
         sent++;
       } catch (e) {
         log(`weekly report for ${tenant.id}: ${e instanceof Error ? e.message : String(e)}`);

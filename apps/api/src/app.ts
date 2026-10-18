@@ -64,7 +64,9 @@ import {
   RequestWindows,
 } from './limits';
 import { loginRoutes } from './login';
+import { onboardingRoutes } from './onboarding';
 import { PaymentBody, recordPayment } from './payments';
+import { awaitsGoLive } from './platform';
 import { reportFor } from './report';
 import { DeleteBody, deleteTenant, exportTenant } from './rgpd';
 import { playScenario, SCENARIOS } from './sandbox';
@@ -138,7 +140,7 @@ export function createApp(deps: ApiDeps) {
   app.use('*', (c, next) => {
     const path = c.req.path;
     if (path.startsWith('/workbooks/') || path === '/detect') return bigBody(c, next);
-    if (path.startsWith('/webhooks/') || path.startsWith('/auth/')) return smallBody(c, next);
+    if (/^\/(webhooks|auth|onboarding)\//.test(path)) return smallBody(c, next);
     return body2Mb(c, next);
   });
 
@@ -180,6 +182,8 @@ export function createApp(deps: ApiDeps) {
 
   // ── Sign-in links (no tenant key yet) ─────────────────────────────────────────────────────────
   app.route('/auth', loginRoutes(deps));
+  // « Créer un compte »: the directory lookup, the request, its e-mailed confirmation, the poll.
+  app.route('/onboarding', onboardingRoutes(deps));
 
   // ── Platform webhooks (signed; no tenant key) ─────────────────────────────────────────────────
   app.post('/webhooks/pdp/:provider', async (c) => {
@@ -239,6 +243,8 @@ export function createApp(deps: ApiDeps) {
       tenant: tenantView(tenant),
       user: principal.kind === 'session' ? { email: principal.email, role: principal.role } : null,
       testMode: { enabled: tenant.sandboxEnabled, available: deps.test !== null },
+      // Prod: real sends wait for the operator's go-live switch; the pane says so.
+      awaitingGoLive: awaitsGoLive(deps, tenant),
     });
   });
 

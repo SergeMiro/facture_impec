@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { COMMANDS, type Command } from './commands';
 import { Controller } from './controller';
 import { officeExcelPort } from './excel/office';
+import { officeOpenUrl } from './pages';
 import { tokenStore } from './storage';
 import { App } from './ui/App';
 
@@ -28,6 +29,9 @@ async function boot(): Promise<void> {
     tokens: tokenStore(),
     apiBase: __API_URL__,
     showTaskpane: () => Office.addin.showAsTaskpane(),
+    openUrl: officeOpenUrl,
+    // Only Office on iPad ever says false; elsewhere it may be undefined (docs/APPSOURCE.md §3).
+    commerceAllowed: typeof Office === 'undefined' || Office.context?.commerceAllowed !== false,
     objectUrl: {
       create: (blob) => URL.createObjectURL(blob),
       revoke: (url) => URL.revokeObjectURL(url),

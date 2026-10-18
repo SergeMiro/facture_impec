@@ -10,6 +10,10 @@ describe('ApiClient', () => {
       if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
       return Promise.resolve(Response.json({ magicLink: true }));
     });
-    expect(await new ApiClient('/api', () => null).options()).toEqual({ magicLink: true });
+    // An API from before sign-up existed answers without `signup`: read as not offered.
+    expect(await new ApiClient('/api', () => null).options()).toEqual({
+      magicLink: true,
+      signup: null,
+    });
   });
 });

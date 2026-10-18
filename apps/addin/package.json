@@ -10,7 +10,9 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test",
-    "seed:demo": "tsx scripts/seed-demo.ts"
+    "seed:demo": "tsx scripts/seed-demo.ts",
+    "icons": "tsx scripts/icons.ts",
+    "appsource": "tsx scripts/appsource.ts"
   },
   "dependencies": {
     "@fi/core": "workspace:*",

@@ -1,0 +1,14 @@
+# The API image (apps/api/Dockerfile) installs its own dependencies.
+**/node_modules
+.git
+**/dist
+**/.turbo
+**/.vitest-cache
+**/test-results
+.data
+**/.env
+**/.env.*
+!.env.example
+.oracle-cache
+.astro
+.vercel

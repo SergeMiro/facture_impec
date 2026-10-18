@@ -48,8 +48,12 @@ export default defineConfig(async ({ command, mode }) => {
     },
     preview: { port, strictPort: true, https },
     build: {
-      // harness.html is a dev page: only the task pane ships.
-      rolldownOptions: { input: fileURLToPath(new URL('./taskpane.html', import.meta.url)) },
+      // harness.html is a dev page: the task pane and the dialog's first page ship (src/pages.ts).
+      rolldownOptions: {
+        input: ['./taskpane.html', './redirect.html'].map((page) =>
+          fileURLToPath(new URL(page, import.meta.url)),
+        ),
+      },
     },
   };
 });

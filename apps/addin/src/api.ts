@@ -18,6 +18,13 @@ export class Offline extends Error {}
 
 const ErrorBody = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
 
+/** An accounting firm's brand on the company (white label, M7). */
+const Brand = z.object({
+  firmName: z.string(),
+  accentColor: z.string().optional(),
+  full: z.boolean(),
+});
+
 const Tenant = z.object({
   id: z.string(),
   name: z.string(),
@@ -25,6 +32,7 @@ const Tenant = z.object({
   pdpProvider: z.string(),
   mode: z.string(),
   sandboxEnabled: z.boolean(),
+  whiteLabel: Brand.nullable().default(null),
 });
 const User = z.object({ email: z.string(), role: z.string() });
 
@@ -32,8 +40,75 @@ export const Me = z.object({
   tenant: Tenant,
   user: User.nullable(),
   testMode: z.object({ enabled: z.boolean(), available: z.boolean() }),
+  /** Prod: real sends wait until the operator switches the company live. */
+  awaitingGoLive: z.boolean().default(false),
 });
 export type Me = z.infer<typeof Me>;
+
+const SignupOffer = z.object({ termsVersion: z.string(), termsUrl: z.string().nullable() });
+export type SignupOffer = z.infer<typeof SignupOffer>;
+const Options = z.object({
+  magicLink: z.boolean(),
+  signup: SignupOffer.nullable().default(null),
+});
+
+const PostalAddress = z.object({
+  line1: z.string().optional(),
+  line2: z.string().optional(),
+  line3: z.string().optional(),
+  city: z.string().optional(),
+  postCode: z.string().optional(),
+  subdivision: z.string().optional(),
+  country: z.string().optional(),
+});
+export type PostalAddress = z.infer<typeof PostalAddress>;
+
+/** What the company directory knows of a SIREN (« Créer un compte »). */
+export const DirectoryCompany = z.object({
+  siren: z.string(),
+  name: z.string().nullable(),
+  address: PostalAddress.nullable(),
+  vatId: z.string().nullable(),
+  vatSource: z.enum(['dgfip', 'computed']),
+  masked: z.boolean(),
+});
+export type DirectoryCompany = z.infer<typeof DirectoryCompany>;
+
+export interface SignupRequest {
+  siren: string;
+  email: string;
+  company: { name: string; address: PostalAddress | null; vatId: string | null };
+  termsVersion: string;
+}
+
+/** Réglages → Abonnement (GET /billing). */
+export const BillingView = z.object({
+  enabled: z.boolean(),
+  status: z.enum(['trial', 'active', 'past_due', 'ended', 'pilot']),
+  plan: z.enum(['essentiel', 'croissance']).nullable(),
+  interval: z.enum(['month', 'year']).nullable(),
+  trialEndsAt: z.string().nullable(),
+  periodEnd: z.string().nullable(),
+  trial: z.object({ sends: z.number(), left: z.number() }).nullable(),
+  month: z.object({
+    month: z.string(),
+    sent: z.number(),
+    included: z.number().nullable(),
+    overage: z.boolean(),
+  }),
+  offers: z.array(
+    z.object({
+      plan: z.enum(['essentiel', 'croissance']),
+      interval: z.enum(['month', 'year']),
+      included: z.number(),
+      overage: z.boolean(),
+    }),
+  ),
+  portal: z.boolean(),
+});
+export type BillingView = z.infer<typeof BillingView>;
+export type Offer = BillingView['offers'][number];
+const PageUrl = z.object({ url: z.string().url() });
 
 export const Tone = z.enum(['ok', 'warning', 'error', 'progress', 'neutral']);
 
@@ -362,7 +437,7 @@ export class ApiClient {
     return schema.parse(await res.json());
   }
 
-  options = () => this.#json(z.object({ magicLink: z.boolean() }), '/auth/options');
+  options = () => this.#json(Options, '/auth/options');
   requestLink = (email: string) =>
     this.#json(LinkStarted, '/auth/magic-link', { method: 'POST', body: { email } });
   pollLink = (requestId: string) =>
@@ -371,6 +446,31 @@ export class ApiClient {
     await this.#send('/auth/logout', { method: 'POST' });
   };
   me = () => this.#json(Me, '/me');
+
+  lookupCompany = (siren: string) =>
+    this.#json(
+      DirectoryCompany,
+      `/onboarding/company/${encodeURIComponent(siren.replace(/\s/g, ''))}`,
+    );
+  signup = (request: SignupRequest) =>
+    this.#json(LinkStarted, '/onboarding/signup', {
+      method: 'POST',
+      body: { ...request, acceptTerms: true },
+    });
+  pollSignup = (requestId: string) =>
+    this.#json(LinkPoll, '/onboarding/poll', { method: 'POST', body: { requestId } });
+
+  billing = () => this.#json(BillingView, '/billing');
+  checkout = (offer: Pick<Offer, 'plan' | 'interval'>) =>
+    this.#json(PageUrl, '/billing/checkout', {
+      method: 'POST',
+      body: { plan: offer.plan, interval: offer.interval },
+    });
+  portal = () => this.#json(PageUrl, '/billing/portal', { method: 'POST' });
+  /** RGPD erasure: the owner types the SIREN again. */
+  deleteAccount = async (confirmSiren: string) => {
+    await this.#send('/tenant', { method: 'DELETE', body: { confirmSiren } });
+  };
 
   detect = (snapshot: SheetSnapshot) =>
     this.#json(Detection, '/detect', { method: 'POST', body: { snapshot } });

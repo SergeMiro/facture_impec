@@ -65,7 +65,8 @@ function actionsFor(f: WeekFacts): string[] {
   ].slice(0, MAX_ACTIONS);
 }
 
-export function weeklyReport(f: WeekFacts): WeeklyReport {
+/** `sender`: our name, or the accounting firm's under its full white label. */
+export function weeklyReport(f: WeekFacts, sender = t('app.title')): WeeklyReport {
   const range = { from: frDate(f.from), to: frDate(f.to) };
   const tally = (key: 'sent' | 'paid' | 'overdue' | 'atRisk', v: Tally) =>
     t(`report.${key}`, { count: v.count, amount: frMoney(v.amount, f.currency) });
@@ -81,7 +82,7 @@ export function weeklyReport(f: WeekFacts): WeeklyReport {
     ? [t('report.todo'), ...actions.map((a) => `• ${a}`)]
     : [t('report.nothing')];
   return {
-    subject: t('report.subject', range),
+    subject: t('report.subject', { ...range, sender }),
     title,
     numbers,
     actions,

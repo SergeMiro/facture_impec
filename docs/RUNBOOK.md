@@ -263,7 +263,8 @@ validated in `docs/OFFICE.md` §2). `pnpm dev` must be running on the same machi
 
 The ribbon group « Facture Impec » appears on the Home tab: Ouvrir, Vérifier, Envoyer (opens the
 confirmation, never sends by itself), Mode test. The Windows and Mac scripts follow Microsoft's guides
-but have not been run on those systems yet. `pnpm addin:icons` redraws the four icons.
+but have not been run on those systems yet. `pnpm addin:icons` redraws the four icons
+(`apps/addin/scripts/icons.ts`; the store logo is drawn by `pnpm appsource:package`).
 
 ### E2E
 
@@ -290,6 +291,95 @@ goes to the real sandbox and the M3 spec skips itself (§ B2Brouter sandbox).
 - `FI_E2E_STORAGE`: a Playwright storage state signed in to that Microsoft account, recorded once with
   `pnpm --filter @fi/addin exec playwright codegen --save-storage=e2e/.auth/microsoft.json https://www.office.com`
   (the `.auth` folder is git-ignored; never commit it).
+
+## Deployment
+
+The API image, the compose file and the settings of a hosted sandbox or prod: `docs/DEPLOY.md`. The
+store package for Excel: `pnpm appsource:package` (`docs/APPSOURCE.md` §6).
+
+## Pilot
+
+Plan §11 M7: « 3 pilot tenants on sandbox, zero P1 bugs for 5 days, then switch one to prod ». It runs on
+the **prod** deployment (`docs/DEPLOY.md` §1): each company signs up and works in « Mode test », which
+goes to B2Brouter's sandbox; nothing real leaves until the operator switches that company live. The
+rehearsal of the whole path is `apps/api/src/pilot.test.ts` (in `pnpm verify`).
+
+### Before day 1
+
+- [ ] The prod stack runs, `/health` answers on `https://api.<domain>`, the pane is served and the manifest
+      built from its URL is in the pilots' Excel (sideloaded, centralized deployment or store).
+- [ ] `B2BROUTER_SANDBOX_API_KEY` is set (without it there is no Mode test in prod), the mail provider
+      sends, `TERMS_URL` points at the published CGU.
+- [ ] Three pilot companies agreed to it, knowing it is a pilot: their invoices stay test invoices until
+      they say « go » for real.
+
+### Each company
+
+```bash
+API=https://api.<domain>; AUTH="authorization: Bearer $ADMIN_TOKEN"
+# 1. They click « Créer un compte » in Excel (SIREN, e-mail, terms, the link). Find the company:
+curl -s -H "$AUTH" "$API/admin/tenants?siren=<SIREN>"
+# 2. Pilot status: never billed, whatever Stripe says.
+curl -s -X PUT -H "$AUTH" -H 'content-type: application/json' \
+  -d '{"status":"pilot"}' "$API/admin/tenants/<id>/billing"
+# 3. If B2Brouter's account id is not the SIREN (docs/B2BROUTER.md T22):
+curl -s -X PUT -H "$AUTH" -H 'content-type: application/json' \
+  -d '{"account":"<B2Brouter account id>"}' "$API/admin/tenants/<id>/platform"
+```
+
+An accounting firm's brand, if a pilot comes through one:
+`PUT /admin/tenants/<id>/white-label {"whiteLabel":{"firmName":"…","accentColor":"#0f6cbd","full":false}}`
+(`full: true` also removes the Facture Impec mention and signs the weekly report with the firm's name).
+
+### P1, P2
+
+A **P1** is any of: an invoice sent twice, or to the wrong customer or platform; a real invoice leaving
+without the user's « Envoyer » or while the company is not live; an amount, VAT or date in the XML that
+differs from the sheet; an invoice lost or stuck (no platform answer, no error shown) for more than a
+business day; personal data of one company visible to another; the pane unusable for a pilot (cannot
+sign in, cannot send a test invoice) for more than an hour. A P1 resets the 5-day clock once fixed.
+
+A **P2** is anything else wrong that has a way around: a confusing message, a column badly guessed, a
+chase planned on the wrong day. Logged, fixed, does not reset the clock.
+
+### Every morning
+
+```bash
+curl -s -H "$AUTH" "$API/admin/tenants"                 # status, plan, live or not
+docker compose -f deploy/compose.yaml logs --since 24h api | grep -iE "error|failed" | tail -50
+docker compose -f deploy/compose.yaml exec -T postgres psql -U fi -d fi <<'SQL'
+-- Sends that did not reach the platform after an hour.
+select t.siren, i.number, i.is_test, s.status, s.attempts, s.last_error, s.updated_at
+from pdp_submissions s join invoices i on i.id = s.invoice_id join tenants t on t.id = s.tenant_id
+where s.status = 'pending' and s.updated_at < now() - interval '1 hour';
+-- Invoices refused by the platform or still « sending » in the last day.
+select t.siren, i.number, i.is_test, i.status, i.pdp_status_raw, i.updated_at
+from invoices i join tenants t on t.id = i.tenant_id
+where i.status in ('rejected_by_pdp', 'sending') and i.updated_at > now() - interval '1 day';
+-- Jobs pg-boss gave up on.
+select name, count(*) from pgboss.job where state = 'failed' and completed_on > now() - interval '1 day'
+group by name;
+SQL
+```
+
+Each line is either explained (a real customer error the pane explained) or a bug: P1 or P2. Write the
+day in `docs/PROGRESS.md` M7 (date, invoices sent per company, P1/P2 found, fixed in which commit).
+
+### Switching one live (day 6 at the earliest)
+
+After five consecutive days without P1, with the company's agreement and its B2Brouter production
+account set up (the owner's step: account, DGFiP setting, plan):
+
+```bash
+curl -s -X PUT -H "$AUTH" -H 'content-type: application/json' \
+  -d '{"live":true,"confirmSiren":"<SIREN>"}' "$API/admin/tenants/<id>/live"
+```
+
+The call checks that B2Brouter answers for that account (`platform_account_missing` with B2Brouter's
+reason otherwise, nothing changed) and records `tenant.live` in the audit log. From then on the pane no
+longer says « Votre compte est en cours d'activation… », « Mode test » off sends for real, and the inbox is read.
+Watch its first real invoice to « Déposée » and beyond the same day. `{"live":false,…}` closes real
+sends again (audit `tenant.offline`); invoices already sent keep being followed.
 
 ## Legacy MVP
 

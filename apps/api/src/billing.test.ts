@@ -3,11 +3,11 @@
 import { createHmac } from 'node:crypto';
 import type { Database } from '@fi/db';
 import { billingUsage, eq, invoices, stripeEvents, tenants } from '@fi/db';
-import { StripeStandIn } from '@fi/mock-pdp';
+import type { StripeStandIn } from '@fi/mock-pdp';
 import { TRIAL_DAYS, TRIAL_REAL_SENDS } from '@fi/shared';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { type Billing, recordUsage, runUsageReport } from './billing';
-import { StripeApi, verifyStripeSignature } from './stripe';
+import { verifyStripeSignature } from './stripe';
 import {
   ADMIN_TOKEN,
   draft,
@@ -15,12 +15,14 @@ import {
   newTenant,
   recordedJobs,
   runSend,
+  STRIPE_TEST_SECRET,
+  standInBilling,
   testApi,
   testDatabase,
   type WorkerDeps,
 } from './test-helpers';
 
-const SECRET = 'whsec_test-billing-secret';
+const SECRET = STRIPE_TEST_SECRET;
 const DAY = 86_400_000;
 
 let database: Database;
@@ -28,14 +30,6 @@ let api: ReturnType<typeof testApi>;
 let stripe: StripeStandIn;
 let clock = new Date();
 let refs = 0;
-
-/** Requests to `http://host/path` answered by an in-process Hono app. */
-const through =
-  (app: { request: (path: string, init?: RequestInit) => Response | Promise<Response> }) =>
-  async (url: string | URL | Request, init?: RequestInit) => {
-    const u = new URL(String(url));
-    return app.request(`${u.pathname}${u.search}`, init);
-  };
 
 const platform = fakeAdapter({
   sendInvoice: async () => ({ outcome: 'deposited', pdpRef: `bill_${++refs}` }),
@@ -45,22 +39,10 @@ let billing: Billing;
 
 beforeAll(async () => {
   database = await testDatabase();
-  stripe = new StripeStandIn({
-    webhookSecret: SECRET,
-    webhookUrl: 'http://api.test/webhooks/stripe',
-    fetcher: through({ request: (path, init) => api.app.request(path, init) }),
-    now: () => clock,
-  });
-  billing = {
-    stripe: new StripeApi('sk_test_billing', 'http://stripe.test', through(stripe.app)),
-    webhookSecret: SECRET,
-    prices: {
-      'essentiel:month': ['price_essentiel_month', 'price_overage_essentiel'],
-      'croissance:year': ['price_croissance_year'],
-    },
-    meterEvent: 'facture_envoyee',
-    automaticTax: false,
-  };
+  ({ stripe, billing } = standInBilling(
+    () => api.app,
+    () => clock,
+  ));
   api = testApi(database, { mock: platform }, ADMIN_TOKEN, { billing, now: () => clock });
 });
 afterAll(async () => {

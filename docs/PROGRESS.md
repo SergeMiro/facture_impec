@@ -354,8 +354,8 @@ How each criterion is read here:
 
 - **Onboarding wizard**: « Créer un compte » on the Connexion screen. The user types a SIREN; the API looks
   the company up in the public SIRENE directory and shows its legal name, head-office address and the
-  VAT number computed from the SIREN (marked « à confirmer »: a company may not be VAT-registered). A
-  closed company, or one that already has an account, cannot be created. The user then gives an e-mail
+  VAT number DGFiP publishes for it, else the one computed from the SIREN, marked « à confirmer » (the
+  formula is unofficial and a company may not be VAT-registered). A closed company, or one that already has an account, cannot be created. The user then gives an e-mail
   and accepts the terms; the e-mailed link confirms the address, and only then does the company exist:
   in trial, « Mode test » on, the pane signed in and on to Détection. Wherever a sign-in link can be sent
   (the outbox in local, a mail provider elsewhere).
@@ -373,13 +373,15 @@ How each criterion is read here:
   the export and in `docs/RGPD.md`; and a daily purge of expired sign-in links, sessions and sign-up
   requests, so the retention the register states is the retention the database has.
 - **AppSource submission package**: `pnpm appsource:package` writes the production manifest from the public
-  URLs, validates it at production level with Microsoft's validator, and gathers icons, store logo,
-  screenshots, the French listing text and the notes for certification into one folder and zip.
-  `docs/APPSOURCE.md` lists what Partner Center asks and what only the owner can do (publisher account,
-  public URLs, a test account for Microsoft's testers).
+  URLs, validates it at production level with Microsoft's validator (`--validate`), and gathers icons,
+  store logo, the French listing text, the notes for certification and the reviewers' sample into one
+  folder (Partner Center takes each piece in its own field, so no zip). Screenshots must show the add-in
+  in Excel: the owner takes them. `docs/APPSOURCE.md` lists what Partner Center asks and what only the
+  owner can do (publisher account, public URLs, a company for Microsoft's testers).
 - **Accountant white-label flag**: the operator sets an accounting firm's name (and colour) on a company;
-  the pane then shows the firm's name, and the chasing e-mails and weekly report are signed with it. The
-  « full » variant removes the Facture Impec mention (PRICING.md: on quote).
+  the pane then shows « proposé par » the firm, in its colour. The « full » variant shows the firm's name
+  alone and signs the weekly report with it (PRICING.md: on quote). Chasing e-mails keep the company's
+  own name, which is who chases (`docs/DEFERRED.md`).
 - **3 pilot tenants on sandbox, zero P1 bugs for 5 days, then switch one to prod**: this needs real pilot
   customers, a hosted sandbox (public HTTPS, the B2Brouter sandbox key, a mail provider, a Stripe test
   key) and a B2Brouter production account, which only the owner can bring. What M7 builds so that the
@@ -388,7 +390,26 @@ How each criterion is read here:
     body-size limits, the mock platform only in local, a second B2Brouter adapter so that Mode test works
     in prod, and a per-company go-live switch for the operator (« switch one to prod » is one admin call
     after its checks);
-  - `pnpm scenario pilot`: three companies sign up through the wizard on the in-process stack, rehearse in
-    Mode test, subscribe or get the pilot status, send, get paid, receive and export; one is switched
-    live; the run fails on any error;
-  - what a P1 bug is, and the daily pilot check, in `docs/RUNBOOK.md` § Pilot.
+  - the pilot rehearsed in prod mode, in `pnpm verify` (`apps/api/src/pilot.test.ts`): three companies
+    sign up through the wizard's calls, the operator makes them pilots, each sends a test invoice to
+    B2Brouter's sandbox while its real sends are refused, one gets its platform account and is switched
+    live and sends for real, the others still wait; the audit trail shows each step. Getting paid,
+    receiving and exporting are M5/M6's tests and do not change with the deployment;
+  - what a P1 bug is, the daily pilot check and the go-live, in `docs/RUNBOOK.md` § Pilot.
+
+### Evidence (2026-10-18)
+
+| Criterion | Evidence |
+|---|---|
+| Onboarding wizard | `apps/api/src/onboarding.test.ts` (lookup, closed, duplicate, masked fields, DGFiP or computed VAT, rate limits, link page GET/POST, two confirmations at once, poll, terms version, sign-up refused without TERMS_URL outside local); `apps/addin/src/controller.test.ts` › creating an account (whole wizard to Détection in Mode test, existing company, directory down → typed in); `docs/ONBOARDING.md` with sources. |
+| Billing (Stripe) | `apps/api/src/billing.test.ts` against the Stripe stand-in (trial quota, Checkout, webhook signature and replay, portal, overage meter events, past due, ended, pilot never billed, deletion cancels); `controller.test.ts` › the subscription, then leaving (offers, Checkout opened outside Excel, portal, commerce hidden when not allowed); `apps/addin/src/pages.test.ts`; `docs/BILLING.md`. No real Stripe call: the owner's account and prices (§11 there). |
+| RGPD endpoints | Deletion from the add-in with the SIREN typed again, which ends the subscription (`controller.test.ts`); `operator.test.ts` › purge (links, sign-ups, sessions); `docs/RGPD.md` updated. |
+| AppSource submission package | `apps/addin/scripts/release.test.ts` (store manifest, listing limits, reviewers' sample); `pnpm appsource:package … --validate` with public test URLs: Microsoft's service answered « The manifest is valid »; `docs/APPSOURCE.md`, `docs/appsource/`. |
+| Accountant white-label flag | `operator.test.ts` › white label (bad colour refused, brand in `/tenant`, weekly report signed and sent from the firm's name, audited). |
+| Deployment pieces | `operator.test.ts` › go-live (real sends and inbox held in prod, confirm SIREN, account checked, offline) and › limits (429 per address and per company, 413); `runtime.test.ts` (mock in local only, `b2brouter_test` in prod); `mail.test.ts` (SMTP); Docker image built and started against the compose Postgres, `/health` 200, removed (2026-10-18); `docs/DEPLOY.md`. |
+| 3 pilots on sandbox, 5 days without P1, one switched to prod | Rehearsed: `apps/api/src/pilot.test.ts`. The real pilot waits for the owner: hosting, B2Brouter live and sandbox keys, mail provider, published CGU, three customers (`docs/RUNBOOK.md` § Pilot). **Not done.** |
+
+### Pilot log
+
+Filled in every morning of the pilot (`docs/RUNBOOK.md` § Pilot): date, invoices per company (test /
+real), P1 and P2 found, the commit that fixed them. Empty until the pilot starts.

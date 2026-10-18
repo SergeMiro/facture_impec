@@ -2,20 +2,68 @@
 import { type InvoiceDraft, parisHour, parisToday } from '@fi/core';
 import { bundledFonts } from '@fi/core/fonts';
 import { type Database, openDatabase } from '@fi/db';
+import { StripeStandIn, sireneStandIn } from '@fi/mock-pdp';
 import type { PdpAdapter } from '@fi/pdp-adapter';
 import { createAiDeps } from './ai';
 import { createApp } from './app';
+import type { Billing } from './billing';
 import type { ApiDeps, Jobs, PdpRegistry, SyncTarget } from './deps';
+import { RequestWindows } from './limits';
 import { OutboxMailer } from './mail';
 import { SCENARIO_SELLER, scenarioDraft } from './scenarios/invoice';
+import { RechercheEntreprises } from './sirene';
+import { StripeApi } from './stripe';
 
 import { runSend, runSync, type WorkerDeps } from './workers';
 
+// The SIRENs the directory stand-in plays a case with.
+export { SIRENE_CASES } from '@fi/mock-pdp';
 // The task pane's tests move invoices as the workers would.
 export { runCollect } from './collect';
 export { runSend, runSync, type WorkerDeps };
 
+/** `fetch` for `http://any-host/path`, answered by an in-process Hono app. */
+export const inProcess =
+  (app: { request: (path: string, init?: RequestInit) => Response | Promise<Response> }) =>
+  async (url: string | URL | Request, init?: RequestInit) => {
+    const u = new URL(url instanceof Request ? url.url : String(url));
+    return app.request(`${u.pathname}${u.search}`, init);
+  };
+
+/** The company directory, played by the stand-in of apps/mock-pdp (synthetic companies). */
+export const testDirectory = () =>
+  new RechercheEntreprises('http://sirene.test', inProcess(sireneStandIn()));
+
 export const ADMIN_TOKEN = 'test-admin-token-0123456789abcdef';
+
+export const STRIPE_TEST_SECRET = 'whsec_test-billing-secret';
+
+/**
+ * Billing against the Stripe stand-in of apps/mock-pdp: monthly Essentiel with its overage price,
+ * yearly Croissance without one. `app` is read on each webhook: the API is created after `billing`.
+ */
+export function standInBilling(
+  app: () => { request: (path: string, init?: RequestInit) => Response | Promise<Response> },
+  now?: () => Date,
+): { stripe: StripeStandIn; billing: Billing } {
+  const stripe = new StripeStandIn({
+    webhookSecret: STRIPE_TEST_SECRET,
+    webhookUrl: 'http://api.test/webhooks/stripe',
+    fetcher: inProcess({ request: (path, init) => app().request(path, init) }),
+    ...(now && { now }),
+  });
+  const billing: Billing = {
+    stripe: new StripeApi('sk_test_billing', 'http://stripe.test', inProcess(stripe.app)),
+    webhookSecret: STRIPE_TEST_SECRET,
+    prices: {
+      'essentiel:month': ['price_essentiel_month', 'price_overage_essentiel'],
+      'croissance:year': ['price_croissance_year'],
+    },
+    meterEvent: 'facture_envoyee',
+    automaticTax: false,
+  };
+  return { stripe, billing };
+}
 
 export interface RecordedJobs extends Jobs {
   sends: string[];
@@ -82,8 +130,11 @@ export function testApi(
   /** `null`: the admin routes are disabled, as on a server without ADMIN_TOKEN. */
   adminToken: string | null = ADMIN_TOKEN,
   /** Default: the mock as test platform (no scenario port), AI off, an outbox mailer. */
-  overrides: Partial<Omit<ApiDeps, 'env' | 'db' | 'jobs' | 'pdp'>> = {},
+  overrides: Partial<Omit<ApiDeps, 'env' | 'db' | 'jobs' | 'pdp'>> & {
+    env?: Partial<ApiDeps['env']>;
+  } = {},
 ) {
+  const { env, ...rest } = overrides;
   const jobs = recordedJobs();
   // Stamped with the business clock, as in the API process.
   const mailer = new OutboxMailer(undefined, () => deps.now());
@@ -93,6 +144,7 @@ export function testApi(
       ADMIN_TOKEN: adminToken ?? undefined,
       API_PUBLIC_URL: 'http://localhost:4000',
       ADDIN_ORIGINS: ['https://localhost:3000'],
+      ...env,
     },
     db: database.db,
     jobs,
@@ -101,8 +153,11 @@ export function testApi(
     ai: testAi(database),
     mailer,
     fonts: FONTS,
+    directory: testDirectory(),
+    // Tests make more requests a minute than a person; the limits have their own test.
+    limits: new RequestWindows({ public: 1e6, poll: 1e6, tenant: 1e6, admin: 1e6 }),
     now: () => new Date(),
-    ...overrides,
+    ...rest,
   };
   const app = createApp(deps);
   const request = (

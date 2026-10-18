@@ -1,12 +1,8 @@
-// Draws the add-in's ribbon and store icons (docs/OFFICE.md §2: 16, 32 and 80 px required, 64 for
-// HighResolutionIconUrl): a brand-green rounded square, a white sheet, a green check mark.
-// Run: pnpm tsx scripts/addin-icons.ts — writes apps/addin/public/assets/icon-<size>.png.
-import { mkdirSync, writeFileSync } from 'node:fs';
+// The add-in's icon (docs/OFFICE.md §2): a brand-green rounded square, a white sheet, a green check
+// mark, drawn at any size without an image library. Used by scripts/icons.ts and scripts/appsource.ts.
 import { crc32, deflateSync } from 'node:zlib';
 import { brand } from '@fi/shared';
 
-const SIZES = [16, 32, 64, 80];
-const OUT = new URL('../apps/addin/public/assets/', import.meta.url);
 const SAMPLES = 4;
 
 const rgb = (hex: string) => [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
@@ -37,7 +33,8 @@ function paint(x: number, y: number): number[] | null {
   return check < 0.055 ? GREEN : WHITE;
 }
 
-function png(size: number): Buffer {
+/** The icon as an RGBA PNG, `size` pixels square. */
+export function iconPng(size: number): Buffer {
   const raw = Buffer.alloc(size * (size * 4 + 1));
   for (let y = 0; y < size; y++) {
     raw[y * (size * 4 + 1)] = 0;
@@ -76,7 +73,3 @@ function png(size: number): Buffer {
     chunk('IEND', Buffer.alloc(0)),
   ]);
 }
-
-mkdirSync(OUT, { recursive: true });
-for (const size of SIZES) writeFileSync(new URL(`icon-${size}.png`, OUT), png(size));
-console.log(`icons: ${SIZES.join(', ')} px → apps/addin/public/assets`);

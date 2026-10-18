@@ -1,6 +1,7 @@
 import type { Database } from '@fi/db';
 import { auditEvents, eq, magicLinks, sessions, sha256 } from '@fi/db';
 import { createMockPdpAdapter } from '@fi/pdp-adapter';
+import { TERMS_VERSION } from '@fi/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LINKS_PER_HOUR } from './login';
 import type { OutboxMailer } from './mail';
@@ -137,9 +138,16 @@ describe('sign-in links', () => {
   });
 
   it('tells the task pane whether links exist, and refuses them without a mailer', async () => {
-    expect(await (await request('/auth/options')).json()).toEqual({ magicLink: true });
+    // Local, with a directory: « Créer un compte » too (src/onboarding.ts signupOffered).
+    expect(await (await request('/auth/options')).json()).toEqual({
+      magicLink: true,
+      signup: { termsVersion: TERMS_VERSION, termsUrl: null },
+    });
     const noMail = testApi(database, { mock }, null, { mailer: null }).request;
-    expect(await (await noMail('/auth/options')).json()).toEqual({ magicLink: false });
+    expect(await (await noMail('/auth/options')).json()).toEqual({
+      magicLink: false,
+      signup: null,
+    });
     const res = await noMail('/auth/magic-link', { method: 'POST', body: { email: email() } });
     expect(res.status).toBe(503);
     expect(((await res.json()) as ErrorBody).error.code).toBe('mail_disabled');

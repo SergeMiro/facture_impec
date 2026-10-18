@@ -1,7 +1,18 @@
-// The operator's routes (Bearer ADMIN_TOKEN): create a company, switch it live in prod, give it a
-// firm's brand or the pilot status, and the local outbox. Every change is audited as `admin`.
+// The operator's routes (Bearer ADMIN_TOKEN): list and create companies, set one's platform account and
+// switch it live in prod, give it a firm's brand or the pilot status, and the local outbox. Every change is audited as `admin`.
 import { Address, isValidSiren } from '@fi/core';
-import { apiKeys, audit, eq, sha256, TENANT_PROVIDERS, type TenantRow, tenants } from '@fi/db';
+import {
+  and,
+  apiKeys,
+  asc,
+  audit,
+  eq,
+  isNull,
+  sha256,
+  TENANT_PROVIDERS,
+  type TenantRow,
+  tenants,
+} from '@fi/db';
 import { TRIAL_DAYS, WhiteLabel } from '@fi/shared';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -33,6 +44,7 @@ const NewTenant = z.object({
 const LiveBody = z.object({ live: z.boolean(), confirmSiren: z.string() });
 const BrandBody = z.object({ whiteLabel: WhiteLabel.nullable() });
 const BillingBody = z.object({ status: z.enum(['pilot', 'trial']) });
+const PlatformBody = z.object({ account: z.string().trim().min(1).max(100) });
 
 export function adminRoutes(deps: ApiDeps) {
   const admin = new Hono();
@@ -70,6 +82,17 @@ export function adminRoutes(deps: ApiDeps) {
       });
       return row;
     });
+
+  /** The companies, oldest first; `?siren=` finds one (the ids the routes below take). */
+  admin.get('/tenants', async (c) => {
+    const siren = c.req.query('siren')?.replace(/\s/g, '');
+    const rows = await deps.db
+      .select()
+      .from(tenants)
+      .where(and(isNull(tenants.deletedAt), siren ? eq(tenants.siren, siren) : undefined))
+      .orderBy(asc(tenants.createdAt));
+    return c.json({ tenants: rows.map(tenantView) });
+  });
 
   admin.post('/tenants', async (c) => {
     const input = await body(c, NewTenant);
@@ -126,6 +149,17 @@ export function adminRoutes(deps: ApiDeps) {
       throw new ApiError(409, 'platform_account_missing', undefined, details);
     }
     return c.json(tenantView(await update(before, 'tenant.live', { liveAt: deps.now() })));
+  });
+
+  /**
+   * The company's account id at its platform, when it is not the SIREN a sign-up gives (docs/B2BROUTER.md
+   * T22). Fixed once the company is live: its invoices are followed through that account.
+   */
+  admin.put('/tenants/:id/platform', async (c) => {
+    const { account } = await body(c, PlatformBody);
+    const before = await company(c.req.param('id'));
+    if (before.liveAt) throw new ApiError(409, 'tenant_live');
+    return c.json(tenantView(await update(before, 'tenant.platform', { pdpAccount: account })));
   });
 
   admin.put('/tenants/:id/white-label', async (c) => {

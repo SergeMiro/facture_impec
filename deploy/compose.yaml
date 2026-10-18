@@ -1,0 +1,33 @@
+# The pilot stack (docs/DEPLOY.md): the API with its workers, and Postgres. Settings and secrets come
+# from deploy/.env (never committed, chmod 600). Put a TLS reverse proxy in front of 127.0.0.1:4000:
+# Office, Stripe's webhooks and B2Brouter's need https.
+name: facture-impec
+services:
+  postgres:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_USER: fi
+      POSTGRES_DB: fi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U fi -d fi']
+      interval: 5s
+      retries: 30
+    restart: unless-stopped
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://fi:${POSTGRES_PASSWORD}@postgres:5432/fi
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:${API_PUBLISHED_PORT:-4000}:4000
+    restart: unless-stopped
+volumes:
+  pgdata: {}

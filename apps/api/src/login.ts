@@ -13,16 +13,18 @@ import {
   magicLinks,
   sessions,
   sha256,
+  type Tx,
   tenants,
   users,
 } from '@fi/db';
-import { t } from '@fi/shared';
+import { TERMS_VERSION, t } from '@fi/shared';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { newSessionToken, type TenantEnv, tenantAuth } from './auth';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { body, Email } from './http';
+import { signupOffered } from './onboarding';
 import { page as htmlPage } from './page';
 import { tenantView } from './views';
 
@@ -37,11 +39,40 @@ const minutes = (n: number) => n * 60_000;
 const page = (message: string, form?: { action: string; button: string }) =>
   htmlPage(t('login.page.title'), message, form);
 
+/** A session for a person whose link was confirmed (sign-in or sign-up); the token is shown once. */
+export async function openSession(tx: Tx, userId: string, tenantId: string, now: Date) {
+  const token = newSessionToken();
+  const [session] = await tx
+    .insert(sessions)
+    .values({
+      userId,
+      tenantId,
+      hash: sha256(token),
+      expiresAt: new Date(+now + SESSION_DAYS * 86_400_000),
+      createdAt: now,
+    })
+    .returning({ id: sessions.id });
+  await audit(tx, {
+    tenantId,
+    actor: `user:${userId}`,
+    action: 'session.create',
+    objectType: 'session',
+    objectId: session?.id ?? '',
+  });
+  return token;
+}
+
 export function loginRoutes(deps: ApiDeps) {
   const app = new Hono<TenantEnv>();
 
-  /** The Connexion screen offers the e-mail form only where links can be sent. */
-  app.get('/options', (c) => c.json({ magicLink: deps.mailer !== null }));
+  /** The Connexion screen offers the e-mail form only where links can be sent, sign-up only where offered. */
+  app.get('/options', (c) => {
+    const signup = signupOffered(deps);
+    return c.json({
+      magicLink: deps.mailer !== null,
+      signup: signup ? { termsVersion: TERMS_VERSION, termsUrl: deps.env.TERMS_URL ?? null } : null,
+    });
+  });
 
   app.post('/magic-link', async (c) => {
     if (!deps.mailer) throw new ApiError(503, 'mail_disabled');
@@ -145,25 +176,7 @@ export function loginRoutes(deps: ApiDeps) {
         .innerJoin(tenants, eq(tenants.id, users.tenantId))
         .where(and(eq(users.id, userId), isNull(tenants.deletedAt)));
       if (!found) return null;
-      const token = newSessionToken();
-      const [session] = await tx
-        .insert(sessions)
-        .values({
-          userId,
-          tenantId: found.tenant.id,
-          hash: sha256(token),
-          expiresAt: new Date(+now + SESSION_DAYS * 86_400_000),
-          createdAt: now,
-        })
-        .returning({ id: sessions.id });
-      await audit(tx, {
-        tenantId: found.tenant.id,
-        actor: `user:${found.user.id}`,
-        action: 'session.create',
-        objectType: 'session',
-        objectId: session?.id ?? '',
-      });
-      return { token, found };
+      return { token: await openSession(tx, found.user.id, found.tenant.id, now), found };
     });
     if (!result) throw new ApiError(410, 'link_expired');
     return c.json({

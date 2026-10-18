@@ -21,7 +21,8 @@
     "accounting:check": "tsx scripts/accounting/check.ts",
     "test:e2e": "pnpm --filter @fi/addin test:e2e",
     "seed:demo": "pnpm --filter @fi/addin seed:demo",
-    "addin:icons": "tsx scripts/addin-icons.ts"
+    "addin:icons": "pnpm --filter @fi/addin icons",
+    "appsource:package": "pnpm --filter @fi/addin appsource"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

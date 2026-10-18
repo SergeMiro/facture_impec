@@ -285,6 +285,55 @@ confirmation, export, Mode test, RGPD), `packages/db/src/db.test.ts` (the status
 | Invoices the FEC cannot hold | Other currencies and VAT lines that do not add up go to the CSV only, and the pane says so | No exchange rate, and an entry that does not balance would be refused or wrong. |
 | Once exported | No dispute and no second export of an invoice | The accountant holds it now; reversing it is their entry (`docs/DEFERRED.md`). |
 
+## What M7 added: sign-up, billing, the operator's switches, deployment, the store package
+
+```
+Excel « Créer un compte » ─► GET /onboarding/company/:siren ─► Annuaire des entreprises (DINUM, no key)
+   └─► POST /onboarding/signup ─► e-mailed link ─► button ─► tenant (trial 30 d) + owner ─► pane polls, signed in
+Réglages « Choisir une formule » ─► POST /billing/checkout ─► Stripe Checkout (browser window / dialog)
+Stripe ─► POST /webhooks/stripe (signed) ─► tenants.billing_status, plan, period ─► send gate
+each real send ─► billing_usage (+ meter event beyond the quota)
+operator ─► /admin/tenants (list, platform account, pilot/trial, white label, live in prod)
+```
+
+| Path | What it does |
+|---|---|
+| `apps/api/src/onboarding.ts`, `sirene.ts` | « Créer un compte »: directory lookup, sign-up request, link, creation, poll (`docs/ONBOARDING.md`). |
+| `apps/api/src/billing.ts`, `stripe.ts` | Checkout, customer portal, the signed webhook, the gate on real sends, usage and meter events, cancellation at deletion (`docs/BILLING.md`). |
+| `apps/api/src/admin.ts` | The operator: list companies, create one, set its platform account, pilot or trial, an accounting firm's brand, go-live in prod. |
+| `apps/api/src/platform.ts` | `routeFor` (a test invoice to the test platform), `homeProvider`, `awaitsGoLive` (prod only). |
+| `apps/api/src/runtime.ts` | The registry: the mock in local only, B2Brouter with the key, `b2brouter_test` (B2Brouter's sandbox) in prod for Mode test; the SMTP mailer outside local. |
+| `apps/api/src/limits.ts` | Requests per client address and per company in fixed windows, body size limits (2 MB, 256 KB on webhooks, sign-in and sign-up). |
+| `apps/api/src/rgpd.ts` | `purgeExpired`, daily: links, sessions and sign-up requests a day after they end; deletion also ends the Stripe subscription. |
+| `apps/api/src/report.ts`, `packages/agents/src/report.ts` | The weekly report signed with the firm's name under a full white label. |
+| `apps/addin/src/ui/Signup.tsx`, `Subscription.tsx`, `SettingsView.tsx` | The wizard; Abonnement in Réglages (trial, quota used, plans, portal); « Supprimer le compte » with the SIREN typed again. |
+| `apps/addin/src/pages.ts`, `redirect.html` | Stripe pages outside Excel: `openBrowserWindow`, or a dialog on our page in Excel on the web; only Stripe's two hosts. |
+| `apps/addin/scripts/release.ts`, `appsource.ts` | `pnpm appsource:package`: store manifest, icons, store logo, listing checks, reviewers' notes and sample (`docs/APPSOURCE.md`). |
+| `apps/mock-pdp/src/stripe.ts`, `sirene.ts` | Stand-ins for Stripe and the directory, in local and tests. |
+| `apps/api/Dockerfile`, `deploy/compose.yaml` | The API image and the pilot stack with Postgres (`docs/DEPLOY.md`). |
+
+Tables (migration `0006_pilot.sql`): `tenants` gains `live_at`, `white_label_json`, the terms accepted and
+the billing columns (`billing_status`, `trial_ends_at`, `plan`, `billing_interval`, `stripe_customer_id`,
+`stripe_subscription_id`, `billing_period_end`); new `signup_requests`, `billing_usage` (real sends per
+company and period, once per invoice) and `stripe_events` (webhook ids already handled).
+
+Tests: `apps/api/src/onboarding.test.ts`, `billing.test.ts`, `operator.test.ts`, `mail.test.ts`,
+`pilot.test.ts` (the pilot rehearsed in prod mode), `controller.test.ts` › creating an account and
+› the subscription, then leaving, `release.test.ts`, `pages.test.ts`.
+
+### Decisions taken in M7
+
+| Topic | Decision | Why |
+|---|---|---|
+| Who may create an account | Anyone with a SIREN the directory knows and an e-mail they can read | Self-service is the point; real sends stay closed until the operator's go-live in prod, after B2Brouter's own checks on the account. |
+| VAT number at sign-up | DGFiP's published number, else the computed one marked « à confirmer » | The key formula is unofficial and not every company has a number (`docs/ONBOARDING.md` §2). |
+| Billing state | Stripe is the source; the database mirrors it from signed webhooks, and the pane re-reads after Checkout | No card data or price amounts in our code; one source of truth. |
+| What billing blocks | Only a real send, once the trial is over without a subscription or after it ended | Reading, Mode test, exports, RGPD and following invoices already sent must never depend on payment. |
+| Mode test in prod | B2Brouter's sandbox through a second key, as its own provider `b2brouter_test` | Prod has no mock, and a test invoice must never reach a real platform (plan §0.5). |
+| Go-live | One operator call per company, checked against the platform, audited, reversible | « Switch one to prod » (plan §11) without a second deployment or a data move. |
+| API runtime | One image running `tsx`, workers in the same process | No bundler to maintain for a pilot; a bundle is in `docs/DEFERRED.md` if start-up or size matters. |
+| Stripe from Excel | Browser window (desktop) or a dialog on our own page (web), only Stripe's hosts | Stripe advises against iframes; no AppDomain needed; 1100.4 asks for the user's click. |
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than
@@ -331,7 +380,7 @@ the `FF-` prefix for our own checks, French messages, and the cell reference car
 - **XML (M1, done).** `@e-invoice-eu/core` was evaluated and not adopted: it cannot parse CII or UBL,
   has no business rules and installs 74 MB (`docs/research/FORMATS.md` §1). Our own builders pass the
   official XSD and schematrons.
-- **API runtime (M7).** Bundle `apps/api` and `apps/mock-pdp` (esbuild/tsup) and ship one Docker image for the EU VPS; until then both run through `tsx` (`docs/DEFERRED.md`).
+- **API runtime (M7, done).** One Docker image runs `apps/api` through `tsx` with its workers (`docs/DEPLOY.md`); bundling it is deferred (`docs/DEFERRED.md`).
 - **LLM (M3).** Plan §1 named the Anthropic API only. On 2026-10-17 the owner asked for every major
   provider plus any OpenAI-compatible endpoint, included or with the tenant's own key: design in
   `docs/AI_PROVIDERS.md` (Vercel AI SDK, per-tenant settings, sealed keys, capability probe, no silent
@@ -348,7 +397,7 @@ the `FF-` prefix for our own checks, French messages, and the cell reference car
 | Env | PDP | Data |
 |---|---|---|
 | `local` | `apps/mock-pdp` on :4010 (with B2Brouter's stand-in at `/b2brouter`), or B2Brouter's sandbox with a `test_` key | PGlite in `.data/pglite`, or any Postgres through `DATABASE_URL` |
-| `sandbox` | B2Brouter sandbox (`test_` key required) | Supabase `fi-sandbox`, when it is hosted (M7) |
-| `prod` | B2Brouter production | Supabase `fi-prod` (EU), from M7 |
+| `sandbox` | B2Brouter sandbox (`test_` key required) | Postgres through `DATABASE_URL`: the compose service (`docs/DEPLOY.md`) or a managed EU Postgres |
+| `prod` | B2Brouter production, and its sandbox (`b2brouter_test`) for « Mode test » | Same; nothing is hosted yet |
 
 `FI_ENV` selects the environment; it is validated at startup and reported by `/health`.

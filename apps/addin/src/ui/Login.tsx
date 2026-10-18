@@ -1,4 +1,5 @@
-// Screen 1, Connexion (plan §5): a link by e-mail, or the company's access key.
+// Screen 1, Connexion (plan §5): a link by e-mail, or the company's access key; « Créer un compte »
+// where the server offers sign-up (M7).
 import { t } from '@fi/shared';
 import {
   Button,
@@ -67,6 +68,15 @@ export function Login() {
         </form>
       ) : (
         <Text size={200}>{t('addin.login.noLink')}</Text>
+      )}
+
+      {state.signupOffer && !state.link && (
+        <>
+          <Divider>{t('addin.login.new')}</Divider>
+          <Button onClick={fi.startSignup} data-testid="start-signup">
+            {t('addin.login.signup')}
+          </Button>
+        </>
       )}
 
       <Divider>{t('addin.login.or')}</Divider>

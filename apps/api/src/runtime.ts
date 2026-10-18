@@ -21,6 +21,7 @@ import type { AiDeps, ApiDeps, Mailer, PdpRegistry, TestPlatform } from './deps'
 import { bossJobs, createBoss, ensureQueues } from './jobs';
 import { type Listening, listen } from './listen';
 import { OutboxMailer, SmtpMailer } from './mail';
+import { type Directory, RechercheEntreprises } from './sirene';
 import { startWorkers } from './workers';
 
 export interface ApiOptions {
@@ -38,6 +39,8 @@ export interface ApiOptions {
   mailer?: Mailer | null;
   /** Default: billingFromEnv (STRIPE_*). */
   billing?: Billing | null;
+  /** Default: the Annuaire des entreprises at SIRENE_URL. */
+  directory?: Directory | null;
   pollingIntervalSeconds?: number;
   /** Chasing timer (real seconds); default COLLECT_EVERY_SECONDS. */
   collectEverySeconds?: number;
@@ -151,6 +154,10 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
       }),
     mailer: options.mailer === undefined ? mailerFromEnv(env, log, now) : options.mailer,
     billing: options.billing === undefined ? billingFromEnv(env) : options.billing,
+    directory:
+      options.directory === undefined
+        ? new RechercheEntreprises(env.SIRENE_URL)
+        : options.directory,
     fonts: bundledFonts(),
     now,
   };

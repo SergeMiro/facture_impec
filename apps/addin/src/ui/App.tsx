@@ -23,6 +23,7 @@ import { InvoiceView } from './InvoiceView';
 import { Login } from './Login';
 import { ReceptionView } from './ReceptionView';
 import { SettingsView } from './SettingsView';
+import { Signup } from './Signup';
 import { TEST_ORANGE, theme } from './theme';
 
 const useStyles = makeStyles({
@@ -42,7 +43,15 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     fontWeight: tokens.fontWeightSemibold,
   },
-  header: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' },
+  header: {
+    display: 'flex',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: '8px',
+    paddingBottom: '6px',
+    borderBottom: '3px solid transparent',
+  },
+  brand: { display: 'flex', flexDirection: 'column' },
   center: { display: 'flex', justifyContent: 'center', padding: '48px 0' },
 });
 
@@ -71,10 +80,20 @@ function Pane() {
     );
   }
 
+  // An accounting firm's brand (white label): its name, its colour; « full » drops ours.
+  const brand = state.me?.tenant.whiteLabel ?? null;
   return (
     <main className={styles.root}>
-      <div className={styles.header}>
-        <Title3 as="h1">{t('app.title')}</Title3>
+      <div
+        className={styles.header}
+        style={brand?.accentColor ? { borderBottomColor: brand.accentColor } : undefined}
+      >
+        <span className={styles.brand}>
+          <Title3 as="h1">{brand?.full ? brand.firmName : t('app.title')}</Title3>
+          {brand && !brand.full && (
+            <Text size={200}>{t('addin.brand.by', { firm: brand.firmName })}</Text>
+          )}
+        </span>
         {state.me && <Text size={200}>{state.me.tenant.name}</Text>}
       </div>
 
@@ -82,6 +101,12 @@ function Pane() {
         <div className={styles.testBanner} role="status" data-testid="test-banner">
           {t('banner.testMode')}
         </div>
+      )}
+
+      {state.me?.awaitingGoLive && (
+        <MessageBar intent="info" layout="multiline" data-testid="go-live-banner">
+          <MessageBarBody>{t('addin.goLive.waiting')}</MessageBarBody>
+        </MessageBar>
       )}
 
       {state.offline && (
@@ -146,11 +171,15 @@ function Pane() {
 
 function Screen() {
   const [state] = useFi();
-  if (!state.me)
+  if (!state.me) {
+    if (state.screen.name === 'signup') return <Signup />;
     return state.screen.name === 'login' ? <Login /> : <Spinner label={t('addin.loading')} />;
+  }
   switch (state.screen.name) {
     case 'login':
       return <Login />;
+    case 'signup':
+      return <Signup />;
     case 'detect':
       return <Detection />;
     case 'dashboard':

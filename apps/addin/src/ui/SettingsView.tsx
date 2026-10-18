@@ -1,6 +1,6 @@
 // Screen 6, Réglages (plan §5): mode (Review, or the chasing autopilot with its ceiling), chasing
-// cadence, pseudonymization, PDP connection, Mode test, the invoice defaults, the AI choice and the
-// RGPD export.
+// cadence, pseudonymization, PDP connection, Mode test, the invoice defaults, the AI choice, the
+// subscription, the RGPD export and the account's deletion.
 import { isMessageKey, t } from '@fi/shared';
 import {
   Badge,
@@ -21,6 +21,7 @@ import {
 import { type FormEvent, useEffect, useState } from 'react';
 import { AI_PROVIDERS, type AiChoice, type Settings } from '../api';
 import { useFi } from './context';
+import { DeleteAccount, Subscription } from './Subscription';
 
 const useStyles = makeStyles({
   section: { display: 'flex', flexDirection: 'column', gap: '10px' },
@@ -74,7 +75,11 @@ export function SettingsView() {
       <Divider />
       <Ai settings={settings} />
       <Divider />
+      <Subscription />
+      {state.billing?.enabled && <Divider />}
       <Account />
+      <Divider />
+      <DeleteAccount />
     </section>
   );
 }

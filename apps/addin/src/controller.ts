@@ -6,19 +6,24 @@ import {
   type AiChoice,
   ApiClient,
   ApiFailure,
+  type BillingView,
   type Degraded,
+  type DirectoryCompany,
   type Explained,
   type ExportFile,
   type Inbound,
   type InboundExport,
   type InvoiceDetail,
   type Me,
+  type Offer,
   Offline,
+  type PostalAddress,
   type Rehearsal,
   type RowStatus,
   type Scenario,
   type Settings,
   type SettingsPatch,
+  type SignupOffer,
   type SyncResult,
   type TestInboundKind,
   type WeeklyReport,
@@ -38,6 +43,7 @@ import type { KeyValueStore } from './storage';
 
 export type Screen =
   | { name: 'login' }
+  | { name: 'signup' }
   | { name: 'detect' }
   | { name: 'dashboard' }
   | { name: 'invoice'; id: string; confirmSend: boolean }
@@ -60,6 +66,15 @@ export interface OpenInvoice {
   rehearsal: Rehearsal | null;
   xml: string | null;
   pdfUrl: string | null;
+}
+
+/** « Créer un compte »: the SIREN, then the company to confirm, then the e-mailed link to open. */
+export interface Signup {
+  step: 'siren' | 'company' | 'waiting';
+  siren: string;
+  /** What the directory found; null: the person types the company (directory down). */
+  found: DirectoryCompany | null;
+  email: string | null;
 }
 
 /** Réception: the supplier invoices of the side « Mode test » shows (test or real). */
@@ -93,6 +108,15 @@ export interface FiState {
   notice: Notice | null;
   magicLink: boolean;
   link: { email: string } | null;
+  /** Null where this server offers no sign-up. */
+  signupOffer: SignupOffer | null;
+  signup: Signup | null;
+  /** Réglages → Abonnement; null until loaded. */
+  billing: BillingView | null;
+  /** Office says purchases may be shown here (false on iPad: Office.context.commerceAllowed). */
+  commerce: boolean;
+  /** The Stripe page last prepared, for the person to open if the window did not. */
+  pageLink: string | null;
 }
 
 /** Statuses that move without the user: the open fiche refreshes itself while they last. */
@@ -132,6 +156,10 @@ export interface ControllerDeps {
   showTaskpane?: () => Promise<void>;
   /** Blob → URL for the PDF viewer; absent in Node tests. */
   objectUrl?: { create: (blob: Blob) => string; revoke: (url: string) => void };
+  /** Opens a Stripe page outside the pane; false when it could not (the pane then shows a link). */
+  openUrl?: (url: string) => Promise<boolean>;
+  /** Office.context.commerceAllowed; default true. */
+  commerceAllowed?: boolean;
 }
 
 const INITIAL: FiState = {
@@ -154,12 +182,17 @@ const INITIAL: FiState = {
   notice: null,
   magicLink: false,
   link: null,
+  signupOffer: null,
+  signup: null,
+  billing: null,
+  commerce: true,
+  pageLink: null,
 };
 
 export class Controller {
   #state: FiState = INITIAL;
   readonly #listeners = new Set<() => void>();
-  readonly #deps: Required<Omit<ControllerDeps, 'fetch' | 'objectUrl'>> &
+  readonly #deps: Required<Omit<ControllerDeps, 'fetch' | 'objectUrl' | 'commerceAllowed'>> &
     Pick<ControllerDeps, 'objectUrl'>;
   readonly api: ApiClient;
   readonly #writer: StatusWriter;
@@ -172,7 +205,7 @@ export class Controller {
   #syncing: Promise<void> | null = null;
   #syncAgain = false;
   #linkTimer: unknown = null;
-  #linkRequest: string | null = null;
+  #linkRequest: { id: string; kind: 'login' | 'signup' } | null = null;
   #poll: { timer: unknown; left: number } | null = null;
   #sheetPoll: { timer: unknown; delay: number } | null = null;
 
@@ -183,8 +216,10 @@ export class Controller {
       now: () => Date.now(),
       newId: () => crypto.randomUUID(),
       showTaskpane: async () => {},
+      openUrl: async () => false,
       ...deps,
     };
+    this.#state = { ...INITIAL, commerce: deps.commerceAllowed !== false };
     this.api = new ApiClient(deps.apiBase, () => this.#token, deps.fetch);
     this.#writer = new StatusWriter(deps.port, this.#deps.writerClock);
     this.#queue = new OfflineQueue(
@@ -221,7 +256,10 @@ export class Controller {
   navigate = (screen: Screen): void => {
     if (screen.name !== 'invoice') this.#closeInvoice();
     this.#set({ screen, notice: null });
-    if (screen.name === 'settings' && !this.#state.settings) void this.loadSettings();
+    if (screen.name === 'settings') {
+      if (!this.#state.settings) void this.loadSettings();
+      void this.loadBilling();
+    }
     if (screen.name === 'dashboard') void this.loadReport();
     if (screen.name === 'reception') void this.loadReception();
   };
@@ -302,8 +340,8 @@ export class Controller {
       }
       const testMode = (await port.getSetting(SETTING.testMode)) === 'on';
       this.#set({ sheet, workbookId, testMode });
-      const options = await this.api.options().catch(() => ({ magicLink: false }));
-      this.#set({ magicLink: options.magicLink });
+      const options = await this.api.options().catch(() => ({ magicLink: false, signup: null }));
+      this.#set({ magicLink: options.magicLink, signupOffer: options.signup });
       if (this.#token) {
         // Signed in before: the dashboard waits for the API instead of asking to sign in again.
         this.#set({ screen: { name: 'dashboard' } });
@@ -323,7 +361,7 @@ export class Controller {
 
   async #signedIn(): Promise<void> {
     const me = await this.api.me();
-    this.#set({ me, notice: null, link: null });
+    this.#set({ me, notice: null, link: null, signup: null });
     await this.#openSheet(this.#state.sheet ?? (await this.#deps.port.activeSheet()));
   }
 
@@ -375,7 +413,7 @@ export class Controller {
   requestLink = async (email: string): Promise<void> => {
     const started = await this.#act('login', () => this.api.requestLink(email));
     if (!started) return;
-    this.#linkRequest = started.requestId;
+    this.#linkRequest = { id: started.requestId, kind: 'login' };
     this.#set({ link: { email: email.trim() }, notice: null });
     this.#pollLink();
   };
@@ -390,11 +428,14 @@ export class Controller {
   #pollLink(): void {
     this.#linkTimer = this.#deps.timers.setTimeout(async () => {
       this.#linkTimer = null;
-      const requestId = this.#linkRequest;
-      if (!requestId) return;
+      const request = this.#linkRequest;
+      if (!request) return;
       try {
-        const answer = await this.api.pollLink(requestId);
-        if (this.#linkRequest !== requestId) return;
+        const answer =
+          request.kind === 'login'
+            ? await this.api.pollLink(request.id)
+            : await this.api.pollSignup(request.id);
+        if (this.#linkRequest !== request) return;
         if (answer.status === 'pending') {
           this.#pollLink();
           return;
@@ -402,17 +443,128 @@ export class Controller {
         this.#linkRequest = null;
         this.#token = answer.token;
         await this.#deps.tokens.set(TOKEN_KEY, answer.token);
+        if (request.kind === 'signup') {
+          // A new account rehearses first: Mode test on, the banner says so.
+          await this.#deps.port.setSetting(SETTING.testMode, 'on');
+          this.#set({ testMode: true });
+        }
         await this.#act('login', () => this.#signedIn());
+        if (request.kind === 'signup' && this.#state.me) {
+          this.notify(
+            'success',
+            t('addin.signup.created', { company: this.#state.me.tenant.name }),
+          );
+        }
       } catch (e) {
         if (e instanceof Offline) {
           this.#pollLink();
           return;
         }
-        this.cancelLink();
+        if (request.kind === 'login') this.cancelLink();
+        else this.cancelSignup();
         this.#fail(e);
       }
     }, LINK_POLL_MS);
   }
+
+  // ── Créer un compte ───────────────────────────────────────────────────────────────────────────
+  startSignup = (): void => {
+    this.cancelLink();
+    this.#set({
+      screen: { name: 'signup' },
+      signup: { step: 'siren', siren: '', found: null, email: null },
+      notice: null,
+    });
+  };
+
+  cancelSignup = (): void => {
+    if (this.#linkRequest?.kind === 'signup') {
+      this.#linkRequest = null;
+      if (this.#linkTimer !== null) this.#deps.timers.clearTimeout(this.#linkTimer);
+      this.#linkTimer = null;
+    }
+    this.#set({ screen: { name: 'login' }, signup: null });
+  };
+
+  /** Back from the company to the SIREN, or from waiting for the link to the company. */
+  signupBack = (): void => {
+    const signup = this.#state.signup;
+    if (!signup) return;
+    if (signup.step === 'company')
+      this.#set({ signup: { ...signup, step: 'siren' }, notice: null });
+    if (signup.step === 'waiting') {
+      this.#linkRequest = null;
+      this.#set({ signup: { ...signup, step: 'company' }, notice: null });
+    }
+  };
+
+  lookupCompany = async (siren: string): Promise<void> => {
+    const s = siren.replace(/\s/g, '');
+    this.#busy('signup', true);
+    try {
+      const found = await this.api.lookupCompany(s);
+      this.#set({ signup: { step: 'company', siren: s, found, email: null }, notice: null });
+    } catch (e) {
+      if (e instanceof ApiFailure && e.code === 'directory_unavailable') {
+        // The directory is down: the person types the company; the API checks it again later.
+        this.#set({ signup: { step: 'company', siren: s, found: null, email: null } });
+        this.notify('warning', e.message);
+      } else if (e instanceof Offline) {
+        this.notify('warning', t('addin.offline.notQueued'));
+      } else {
+        this.#fail(e);
+      }
+    } finally {
+      this.#busy('signup', false);
+    }
+  };
+
+  submitSignup = async (
+    email: string,
+    company: { name: string; address: PostalAddress | null; vatId: string | null },
+  ): Promise<void> => {
+    const signup = this.#state.signup;
+    const offer = this.#state.signupOffer;
+    if (!signup || !offer) return;
+    const started = await this.#act('signup', () =>
+      this.api.signup({ siren: signup.siren, email, company, termsVersion: offer.termsVersion }),
+    );
+    if (!started) return;
+    this.#linkRequest = { id: started.requestId, kind: 'signup' };
+    this.#set({ signup: { ...signup, step: 'waiting', email: email.trim() }, notice: null });
+    this.#pollLink();
+  };
+
+  // ── Abonnement ────────────────────────────────────────────────────────────────────────────────
+  loadBilling = async (): Promise<void> => {
+    const billing = await this.#act('billing', () => this.api.billing());
+    if (billing) this.#set({ billing });
+  };
+
+  openCheckout = async (offer: Pick<Offer, 'plan' | 'interval'>): Promise<void> => {
+    const page = await this.#act('billing', () => this.api.checkout(offer));
+    if (page) await this.#openPage(page.url);
+  };
+
+  openPortal = async (): Promise<void> => {
+    const page = await this.#act('billing', () => this.api.portal());
+    if (page) await this.#openPage(page.url);
+  };
+
+  async #openPage(url: string): Promise<void> {
+    const opened = await this.#deps.openUrl(url).catch(() => false);
+    this.#set({ pageLink: url });
+    this.notify('info', t(opened ? 'addin.billing.opened' : 'addin.billing.openLink'));
+  }
+
+  /** RGPD erasure from Réglages (owner, SIREN typed again); the pane signs out. */
+  deleteAccount = async (confirmSiren: string): Promise<void> => {
+    const done = await this.#act('delete', async () => {
+      await this.api.deleteAccount(confirmSiren);
+      return true;
+    });
+    if (done) await this.#signedOut({ tone: 'success', text: t('addin.account.deleted') });
+  };
 
   signOut = async (): Promise<void> => {
     if (this.#token?.startsWith('fis_')) await this.api.logout().catch(() => undefined);
@@ -436,6 +588,9 @@ export class Controller {
       settings: null,
       offline: null,
       link: null,
+      signup: null,
+      billing: null,
+      pageLink: null,
       notice,
     });
   }

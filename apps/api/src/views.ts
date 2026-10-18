@@ -13,6 +13,7 @@ export function tenantView(row: TenantRow) {
     vatId: row.vatId,
     address: row.address,
     pdpProvider: row.pdpProvider,
+    pdpAccount: row.pdpAccount,
     mode: row.mode,
     autopilotMaxAmount: row.autopilotMaxAmount,
     sandboxEnabled: row.sandboxEnabled,

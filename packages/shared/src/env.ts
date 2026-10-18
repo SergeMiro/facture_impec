@@ -74,6 +74,8 @@ export const ServerEnvSchema = z
     MAIL_SMTP_URL: optionalText(),
     MAIL_FROM: optionalText(),
     SIRENE_URL: z.url().default('https://recherche-entreprises.api.gouv.fr'),
+    // The published terms a new account accepts (docs/ONBOARDING.md). Empty: no sign-up outside local.
+    TERMS_URL: z.preprocess(blank, z.url().optional()),
     // Billing (docs/BILLING.md): the owner's Stripe account. Empty key: nobody is billed or gated.
     STRIPE_SECRET_KEY: optionalText(),
     STRIPE_WEBHOOK_SECRET: optionalText(),

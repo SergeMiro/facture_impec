@@ -16,14 +16,19 @@ or deletes it. The code is `apps/api/src/rgpd.ts` (export, deletion) and `packag
 - For the **invoices** (buyer names, addresses, SIREN, amounts), Facture Impec works on behalf of the
   customer who issues them: it is a processor (*sous-traitant*, art. 28). This needs a processing
   agreement in the terms of service (M7).
-- Subprocessors: the PDP (B2Brouter from M4), the hosting (EU VPS, M7), and the AI provider included
-  in the subscription. A customer who brings their own AI key chooses that provider themselves.
+- Subprocessors: the PDP (B2Brouter from M4), the hosting (EU VPS, M7), the mail provider (M7), Stripe
+  for the subscription (M7: card and billing details stay at Stripe, we never see a card), and the AI
+  provider included in the subscription. A customer who brings their own AI key chooses that provider
+  themselves. The company directory (DINUM) receives only the SIREN typed at sign-up, a public number.
 
 ## Register of processing (art. 30)
 
 | Processing | Data | Purpose and legal basis | Kept | Where in the code |
 |---|---|---|---|---|
-| Accounts and sign-in | E-mail and role of each person; sign-in links (hash only); sessions (hash only) | Signing in to the add-in. Contract. | Links: 15 min, single use. Sessions: 30 days. People: until the account is deleted. | `users`, `magic_links`, `sessions`; `apps/api/src/login.ts` |
+| Accounts and sign-in | E-mail and role of each person; sign-in links (hash only); sessions (hash only) | Signing in to the add-in. Contract. | Links: 15 min, single use, deleted a day later. Sessions: 30 days, deleted a day after they expire or end. People: until the account is deleted. | `users`, `magic_links`, `sessions`; `apps/api/src/login.ts`; purge `purgeExpired` in `apps/api/src/rgpd.ts` (daily) |
+| Sign-up requests (M7) | E-mail, SIREN, the company as prefilled or typed (name, address, VAT number), terms version, hashes of the link and of the pane's secret | Creating the account the person asked for. Pre-contractual steps. | 60 minutes to confirm; deleted a day after they expire, whether or not they became an account (`docs/ONBOARDING.md`). | `signup_requests`; `apps/api/src/onboarding.ts` |
+| Terms accepted (M7) | Version of the CGU and date of acceptance | Proving the contract. Contract. | With the company row. | `tenants.terms_version`, `terms_accepted_at` |
+| Subscription (M7) | Stripe customer and subscription ids, plan, status, period end; one row per invoice sent for real (invoice id, month, beyond the quota or not) | Billing the plan and the invoices beyond it. Contract; our own accounting duty. | Ids and usage kept after deletion (10 years, accounting documents of our own sales); card and billing details only at Stripe, under its terms. | `tenants` (billing columns), `billing_usage`, `stripe_events` (event ids only); `apps/api/src/billing.ts`, `docs/BILLING.md` |
 | Company access keys | Hash of each key, label, revocation date | Signing in a workbook without e-mail. Contract. | Until revoked; revoked at deletion. | `api_keys` |
 | Invoices issued | The invoice as built from the sheet (buyer and seller names, addresses, SIREN, VAT number, amounts), its XML and PDF, the platform's answers | Validating, converting, transmitting and following the invoice. Contract, and the customer's legal duty to issue e-invoices. | **Transmitted invoices: 10 years** (Code de commerce art. L123-22, accounting documents), kept after deletion. Never transmitted or test invoices: until deletion. | `invoices`, `invoice_events`, `pdp_submissions`, `validation_results` |
 | Invoices received | The supplier's invoice as the platform delivers it (supplier name, address, SIREN, VAT number, IBAN, amounts), its XML, the facts read from it, the triage, the user's decision (« Bon pour paiement » or « Contester » with its reason, by whom) | Receiving the customer's purchase invoices: polled from M4, read, triaged and decided from M6. Contract, and the customer's legal duty to receive e-invoices. | **10 years** like issued ones (accounting documents), kept after deletion with the person's e-mail removed from the decision. Mode test invoices: until deletion. | `inbound_queue`; `runInboundPoll` in `apps/api/src/workers.ts`, `apps/api/src/inbound.ts` |
@@ -37,11 +42,11 @@ or deletes it. The code is `apps/api/src/rgpd.ts` (export, deletion) and `packag
 
 | Right | How | Who |
 |---|---|---|
-| Access and portability (art. 15, 20) | `GET /tenant/export`: one JSON file with the company, its people, settings, invoices, received invoices with their decisions, accountant exports with their files, events, agent runs and audit log. In the add-in: Réglages → « Exporter mes données ». | Any signed-in person of the company. |
-| Erasure (art. 17) | `DELETE /tenant` with `{ "confirmSiren": "<SIREN>" }`: deletes the people, sessions, links, mappings, settings, AI keys, agent runs and every invoice that never left (drafts, test invoices) and the Mode test supplier invoices and exports; revokes the keys; keeps the transmitted invoices, the received invoices, the accountant exports (the person's e-mail removed) and the audit log for the legal period, the company row marked deleted. | The owner only. No button in the add-in yet (`docs/DEFERRED.md`): on request, the operator runs it. |
+| Access and portability (art. 15, 20) | `GET /tenant/export`: one JSON file with the company, its people, settings, invoices, received invoices with their decisions, accountant exports with their files, billing usage, events, agent runs and audit log. In the add-in: Réglages → « Exporter mes données ». | Any signed-in person of the company. |
+| Erasure (art. 17) | `DELETE /tenant` with `{ "confirmSiren": "<SIREN>" }`, in the add-in Réglages → « Supprimer le compte » with the SIREN typed again (M7). First ends the Stripe subscription (usage not billed yet is invoiced; if Stripe fails, nothing is erased and the message says so). Then deletes the people, sessions, links, sign-up requests, mappings, settings, AI keys, brand, agent runs and every invoice that never left (drafts, test invoices) and the Mode test supplier invoices and exports; revokes the keys; keeps the transmitted invoices, the received invoices, the accountant exports (the person's e-mail removed), the billing ids and usage and the audit log for the legal period, the company row marked deleted. | The owner only. |
 | Rectification (art. 16) | The sheet is the source: the customer corrects it and checks again. A transmitted invoice is never edited; it is corrected by a credit note (M5). | The customer. |
 
-Tests: `apps/api/src/settings.test.ts` › RGPD (export without secrets, what deletion keeps, owner only); `apps/api/src/inbound.test.ts` › RGPD (received invoices and exports in the export, test ones deleted).
+Tests: `apps/api/src/settings.test.ts` › RGPD (export without secrets, what deletion keeps, owner only); `apps/api/src/inbound.test.ts` › RGPD (received invoices and exports in the export, test ones deleted); `apps/api/src/billing.test.ts` › the customer portal and deletion (the subscription ends first); `apps/api/src/operator.test.ts` › purge; `apps/addin/src/controller.test.ts` › the subscription, then leaving (deletion from Réglages).
 
 ## Open decisions (owner)
 
@@ -51,3 +56,8 @@ Tests: `apps/api/src/settings.test.ts` › RGPD (export without secrets, what de
 3. **Processing agreement and subprocessor list** in the terms of service before M7.
 4. **AI provider included in the subscription**: which one, in which region, and whether its terms
    allow training on inputs (pseudonymized or not, the answer must be no).
+5. **Stripe and the mail provider** in the subprocessor list, and the 10 years for billing ids and usage
+   after deletion (our own accounting documents; Stripe keeps its own records under its terms).
+6. **Anyone can request an account for a SIREN** (`docs/ONBOARDING.md` §3): the e-mail is proven, the
+   right to act for the company is not. The CGU should say that the person who accepts them declares
+   they may engage the company.

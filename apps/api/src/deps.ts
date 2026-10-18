@@ -5,6 +5,7 @@ import type { PdpAdapter, ScenarioPort } from '@fi/pdp-adapter';
 import type { ServerEnv } from '@fi/shared/env';
 import type { Billing } from './billing';
 import type { RequestWindows } from './limits';
+import type { Directory } from './sirene';
 
 /** The adapters this deployment can use; a tenant on a missing provider cannot send yet. */
 export type PdpRegistry = Partial<Record<PdpProvider, PdpAdapter>>;
@@ -61,7 +62,12 @@ export interface TestPlatform {
 export interface ApiDeps {
   env: Pick<
     ServerEnv,
-    'FI_ENV' | 'ADMIN_TOKEN' | 'API_PUBLIC_URL' | 'ADDIN_ORIGINS' | 'TRUST_PROXY_HEADER'
+    | 'FI_ENV'
+    | 'ADMIN_TOKEN'
+    | 'API_PUBLIC_URL'
+    | 'ADDIN_ORIGINS'
+    | 'TRUST_PROXY_HEADER'
+    | 'TERMS_URL'
   >;
   db: Db;
   jobs: Jobs;
@@ -77,6 +83,8 @@ export interface ApiDeps {
   fonts: FacturXOptions['fonts'];
   /** Stripe (src/billing.ts); absent or null: nobody is billed and no send waits for a plan. */
   billing?: Billing | null;
+  /** The company directory behind « Créer un compte » (src/sirene.ts); absent: no sign-up. */
+  directory?: Directory | null;
   /** Request counters (src/limits.ts); default: fresh ones per app. */
   limits?: RequestWindows;
   now: () => Date;

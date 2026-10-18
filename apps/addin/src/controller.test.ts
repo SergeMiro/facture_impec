@@ -7,15 +7,24 @@ import {
   runCollect,
   runSend,
   runSync,
+  SIRENE_CASES,
+  standInBilling,
   type testApi as TestApi,
   testApi,
   testDatabase,
   type WorkerDeps,
 } from '@fi/api/testing';
 import { addDays, parisToday } from '@fi/core';
-import { type MessageKey, t } from '@fi/shared';
+import { type MessageKey, TERMS_VERSION, TRIAL_REAL_SENDS, t } from '@fi/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Controller, type FiState, SETTING, SHEET_POLL_MAX_MS, SHEET_POLL_MS } from './controller';
+import {
+  Controller,
+  type ControllerDeps,
+  type FiState,
+  SETTING,
+  SHEET_POLL_MAX_MS,
+  SHEET_POLL_MS,
+} from './controller';
 import { FakeWorkbook } from './excel/fake';
 import { DEMO_DEFAULTS, DEMO_OWNER, DEMO_SELLER, DEMO_SHEET, demoSheet } from './harness/demo';
 import type { Timers } from './offline';
@@ -67,7 +76,7 @@ async function until(check: () => boolean, what: string, ms = 8_000): Promise<vo
 
 let workbooks = 0;
 
-function pane(book: FakeWorkbook, tokens = memoryStore()) {
+function pane(book: FakeWorkbook, tokens = memoryStore(), extra: Partial<ControllerDeps> = {}) {
   const id = `test-${String(++workbooks).padStart(4, '0')}`;
   const controller = new Controller({
     port: book,
@@ -77,6 +86,7 @@ function pane(book: FakeWorkbook, tokens = memoryStore()) {
     timers: fastTimers,
     writerClock: { now: () => Date.now(), setTimeout: (fn) => setTimeout(fn, 0) },
     newId: () => id,
+    ...extra,
   });
   const state = (): FiState => controller.getState();
   return { controller, state, tokens };
@@ -449,5 +459,170 @@ describe('signing in', () => {
     await until(() => state().screen.name === 'login', 'the sign-in screen');
     expect(state().notice).toEqual({ tone: 'error', text: t('api.error.unauthorized') });
     expect(await tokens.get('token')).toBeNull();
+  });
+});
+
+describe('creating an account', () => {
+  const SIREN = '999000102';
+  const EMAIL = 'gerance@entreprise-demo.test';
+  const book = new FakeWorkbook({ [DEMO_SHEET]: demoSheet() });
+  const { controller, state, tokens } = pane(book);
+
+  it('finds the company, mails the link, then signs in by itself, in Mode test', async () => {
+    await controller.start();
+    expect(state().signupOffer).toEqual({ termsVersion: TERMS_VERSION, termsUrl: null });
+    controller.startSignup();
+    expect(state().screen.name).toBe('signup');
+
+    await controller.lookupCompany('999 000 102');
+    expect(state().signup).toMatchObject({ step: 'company', siren: SIREN });
+    const found = state().signup?.found;
+    if (!found?.name) throw new Error('the directory found nothing');
+    const name = found.name;
+    expect(found).toMatchObject({
+      name: 'ENTREPRISE DE DEMONSTRATION 0102',
+      address: { postCode: '21000', city: 'DIJON', country: 'FR' },
+      vatSource: 'dgfip',
+      masked: false,
+    });
+
+    await controller.submitSignup(EMAIL, {
+      name,
+      address: found.address,
+      vatId: found.vatId,
+    });
+    expect(state().signup).toMatchObject({ step: 'waiting', email: EMAIL });
+    const link = linkToken(api.mailer, EMAIL);
+    const confirmed = await api.request(`/onboarding/confirm?token=${link}`, { method: 'POST' });
+    expect(confirmed.status).toBe(200);
+
+    await until(() => state().me !== null, 'the new session');
+    expect(state().me?.tenant).toMatchObject({ siren: SIREN, name });
+    expect(state().me?.user).toEqual({ email: EMAIL, role: 'owner' });
+    expect(state().signup).toBeNull();
+    expect(await tokens.get('token')).toMatch(/^fis_/);
+    // A new account rehearses first.
+    expect(state().testMode).toBe(true);
+    expect(book.settings.get(SETTING.testMode)).toBe('on');
+    expect(state().notice).toEqual({
+      tone: 'success',
+      text: t('addin.signup.created', { company: name }),
+    });
+    await controller.signOut();
+  });
+
+  it('refuses a company that has an account; lets the person type it when the directory is busy', async () => {
+    controller.startSignup();
+    await controller.lookupCompany(SIREN);
+    expect(state().notice).toEqual({ tone: 'error', text: t('api.error.company_exists') });
+    expect(state().signup?.step).toBe('siren');
+
+    await controller.lookupCompany(SIRENE_CASES.busy);
+    expect(state().signup).toMatchObject({
+      step: 'company',
+      siren: SIRENE_CASES.busy,
+      found: null,
+    });
+    expect(state().notice).toEqual({
+      tone: 'warning',
+      text: t('api.error.directory_unavailable'),
+    });
+    controller.signupBack();
+    expect(state().signup?.step).toBe('siren');
+    controller.cancelSignup();
+    expect(state().screen.name).toBe('login');
+    expect(state().signup).toBeNull();
+  });
+});
+
+describe('the subscription, then leaving', () => {
+  const SIREN = '999000110';
+  let billed: ReturnType<typeof TestApi>;
+  let stripe: ReturnType<typeof standInBilling>['stripe'];
+  let billedDb: Awaited<ReturnType<typeof testDatabase>>;
+  let key: string;
+  const opened: string[] = [];
+  let opens = true;
+  const book = new FakeWorkbook({ [DEMO_SHEET]: demoSheet() });
+  const { controller, state, tokens } = pane(book, memoryStore(), {
+    fetch: async (input, init) => billed.app.request(String(input), init),
+    openUrl: async (url) => {
+      opened.push(url);
+      return opens;
+    },
+  });
+  /** The Checkout Session of a stand-in page `…/checkout/<id>`. */
+  const sessionOf = (url: string | undefined) => url?.split('/').pop() ?? '';
+
+  beforeAll(async () => {
+    billedDb = await testDatabase();
+    let billing: ReturnType<typeof standInBilling>['billing'];
+    ({ stripe, billing } = standInBilling(() => billed.app));
+    billed = testApi(billedDb, { mock: adapter }, undefined, { billing });
+    const vatId = `FR${String((12 + 3 * (Number(SIREN) % 97)) % 97).padStart(2, '0')}${SIREN}`;
+    key = (await newTenant(billed.request, { ...SELLER, siren: SIREN, vatId, billing: 'trial' }))
+      .apiKey;
+  });
+  afterAll(async () => {
+    await billedDb.close();
+  });
+
+  it('shows the trial in Réglages, opens Stripe Checkout, then shows the paid plan', async () => {
+    await controller.start();
+    await controller.signInWithKey(key);
+    controller.navigate({ name: 'settings' });
+    await until(() => state().billing !== null, 'the subscription');
+    expect(state().commerce).toBe(true);
+    expect(state().billing).toMatchObject({
+      enabled: true,
+      status: 'trial',
+      trial: { sends: TRIAL_REAL_SENDS, left: TRIAL_REAL_SENDS },
+    });
+    expect(state().billing?.offers.map((o) => [o.plan, o.interval, o.overage])).toEqual([
+      ['essentiel', 'month', true],
+      ['croissance', 'year', false],
+    ]);
+
+    await controller.openCheckout({ plan: 'essentiel', interval: 'month' });
+    expect(opened).toHaveLength(1);
+    expect(state().pageLink).toBe(opened[0]);
+    expect(state().notice).toEqual({ tone: 'info', text: t('addin.billing.opened') });
+    await stripe.pay(sessionOf(opened[0]));
+    await controller.loadBilling();
+    expect(state().billing).toMatchObject({
+      status: 'active',
+      plan: 'essentiel',
+      interval: 'month',
+      portal: true,
+    });
+
+    // Office could not open it (an old Excel): the link is shown instead.
+    opens = false;
+    await controller.openPortal();
+    expect(opened[1]).toContain('/portal/');
+    expect(state().pageLink).toBe(opened[1]);
+    expect(state().notice).toEqual({ tone: 'info', text: t('addin.billing.openLink') });
+  });
+
+  it('deletes the account once the SIREN is typed again: Stripe stops, the pane signs out', async () => {
+    await controller.deleteAccount('999 999 999');
+    expect(state().notice).toEqual({ tone: 'error', text: t('api.error.confirm_mismatch') });
+    expect(state().me).not.toBeNull();
+
+    await controller.deleteAccount('999 000 110');
+    expect(state().screen.name).toBe('login');
+    expect(state().notice).toEqual({ tone: 'success', text: t('addin.account.deleted') });
+    expect(state().billing).toBeNull();
+    expect(state().pageLink).toBeNull();
+    expect(await tokens.get('token')).toBeNull();
+    expect([...stripe.subscriptions.values()].map((s) => s.status)).toEqual(['canceled']);
+    expect((await billed.request('/me', { token: key })).status).toBe(401);
+  });
+
+  it('hides purchases where Office forbids them', async () => {
+    const ipad = pane(new FakeWorkbook({ [DEMO_SHEET]: demoSheet() }), memoryStore(), {
+      commerceAllowed: false,
+    });
+    expect(ipad.state().commerce).toBe(false);
   });
 });
