@@ -92,6 +92,16 @@ import {
   settingsView,
   updateSettings,
 } from './settings';
+import {
+  ConfirmBody,
+  detectSource,
+  includeSource,
+  listSources,
+  registryView,
+  removeSource,
+  SourceSync,
+  syncSource,
+} from './sources';
 import { invoiceDetail, invoiceSummary, tenantView } from './views';
 import {
   assertTestMode,
@@ -245,6 +255,7 @@ export function createApp(deps: ApiDeps) {
     '/validate',
     '/detect',
     '/workbooks/*',
+    '/registry',
     '/invoices',
     '/invoices/*',
     '/inbound',
@@ -362,6 +373,44 @@ export function createApp(deps: ApiDeps) {
     const workbookId = parse(WorkbookId, c.req.param('id'));
     return c.json(await syncSheet(deps, c.get('tenant'), workbookId, await body(c, SyncBody)));
   });
+
+  // ── The workbook's other sheets (R1) ──────────────────────────────────────────────────────────
+  api.post('/workbooks/:id/sources/detect', async (c) => {
+    const workbookId = parse(WorkbookId, c.req.param('id'));
+    const { snapshot } = await body(c, z.object({ snapshot: Snapshot }));
+    return c.json(
+      await detectSource(deps, c.get('tenant'), workbookId, snapshot, c.req.raw.signal),
+    );
+  });
+
+  api.get('/workbooks/:id/sources', async (c) => {
+    const workbookId = parse(WorkbookId, c.req.param('id'));
+    return c.json(await listSources(deps, c.get('tenant'), workbookId));
+  });
+
+  api.put('/workbooks/:id/sources/:sheet', async (c) => {
+    const workbookId = parse(WorkbookId, c.req.param('id'));
+    const input = await body(c, ConfirmBody);
+    if (input.layout.sheet !== c.req.param('sheet')) {
+      throw new ApiError(400, 'invalid_request', undefined, 'layout.sheet differs from the path');
+    }
+    const tenant = c.get('tenant');
+    return c.json(await includeSource(deps, tenant, c.get('principal'), workbookId, input));
+  });
+
+  api.delete('/workbooks/:id/sources/:sheet', async (c) => {
+    const workbookId = parse(WorkbookId, c.req.param('id'));
+    return c.json(await removeSource(deps, c.get('tenant'), workbookId, c.req.param('sheet')));
+  });
+
+  api.post('/workbooks/:id/sources/:sheet/sync', async (c) => {
+    const workbookId = parse(WorkbookId, c.req.param('id'));
+    const { snapshot } = await body(c, SourceSync);
+    const tenant = c.get('tenant');
+    return c.json(await syncSource(deps, tenant, workbookId, c.req.param('sheet'), snapshot));
+  });
+
+  api.get('/registry', async (c) => c.json(await registryView(deps, c.get('tenant'))));
 
   // ── Invoices ──────────────────────────────────────────────────────────────────────────────────
   api.post('/invoices', async (c) => {

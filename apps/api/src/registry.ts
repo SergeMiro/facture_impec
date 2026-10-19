@@ -43,26 +43,33 @@ const ref = (s: string | undefined) => clean(s)?.replace(/\s+/g, ' ').toUpperCas
 
 export type Direction = 'out' | 'in';
 
+/** What names an article on a line: BT-153, BT-155, BT-156. */
+export type ItemIdentity = Pick<Line['item'], 'name' | 'sellerId' | 'buyerId'>;
+
 /**
  * The article a line is about. The company's own reference first: BT-155 on what it sells, BT-156
  * (the buyer's identifier) on what it buys, when the supplier writes it. Else its name, normalized.
  * A bought line without the company's reference stays the supplier's article: telling which of the
  * company's articles it is belongs to a later stage, not to a guess here.
  */
-export function itemKey(direction: Direction, line: Line, supplier: string | null): string | null {
-  const name = clean(line.item.name);
+export function itemKey(
+  direction: Direction,
+  item: ItemIdentity,
+  supplier: string | null,
+): string | null {
+  const name = clean(item.name);
   const byName = name ? normalizeName(name) : '';
-  const own = ref(direction === 'out' ? line.item.sellerId : line.item.buyerId);
+  const own = ref(direction === 'out' ? item.sellerId : item.buyerId);
   if (own) return `ref:${own}`;
   if (direction === 'out') return byName ? `name:${byName}` : null;
   const scope = `supplier:${supplier ?? '?'}:`;
-  const theirs = ref(line.item.sellerId);
+  const theirs = ref(item.sellerId);
   if (theirs) return `${scope}ref:${theirs}`;
   return byName ? `${scope}name:${byName}` : null;
 }
 
 /** A date column takes only a real date: a sheet may hold « 2026-13-45 » until the user fixes it. */
-function isoDate(value: string | undefined): string | null {
+export function isoDate(value: string | undefined): string | null {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const d = new Date(`${value}T00:00:00Z`);
   return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== value ? null : value;
@@ -145,29 +152,14 @@ async function project(tx: Tx, tenantId: string, sources: Source[], now: Date) {
       source: s,
       line,
       position,
-      key: itemKey(s.direction, line, s.supplier),
+      key: itemKey(s.direction, line.item, s.supplier),
     })),
   );
-  const names = new Map<string, string>();
-  for (const l of lines) {
-    if (l.key && !names.has(l.key)) {
-      names.set(l.key, clean(l.line.item.name) ?? l.key.replace(/^.*?(ref|name):/, ''));
-    }
-  }
-  const keys = [...names.keys()];
-  const itemOf = new Map<string, string>();
-  for (let i = 0; i < keys.length; i += 1_000) {
-    const chunk = keys.slice(i, i + 1_000);
-    await tx
-      .insert(items)
-      .values(chunk.map((key) => ({ tenantId, key, name: names.get(key) ?? key })))
-      .onConflictDoNothing();
-    const found = await tx
-      .select({ id: items.id, key: items.key })
-      .from(items)
-      .where(and(eq(items.tenantId, tenantId), inArray(items.key, chunk)));
-    for (const f of found) itemOf.set(f.key, f.id);
-  }
+  const itemOf = await ensureItems(
+    tx,
+    tenantId,
+    lines.map((l) => ({ key: l.key, name: l.line.item.name })),
+  );
 
   const lineRows = lines.map(({ source, line, position, key }) => {
     const allowances = line.allowances.filter((a) => a.amount !== undefined);
@@ -195,6 +187,38 @@ async function project(tx: Tx, tenantId: string, sources: Source[], now: Date) {
   for (let i = 0; i < lineRows.length; i += 1_000) {
     await tx.insert(docLines).values(lineRows.slice(i, i + 1_000));
   }
+}
+
+/**
+ * The articles' ids, each created on first sight and never renamed (the name it was first seen with).
+ * Shared with the sheets of the workbook (src/sources.ts).
+ */
+export async function ensureItems(
+  tx: Tx,
+  tenantId: string,
+  seen: readonly { key: string | null; name: string | undefined }[],
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  for (const s of seen) {
+    if (s.key && !names.has(s.key)) {
+      names.set(s.key, clean(s.name) ?? s.key.replace(/^.*?(ref|name):/, ''));
+    }
+  }
+  const keys = [...names.keys()];
+  const itemOf = new Map<string, string>();
+  for (let i = 0; i < keys.length; i += 1_000) {
+    const chunk = keys.slice(i, i + 1_000);
+    await tx
+      .insert(items)
+      .values(chunk.map((key) => ({ tenantId, key, name: names.get(key) ?? key })))
+      .onConflictDoNothing();
+    const found = await tx
+      .select({ id: items.id, key: items.key })
+      .from(items)
+      .where(and(eq(items.tenantId, tenantId), inArray(items.key, chunk)));
+    for (const f of found) itemOf.set(f.key, f.id);
+  }
+  return itemOf;
 }
 
 const BATCH = 200;

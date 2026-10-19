@@ -96,22 +96,18 @@ async function company() {
 
 describe('item keys', () => {
   it("reads the company's own reference first, else the name", () => {
-    const base = { allowances: [], charges: [], price: {}, vat: {} };
-    const sold = { ...base, item: { name: 'Journée  de Conseil.', sellerId: ' ab-12 ' } };
-    expect(itemKey('out', sold, null)).toBe('ref:AB-12');
-    expect(itemKey('out', { ...base, item: { name: 'Journée  de Conseil.' } }, null)).toBe(
-      'name:journee de conseil',
+    expect(itemKey('out', { name: 'Journée  de Conseil.', sellerId: ' ab-12 ' }, null)).toBe(
+      'ref:AB-12',
     );
-    expect(itemKey('out', { ...base, item: {} }, null)).toBeNull();
+    expect(itemKey('out', { name: 'Journée  de Conseil.' }, null)).toBe('name:journee de conseil');
+    expect(itemKey('out', {}, null)).toBeNull();
     // Bought: the company's reference is the buyer's identifier; else the supplier's article.
-    const bought = { ...base, item: { name: 'Vis M6', sellerId: 'V-6', buyerId: 'ab-12' } };
+    const bought = { name: 'Vis M6', sellerId: 'V-6', buyerId: 'ab-12' };
     expect(itemKey('in', bought, '300000004')).toBe('ref:AB-12');
-    expect(
-      itemKey('in', { ...bought, item: { name: 'Vis M6', sellerId: 'V-6' } }, '300000004'),
-    ).toBe('supplier:300000004:ref:V-6');
-    expect(itemKey('in', { ...base, item: { name: 'Vis M6' } }, '300000004')).toBe(
-      'supplier:300000004:name:vis m6',
+    expect(itemKey('in', { name: 'Vis M6', sellerId: 'V-6' }, '300000004')).toBe(
+      'supplier:300000004:ref:V-6',
     );
+    expect(itemKey('in', { name: 'Vis M6' }, '300000004')).toBe('supplier:300000004:name:vis m6');
     expect(normalizeName('Œuvre — Été 2026 !')).toBe('œuvre ete 2026');
   });
 });

@@ -22,6 +22,7 @@ import {
   invoices,
   isNull,
   items,
+  layoutProfiles,
   lt,
   magicLinks,
   or,
@@ -31,6 +32,7 @@ import {
   sessions,
   sheetMappings,
   signupRequests,
+  sources,
   sql,
   type TenantRow,
   tenants,
@@ -81,6 +83,8 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     articles,
     documents,
     lines,
+    profiles,
+    sheets,
   ] = await Promise.all([
     db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
     db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
@@ -135,7 +139,18 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       .from(docLines)
       .where(eq(docLines.tenantId, tenant.id))
       .orderBy(asc(docLines.docId), asc(docLines.position)),
+    db
+      .select()
+      .from(layoutProfiles)
+      .where(eq(layoutProfiles.tenantId, tenant.id))
+      .orderBy(asc(layoutProfiles.createdAt)),
+    db
+      .select()
+      .from(sources)
+      .where(eq(sources.tenantId, tenant.id))
+      .orderBy(asc(sources.workbookId), asc(sources.sheet)),
   ]);
+  const sheetOf = new Map(sheets.map((s) => [s.id, s.sheet]));
   const itemKeys = new Map(articles.map((a) => [a.id, a.key]));
   const linesOf = new Map<string, typeof lines>();
   for (const l of lines) {
@@ -170,6 +185,22 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       sheet: m.sheet,
       mapping: m.mapping,
       updatedAt: m.updatedAt.toISOString(),
+    })),
+    /** The layouts the company confirmed for its other sheets, and the sheets it included. */
+    layoutProfiles: profiles.map((p) => ({
+      kind: p.kind,
+      layout: p.layout,
+      version: p.version,
+      confirmedAt: p.confirmedAt.toISOString(),
+    })),
+    includedSheets: sheets.map((s) => ({
+      workbookId: s.workbookId,
+      sheet: s.sheet,
+      kind: s.kind,
+      layout: s.layout,
+      consentedAt: s.consentedAt.toISOString(),
+      readAt: s.readAt?.toISOString() ?? null,
+      stats: s.stats,
     })),
     invoices: rows.map((r) => ({
       ...invoiceSummary(r),
@@ -219,13 +250,20 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     customers: customers.map(partyView),
     /** The ten-year register; the documents themselves are the invoices above and their XML. */
     archive,
-    /** The invoices above and the received ones, line by line, with the article of each line. */
+    /**
+     * The invoices above, the received ones and the documents of the included sheets, line by line,
+     * with the article of each line.
+     */
     registry: {
       items: articles.map((a) => ({ key: a.key, name: a.name })),
       documents: documents.map((d) => ({
         direction: d.direction,
+        kind: d.kind,
         invoiceId: d.invoiceId,
         inboundId: d.inboundId,
+        sheet: d.sourceId ? (sheetOf.get(d.sourceId) ?? null) : null,
+        sheetKey: d.sourceKey,
+        orderRef: d.orderRef,
         isTest: d.isTest,
         typeCode: d.typeCode,
         number: d.number,
@@ -298,6 +336,9 @@ export async function deleteTenant(
     await tx.delete(docLines).where(eq(docLines.tenantId, tenant.id));
     await tx.delete(docs).where(eq(docs.tenantId, tenant.id));
     await tx.delete(items).where(eq(items.tenantId, tenant.id));
+    // The sheets' layouts and consents go with the account; their documents went with the registry.
+    await tx.delete(sources).where(eq(sources.tenantId, tenant.id));
+    await tx.delete(layoutProfiles).where(eq(layoutProfiles.tenantId, tenant.id));
     // Chasing drafts quote the customer: no plan outlives the deletion, and the advice notes kept
     // on transmitted invoices lose their drafted reply.
     await tx.delete(chasePlans).where(eq(chasePlans.tenantId, tenant.id));

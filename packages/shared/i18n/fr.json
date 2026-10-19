@@ -49,6 +49,8 @@
   "api.error.scenario_not_now": "Cette simulation ne s'applique pas à une facture au statut « {status} ». Rien n'a été modifié. Choisissez une autre simulation ou envoyez une nouvelle facture de test.",
   "api.error.scenario_unavailable": "La plateforme de test ne répond pas. Rien n'a été modifié. Réessayez dans quelques instants.",
   "api.error.mapping_not_found": "Aucune correspondance de colonnes n'est enregistrée pour cette feuille. Rien n'a été modifié. Lancez la détection des colonnes.",
+  "api.error.source_not_found": "Cette feuille ne fait pas partie de la vérification. Rien n'a été modifié. Ouvrez l'onglet « Registre » et choisissez « Inclure cette feuille ».",
+  "api.error.layout_kind_unsupported": "Seules les feuilles de commandes, de bons de livraison, d'achats et de tarifs peuvent être incluses. Rien n'a été enregistré. Choisissez le type de la feuille, ou laissez-la de côté.",
   "api.error.byok_disabled": "L'utilisation de votre propre clé d'assistant n'est pas disponible sur ce serveur. Rien n'a été enregistré. Gardez l'assistant inclus ou désactivez-le.",
   "api.error.ai_probe": "Le test de connexion à l'assistant a échoué. {problem}",
   "api.error.confirm_mismatch": "Le SIREN saisi n'est pas celui de votre entreprise. Rien n'a été supprimé. Saisissez le SIREN de votre entreprise pour confirmer.",
