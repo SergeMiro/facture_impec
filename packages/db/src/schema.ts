@@ -8,9 +8,10 @@ import type {
   InvoiceDefaultsInput,
   InvoiceDraft,
   Issue,
+  LayoutMapping,
   SheetMapping,
 } from '@fi/core';
-import { INBOUND_STATES, STATES } from '@fi/core';
+import { DOC_KINDS, INBOUND_STATES, STATES } from '@fi/core';
 import { BILLING_INTERVALS, BILLING_STATUSES, PLANS, type Plan, type WhiteLabel } from '@fi/shared';
 import { sql } from 'drizzle-orm';
 import {
@@ -652,6 +653,78 @@ export const invoiceArchive = pgTable(
   ],
 );
 
+// ── Sheets of the workbook (R1) ────────────────────────────────────────────────────────────────
+// The company's other sheets (orders, delivery notes, purchases, price lists) feed the registry once
+// it says « Inclure cette feuille ». Nothing is read from a sheet it did not include.
+
+/** A layout the company confirmed, found again for any sheet with the same header row. */
+export const layoutProfiles = pgTable(
+  'layout_profiles',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    /** SHA-256 of the header row's labels and columns (core `headerSignature`). */
+    fingerprint: text('fingerprint').notNull(),
+    kind: text('kind', { enum: DOC_KINDS }).notNull(),
+    layout: jsonb('layout_json').$type<LayoutMapping>().notNull(),
+    /** The user who confirmed it, or `key` for the API key. */
+    confirmedBy: text('confirmed_by').notNull(),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }).notNull(),
+    /** Raised each time the company confirms it again with changes. */
+    version: integer('version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('layout_profiles_fingerprint').on(t.tenantId, t.fingerprint)],
+);
+
+/** One sheet the company included: where it is, how it reads, when it was last read. */
+export const sources = pgTable(
+  'sources',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    type: text('type', { enum: ['sheet'] })
+      .notNull()
+      .default('sheet'),
+    workbookId: text('workbook_id').notNull(),
+    sheet: text('sheet').notNull(),
+    profileId: uuid('profile_id').references(() => layoutProfiles.id),
+    kind: text('kind', { enum: DOC_KINDS }).notNull(),
+    /** Its own copy: a profile confirmed again later does not change a sheet already read. */
+    layout: jsonb('layout_json').$type<LayoutMapping>().notNull(),
+    /** Of its header row: rows inserted above it move the header, found again by this. */
+    fingerprint: text('fingerprint'),
+    /** « Inclure cette feuille »: when, and who. */
+    consentedAt: timestamp('consented_at', { withTimezone: true }).notNull(),
+    consentedBy: text('consented_by').notNull(),
+    /** SHA-256 of the last snapshot read: the same one again changes nothing. */
+    etag: text('etag'),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    /** The last read that changed the registry. */
+    changedAt: timestamp('changed_at', { withTimezone: true }),
+    stats: jsonb('stats_json').$type<SourceStats>(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('sources_sheet').on(t.tenantId, t.workbookId, t.sheet)],
+);
+
+/** What the last read of a sheet found. */
+export interface SourceStats {
+  docs: number;
+  lines: number;
+  rows: number;
+  ignoredRows: number;
+  unreadRows: number;
+  /** False when no row of the sheet has the confirmed headers any more: it was read as before. */
+  headerFound: boolean;
+}
+
 // ── Registry (R0) ───────────────────────────────────────────────────────────────────────────────
 // Every invoice of the company, sent or received, as a document and its lines, each line tied to the
 // article it is about: what the checks of documents together read. Derived data, written only by the
@@ -682,10 +755,16 @@ export const docs = pgTable(
     tenantId: uuid('tenant_id')
       .notNull()
       .references(() => tenants.id),
-    /** out: an invoice of the company; in: one it received. */
+    /** out: an invoice of the company, an order or a delivery to a customer, its prices; in: bought. */
     direction: text('direction', { enum: ['out', 'in'] }).notNull(),
+    kind: text('kind', { enum: ['invoice', ...DOC_KINDS] })
+      .notNull()
+      .default('invoice'),
     invoiceId: uuid('invoice_id').references(() => invoices.id),
     inboundId: uuid('inbound_id').references(() => inboundQueue.id),
+    /** A document read from an included sheet: the sheet, and its key there (number, or `row:14`). */
+    sourceId: uuid('source_id').references(() => sources.id, { onDelete: 'cascade' }),
+    sourceKey: text('source_key'),
     isTest: boolean('is_test').notNull(),
     typeCode: text('type_code'),
     number: text('number'),
@@ -694,15 +773,18 @@ export const docs = pgTable(
     partySiren: text('party_siren'),
     partyName: text('party_name'),
     currency: text('currency'),
-    /** BT-109. */
+    /** On a delivery note: the order it delivers. */
+    orderRef: text('order_ref'),
+    /** BT-109; on a sheet document, the sum of its lines when every one has an amount. */
     netTotal: cents('net_total'),
-    /** What the lines were read from (the invoice's fingerprint): another one projects them again. */
+    /** What the lines were read from (the invoice's fingerprint, a sheet document's hash): another one projects them again. */
     sourceVersion: text('source_version').notNull(),
     updatedAt: updatedAt(),
   },
   (t) => [
     uniqueIndex('docs_invoice').on(t.invoiceId),
     uniqueIndex('docs_inbound').on(t.inboundId),
+    uniqueIndex('docs_source').on(t.sourceId, t.sourceKey),
     index('docs_tenant').on(t.tenantId, t.direction, t.issueDate),
   ],
 );
@@ -763,3 +845,5 @@ export type ArchiveRow = typeof invoiceArchive.$inferSelect;
 export type ItemRow = typeof items.$inferSelect;
 export type DocRow = typeof docs.$inferSelect;
 export type DocLineRow = typeof docLines.$inferSelect;
+export type LayoutProfileRow = typeof layoutProfiles.$inferSelect;
+export type SourceRow = typeof sources.$inferSelect;

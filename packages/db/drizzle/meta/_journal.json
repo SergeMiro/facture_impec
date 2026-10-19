@@ -71,6 +71,13 @@
       "when": 1792419338608,
       "tag": "0009_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792424194086,
+      "tag": "0010_sources",
+      "breakpoints": true
     }
   ]
 }
