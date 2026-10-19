@@ -12,6 +12,8 @@ import {
   billingUsage,
   chasePlans,
   type Db,
+  docLines,
+  docs,
   eq,
   inArray,
   inboundExports,
@@ -19,6 +21,7 @@ import {
   invoiceEvents,
   invoices,
   isNull,
+  items,
   lt,
   magicLinks,
   or,
@@ -75,6 +78,9 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     usage,
     customers,
     archive,
+    articles,
+    documents,
+    lines,
   ] = await Promise.all([
     db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
     db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
@@ -118,7 +124,25 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       .where(eq(parties.tenantId, tenant.id))
       .orderBy(asc(parties.legalName)),
     archiveRegister(db, tenant.id),
+    db.select().from(items).where(eq(items.tenantId, tenant.id)).orderBy(asc(items.key)),
+    db
+      .select()
+      .from(docs)
+      .where(eq(docs.tenantId, tenant.id))
+      .orderBy(asc(docs.direction), asc(docs.issueDate), asc(docs.number)),
+    db
+      .select()
+      .from(docLines)
+      .where(eq(docLines.tenantId, tenant.id))
+      .orderBy(asc(docLines.docId), asc(docLines.position)),
   ]);
+  const itemKeys = new Map(articles.map((a) => [a.id, a.key]));
+  const linesOf = new Map<string, typeof lines>();
+  for (const l of lines) {
+    const list = linesOf.get(l.docId);
+    if (list) list.push(l);
+    else linesOf.set(l.docId, [l]);
+  }
   const ids = rows.map((r) => r.id);
   const events = ids.length
     ? await db
@@ -195,6 +219,27 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     customers: customers.map(partyView),
     /** The ten-year register; the documents themselves are the invoices above and their XML. */
     archive,
+    /** The invoices above and the received ones, line by line, with the article of each line. */
+    registry: {
+      items: articles.map((a) => ({ key: a.key, name: a.name })),
+      documents: documents.map((d) => ({
+        direction: d.direction,
+        invoiceId: d.invoiceId,
+        inboundId: d.inboundId,
+        isTest: d.isTest,
+        typeCode: d.typeCode,
+        number: d.number,
+        issueDate: d.issueDate,
+        partySiren: d.partySiren,
+        partyName: d.partyName,
+        currency: d.currency,
+        netTotal: d.netTotal,
+        lines: (linesOf.get(d.id) ?? []).map(({ id, docId, tenantId, itemId, ...line }) => ({
+          ...line,
+          item: itemId ? (itemKeys.get(itemId) ?? null) : null,
+        })),
+      })),
+    },
     agentRuns: runs.map((r) => ({
       agent: r.agent,
       provider: r.provider,
@@ -249,6 +294,10 @@ export async function deleteTenant(
         ),
       );
     const ids = gone.map((r) => r.id);
+    // The registry is rebuilt from the invoices at any time; nothing reads it once the account is gone.
+    await tx.delete(docLines).where(eq(docLines.tenantId, tenant.id));
+    await tx.delete(docs).where(eq(docs.tenantId, tenant.id));
+    await tx.delete(items).where(eq(items.tenantId, tenant.id));
     // Chasing drafts quote the customer: no plan outlives the deletion, and the advice notes kept
     // on transmitted invoices lose their drafted reply.
     await tx.delete(chasePlans).where(eq(chasePlans.tenantId, tenant.id));

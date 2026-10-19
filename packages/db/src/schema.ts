@@ -652,6 +652,94 @@ export const invoiceArchive = pgTable(
   ],
 );
 
+// ── Registry (R0) ───────────────────────────────────────────────────────────────────────────────
+// Every invoice of the company, sent or received, as a document and its lines, each line tied to the
+// article it is about: what the checks of documents together read. Derived data, written only by the
+// registry.refresh job (apps/api/src/registry.ts) from `invoices` and `inbound_queue`, and rebuilt
+// from them at any time.
+
+/** An article of the company: its own reference (BT-155 sold, BT-156 bought), else its name. */
+export const items = pgTable(
+  'items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    /** `ref:<reference>`, `name:<normalized name>`, or a supplier's article `supplier:<key>:…`. */
+    key: text('key').notNull(),
+    /** As first seen. */
+    name: text('name').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('items_key').on(t.tenantId, t.key)],
+);
+
+export const docs = pgTable(
+  'docs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    /** out: an invoice of the company; in: one it received. */
+    direction: text('direction', { enum: ['out', 'in'] }).notNull(),
+    invoiceId: uuid('invoice_id').references(() => invoices.id),
+    inboundId: uuid('inbound_id').references(() => inboundQueue.id),
+    isTest: boolean('is_test').notNull(),
+    typeCode: text('type_code'),
+    number: text('number'),
+    issueDate: date('issue_date', { mode: 'string' }),
+    /** The other company: the customer of an outgoing invoice, the supplier of a received one. */
+    partySiren: text('party_siren'),
+    partyName: text('party_name'),
+    currency: text('currency'),
+    /** BT-109. */
+    netTotal: cents('net_total'),
+    /** What the lines were read from (the invoice's fingerprint): another one projects them again. */
+    sourceVersion: text('source_version').notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('docs_invoice').on(t.invoiceId),
+    uniqueIndex('docs_inbound').on(t.inboundId),
+    index('docs_tenant').on(t.tenantId, t.direction, t.issueDate),
+  ],
+);
+
+export const docLines = pgTable(
+  'doc_lines',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    docId: uuid('doc_id')
+      .notNull()
+      .references(() => docs.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    /** In the document's order, from 0. */
+    position: integer('position').notNull(),
+    itemId: uuid('item_id').references(() => items.id),
+    lineId: text('line_id'), // BT-126
+    name: text('name'), // BT-153
+    sellerRef: text('seller_ref'), // BT-155
+    buyerRef: text('buyer_ref'), // BT-156
+    standardId: text('standard_id'), // BT-157
+    quantity: text('quantity'), // BT-129, decimal as written
+    unitCode: text('unit_code'), // BT-130
+    netPrice: text('net_price'), // BT-146, decimal as written
+    /** The line's allowances (BT-136), summed. */
+    discount: cents('discount'),
+    netAmount: cents('net_amount'), // BT-131
+    vatCategory: text('vat_category'), // BT-151
+    vatRate: text('vat_rate'), // BT-152
+    orderLineRef: text('order_line_ref'), // BT-132
+    /** The sheet cell of the line's designation, for an invoice made from a sheet. */
+    cell: text('cell'),
+  },
+  (t) => [index('doc_lines_doc').on(t.docId), index('doc_lines_item').on(t.tenantId, t.itemId)],
+);
+
 /** Stripe events already applied: an endpoint may receive the same event twice (docs/BILLING.md). */
 export const stripeEvents = pgTable('stripe_events', {
   id: text('id').primaryKey(),
@@ -672,3 +760,6 @@ export type ChasePlanRow = typeof chasePlans.$inferSelect;
 export type PaymentReportRow = typeof paymentReports.$inferSelect;
 export type PartyRow = typeof parties.$inferSelect;
 export type ArchiveRow = typeof invoiceArchive.$inferSelect;
+export type ItemRow = typeof items.$inferSelect;
+export type DocRow = typeof docs.$inferSelect;
+export type DocLineRow = typeof docLines.$inferSelect;

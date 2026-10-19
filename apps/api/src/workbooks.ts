@@ -344,6 +344,8 @@ export async function syncSheet(
   const statuses: RowStatus[] = [];
   const checked: { id: string; fingerprint: string; key: string }[] = [];
   const unknown: { at: number; row: SheetRow; shown: Shown; notes: string[] }[] = [];
+  // An invoice created, written or cancelled: the registry follows (src/registry.ts).
+  let changed = removed.length > 0;
   for (const [i, row] of rows.entries()) {
     const target = matched[i];
     try {
@@ -363,6 +365,7 @@ export async function syncSheet(
           parties: book,
           history: { index: history, self: `new:${i}` },
         });
+        changed = true;
         if (created.issues) {
           statuses.push(rowStatus(created.row, row.sheetInvoice, created.issues, notes));
         } else {
@@ -380,6 +383,7 @@ export async function syncSheet(
         last: last.get(target.id),
       });
       if (saved.kind === 'saved') {
+        changed = true;
         const issues = saved.issues ?? last.get(target.id) ?? [];
         statuses.push(rowStatus(saved.row, row.sheetInvoice, issues, notes));
         continue;
@@ -403,6 +407,7 @@ export async function syncSheet(
       if (!(e instanceof ApiError)) throw e;
     });
   }
+  if (changed) await deps.jobs.enqueueRegistry(tenant.id);
   if (unknown.length > 0) {
     const found = await latestIssues(
       deps.db,

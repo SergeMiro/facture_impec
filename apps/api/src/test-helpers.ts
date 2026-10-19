@@ -70,6 +70,8 @@ export interface RecordedJobs extends Jobs {
   syncs: SyncTarget[];
   monitors: string[];
   payments: string[];
+  /** Companies whose registry refresh was queued. */
+  registry: string[];
 }
 
 export function recordedJobs(): RecordedJobs {
@@ -77,11 +79,13 @@ export function recordedJobs(): RecordedJobs {
   const syncs: SyncTarget[] = [];
   const monitors: string[] = [];
   const payments: string[] = [];
+  const registry: string[] = [];
   return {
     sends,
     syncs,
     monitors,
     payments,
+    registry,
     async enqueueSend(id) {
       sends.push(id);
     },
@@ -93,6 +97,9 @@ export function recordedJobs(): RecordedJobs {
     },
     async enqueueReportPayment(id) {
       payments.push(id);
+    },
+    async enqueueRegistry(tenantId) {
+      registry.push(tenantId);
     },
   };
 }

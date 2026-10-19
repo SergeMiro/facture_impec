@@ -49,6 +49,7 @@ import { QUEUES } from './jobs';
 import { ADVISED, awaitingAdvice, runMonitor } from './monitor';
 import { runReportPayment } from './payments';
 import { adapterFor, awaitsGoLive, routeFor } from './platform';
+import { refreshRegistry, registryBehind } from './registry';
 import { runWeeklyReports } from './report';
 import { purgeExpired } from './rgpd';
 
@@ -72,6 +73,7 @@ export interface WorkerDeps {
 
 const SendJob = z.object({ invoiceId: z.uuid() });
 const InvoiceJob = SendJob;
+const RegistryJob = z.object({ tenantId: z.uuid() });
 const SyncJob = z.object({
   provider: z.enum(PDP_PROVIDERS),
   account: z.string().min(1),
@@ -275,11 +277,15 @@ export async function runSync(deps: WorkerDeps, target: SyncTarget): Promise<voi
 
 /**
  * Refreshes every invoice the platform still has news about, re-queues unfinished sends, and queues
- * the advice and payment reports whose job was lost.
+ * the advice, payment reports and registry refreshes whose job was lost.
  */
-export async function runSweep(
-  deps: WorkerDeps,
-): Promise<{ synced: number; sends: number; advice: number; payments: number }> {
+export async function runSweep(deps: WorkerDeps): Promise<{
+  synced: number;
+  sends: number;
+  advice: number;
+  payments: number;
+  registry: number;
+}> {
   const inFlight = await deps.db
     .select({
       pdpRef: invoices.pdpRef,
@@ -308,11 +314,14 @@ export async function runSweep(
     .from(paymentReports)
     .where(eq(paymentReports.status, 'pending'));
   for (const p of payments) await deps.jobs.enqueueReportPayment(p.id);
+  const behind = await registryBehind(deps.db);
+  for (const tenantId of behind) await deps.jobs.enqueueRegistry(tenantId);
   return {
     synced: inFlight.length,
     sends: unfinished.length,
     advice: advice.length,
     payments: payments.length,
+    registry: behind.length,
   };
 }
 
@@ -454,6 +463,9 @@ export async function startWorkers(
   });
   await boss.work(QUEUES.reportPayment, polling, async ([job]) => {
     if (job) await runReportPayment(deps, InvoiceJob.parse(job.data).invoiceId);
+  });
+  await boss.work(QUEUES.registry, polling, async ([job]) => {
+    if (job) await refreshRegistry(deps.db, RegistryJob.parse(job.data).tenantId, deps.now());
   });
   const tick = () =>
     boss

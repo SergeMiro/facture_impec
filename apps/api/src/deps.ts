@@ -39,6 +39,8 @@ export interface Jobs {
   enqueueMonitor(invoiceId: string): Promise<void>;
   /** Report a payment the user recorded to the platform (src/payments.ts). */
   enqueueReportPayment(invoiceId: string): Promise<void>;
+  /** Bring a company's registry up to date (src/registry.ts). */
+  enqueueRegistry(tenantId: string): Promise<void>;
 }
 
 export interface AiDeps {

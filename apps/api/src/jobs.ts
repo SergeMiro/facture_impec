@@ -15,6 +15,8 @@ export const QUEUES = {
   monitor: 'invoice.monitor',
   /** « Encaissée » reported to the platform. */
   reportPayment: 'invoice.report_payment',
+  /** A company's registry brought up to date. `stately` per company: one running + one queued. */
+  registry: 'registry.refresh',
 } as const;
 
 export function createBoss(database: Database): PgBoss {
@@ -57,6 +59,14 @@ export async function ensureQueues(boss: PgBoss): Promise<void> {
     retryDelayMax: 600,
     expireInSeconds: 120,
   });
+  // 50 000 lines take seconds (docs/PROGRESS.md R0); a retry starts again from what is left.
+  await boss.createQueue(QUEUES.registry, {
+    policy: 'stately',
+    retryLimit: 3,
+    retryDelay: 5,
+    retryBackoff: true,
+    expireInSeconds: 600,
+  });
 }
 
 export const syncKey = (target: SyncTarget) =>
@@ -75,6 +85,9 @@ export function bossJobs(boss: PgBoss): Jobs {
     },
     async enqueueReportPayment(invoiceId) {
       await boss.send(QUEUES.reportPayment, { invoiceId }, { singletonKey: invoiceId });
+    },
+    async enqueueRegistry(tenantId) {
+      await boss.send(QUEUES.registry, { tenantId }, { singletonKey: tenantId });
     },
   };
 }

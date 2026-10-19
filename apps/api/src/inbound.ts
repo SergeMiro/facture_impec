@@ -44,7 +44,7 @@ import {
 import { t } from '@fi/shared';
 import { z } from 'zod';
 import type { Principal } from './auth';
-import type { ApiDeps } from './deps';
+import type { ApiDeps, Jobs } from './deps';
 import { ApiError } from './errors';
 import { TEST_PREFIX } from './invoices';
 import { assertTestMode } from './workbooks';
@@ -64,12 +64,12 @@ const who = (principal: Principal) => (principal.kind === 'session' ? principal.
  * that a duplicate is compared with the invoice it repeats. Returns how many were triaged.
  */
 export async function triagePending(
-  deps: { db: Db; now: () => Date },
+  deps: { db: Db; now: () => Date; jobs: Pick<Jobs, 'enqueueRegistry'> },
   tenantId?: string,
   log: (message: string) => void = () => {},
 ): Promise<number> {
   const pending = await deps.db
-    .select({ id: inboundQueue.id })
+    .select({ id: inboundQueue.id, tenantId: inboundQueue.tenantId })
     .from(inboundQueue)
     .where(
       and(
@@ -79,13 +79,19 @@ export async function triagePending(
     )
     .orderBy(asc(inboundQueue.receivedAt), asc(inboundQueue.id));
   let triaged = 0;
-  for (const { id } of pending) {
+  const read = new Set<string>();
+  for (const { id, tenantId: company } of pending) {
     try {
-      if (await deps.db.transaction((tx) => triageOne(tx, id, deps.now()))) triaged++;
+      if (await deps.db.transaction((tx) => triageOne(tx, id, deps.now()))) {
+        triaged++;
+        read.add(company);
+      }
     } catch (e) {
       log(`inbound triage ${id}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
+  // What was read joins the registry (src/registry.ts).
+  for (const company of read) await deps.jobs.enqueueRegistry(company);
   return triaged;
 }
 
