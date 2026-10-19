@@ -34,7 +34,7 @@ interface Synonyms {
   never?: (header: string) => boolean;
 }
 
-const hasWords = (header: string, words: string) => ` ${header} `.includes(` ${words} `);
+export const hasWords = (header: string, words: string) => ` ${header} `.includes(` ${words} `);
 
 /** « Remise % », « Taux de remise »: a percentage, where an amount is expected. */
 export const percentHeader = (header: string) =>
@@ -400,7 +400,7 @@ function findHeaderRow(snapshot: SheetSnapshot): number | undefined {
 }
 
 /** A « TVA » column holds rates when nearly all its values are French rates; else it is an amount. */
-function holdsRates(values: readonly RawCell[]): boolean {
+export function holdsRates(values: readonly RawCell[]): boolean {
   const filled = values.filter((c) => !isBlank(c));
   if (filled.length === 0) return true;
   const rates = filled.filter((c) => {

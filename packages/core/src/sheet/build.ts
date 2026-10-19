@@ -85,7 +85,8 @@ const simple = (text: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 
-const unitOf = (cell: RawCell | undefined) => {
+/** A unit as typed → its UN/ECE Rec 20 code when it is a common French one. */
+export const unitOf = (cell: RawCell | undefined) => {
   const text = textOf(cell);
   return text === undefined ? undefined : (UNITS[simple(text)] ?? text);
 };
