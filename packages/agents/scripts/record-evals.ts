@@ -3,16 +3,18 @@
 //
 //   EVAL_PROVIDER=openai-compatible EVAL_BASE_URL=http://127.0.0.1:47821/v1 EVAL_API_KEY=… \
 //   EVAL_MODEL='auto - Smart models - Hermes' EVAL_LABEL=llmfp-smart \
-//   pnpm --filter @fi/agents eval:record [mapping|explain|monitor]
+//   pnpm --filter @fi/agents eval:record [mapping|layout|explain|monitor]
 //
 // EVAL_GATE=true marks the recording as the one the plan's thresholds apply to.
 
 import { EXPLAIN_FIXTURES } from '../evals/explain.fixtures';
-import { type Recording, ratio, saveRecording, scoreMapping } from '../evals/harness';
+import { type Recording, ratio, saveRecording, scoreLayout, scoreMapping } from '../evals/harness';
+import { LAYOUT_FIXTURES } from '../evals/layout.fixtures';
 import { MAPPING_FIXTURES } from '../evals/mapping.fixtures';
 import { MONITOR_FIXTURES } from '../evals/monitor.fixtures';
 import { aiHandle } from '../src/ai';
 import { EXPLAIN_PROMPT_HASH, explainIssues } from '../src/explain';
+import { LAYOUT_PROMPT_HASH, proposeLayout } from '../src/layout';
 import { MAPPING_PROMPT_HASH, proposeMapping } from '../src/mapping';
 import { adviseNext, MONITOR_PROMPT_HASH } from '../src/monitor';
 import {
@@ -83,6 +85,28 @@ if (which === 'all' || which === 'mapping') {
     ...base,
   });
   console.log(`mapping: ${(ratio(scores) * 100).toFixed(1)} % on core fields → ${file.pathname}`);
+}
+
+if (which === 'all' || which === 'layout') {
+  const answers: Recording['answers'] = {};
+  const scores = [];
+  for (const f of LAYOUT_FIXTURES) {
+    const { layout, degraded } = await proposeLayout(f.snapshot, {
+      tenantId: 'eval',
+      orchestrator,
+      ai,
+    });
+    answers[f.name] = orchestrator.last;
+    const s = scoreLayout(f, layout);
+    scores.push(s);
+    console.log(
+      `${f.name}: ${s.correct}/${s.total}${s.headerOk ? '' : ' (header row)'}${degraded ? ` (${degraded})` : ''} ${s.misses.join('; ')}`,
+    );
+  }
+  const file = saveRecording({ agent: 'layout', promptHash: LAYOUT_PROMPT_HASH, answers, ...base });
+  console.log(
+    `layout: ${(ratio(scores) * 100).toFixed(1)} % on the kind and key fields → ${file.pathname}`,
+  );
 }
 
 if (which === 'all' || which === 'explain') {

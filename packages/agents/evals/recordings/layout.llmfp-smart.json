@@ -1,0 +1,780 @@
+{
+  "agent": "layout",
+  "promptHash": "eccbd1bad2d75c23",
+  "answers": {
+    "order-01-clean": {
+      "kind": "order",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "docNumber",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "docDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "partyName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemRef",
+          "column": "D",
+          "confidence": 0.65
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": []
+    },
+    "order-02-planned-delivery": {
+      "kind": "order",
+      "kindConfidence": 0.95,
+      "headerRow": 4,
+      "mapping": [
+        {
+          "field": "docNumber",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "docDate",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "partyName",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemRef",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": []
+    },
+    "order-03-lines-and-contact": {
+      "kind": "order",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "docNumber",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "docDate",
+          "column": "B",
+          "confidence": 0.9
+        },
+        {
+          "field": "partyName",
+          "column": "C",
+          "confidence": 0.9
+        },
+        {
+          "field": "itemRef",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "F",
+          "confidence": 0.9
+        },
+        {
+          "field": "quantity",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": ["Vérifiez l'absence de colonnes SIREN, Unité, Montant HT, TVA"]
+    },
+    "order-04-generic-name": {
+      "kind": "order",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "docNumber",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "docDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "partyName",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": [
+        "La colonne C (Code client) n'est pas utilisée.",
+        "La colonne G (Reliquat) n'est pas utilisée.",
+        "Les champs unité, montant HT de la ligne, taux de TVA ne sont pas présents."
+      ]
+    },
+    "order-05-customer-reference": {
+      "kind": "order",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "docNumber",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "docDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "partyName",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemRef",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "H",
+          "confidence": 0.95
+        },
+        {
+          "field": "lineNet",
+          "column": "I",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "J",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": []
+    },
+    "delivery-01-clean": {
+      "kind": "delivery",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "docNumber",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "docDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "partyName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": [
+        "La colonne D pourrait être la référence de l'article mais la confiance est faible."
+      ]
+    },
+    "delivery-02-order-number": {
+      "kind": "delivery",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "docNumber",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "orderRef",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "docDate",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "partyName",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": []
+    },
+    "delivery-03-ordered-and-delivered": {
+      "kind": "delivery",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "docNumber",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "docDate",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "partyName",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemRef",
+          "column": "E",
+          "confidence": 0.9
+        },
+        {
+          "field": "itemName",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": [
+        "Vérifiez que la colonne B contient la référence de commande et non la date de commande.",
+        "Absence de colonnes pour l'unité, le prix unitaire, le montant HT, le taux de TVA et le SIREN."
+      ]
+    },
+    "delivery-04-carrier": null,
+    "delivery-05-lines-and-total": {
+      "kind": "delivery",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "docNumber",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "docDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "partyName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemRef",
+          "column": "D",
+          "confidence": 0.85
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": [
+        "Certaines lignes (3 et 6) n'ont pas de numéro de document, de date ou de client ; vérifiez l'association des lignes avec le bon BL."
+      ]
+    },
+    "purchase-01-clean": {
+      "kind": "purchase",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "docNumber",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "docDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "partyName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemRef",
+          "column": "D",
+          "confidence": 0.9
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": []
+    },
+    "purchase-02-sale-price-too": {
+      "kind": "purchase",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "docNumber",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "docDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "partyName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemRef",
+          "column": "D",
+          "confidence": 0.65
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": [
+        "Colonnes H et I non utilisées (PV HT, Marge)",
+        "Champ unité manquant",
+        "Champ montant HT de ligne manquant",
+        "Champ taux de TVA manquant",
+        "Champ commande livrée manquant",
+        "Champ SIREN manquant"
+      ]
+    },
+    "purchase-03-english": {
+      "kind": "purchase",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "docNumber",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "docDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "partyName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemRef",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": []
+    },
+    "purchase-04-abbreviations": {
+      "kind": "purchase",
+      "kindConfidence": 0.95,
+      "headerRow": 3,
+      "mapping": [
+        {
+          "field": "docNumber",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "docDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "partyName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "partySiren",
+          "column": "D",
+          "confidence": 0.85
+        },
+        {
+          "field": "itemRef",
+          "column": "E",
+          "confidence": 0.65
+        },
+        {
+          "field": "itemName",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": [
+        "La colonne I \\'Chantier\\' n'est pas utilisée dans la correspondance.",
+        "La confiance pour la référence d'article est faible."
+      ]
+    },
+    "purchase-05-lines-discount-total": {
+      "kind": "purchase",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "docNumber",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "docDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "partyName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemRef",
+          "column": "D",
+          "confidence": 0.9
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "H",
+          "confidence": 0.95
+        },
+        {
+          "field": "lineNet",
+          "column": "I",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": [
+        "Certaines lignes (par exemple la ligne 3) ne contiennent pas de numéro de commande ou de date.",
+        "La ligne Totaux n'est pas une ligne de données."
+      ]
+    },
+    "price-01-clean": {
+      "kind": "price_list",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "itemRef",
+          "column": "A",
+          "confidence": 0.65
+        },
+        {
+          "field": "itemName",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "unit",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "E",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": []
+    },
+    "price-02-cost-and-sale": {
+      "kind": "price_list",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "itemRef",
+          "column": "A",
+          "confidence": 0.65
+        },
+        {
+          "field": "itemName",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "F",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": ["Colonnes non utilisées : Prix d'achat, Coef., Prix TTC"]
+    },
+    "price-03-sections": {
+      "kind": "price_list",
+      "kindConfidence": 0.95,
+      "headerRow": 4,
+      "mapping": [
+        {
+          "field": "itemRef",
+          "column": "A",
+          "confidence": 0.65
+        },
+        {
+          "field": "itemName",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "unit",
+          "column": "C",
+          "confidence": 0.8
+        },
+        {
+          "field": "unitPrice",
+          "column": "D",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": []
+    },
+    "price-04-generic-name": {
+      "kind": "price_list",
+      "kindConfidence": 0.98,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "itemRef",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "E",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": ["Colonne "]
+    },
+    "price-05-validity-and-supplier": {
+      "kind": "price_list",
+      "kindConfidence": 0.95,
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "itemRef",
+          "column": "A",
+          "confidence": 0.65
+        },
+        {
+          "field": "itemName",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "C",
+          "confidence": 0.95
+        }
+      ],
+      "warnings": [
+        "Colonne F « Fournisseur habituel » non mappée ; elle contient des informations supplémentaires hors champ standard d'un tarif."
+      ]
+    }
+  },
+  "label": "llmfp-smart",
+  "provider": "openai-compatible",
+  "model": "auto - Smart models - Hermes",
+  "recordedAt": "2026-10-19",
+  "gate": false
+}

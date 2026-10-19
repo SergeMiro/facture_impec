@@ -1,8 +1,9 @@
 // Replays recorded model answers through the real agents (guardrails included) and scores them.
 // A recording made with another prompt fails: re-record with `pnpm --filter @fi/agents eval:record`.
-import { detectMapping } from '@fi/core';
+import { detectLayout, detectMapping } from '@fi/core';
 import { describe, expect, it } from 'vitest';
 import { EXPLAIN_PROMPT_HASH, explainIssues } from '../src/explain';
+import { LAYOUT_PROMPT_HASH, proposeLayout } from '../src/layout';
 import { MAPPING_PROMPT_HASH, proposeMapping } from '../src/mapping';
 import { adviseNext, MONITOR_PROMPT_HASH } from '../src/monitor';
 import {
@@ -13,7 +14,8 @@ import {
   textResult,
 } from '../src/test-model';
 import { EXPLAIN_FIXTURES } from './explain.fixtures';
-import { loadRecordings, ratio, scoreMapping } from './harness';
+import { loadRecordings, ratio, scoreLayout, scoreMapping } from './harness';
+import { LAYOUT_FIXTURES } from './layout.fixtures';
 import { MAPPING_FIXTURES } from './mapping.fixtures';
 import { MONITOR_FIXTURES } from './monitor.fixtures';
 
@@ -53,6 +55,49 @@ describe('MappingAgent eval fixtures', () => {
             ai: handleFor(replayModel(answer), false),
           });
           scores.push(scoreMapping(f, mapping));
+        }
+        if (rec.gate) expect(ratio(scores)).toBeGreaterThanOrEqual(0.95);
+        else expect(ratio(scores)).toBeGreaterThan(0);
+      });
+    });
+  }
+});
+
+describe('LayoutAgent eval fixtures', () => {
+  it('are 20 sheets, five of each kind', () => {
+    expect(LAYOUT_FIXTURES).toHaveLength(20);
+    expect(new Set(LAYOUT_FIXTURES.map((f) => f.name)).size).toBe(20);
+    for (const kind of ['order', 'delivery', 'purchase', 'price_list'])
+      expect(
+        LAYOUT_FIXTURES.filter((f) => f.expected.kind === kind),
+        kind,
+      ).toHaveLength(5);
+  });
+
+  it('header dictionary alone (the fallback): score kept as the baseline', () => {
+    const scores = LAYOUT_FIXTURES.map((f) => scoreLayout(f, detectLayout(f.snapshot)));
+    // Not a gate, and optimistic: the dictionary was tuned next to these sheets. In AI_PROVIDERS.md.
+    expect(ratio(scores)).toBeGreaterThan(0.9);
+  });
+
+  for (const rec of loadRecordings('layout')) {
+    describe(`recording ${rec.label} (${rec.provider} / ${rec.model})`, () => {
+      it('was made with the current prompt', () => {
+        expect(rec.promptHash, 'prompts/layout.md or its schema changed: re-record').toBe(
+          LAYOUT_PROMPT_HASH,
+        );
+      });
+
+      it(`scores ${rec.gate ? '≥ 95 %' : '(not gating)'} on the kind and the key fields`, async () => {
+        const scores = [];
+        for (const f of LAYOUT_FIXTURES) {
+          const { orchestrator } = testOrchestrator({ retries: 0 });
+          const { layout } = await proposeLayout(f.snapshot, {
+            tenantId: 't',
+            orchestrator,
+            ai: handleFor(replayModel(rec.answers[f.name] ?? null), false),
+          });
+          scores.push(scoreLayout(f, layout));
         }
         if (rec.gate) expect(ratio(scores)).toBeGreaterThanOrEqual(0.95);
         else expect(ratio(scores)).toBeGreaterThan(0);

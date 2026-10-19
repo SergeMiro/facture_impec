@@ -93,15 +93,19 @@ const PERSONAL_FIELDS: Partial<Record<string, TokenKind>> = {
 const PERSONAL_HEADER =
   /\b(client|cli|clt|qui|nom|raison sociale|rs|destinataire|dest|societe|ste|ets|etablissement|enseigne|entreprise|acheteur|payeur|contact|interlocuteur|adresse|adr|rue|e ?mail|mail|courriel|tel|telephone|portable|mobile|iban|rib|siren|siret|tva intra|customer|client name|buyer|name|address|phone)\b/;
 
+/** True when a header (normalized) announces personal values. */
+export const personalHeader = (header: string) => PERSONAL_HEADER.test(header);
+
 /**
  * The sheet as MappingAgent sees it. Header cells stay as written. Below the header, a column the
  * heuristic maps to a personal field, or whose header announces one, is masked as a whole; other
- * cells go through the pattern detectors.
+ * cells go through the pattern detectors. LayoutAgent passes a wider `isPersonal` (supplier columns).
  */
 export function maskSnapshot(
   p: Pseudonymizer,
   snapshot: SheetSnapshot,
   hint: Pick<SheetMapping, 'headerRow' | 'mapping'>,
+  isPersonal: (header: string) => boolean = personalHeader,
 ): SheetSnapshot {
   const personal = new Map<string, TokenKind>();
   for (const [field, m] of Object.entries(hint.mapping)) {
@@ -110,7 +114,7 @@ export function maskSnapshot(
   }
   const header = snapshot.rows.find((r) => r.row === hint.headerRow);
   for (const cell of header?.cells ?? []) {
-    if (!personal.has(cell.col) && PERSONAL_HEADER.test(normalizeHeader(cell.text)))
+    if (!personal.has(cell.col) && isPersonal(normalizeHeader(cell.text)))
       personal.set(cell.col, 'PARTY');
   }
   return {

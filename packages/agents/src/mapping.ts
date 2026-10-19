@@ -37,7 +37,8 @@ export const MappingAnswer = z.object({
 export type MappingAnswer = z.infer<typeof MappingAnswer>;
 
 const SYSTEM = readPrompt('mapping.md');
-const TOOL_DESCRIPTION =
+/** Shared with LayoutAgent: one tool, one description in both prompt hashes. */
+export const TOOL_DESCRIPTION =
   'Shows up to 15 distinct values of one column below a header row, with counts of numbers and dates.';
 export const MAPPING_PROMPT_HASH = promptHash(SYSTEM, MappingAnswer, [TOOL_DESCRIPTION]);
 
@@ -62,7 +63,7 @@ export interface MappingContext {
   signal?: AbortSignal;
 }
 
-const clip = (s: string) => (s.length > CELL_CHARS ? `${s.slice(0, CELL_CHARS)}…` : s);
+export const clip = (s: string) => (s.length > CELL_CHARS ? `${s.slice(0, CELL_CHARS)}…` : s);
 
 /** The user message: sheet, field list, the dictionary's hint and the first rows. */
 export function mappingPrompt(masked: SheetSnapshot, hint: SheetMapping, locale: string): string {
@@ -91,7 +92,7 @@ export function mappingPrompt(masked: SheetSnapshot, hint: SheetMapping, locale:
   });
 }
 
-function sampleTool(masked: SheetSnapshot) {
+export function sampleTool(masked: SheetSnapshot) {
   return tool({
     description: TOOL_DESCRIPTION,
     inputSchema: z.object({ column: z.string(), headerRow: z.number() }),
@@ -114,13 +115,14 @@ function sampleTool(masked: SheetSnapshot) {
   });
 }
 
-const headerText = (snapshot: SheetSnapshot, row: number, col: string) =>
+export const headerText = (snapshot: SheetSnapshot, row: number, col: string) =>
   snapshot.rows.find((r) => r.row === row)?.cells.find((c) => c.col === col)?.text ?? '';
 
-const columnBelow = (snapshot: SheetSnapshot, row: number, col: string) =>
+export const columnBelow = (snapshot: SheetSnapshot, row: number, col: string) =>
   snapshot.rows.filter((r) => r.row > row).flatMap((r) => r.cells.filter((c) => c.col === col));
 
-const SIREN_HEADER = /\b(siren|siret|n d entreprise|numero d entreprise|identifiant entreprise)\b/;
+export const SIREN_HEADER =
+  /\b(siren|siret|n d entreprise|numero d entreprise|identifiant entreprise)\b/;
 
 /**
  * Turns the model's answer into a SheetMapping the rest of the code can trust: known fields, real
@@ -213,7 +215,7 @@ export function guardMapping(
   };
 }
 
-const degradedNote = (reason: Degraded) => t(`mapping.degraded.${reason}` as MessageKey);
+export const degradedNote = (reason: Degraded) => t(`mapping.degraded.${reason}` as MessageKey);
 
 /** Proposes a mapping for a sheet: the agent when AI is on and answers, the dictionary otherwise. */
 export async function proposeMapping(

@@ -1,13 +1,14 @@
 // Shared by the replay tests and the record script: scoring and the recordings on disk.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { CORE_FIELDS, type SheetMapping } from '@fi/core';
+import { CORE_FIELDS, KEY_LAYOUT_FIELDS, type LayoutMapping, type SheetMapping } from '@fi/core';
 import { z } from 'zod';
+import type { LayoutFixture } from './layout.fixtures';
 import type { MappingFixture } from './mapping.fixtures';
 
 export const RECORDINGS = new URL('./recordings/', import.meta.url);
 
 export const Recording = z.object({
-  agent: z.enum(['mapping', 'explain', 'monitor']),
+  agent: z.enum(['mapping', 'layout', 'explain', 'monitor']),
   label: z.string(),
   provider: z.string(),
   model: z.string(),
@@ -57,5 +58,28 @@ export function scoreMapping(f: MappingFixture, m: SheetMapping): MappingScore {
   };
 }
 
-export const ratio = (scores: readonly MappingScore[]) =>
+export interface LayoutScore {
+  correct: number;
+  total: number;
+  misses: string[];
+  headerOk: boolean;
+}
+
+/** The kind plus the key fields: one point each, a field the sheet lacks counting as right when left out. */
+export function scoreLayout(f: LayoutFixture, m: LayoutMapping): LayoutScore {
+  const misses = KEY_LAYOUT_FIELDS.filter(
+    (field) => (m.mapping[field]?.column ?? null) !== (f.expected.fields[field] ?? null),
+  ).map(
+    (field) => `${field}: ${m.mapping[field]?.column ?? '—'} ≠ ${f.expected.fields[field] ?? '—'}`,
+  );
+  if (m.kind !== f.expected.kind) misses.unshift(`kind: ${m.kind} ≠ ${f.expected.kind}`);
+  return {
+    correct: KEY_LAYOUT_FIELDS.length + 1 - misses.length,
+    total: KEY_LAYOUT_FIELDS.length + 1,
+    misses,
+    headerOk: m.headerRow === f.expected.headerRow,
+  };
+}
+
+export const ratio = (scores: readonly { correct: number; total: number }[]) =>
   scores.reduce((n, s) => n + s.correct, 0) / scores.reduce((n, s) => n + s.total, 0);
