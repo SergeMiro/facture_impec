@@ -30,7 +30,15 @@ interface Synonyms {
   contains?: readonly string[];
   /** A vague word (« date », « montant »): 0.65, to be confirmed. */
   weak?: readonly string[];
+  /** A header this is true of is never this field, whatever else it says. */
+  never?: (header: string) => boolean;
 }
+
+const hasWords = (header: string, words: string) => ` ${header} `.includes(` ${words} `);
+
+/** « Remise % », « Taux de remise »: a percentage, where an amount is expected. */
+export const percentHeader = (header: string) =>
+  /%|\b(taux|pourcentage|pourcent|percent|percentage)\b/.test(normalizeHeader(header));
 
 export const SYNONYMS: Readonly<Record<InvoiceField, Synonyms>> = {
   number: {
@@ -223,6 +231,27 @@ export const SYNONYMS: Readonly<Record<InvoiceField, Synonyms>> = {
     ],
     contains: ['designation', 'description', 'libelle', 'article', 'prestation', 'produit'],
   },
+  itemRef: {
+    exact: [
+      'ref article',
+      'reference article',
+      'ref produit',
+      'reference produit',
+      'code article',
+      'code produit',
+      'n article',
+      'sku',
+      'item code',
+      'product code',
+    ],
+    contains: ['ref article', 'reference article', 'code article', 'code produit', 'sku'],
+    weak: ['reference', 'ref'],
+    // « Réf client », « Réf commande », « Réf facture » name something else.
+    never: (header) =>
+      ['client', 'commande', 'facture', 'devis', 'bon'].some((w) =>
+        hasWords(normalizeHeader(header), w),
+      ),
+  },
   quantity: {
     exact: [
       'qte',
@@ -276,6 +305,26 @@ export const SYNONYMS: Readonly<Record<InvoiceField, Synonyms>> = {
     contains: ['montant ht', 'total ht', 'hors taxe'],
     weak: ['montant'],
   },
+  lineDiscount: {
+    exact: [
+      'remise',
+      'remise ht',
+      'remise en euros',
+      'montant remise',
+      'montant de la remise',
+      'rabais',
+      'reduction',
+      'discount',
+    ],
+    contains: ['remise', 'rabais', 'discount'],
+    // « Remise % » is a percentage; « Total après remise », « Net remisé » and « Prix remisé » are
+    // what is left after it.
+    never: (header) =>
+      percentHeader(header) ||
+      ['apres', 'total', 'net', 'ttc', 'prix', 'p u', 'pu'].some((w) =>
+        hasWords(normalizeHeader(header), w),
+      ),
+  },
   vatRate: {
     exact: [
       'taux tva',
@@ -322,13 +371,12 @@ export function isTotalRow(row: SheetSnapshot['rows'][number]): boolean {
   );
 }
 
-const hasWords = (header: string, words: string) => ` ${header} `.includes(` ${words} `);
-
 /** How well one header names one field: 0 when it does not. */
 export function headerScore(header: string, field: InvoiceField): number {
   const h = normalizeHeader(header);
   if (h === '') return 0;
   const s = SYNONYMS[field];
+  if (s.never?.(header)) return 0;
   if (s.exact.includes(h)) return 0.95;
   if (s.contains?.some((w) => hasWords(h, w))) return 0.85;
   if (s.weak?.some((w) => hasWords(h, w))) return 0.65;
@@ -362,6 +410,47 @@ function holdsRates(values: readonly RawCell[]): boolean {
   return rates.length / filled.length >= 0.8;
 }
 
+/** A « Remise » column of 10 %, 5 %: percentages, not the amount the field takes. */
+function holdsPercents(values: readonly RawCell[]): boolean {
+  const filled = values.filter((c) => !isBlank(c));
+  const percents = filled.filter(
+    (c) => (c.format ?? '').includes('%') || /%/.test(textOf(c) ?? ''),
+  );
+  return filled.length > 0 && percents.length / filled.length >= 0.5;
+}
+
+const DISCOUNT_WORDS = ['remise', 'rabais', 'reduction', 'discount'];
+
+/**
+ * A discount the field cannot take: a percentage, by its header or its values. Left unmapped, it
+ * would be dropped without a word, so the user is told to give it in euros (docs/DEFERRED.md).
+ */
+export function percentDiscount(header: string, values: readonly RawCell[]): boolean {
+  const h = normalizeHeader(header);
+  if (!DISCOUNT_WORDS.some((w) => hasWords(h, w))) return false;
+  return notAnAmount(header, values);
+}
+
+/** A percentage by its header or most of its values: never the amount `lineDiscount` takes. */
+export const notAnAmount = (header: string, values: readonly RawCell[]) =>
+  percentHeader(header) || holdsPercents(values);
+
+/** One warning per percentage discount column the mapping leaves out. */
+export function discountWarnings(
+  snapshot: SheetSnapshot,
+  headerRow: number,
+  mapping: SheetMapping['mapping'],
+): string[] {
+  const used = new Set(Object.values(mapping).map((m) => m?.column));
+  const header = snapshot.rows.find((r) => r.row === headerRow);
+  const below = snapshot.rows.filter((r) => r.row > headerRow).slice(0, SAMPLE_ROWS);
+  const values = (col: string) => below.flatMap((r) => r.cells.filter((c) => c.col === col));
+  return (header?.cells ?? [])
+    .filter((c) => !used.has(c.col) && typeof c.value === 'string')
+    .filter((c) => percentDiscount(String(c.value), values(c.col)))
+    .map((c) => t('sheet.warning.discountPercent', { column: c.col }));
+}
+
 /** SIREN has 9 digits, SIRET 14: a « SIREN/SIRET » column goes where most of its values fit. */
 function sirenOrSiret(values: readonly RawCell[]): 'buyerSiren' | 'buyerSiret' {
   const digits = values.map((c) => (textOf(c) ?? '').replace(/\D/g, '').length);
@@ -387,6 +476,7 @@ export function detectMapping(snapshot: SheetSnapshot): SheetMapping {
       // « TVA » alone may be the VAT amount: the values decide. « Taux TVA » is a rate whatever it holds.
       const bare = ['tva', 'vat', 'taux'].includes(normalizeHeader(text)) || confidence < 0.85;
       if (field === 'vatRate' && bare && !holdsRates(columnValues(cell.col))) continue;
+      if (field === 'lineDiscount' && holdsPercents(columnValues(cell.col))) continue;
       if (field === 'buyerSiren' || field === 'buyerSiret') {
         const h = normalizeHeader(text);
         if (hasWords(h, 'siren') && hasWords(h, 'siret')) {
@@ -417,7 +507,7 @@ export function detectMapping(snapshot: SheetSnapshot): SheetMapping {
     headerRow,
     mapping,
     grouping: detectGrouping(snapshot, headerRow, mapping.number?.column),
-    warnings: missingFieldWarnings(mapping),
+    warnings: [...missingFieldWarnings(mapping), ...discountWarnings(snapshot, headerRow, mapping)],
     source: 'heuristic',
   };
 }

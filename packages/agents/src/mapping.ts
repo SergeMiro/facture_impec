@@ -6,6 +6,7 @@ import {
   ColumnLetters,
   detectGrouping,
   detectMapping,
+  discountWarnings,
   type FieldMapping,
   headerScore,
   INVOICE_FIELDS,
@@ -13,6 +14,7 @@ import {
   isBlank,
   missingFieldWarnings,
   normalizeHeader,
+  notAnAmount,
   type SheetMapping,
   type SheetSnapshot,
 } from '@fi/core';
@@ -115,6 +117,9 @@ function sampleTool(masked: SheetSnapshot) {
 const headerText = (snapshot: SheetSnapshot, row: number, col: string) =>
   snapshot.rows.find((r) => r.row === row)?.cells.find((c) => c.col === col)?.text ?? '';
 
+const columnBelow = (snapshot: SheetSnapshot, row: number, col: string) =>
+  snapshot.rows.filter((r) => r.row > row).flatMap((r) => r.cells.filter((c) => c.col === col));
+
 const SIREN_HEADER = /\b(siren|siret|n d entreprise|numero d entreprise|identifiant entreprise)\b/;
 
 /**
@@ -156,6 +161,14 @@ export function guardMapping(
       if (!ok) notes.push(t('mapping.warning.sirenDropped', { column: m.column }));
       return ok;
     })
+    .filter((m) => {
+      // A percentage is not the amount BT-136 takes: a rule decides that, not the model.
+      if (m.field !== 'lineDiscount') return true;
+      const header = headerText(snapshot, headerRow, m.column);
+      const ok = !notAnAmount(header, columnBelow(snapshot, headerRow, m.column));
+      if (!ok) notes.push(t('sheet.warning.discountPercent', { column: m.column }));
+      return ok;
+    })
     .sort((a, b) => b.confidence - a.confidence);
 
   const mapping: Partial<Record<InvoiceField, FieldMapping>> = {};
@@ -188,7 +201,14 @@ export function guardMapping(
     headerRow,
     mapping,
     grouping,
-    warnings: [...missingFieldWarnings(mapping), ...notes, ...own],
+    warnings: [
+      ...new Set([
+        ...missingFieldWarnings(mapping),
+        ...notes,
+        ...discountWarnings(snapshot, headerRow, mapping),
+        ...own,
+      ]),
+    ],
     source: 'agent',
   };
 }

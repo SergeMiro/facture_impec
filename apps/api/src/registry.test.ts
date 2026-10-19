@@ -160,6 +160,30 @@ describe('the registry', () => {
     expect((await c.registry()).documents.map((d) => d.number)).toEqual(['F-1']);
   });
 
+  it("ties a line to the company's article reference when the sheet has one", async () => {
+    const c = await company();
+    const withRef = grid('Factures', [
+      [...HEADER, 'Réf article', 'Remise'],
+      [...line('F-1', 'Vis inox 6×40', 10, 8.4), 'vis-6', 4],
+      [...line('F-2', 'Vis inox (boîte)', 2, 8.4), 'VIS-6', null],
+    ]);
+    await c.sync(withRef);
+    expect(await c.refresh()).toEqual({ projected: 2, removed: 0 });
+    const { documents, lines } = await c.registry();
+    expect(lines.map((l) => [l.key, l.cell])).toEqual([
+      ['ref:VIS-6', 'Factures!H2'],
+      ['ref:VIS-6', 'Factures!H3'],
+    ]);
+    // 10 × 8,40 − 4,00 of discount.
+    expect(documents.map((d) => d.netTotal)).toEqual([8_000, 1_680]);
+    const [discounted] = await database.db
+      .select({ discount: docLines.discount, sellerRef: docLines.sellerRef })
+      .from(docLines)
+      .where(eq(docLines.tenantId, c.tenant.id))
+      .orderBy(asc(docLines.cell));
+    expect(discounted).toEqual({ discount: 400, sellerRef: 'vis-6' });
+  });
+
   it('is queued after a sync that changed something, not after one that did not', async () => {
     const c = await company();
     const rows = sheet(line('F-1', 'Journée de conseil'));

@@ -4,10 +4,12 @@ export * from './cells';
 export {
   detectGrouping,
   detectMapping,
+  discountWarnings,
   headerScore,
   isTotalRow,
   missingFieldWarnings,
   normalizeHeader,
+  notAnAmount,
   SYNONYMS,
 } from './detect';
 export * from './fields';

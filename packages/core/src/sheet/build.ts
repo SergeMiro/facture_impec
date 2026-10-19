@@ -3,8 +3,8 @@
 // nothing the sheet lacks is invented, except what follows from the tenant's own settings.
 import { t } from '@fi/shared';
 import { computeInvoice } from '../compute';
-import type { InvoiceDraft, Line } from '../model';
-import { divRound, isDecimal, lineAmount, roundToCents } from '../money';
+import type { AllowanceCharge, InvoiceDraft, Line } from '../model';
+import { divRound, formatAmount, isDecimal, lineAmount, roundToCents } from '../money';
 import { frMoney } from '../pdf/format';
 import { cellAddress, isBlank, type RawCell, type SheetSnapshot } from './cells';
 import { isTotalRow } from './detect';
@@ -14,10 +14,10 @@ import {
   type SellerProfile,
   type SheetMapping,
 } from './fields';
-import { dateOf, decimalOf, identifierOf, natureOf, rateOf, textOf } from './values';
+import { amountOf, dateOf, decimalOf, identifierOf, natureOf, rateOf, textOf } from './values';
 
 export interface SheetProblem {
-  code: 'group_conflict' | 'line_total_mismatch' | 'total_mismatch';
+  code: 'group_conflict' | 'line_total_mismatch' | 'total_mismatch' | 'discount_percent';
   cell: string;
   messageFr: string;
 }
@@ -128,10 +128,12 @@ const READERS: Readonly<Record<InvoiceField, (cell: RawCell | undefined) => stri
   paymentTerms: textOf,
   currency: currencyOf,
   itemName: textOf,
+  itemRef: textOf,
   quantity: decimalOf,
   unitCode: unitOf,
   unitPrice: decimalOf,
   lineNet: decimalOf,
+  lineDiscount: amountOf,
   vatRate: rateOf,
   vatCategory: (c) => textOf(c)?.toUpperCase(),
   nature: natureOf,
@@ -160,12 +162,14 @@ const INVOICE_PATHS: Partial<Record<InvoiceField, readonly string[]>> = {
 
 const LINE_PATHS: Partial<Record<InvoiceField, string>> = {
   itemName: 'item.name',
+  itemRef: 'item.sellerId',
   quantity: 'quantity',
   unitCode: 'unitCode',
   unitPrice: 'price.net',
   vatRate: 'vat.rate',
   vatCategory: 'vat.category',
   nature: 'nature',
+  lineDiscount: 'allowances[0]',
 };
 
 const PROCESS_TYPE = { goods: 'B1', services: 'S1', mixed: 'M1' } as const;
@@ -341,17 +345,51 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
     let price = read(row, 'unitPrice');
     const net = read(row, 'lineNet');
     const netCell = at('lineNet');
+    // A discount in euros (BT-136), typed 50 or -50: 50 € off. Anything else stays a discount
+    // without an amount, so BR-41 stops the invoice on that cell instead of dropping it.
+    const discount = read(row, 'lineDiscount');
+    const discountCents =
+      discount !== undefined && isDecimal(discount) ? roundToCents(discount) : null;
+    const off = Math.abs(discountCents ?? 0);
+    const unreadable = discount !== undefined && discountCents === null;
+    const allowances: AllowanceCharge[] = [];
+    if (unreadable || off > 0) {
+      allowances.push({
+        ...(discountCents !== null && { amount: off }),
+        reasonCode: '95',
+        reason: t('invoice.default.discountReason'),
+      });
+      if (discount?.endsWith('%')) {
+        problems.push({
+          code: 'discount_percent',
+          cell: at('lineDiscount') ?? '',
+          messageFr: t('sheet.problem.discount_percent', { value: discount }),
+        });
+      }
+    }
     if (price === undefined && net !== undefined) {
-      price = quantity === undefined ? net : (divideDecimal(net, quantity) ?? net);
+      // The line total is after the discount: the price is what it was before.
+      const netCents = isDecimal(net) ? roundToCents(net) : null;
+      const gross = off > 0 && netCents !== null ? formatAmount(netCents + off) : net;
+      price = quantity === undefined ? gross : (divideDecimal(gross, quantity) ?? gross);
       if (netCell) cells[`lines[${i}].price.net`] = netCell;
-    } else if (net !== undefined && quantity !== undefined && price !== undefined && netCell) {
-      const computed = lineAmount(quantity, price);
+    } else if (
+      // A discount that is not an amount is already stopped on its own cell.
+      !unreadable &&
+      net !== undefined &&
+      quantity !== undefined &&
+      price !== undefined &&
+      netCell
+    ) {
+      const amount = lineAmount(quantity, price);
+      const computed = amount === null ? null : amount - off;
       const typed = roundToCents(net);
       if (computed !== null && typed !== null && computed !== typed) {
+        const key = off > 0 ? 'line_total_mismatch_discount' : 'line_total_mismatch';
         problems.push({
           code: 'line_total_mismatch',
           cell: netCell,
-          messageFr: t('sheet.problem.line_total_mismatch', {
+          messageFr: t(`sheet.problem.${key}`, {
             sheet: frMoney(typed, currency),
             computed: frMoney(computed, currency),
           }),
@@ -360,6 +398,7 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
     }
     if (quantity === undefined && price !== undefined) quantity = '1';
     const rate = read(row, 'vatRate');
+    const itemRef = read(row, 'itemRef');
     const category =
       read(row, 'vatCategory') ??
       (rate !== undefined && isDecimal(rate) && Number(rate) > 0 ? 'S' : undefined);
@@ -372,11 +411,11 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
       id: String(i + 1),
       quantity,
       unitCode: read(row, 'unitCode') ?? 'C62',
-      allowances: [],
+      allowances,
       charges: [],
       price: { net: price },
       vat: { category, rate },
-      item: { name: read(row, 'itemName') },
+      item: { name: read(row, 'itemName'), ...(itemRef && { sellerId: itemRef }) },
       ...(nature && { nature }),
     };
   });

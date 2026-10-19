@@ -46,6 +46,15 @@ export function decimalOf(cell: RawCell | undefined): string | undefined {
 
 const isPercentFormat = (cell: RawCell) => (cell.format ?? '').includes('%');
 
+/** An amount in euros. A percent cell keeps its « % »: 10 % off is not 0,10 €. */
+export function amountOf(cell: RawCell | undefined): string | undefined {
+  if (cell && typeof cell.value === 'number' && isPercentFormat(cell)) {
+    const percent = numberText(cell.value * 100);
+    return percent === undefined ? textOf(cell) : `${percent} %`;
+  }
+  return decimalOf(cell);
+}
+
 /** A VAT rate in percent ("20", "5.5"). Excel percent cells hold 0.2 for 20 %. */
 export function rateOf(cell: RawCell | undefined): string | undefined {
   if (!cell) return undefined;

@@ -158,6 +158,25 @@ describe('guardMapping', () => {
     expect(m.mapping.issueDate).toEqual({ column: 'B', confidence: 0, needsConfirmation: true });
   });
 
+  it('refuses a percentage as the line discount, and says so', () => {
+    const withDiscount = grid('Factures', [
+      ['N° facture', 'Désignation', 'Qté', 'PU HT', 'Réduc.', 'Remise'],
+      ['F1', 'Pose', 2, 50, { v: 0.1, t: '10%', f: '0%' }, '5 %'],
+    ]);
+    const m = guardMapping(
+      answer({ headerRow: 1, mapping: [{ field: 'lineDiscount', column: 'E', confidence: 0.9 }] }),
+      withDiscount,
+      detectMapping(withDiscount),
+      new Pseudonymizer(),
+    );
+    expect(m.mapping.lineDiscount).toBeUndefined();
+    // Once for the column the model named, once for the « Remise » it left out.
+    expect(m.warnings.filter((w) => w.includes('remise en pourcentage'))).toEqual([
+      expect.stringContaining('La colonne E'),
+      expect.stringContaining('La colonne F'),
+    ]);
+  });
+
   it('refuses a SIREN column whose header does not say SIREN', () => {
     const m = guardMapping(
       answer({
