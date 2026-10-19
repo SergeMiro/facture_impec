@@ -192,6 +192,20 @@ function Customer({ party }: { party: Party }) {
         {party.autopilot && !autopilotMode && (
           <Caption1>{t('addin.customers.autopilotNeedsMode')}</Caption1>
         )}
+        <Switch
+          checked={party.requiresPurchaseOrder}
+          disabled={busy}
+          onChange={(_, d) =>
+            void fi.updateCustomer(party.id, { requiresPurchaseOrder: d.checked })
+          }
+          label={t('addin.customers.requiresPurchaseOrder')}
+        />
+        <Switch
+          checked={party.publicEntity}
+          disabled={busy}
+          onChange={(_, d) => void fi.updateCustomer(party.id, { publicEntity: d.checked })}
+          label={t('addin.customers.publicEntity')}
+        />
         <span className={styles.line}>
           <Button
             size="small"

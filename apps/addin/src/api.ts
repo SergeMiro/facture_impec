@@ -329,6 +329,9 @@ export const Party = z.object({
   /** What the platform's directory said when the customer was confirmed. */
   routing: z.object({ found: z.boolean(), checkedAt: z.string() }).nullable(),
   autopilot: z.boolean(),
+  /** What the checks know about the customer (rules FF-PO-01, DGFIP-G2.32). */
+  requiresPurchaseOrder: z.boolean(),
+  publicEntity: z.boolean(),
   verifiedAt: z.string(),
 });
 export type Party = z.infer<typeof Party>;
@@ -357,7 +360,12 @@ export interface PartyQuery {
   postCode?: string;
 }
 
-export type PartyPatch = Partial<{ email: string | null; autopilot: boolean }>;
+export type PartyPatch = Partial<{
+  email: string | null;
+  autopilot: boolean;
+  requiresPurchaseOrder: boolean;
+  publicEntity: boolean;
+}>;
 
 /** The weekly report (Tableau de bord card): numbers first, then what to do. */
 export const WeeklyReport = z.object({

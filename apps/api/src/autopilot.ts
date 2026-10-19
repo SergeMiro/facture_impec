@@ -168,7 +168,7 @@ export async function unplanAll(tx: Tx, tenantId: string, partyId?: string) {
 }
 
 /** FI_Détail of a planned invoice: when it leaves. */
-export function autopilotNote(row: InvoiceRow): string | null {
+export function autopilotNote(row: Pick<InvoiceRow, 'status' | 'autopilotAt'>): string | null {
   if (row.status !== 'validated' || !row.autopilotAt) return null;
   return t('autopilot.sheet', { time: parisTime(row.autopilotAt) });
 }

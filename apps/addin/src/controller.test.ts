@@ -468,6 +468,11 @@ describe('a new user on the demo sheet', () => {
     });
     expect(state().notice?.text).toBe(t('addin.customers.autopilotOn', { name: 'GARAGE DUPONT' }));
 
+    // The checks read this switch: the API checked its invoices again (parties.test.ts), the sheet syncs.
+    expect(await controller.updateCustomer(party.id, { requiresPurchaseOrder: true })).toBe(true);
+    expect(state().customers?.parties[0]?.requiresPurchaseOrder).toBe(true);
+    expect(state().notice?.text).toBe(t('addin.customers.rulesSaved', { name: 'GARAGE DUPONT' }));
+
     await controller.removeCustomer(party.id);
     expect(state().customers?.parties).toEqual([]);
   });

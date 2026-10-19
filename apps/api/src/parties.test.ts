@@ -49,6 +49,8 @@ interface Party {
   names: string[];
   routing: { found: boolean } | null;
   autopilot: boolean;
+  requiresPurchaseOrder: boolean;
+  publicEntity: boolean;
 }
 interface ErrorBody {
   error: { code: string; message: string };
@@ -179,6 +181,8 @@ describe("« C'est ce client »", () => {
       names: ['boulangerie martin sas', 'martin'],
       routing: { found: true },
       autopilot: false,
+      requiresPurchaseOrder: false,
+      publicEntity: false,
     });
     const [event] = await database.db
       .select()
@@ -344,5 +348,36 @@ describe('sync: the sheet completed from the customer', () => {
     const after = await sync(t.apiKey, sheet(line('F-1', 'MARTIN')));
     expect(after.rows[0]?.detail).not.toContain('fiche client');
     expect((await row(byName?.invoiceId))?.document.buyer.legalId).toBeUndefined();
+  });
+
+  it('checks the invoices not yet sent again when the customer requires its order number', async () => {
+    const t = await tenant();
+    const party = (await confirm(t.apiKey, MARTIN_SIREN, 'Martin')).body;
+    const first = await sync(t.apiKey, sheet(line('F-1', 'MARTIN')));
+    const id = first.rows[0]?.invoiceId ?? '';
+    const state = async () => {
+      const [r] = await database.db.select().from(invoices).where(eq(invoices.id, id));
+      return r;
+    };
+    expect((await state())?.status).toBe('validated');
+    const patch = async (change: Record<string, boolean>) => {
+      const res = await request(`/parties/${party.id}`, {
+        method: 'PATCH',
+        token: t.apiKey,
+        body: change,
+      });
+      expect(res.status).toBe(200);
+      return (await res.json()) as Party;
+    };
+    expect(await patch({ requiresPurchaseOrder: true })).toMatchObject({
+      requiresPurchaseOrder: true,
+      publicEntity: false,
+    });
+    expect((await state())?.status).toBe('needs_fix');
+    const again = await sync(t.apiKey, sheet(line('F-1', 'MARTIN')));
+    expect(again.rows[0]).toMatchObject({ invoiceId: id, status: 'needs_fix', errors: 1 });
+    expect(again.rows[0]?.detail).toContain('bon de commande');
+    await patch({ requiresPurchaseOrder: false });
+    expect((await state())?.status).toBe('validated');
   });
 });

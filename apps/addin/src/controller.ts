@@ -1187,15 +1187,16 @@ export class Controller {
     const party = await this.#act(`party:${id}`, () => this.api.patchParty(id, patch));
     if (!party) return false;
     this.#putParty(party);
+    // The checks read the two switches: the API checked its invoices again, the sheet shows it.
+    const rules = patch.requiresPurchaseOrder !== undefined || patch.publicEntity !== undefined;
+    const name = { name: party.legalName };
     this.notify(
       'success',
-      patch.autopilot === undefined
-        ? t('addin.customers.saved', { name: party.legalName })
-        : t(patch.autopilot ? 'addin.customers.autopilotOn' : 'addin.customers.autopilotOff', {
-            name: party.legalName,
-          }),
+      patch.autopilot !== undefined
+        ? t(patch.autopilot ? 'addin.customers.autopilotOn' : 'addin.customers.autopilotOff', name)
+        : t(rules ? 'addin.customers.rulesSaved' : 'addin.customers.saved', name),
     );
-    if (patch.autopilot !== undefined) void this.sync();
+    if (patch.autopilot !== undefined || rules) void this.sync();
     return true;
   };
 

@@ -472,3 +472,44 @@ written here before the work:
 | §6 PartyAgent for foreign customers (VIES) | French companies only (SIREN) | `docs/DEFERRED.md` (VIES) |
 | §4 `parties` for suppliers | Column ready, only customers written | `docs/DEFERRED.md` (suppliers) |
 | `TODO(verify)` on B2Brouter | T1–T23, closed with the owner's sandbox key | `docs/B2BROUTER.md` §11 |
+
+## R0 — Groundwork for checking documents together (started 2026-10-19)
+
+The next stages check each invoice against the company's other documents (orders, delivery notes,
+purchases) in the background, and let the user talk with an agent about what was found. R0 makes the
+current sheet path cheap enough to run all the time and gives those checks their first tables.
+Criteria, written here before the work:
+
+- **Customer settings reach the rules**: a confirmed customer carries two switches in Clients,
+  « Exige son numéro de bon de commande » and « Organisme public »; every check of an invoice to that
+  customer passes them to the rules, so FF-PO-01 and G2.32 follow the customer instead of always running
+  with the defaults (today one never fires, the other always does). Changing a switch checks that
+  customer's invoices not yet sent again. The third, « Livré à une autre adresse » (BR-FR-14), waits:
+  it asks for a delivery address the sheet cannot give yet (`docs/DEFERRED.md`).
+- **Numbering history in proportion**: the history rules (BR-FR-CO-02, FF-NUM-01, FF-NUM-02, FF-CN-01)
+  receive, for each invoice, only the earlier invoices that decide them. Same verdict as with the whole
+  list (property test on random histories); checking 5 000 invoices of one series costs about what it
+  costs without history (measured before: 0.9 s without, 8.7 s with).
+- **A sync that changes nothing writes nothing**: the sheet's invoices are read in one query and computed
+  in memory; an invoice is written only when its content, its customer or its rows changed, and checked
+  again only when something its verdict depends on changed (content, customer switches, company
+  setting, the day, its numbering neighbours). Test: a repeat sync issues 0 INSERT/UPDATE/DELETE; one
+  cell changed → one invoice updated and checked.
+- **Rows that move keep their invoice**: a row inserted above an invoice without a number (key `row:N`)
+  no longer hands that invoice to its neighbour: an invoice found unchanged elsewhere in the sheet
+  follows its rows.
+- **Registry, first tables**: `docs`, `doc_lines` and `items` hold every outgoing invoice (test ones
+  flagged) and every received invoice that could be read, line by line: item references (BT-155/156/157),
+  quantity, unit, net price, discount, net amount, VAT, order line (BT-132), and the source cell of a
+  sheet invoice. An item is the company's, found by its article reference, else by its normalized name.
+  A per-company queue job (`registry.refresh`: one running and one waiting per company) fills them after
+  a sync that changed something and after a received invoice; the sweep catches up what is missing. The
+  RGPD export and deletion cover the new tables.
+- **Mapping fields**: « Référence article » (BT-155) and « Remise » (line discount amount, BT-136) can
+  be mapped, by detection or by hand, and reach the invoice and the registry.
+- **Load test**: `pnpm load:sync` (in-process, PGlite, or Postgres with `DATABASE_URL`) measures the
+  first sync of a 5 000-row sheet, a repeat sync (0 writes), a one-cell edit (1 invoice written), and
+  the registry projection of 50 000 lines (target < 30 s). Results recorded here.
+- **Docs**: `docs/ARCHITECTURE.md` stops saying the pane validates (it never called `validate()`);
+  `docs/DEFERRED.md` lists the registry tables later stages bring (`row_state`, `layout_profiles`,
+  `sources`, `links`, `findings`, `rule_exceptions`) and the sweep split per company.

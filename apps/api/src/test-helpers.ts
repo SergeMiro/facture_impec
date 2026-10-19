@@ -1,7 +1,7 @@
 // Shared by the API tests: an in-memory database, recorded jobs, a tenant with its key.
 import { type InvoiceDraft, parisHour, parisToday } from '@fi/core';
 import { bundledFonts } from '@fi/core/fonts';
-import { type Database, openDatabase } from '@fi/db';
+import { type Database, type OpenOptions, openDatabase } from '@fi/db';
 import { StripeStandIn, sireneStandIn } from '@fi/mock-pdp';
 import type { PdpAdapter } from '@fi/pdp-adapter';
 import { createAiDeps } from './ai';
@@ -97,8 +97,8 @@ export function recordedJobs(): RecordedJobs {
   };
 }
 
-export async function testDatabase(): Promise<Database> {
-  const database = await openDatabase();
+export async function testDatabase(options: Pick<OpenOptions, 'logger'> = {}): Promise<Database> {
+  const database = await openDatabase(options);
   await database.migrate();
   return database;
 }

@@ -35,6 +35,7 @@ import { planAll, unplanAll } from './autopilot';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { Email } from './http';
+import { recheckParty } from './invoices';
 import { awaitsGoLive, routeFor } from './platform';
 import { DirectoryUnavailable } from './sirene';
 
@@ -53,7 +54,12 @@ export const PartyConfirm = z.object({
 });
 
 export const PartyPatch = z
-  .object({ email: Email.nullable(), autopilot: z.boolean() })
+  .object({
+    email: Email.nullable(),
+    autopilot: z.boolean(),
+    requiresPurchaseOrder: z.boolean(),
+    publicEntity: z.boolean(),
+  })
   .partial()
   .refine((p) => Object.keys(p).length > 0, { message: 'nothing to change' });
 
@@ -71,6 +77,8 @@ export function partyView(row: PartyRow) {
     names: row.names,
     routing: row.routing,
     autopilot: row.autopilot,
+    requiresPurchaseOrder: row.requiresPurchaseOrder,
+    publicEntity: row.publicEntity,
     verifiedAt: row.verifiedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -288,6 +296,11 @@ export async function updateParty(
       .where(eq(parties.id, id))
       .returning();
     if (!row) throw new ApiError(404, 'party_missing');
+    // What the rules know about the customer changed: its invoices not yet sent are checked now.
+    const rules =
+      row.requiresPurchaseOrder !== before.requiresPurchaseOrder ||
+      row.publicEntity !== before.publicEntity;
+    if (rules) await recheckParty(tx, tenant, row, deps.now());
     if (row.autopilot !== before.autopilot) {
       if (row.autopilot) await planAll(tx, deps.now(), tenant, id);
       else await unplanAll(tx, tenant.id, id);
@@ -327,6 +340,7 @@ export async function deleteParty(deps: ApiDeps, tenant: TenantRow, id: string) 
 export interface Enriched {
   draft: InvoiceDraft;
   partyId: string | null;
+  party: PartyRow | null;
   filled: FilledField[];
 }
 
@@ -356,9 +370,9 @@ export class PartyBook {
     const siren = buyerSirenOf(draft);
     const key = partyKey(draft.buyer.name ?? '');
     const party = siren ? this.#bySiren.get(siren) : key ? this.#byName.get(key) : undefined;
-    if (!party) return { draft, partyId: null, filled: [] };
+    if (!party) return { draft, partyId: null, party: null, filled: [] };
     const done = completeBuyer(draft, party);
-    return { draft: done.draft, partyId: party.id, filled: done.filled };
+    return { draft: done.draft, partyId: party.id, party, filled: done.filled };
   }
 }
 

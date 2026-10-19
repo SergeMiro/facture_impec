@@ -279,6 +279,11 @@ export const parties = pgTable(
     routing: jsonb('pdp_routing_json').$type<PartyRouting>(),
     /** « Envoi automatique » (plan §0.2): opted in for the autopilot, under the company's ceiling. */
     autopilot: boolean('autopilot').notNull().default(false),
+    // What the rules must know about this customer (core RuleContext.buyer), set in Clients.
+    /** Refuses invoices without its purchase-order number (FF-PO-01). */
+    requiresPurchaseOrder: boolean('requires_purchase_order').notNull().default(false),
+    /** A public body (B2G): DGFiP G2.32 does not apply. */
+    publicEntity: boolean('public_entity').notNull().default(false),
     source: text('source', { enum: ['sirene'] })
       .notNull()
       .default('sirene'),
@@ -338,6 +343,12 @@ export const invoices = pgTable(
     autopilotAt: timestamp('autopilot_at', { withTimezone: true }),
     autopilotFingerprint: text('autopilot_fingerprint'),
     autopilotHeld: boolean('autopilot_held').notNull().default(false),
+    /**
+     * What the last check depended on, hashed (src/invoices.ts checkOf in the API): the rules' code, the
+     * content, the day, the customer's settings, the numbering neighbours. A sync checks again only
+     * when it changed.
+     */
+    validatedKey: text('validated_key'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

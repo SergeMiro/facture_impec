@@ -4,7 +4,7 @@
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { PGlite } from '@electric-sql/pglite';
-import type { SQL } from 'drizzle-orm';
+import type { Logger, SQL } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import * as schema from './schema';
 
@@ -35,6 +35,8 @@ export interface OpenOptions {
   url?: string;
   /** PGlite data directory; omitted = in memory. */
   dir?: string;
+  /** Sees every query: tests count the writes of a sync with it. */
+  logger?: Logger;
 }
 
 export async function openDatabase(options: OpenOptions = {}): Promise<Database> {
@@ -44,7 +46,7 @@ export async function openDatabase(options: OpenOptions = {}): Promise<Database>
     const { drizzle } = await import('drizzle-orm/node-postgres');
     const { migrate } = await import('drizzle-orm/node-postgres/migrator');
     const pool = new Pool({ connectionString: options.url });
-    const db = drizzle(pool, { schema });
+    const db = drizzle(pool, { schema, ...(options.logger && { logger: options.logger }) });
     return {
       kind: 'postgres',
       db,
@@ -58,7 +60,7 @@ export async function openDatabase(options: OpenOptions = {}): Promise<Database>
   const { migrate } = await import('drizzle-orm/pglite/migrator');
   if (options.dir) mkdirSync(options.dir, { recursive: true });
   const pglite = new PGlite(options.dir);
-  const db = drizzle(pglite, { schema });
+  const db = drizzle(pglite, { schema, ...(options.logger && { logger: options.logger }) });
   return {
     kind: 'pglite',
     db,
