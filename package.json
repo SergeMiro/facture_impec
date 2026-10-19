@@ -18,6 +18,7 @@
     "verify": "pnpm lint && pnpm typecheck && turbo run test test:oracle",
     "scenario": "tsx scripts/run-scenario.ts",
     "load": "tsx scripts/load/run.ts",
+    "load:sync": "tsx scripts/load/sync.ts",
     "accounting:check": "tsx scripts/accounting/check.ts",
     "test:e2e": "pnpm --filter @fi/addin test:e2e",
     "seed:demo": "pnpm --filter @fi/addin seed:demo",

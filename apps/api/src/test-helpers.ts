@@ -20,6 +20,8 @@ import { runSend, runSync, type WorkerDeps } from './workers';
 export { SIRENE_CASES } from '@fi/mock-pdp';
 // The task pane's tests move invoices as the workers would.
 export { runCollect } from './collect';
+// The sync load test (scripts/load/sync.ts) times the registry.
+export { refreshRegistry } from './registry';
 export { runSend, runSync, type WorkerDeps };
 
 /** `fetch` for `http://any-host/path`, answered by an in-process Hono app. */
@@ -104,7 +106,9 @@ export function recordedJobs(): RecordedJobs {
   };
 }
 
-export async function testDatabase(options: Pick<OpenOptions, 'logger'> = {}): Promise<Database> {
+export async function testDatabase(
+  options: Pick<OpenOptions, 'logger' | 'url'> = {},
+): Promise<Database> {
   const database = await openDatabase(options);
   await database.migrate();
   return database;
