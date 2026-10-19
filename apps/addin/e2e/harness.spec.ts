@@ -3,16 +3,18 @@
 // sees « Prêt à envoyer »; then sends a test invoice and plays « Simuler un rejet PDP ». Since M4
 // the test platform is B2Brouter's stand-in (a test_ key), which cannot play scenarios: the API
 // writes the rejection as the platform would have (apps/api/src/sandbox.ts). Since M6 it also
-// receives test supplier invoices on « Réception » and exports them for the accountant.
+// receives test supplier invoices on « Réception » and exports them for the accountant. Since R1 it
+// includes the « Commandes » sheet in the « Registre », and an edit there reaches the registry.
 // browser: local (Chrome of this server; Browserbase cannot reach localhost).
 
 import { readFile } from 'node:fs/promises';
+import { frMoney } from '@fi/core';
 import { t } from '@fi/shared';
 import { expect, test } from '@playwright/test';
-import { DEMO_OWNER } from '../src/harness/demo';
+import { DEMO_ORDERS, DEMO_OWNER, DEMO_SHEET } from '../src/harness/demo';
 import { seedDemo } from '../src/harness/seed';
 import { E2E, LIVE } from './env';
-import { api, row, signIn, typeInSelectedCell } from './helpers';
+import { api, row, signIn, typeInCell, typeInSelectedCell } from './helpers';
 
 // The live run is b2brouter.spec.ts alone: this one needs the stand-in's account and SIRENs.
 test.skip(LIVE !== null, 'live B2Brouter run');
@@ -148,5 +150,38 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
     await (await download).saveAs(fec);
     expect((await readFile(fec, 'utf8')).split('\r\n')[0]).toMatch(/^JournalCode\tJournalLib\t/);
     await page.screenshot({ path: info.outputPath('exported.png') });
+  });
+
+  await test.step('Registre: « Commandes » is included, and an edit there reaches the registry', async () => {
+    await pane.getByRole('tab', { name: t('addin.nav.dashboard') }).click();
+    await expect(pane.getByTestId('registry-hint')).toContainText(DEMO_ORDERS);
+    await pane.getByRole('tab', { name: t('addin.nav.registry') }).click();
+    await expect(pane.getByTestId('invoice-sheet')).toContainText(DEMO_SHEET);
+    await pane
+      .getByTestId(`other-${DEMO_ORDERS}`)
+      .getByRole('button', { name: t('addin.registry.include') })
+      .click();
+    const inclusion = pane.getByTestId('inclusion');
+    await expect(inclusion).toContainText(t('addin.registry.confirmTitle', { sheet: DEMO_ORDERS }));
+    await expect(inclusion.getByLabel(t('layout.field.quantity'))).toHaveValue('F');
+    await page.screenshot({ path: info.outputPath('registry-confirm.png') });
+    await inclusion.getByRole('button', { name: t('addin.registry.confirm') }).click();
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.registry.included', { sheet: DEMO_ORDERS, docs: 2 }),
+    );
+    const order = pane.locator('[data-testid^="doc-"]').filter({ hasText: 'C-41' });
+    await expect(order).toContainText(frMoney(4 * 8_500 + 14_000, 'EUR'));
+
+    // The pane stays on the registry while the user edits « Commandes »: the order follows.
+    await page.locator('.tabs').getByRole('button', { name: DEMO_ORDERS }).click();
+    await typeInCell(page, 'F2', '5');
+    await expect(order).toContainText(frMoney(5 * 8_500 + 14_000, 'EUR'));
+    // « Voir dans la feuille » selects where the order starts.
+    await page.locator('.tabs').getByRole('button', { name: DEMO_SHEET }).click();
+    await order.getByText(t('addin.registry.showDoc')).click();
+    await expect(page.getByTestId('name-box')).toHaveText('E2');
+    await page.screenshot({ path: info.outputPath('registry.png') });
+    // Every screen fits the pane's width: nothing scrolls sideways.
+    expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
   });
 });

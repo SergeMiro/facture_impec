@@ -91,6 +91,41 @@ export function demoSheet(): Record<string, FakeCell | string | number> {
 
 export const DEMO_SHEET = 'Factures';
 
+/** Customer orders (R1), for the « Registre »: C-41 spans two rows, C-42 one. */
+export const DEMO_ORDERS = 'Commandes';
+const ORDER_HEADERS = ['N° commande', 'Date', 'Client', 'Réf.', 'Désignation', 'Qté', 'PU HT'];
+const ORDER_ROWS: (string | number | FakeCell)[][] = [
+  [
+    'C-41',
+    date('01/10/2026', 46296),
+    'Boulangerie Martin',
+    'TAB-01',
+    'Tabouret chêne',
+    4,
+    money(85),
+  ],
+  ['', '', '', 'ETA-12', 'Étagère murale', 1, money(140)],
+  [
+    'C-42',
+    date('06/10/2026', 46301),
+    'Garage des Lilas',
+    'ETA-12',
+    'Étagère murale',
+    2,
+    money(140),
+  ],
+];
+
+export function demoOrders(): Record<string, FakeCell | string | number> {
+  const cells: Record<string, FakeCell | string | number> = {};
+  [ORDER_HEADERS, ...ORDER_ROWS].forEach((row, r) => {
+    row.forEach((value, c) => {
+      if (value !== '') cells[`${COLS[c]}${r + 1}`] = value;
+    });
+  });
+  return cells;
+}
+
 /** The header row and the three invoices, cells as the harness holds them. */
 export const demoTable = (): (string | number | FakeCell)[][] => [HEADERS, ...ROWS];
 

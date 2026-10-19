@@ -26,7 +26,15 @@ import {
   SHEET_POLL_MS,
 } from './controller';
 import { FakeWorkbook } from './excel/fake';
-import { DEMO_DEFAULTS, DEMO_OWNER, DEMO_SELLER, DEMO_SHEET, demoSheet } from './harness/demo';
+import {
+  DEMO_DEFAULTS,
+  DEMO_ORDERS,
+  DEMO_OWNER,
+  DEMO_SELLER,
+  DEMO_SHEET,
+  demoOrders,
+  demoSheet,
+} from './harness/demo';
 import type { Timers } from './offline';
 import { memoryStore } from './storage';
 
@@ -488,6 +496,156 @@ describe('a new user on the demo sheet', () => {
     expect(state().notice?.text).toBe(
       t('addin.autopilot.held', { number: state().invoice?.detail.number ?? '' }),
     );
+  });
+});
+
+describe('the other sheets of the workbook (R1)', () => {
+  const SIREN = '999000128';
+  const book = new FakeWorkbook({
+    [DEMO_SHEET]: demoSheet(),
+    [DEMO_ORDERS]: demoOrders(),
+    Notes: { A1: 'Penser à rappeler le comptable' },
+  });
+  const { controller, state, tokens } = pane(book);
+  let later: ReturnType<typeof pane>;
+  let key: string;
+  const sourceReads = () => calls.filter((c) => c.includes('/sources/Commandes/sync')).length;
+  const invoiceSyncs = () => calls.filter((c) => /^POST \/workbooks\/[^/]+\/sync$/.test(c)).length;
+  const order = async (number: string, from = controller) =>
+    (await from.api.registry()).recent.find((d) => d.number === number);
+  const settle = () => new Promise((r) => setTimeout(r, 50));
+
+  beforeAll(async () => {
+    const vatId = `FR${String((12 + 3 * (Number(SIREN) % 97)) % 97).padStart(2, '0')}${SIREN}`;
+    key = (
+      await newTenant(api.request, {
+        ...SELLER,
+        siren: SIREN,
+        vatId,
+        ownerEmail: 'registre@entreprise-demo.test',
+      })
+    ).apiKey;
+  });
+
+  it('proposes the other sheets, then includes « Commandes » once the company confirms it', async () => {
+    await controller.start();
+    await controller.signInWithKey(key);
+    await until(() => state().detection !== null, 'the invoice columns');
+    const columns = state().detection?.mapping;
+    if (!columns) throw new Error('no invoice columns');
+    await controller.confirmMapping(columns);
+    expect(state().otherSheets).toEqual(['Commandes', 'Notes']);
+
+    controller.navigate({ name: 'registry' });
+    await until(() => state().registry !== null, 'the registry');
+    expect(state().registry?.sources).toEqual([]);
+
+    await controller.includeSheet('Commandes');
+    const inclusion = state().inclusion;
+    if (!inclusion) throw new Error('no proposal');
+    expect(inclusion.detection).toMatchObject({
+      degraded: 'ai_off',
+      profile: null,
+      included: false,
+      layout: { kind: 'order', headerRow: 1, source: 'heuristic' },
+    });
+    expect(inclusion.headers.slice(0, 2)).toEqual([
+      { col: 'A', text: 'N° commande' },
+      { col: 'B', text: 'Date' },
+    ]);
+    expect(controller.inclusionHeaders(2)[0]).toEqual({ col: 'A', text: 'C-41' });
+    // Nothing is kept before « Confirmer et inclure ».
+    const workbookId = state().workbookId ?? '';
+    expect((await controller.api.sources(workbookId)).sources).toEqual([]);
+
+    await controller.confirmLayout({ ...inclusion.detection.layout, source: 'user' });
+    expect(state().inclusion).toBeNull();
+    expect(state().sources).toMatchObject([
+      { sheet: 'Commandes', kind: 'order', stats: { docs: 2, lines: 3, headerFound: true } },
+    ]);
+    expect(state().otherSheets).toEqual(['Notes']);
+    expect(state().notice?.text).toBe(
+      t('addin.registry.included', { sheet: 'Commandes', docs: 2 }),
+    );
+    expect(state().registry?.recent.map((d) => [d.kind, d.number, d.sheet, d.netTotal])).toEqual(
+      expect.arrayContaining([
+        ['order', 'C-41', 'Commandes', 4 * 8_500 + 14_000],
+        ['order', 'C-42', 'Commandes', 2 * 14_000],
+      ]),
+    );
+  });
+
+  it('reads « Commandes » again when a cell changes there, while « Factures » stays active', async () => {
+    controller.navigate({ name: 'dashboard' });
+    await until(() => !state().busy.includes('sync'), 'the invoice check');
+    expect(book.active.sheet).toBe(DEMO_SHEET);
+    const invoices = invoiceSyncs();
+    const before = sourceReads();
+    // Two quick edits: one read.
+    book.type('Commandes', 'F2', 5);
+    book.type('Commandes', 'F2', 6);
+    await until(
+      () => sourceReads() > before && !state().busy.includes('source:Commandes'),
+      'the read of Commandes',
+    );
+    await settle();
+    expect(sourceReads()).toBe(before + 1);
+    expect((await order('C-41'))?.netTotal).toBe(6 * 8_500 + 14_000);
+    expect(state().sources[0]?.changedAt).not.toBeNull();
+    // The invoice sheet was not checked again for an edit elsewhere.
+    expect(invoiceSyncs()).toBe(invoices);
+  });
+
+  it('opens the Registre instead of checking « Commandes » as invoices', async () => {
+    book.active = { sheet: 'Commandes', cell: 'A1' };
+    await controller.verifyFromRibbon();
+    expect(state().screen.name).toBe('registry');
+    expect(state().notice?.text).toBe(t('addin.registry.isSource', { sheet: 'Commandes' }));
+    // The invoice sheet keeps its columns.
+    expect(state().sheet).toBe(DEMO_SHEET);
+    expect(state().mapping).not.toBeNull();
+    await controller.showSheet('Commandes');
+    expect(book.active).toEqual({ sheet: 'Commandes', cell: 'A1' });
+    book.active = { sheet: DEMO_SHEET, cell: 'A1' };
+  });
+
+  it('stops listening at sign-out; the next pane reads what changed meanwhile, then follows it', async () => {
+    await controller.signOut();
+    expect(state().sources).toEqual([]);
+    const before = sourceReads();
+    book.type('Commandes', 'F4', 3);
+    await settle();
+    expect(sourceReads()).toBe(before);
+
+    later = pane(book, tokens);
+    await later.controller.start();
+    await later.controller.signInWithKey(key);
+    await until(
+      () => sourceReads() > before && !later.state().busy.includes('source:Commandes'),
+      'the first read',
+    );
+    expect((await order('C-42', later.controller))?.netTotal).toBe(3 * 14_000);
+    expect(later.state().screen.name).toBe('dashboard');
+    expect(later.state().otherSheets).toEqual(['Notes']);
+
+    book.type('Commandes', 'F2', 2);
+    await until(() => sourceReads() > before + 1, 'the read after the edit');
+    await until(() => !later.state().busy.includes('source:Commandes'), 'the read to end');
+    expect((await order('C-41', later.controller))?.netTotal).toBe(2 * 8_500 + 14_000);
+  });
+
+  it('« Retirer » takes the orders out of the registry and stops reading the sheet', async () => {
+    await later.controller.removeSource('Commandes');
+    expect(later.state().sources).toEqual([]);
+    expect(later.state().otherSheets).toEqual(['Commandes', 'Notes']);
+    expect(later.state().notice?.text).toBe(t('addin.registry.removed', { sheet: 'Commandes' }));
+    expect((await later.controller.api.registry()).recent).toEqual([]);
+    const before = sourceReads();
+    book.type('Commandes', 'F2', 1);
+    await settle();
+    expect(sourceReads()).toBe(before);
+    // The sheet itself is untouched.
+    expect(book.cell('Commandes', 'A2')?.text).toBe('C-41');
   });
 });
 

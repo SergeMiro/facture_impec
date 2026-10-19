@@ -33,6 +33,8 @@ export interface StatusPlan {
 
 export interface ExcelPort {
   activeSheet(): Promise<string>;
+  /** The visible sheets, in tab order: the « Registre » proposes those not checked yet. */
+  sheetNames(): Promise<string[]>;
   /** The row of the active cell on the active sheet. */
   activeCell(): Promise<{ sheet: string; row: number }>;
   usedRange(sheet: string): Promise<UsedRange | null>;

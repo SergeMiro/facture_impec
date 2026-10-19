@@ -1,6 +1,13 @@
 // The task pane's only door to the API. Every answer is checked with Zod (rule 4); an API error
 // arrives as ApiFailure with the server's French message, a network failure as Offline.
-import { ChaseDraft, ChaseStep, SheetMapping, type SheetSnapshot } from '@fi/core';
+import {
+  ChaseDraft,
+  ChaseStep,
+  DOC_KINDS,
+  LayoutMapping,
+  SheetMapping,
+  type SheetSnapshot,
+} from '@fi/core';
 import { z } from 'zod';
 
 export class ApiFailure extends Error {
@@ -148,6 +155,66 @@ export const Detection = z.object({ mapping: SheetMapping, degraded: Degraded.nu
 export type Detection = z.infer<typeof Detection>;
 
 const SavedMapping = z.object({ mapping: SheetMapping, updatedAt: z.string() });
+
+/** What one read of an included sheet found (R1). */
+const SourceStats = z.object({
+  docs: z.number(),
+  lines: z.number(),
+  rows: z.number(),
+  ignoredRows: z.number(),
+  unreadRows: z.number(),
+  /** False: the confirmed header row is nowhere in the sheet any more; nothing was read. */
+  headerFound: z.boolean(),
+});
+
+/** A sheet of the workbook the company included in the check (« Inclure cette feuille »). */
+export const Source = z.object({
+  id: z.string(),
+  workbookId: z.string(),
+  sheet: z.string(),
+  kind: z.enum(DOC_KINDS),
+  layout: LayoutMapping,
+  consentedAt: z.string(),
+  readAt: z.string().nullable(),
+  changedAt: z.string().nullable(),
+  stats: SourceStats.nullable(),
+});
+export type Source = z.infer<typeof Source>;
+
+/** What a sheet holds: a profile the company confirmed before, else LayoutAgent or the dictionary. */
+export const LayoutDetection = z.object({
+  layout: LayoutMapping,
+  profile: z.object({ id: z.string(), version: z.number() }).nullable(),
+  degraded: Degraded.nullable(),
+  included: z.boolean(),
+});
+export type LayoutDetection = z.infer<typeof LayoutDetection>;
+
+const SourceRead = z.object({ source: Source, written: z.number(), removed: z.number() });
+export type SourceRead = z.infer<typeof SourceRead>;
+
+/** The « Registre » screen. */
+export const Registry = z.object({
+  sources: z.array(Source),
+  invoices: z.object({ sent: z.number(), received: z.number() }),
+  recent: z.array(
+    z.object({
+      id: z.string(),
+      kind: z.enum(DOC_KINDS),
+      direction: z.enum(['out', 'in']),
+      number: z.string().nullable(),
+      issueDate: z.string().nullable(),
+      partyName: z.string().nullable(),
+      /** Cents; null when a line of the document has no amount. */
+      netTotal: z.number().nullable(),
+      sheet: z.string().nullable(),
+      /** Where the document starts in its sheet, e.g. `Commandes!E2`. */
+      cell: z.string().nullable(),
+      updatedAt: z.string(),
+    }),
+  ),
+});
+export type Registry = z.infer<typeof Registry>;
 
 export const Issue = z.object({
   ruleId: z.string(),
@@ -448,6 +515,9 @@ export type LinkPoll = z.infer<typeof LinkPoll>;
 export const SCENARIOS = ['pdp_reject', 'customer_refuse', 'pay_late', 'siren_unknown'] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
+const sourcesPath = (workbookId: string, sheet?: string) =>
+  `/workbooks/${encodeURIComponent(workbookId)}/sources${sheet === undefined ? '' : `/${encodeURIComponent(sheet)}`}`;
+
 interface RequestOptions {
   method?: string;
   body?: unknown;
@@ -557,6 +627,35 @@ export class ApiClient {
       method: 'POST',
       body,
     });
+
+  /** The workbook's other sheets (R1): orders, delivery notes, purchases, price lists. */
+  detectSource = (workbookId: string, snapshot: SheetSnapshot) =>
+    this.#json(LayoutDetection, `${sourcesPath(workbookId)}/detect`, {
+      method: 'POST',
+      body: { snapshot },
+    });
+  sources = (workbookId: string) =>
+    this.#json(z.object({ sources: z.array(Source) }), sourcesPath(workbookId));
+  /** « Inclure cette feuille »: the confirmed layout, and the whole sheet for its first read. */
+  includeSource = (workbookId: string, layout: LayoutMapping, snapshot: SheetSnapshot) =>
+    this.#json(SourceRead, sourcesPath(workbookId, layout.sheet), {
+      method: 'PUT',
+      body: { layout, snapshot },
+    });
+  removeSource = (workbookId: string, sheet: string) =>
+    this.#json(
+      z.object({ removed: z.boolean(), sheet: z.string() }),
+      sourcesPath(workbookId, sheet),
+      {
+        method: 'DELETE',
+      },
+    );
+  syncSource = (workbookId: string, snapshot: SheetSnapshot) =>
+    this.#json(SourceRead, `${sourcesPath(workbookId, snapshot.sheet)}/sync`, {
+      method: 'POST',
+      body: { snapshot },
+    });
+  registry = () => this.#json(Registry, '/registry');
 
   invoice = (id: string) => this.#json(InvoiceDetail, `/invoices/${id}`);
   /** Where these invoices are now: cheaper than a sync, which reads and validates the whole sheet. */

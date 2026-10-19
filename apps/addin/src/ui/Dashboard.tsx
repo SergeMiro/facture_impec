@@ -7,6 +7,9 @@ import {
   Caption1,
   Card,
   Link,
+  MessageBar,
+  MessageBarActions,
+  MessageBarBody,
   makeStyles,
   Spinner,
   Subtitle2,
@@ -14,6 +17,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import type { RowStatus, WeeklyReport } from '../api';
+import { namedLikeSource } from '../controller';
 import { parisTime, useFi } from './context';
 
 const useStyles = makeStyles({
@@ -78,6 +82,8 @@ export function Dashboard() {
   const rows = sync?.result.rows ?? [];
   const errors = rows.filter((r) => r.tone === 'error').length;
   const ready = rows.filter((r) => r.status === 'validated').length;
+  // Sheets whose name says orders, delivery notes, purchases or prices, not included yet.
+  const suggested = state.otherSheets.filter(namedLikeSource);
 
   return (
     <section className={styles.section} aria-labelledby="dash-title">
@@ -94,6 +100,21 @@ export function Dashboard() {
           sync && <Caption1>{t('addin.dash.lastSync', { time: parisTime(sync.at) })}</Caption1>
         )}
       </div>
+
+      {suggested.length > 0 && (
+        <MessageBar intent="info" layout="multiline" data-testid="registry-hint">
+          <MessageBarBody>
+            {t('addin.registry.hint', {
+              sheets: suggested.slice(0, 3).join(', ') + (suggested.length > 3 ? '…' : ''),
+            })}
+          </MessageBarBody>
+          <MessageBarActions>
+            <Button size="small" onClick={() => fi.navigate({ name: 'registry' })}>
+              {t('addin.registry.open')}
+            </Button>
+          </MessageBarActions>
+        </MessageBar>
+      )}
 
       {state.report ? (
         <Week report={state.report} />

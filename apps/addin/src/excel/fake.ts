@@ -67,6 +67,10 @@ export class FakeWorkbook implements ExcelPort {
     return this.active.sheet;
   }
 
+  async sheetNames() {
+    return [...this.sheets.keys()];
+  }
+
   async activeCell() {
     const row = Number(/\d+$/.exec(this.active.cell)?.[0] ?? 1);
     return { sheet: this.active.sheet, row };

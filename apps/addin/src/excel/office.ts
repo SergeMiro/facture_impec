@@ -29,6 +29,14 @@ export function officeExcelPort(): ExcelPort {
         return sheet.name;
       }),
 
+    sheetNames: () =>
+      run(async (context) => {
+        const sheets = context.workbook.worksheets;
+        sheets.load('items/name, items/visibility');
+        await context.sync();
+        return sheets.items.filter((s) => s.visibility === 'Visible').map((s) => s.name);
+      }),
+
     activeCell: () =>
       run(async (context) => {
         const cell = context.workbook.getActiveCell();

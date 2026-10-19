@@ -1,5 +1,5 @@
 // The task pane: banners on every screen (Mode test, offline, the last notice), then one screen.
-// No router: office.js breaks the history API (docs/OFFICE.md §8), and the pane has eight screens.
+// No router: office.js breaks the history API (docs/OFFICE.md §8), and the pane has nine screens.
 import { t } from '@fi/shared';
 import {
   Button,
@@ -23,6 +23,7 @@ import { Detection } from './Detection';
 import { InvoiceView } from './InvoiceView';
 import { Login } from './Login';
 import { ReceptionView } from './ReceptionView';
+import { RegistryView } from './RegistryView';
 import { SettingsView } from './SettingsView';
 import { Signup } from './Signup';
 import { TEST_ORANGE, theme } from './theme';
@@ -54,6 +55,8 @@ const useStyles = makeStyles({
   },
   brand: { display: 'flex', flexDirection: 'column' },
   center: { display: 'flex', justifyContent: 'center', padding: '48px 0' },
+  // Six tabs are wider than a task pane: they wrap instead of scrolling the pane sideways.
+  tabs: { flexWrap: 'wrap' },
 });
 
 export function App({ controller }: { controller: Controller }) {
@@ -138,6 +141,7 @@ function Pane() {
 
       {signedIn && (
         <TabList
+          className={styles.tabs}
           selectedValue={tab}
           onTabSelect={(_, data) => {
             const name = data.value;
@@ -146,6 +150,7 @@ function Pane() {
               name === 'detect' ||
               name === 'reception' ||
               name === 'customers' ||
+              name === 'registry' ||
               name === 'settings'
             ) {
               fi.navigate({ name });
@@ -157,6 +162,7 @@ function Pane() {
           <Tab value="detect">{t('addin.nav.columns')}</Tab>
           <Tab value="reception">{t('addin.nav.reception')}</Tab>
           <Tab value="customers">{t('addin.nav.customers')}</Tab>
+          <Tab value="registry">{t('addin.nav.registry')}</Tab>
           <Tab value="settings">{t('addin.nav.settings')}</Tab>
         </TabList>
       )}
@@ -193,6 +199,8 @@ function Screen() {
       return <ReceptionView />;
     case 'customers':
       return <CustomersView />;
+    case 'registry':
+      return <RegistryView />;
     case 'settings':
       return <SettingsView />;
   }

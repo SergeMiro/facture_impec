@@ -1,6 +1,14 @@
 // The task pane's state and actions, shared by the screens and the ribbon buttons (one shared runtime,
 // docs/OFFICE.md §2). Screens render `state`; nothing here knows about React.
-import { columnIndex, frDate, parseAddress, SheetMapping } from '@fi/core';
+import {
+  columnIndex,
+  frDate,
+  isDocKind,
+  kindFromName,
+  type LayoutMapping,
+  parseAddress,
+  SheetMapping,
+} from '@fi/core';
 import { type MessageKey, t } from '@fi/shared';
 import {
   type AiChoice,
@@ -14,6 +22,7 @@ import {
   type Inbound,
   type InboundExport,
   type InvoiceDetail,
+  type LayoutDetection,
   type Me,
   type Offer,
   Offline,
@@ -22,12 +31,15 @@ import {
   type PartyPatch,
   type PartyQuery,
   type PostalAddress,
+  type Registry,
   type Rehearsal,
   type RowStatus,
   type Scenario,
   type Settings,
   type SettingsPatch,
   type SignupOffer,
+  type Source,
+  type SourceRead,
   type SyncResult,
   type TestInboundKind,
   type WeeklyReport,
@@ -53,6 +65,7 @@ export type Screen =
   | { name: 'invoice'; id: string; confirmSend: boolean }
   | { name: 'reception' }
   | { name: 'customers' }
+  | { name: 'registry' }
   | { name: 'settings' };
 
 export interface Notice {
@@ -98,6 +111,13 @@ export interface Customers {
   sheetName: string | null;
 }
 
+/** « Inclure cette feuille »: what the sheet holds, for the company to check before saying yes. */
+export interface Inclusion {
+  sheet: string;
+  detection: LayoutDetection;
+  headers: Header[];
+}
+
 export interface FiState {
   booted: boolean;
   /** Office could not start in this window (opened outside Excel, or blocked). */
@@ -117,6 +137,15 @@ export interface FiState {
   reception: Reception | null;
   /** Clients; null until loaded. */
   customers: Customers | null;
+  /** « Registre » (R1): what the included sheets brought, the latest documents; null until loaded. */
+  registry: Registry | null;
+  /** The sheets of this workbook included in the check: each one is read again when it changes. */
+  sources: Source[];
+  /** The visible sheets of the workbook. */
+  sheets: string[];
+  /** Sheets proposed for « Inclure cette feuille »: neither included nor an invoice sheet. */
+  otherSheets: string[];
+  inclusion: Inclusion | null;
   /** Actions running now ('sync', 'detect', 'send', …): their buttons show a spinner. */
   busy: string[];
   /** null when online; otherwise the actions waiting for the connection. */
@@ -146,6 +175,20 @@ export const SHEET_POLL_MS = 30_000;
 export const SHEET_POLL_MAX_MS = 300_000;
 
 const TOKEN_KEY = 'token';
+
+/** The sheet's name says orders, delivery notes, purchases or a price list (« Commandes », « BL »). */
+export const namedLikeSource = (sheet: string): boolean => {
+  const kind = kindFromName(sheet);
+  return kind !== null && isDocKind(kind);
+};
+
+/** An included sheet the pane listens to: its pending auto-read, and the read running now. */
+interface SourceWatch {
+  stop: (() => Promise<void>) | null;
+  timer: unknown;
+  reading: Promise<void> | null;
+  again: boolean;
+}
 
 const PLAYED: Record<Scenario, MessageKey> = {
   pdp_reject: 'addin.scenario.played.pdp_reject',
@@ -194,6 +237,11 @@ const INITIAL: FiState = {
   report: null,
   reception: null,
   customers: null,
+  registry: null,
+  sources: [],
+  sheets: [],
+  otherSheets: [],
+  inclusion: null,
   busy: [],
   offline: null,
   notice: null,
@@ -225,6 +273,8 @@ export class Controller {
   #linkRequest: { id: string; kind: 'login' | 'signup' } | null = null;
   #poll: { timer: unknown; left: number } | null = null;
   #sheetPoll: { timer: unknown; delay: number } | null = null;
+  readonly #sourceWatch = new Map<string, SourceWatch>();
+  #inclusionReading: SheetReading | null = null;
 
   constructor(deps: ControllerDeps) {
     this.#deps = {
@@ -280,6 +330,7 @@ export class Controller {
     if (screen.name === 'dashboard') void this.loadReport();
     if (screen.name === 'reception') void this.loadReception();
     if (screen.name === 'customers') void this.loadCustomers();
+    if (screen.name === 'registry') void this.loadRegistry();
   };
 
   /** The connection is back (browser `online` event). */
@@ -380,12 +431,21 @@ export class Controller {
   async #signedIn(): Promise<void> {
     const me = await this.api.me();
     this.#set({ me, notice: null, link: null, signup: null });
+    await this.#loadSources();
     await this.#openSheet(this.#state.sheet ?? (await this.#deps.port.activeSheet()));
+    void this.#followSources();
   }
 
   /** The mapping of this sheet: from the workbook first, else the server's copy. */
   async #openSheet(sheet: string): Promise<void> {
     const { port } = this.#deps;
+    if (this.#isSource(sheet)) {
+      // An included sheet is read into the Registre, never checked as invoices.
+      if (this.#state.sheet === sheet) this.#set({ sheet: null, mapping: null, sync: null });
+      this.navigate({ name: 'registry' });
+      this.notify('info', t('addin.registry.isSource', { sheet }));
+      return;
+    }
     let mapping: SheetMapping | null = null;
     const local = await port.getSetting(SETTING.mapping(sheet));
     if (local) {
@@ -597,6 +657,8 @@ export class Controller {
     this.#stopFollowing();
     await this.#stopListening?.();
     this.#stopListening = null;
+    await Promise.all([...this.#sourceWatch.keys()].map((sheet) => this.#unwatchSource(sheet)));
+    this.#inclusionReading = null;
     this.#set({
       me: null,
       screen: { name: 'login' },
@@ -608,6 +670,11 @@ export class Controller {
       report: null,
       reception: null,
       customers: null,
+      registry: null,
+      sources: [],
+      sheets: [],
+      otherSheets: [],
+      inclusion: null,
       offline: null,
       link: null,
       signup: null,
@@ -661,7 +728,12 @@ export class Controller {
     if (!workbookId) return;
     await this.#act('confirm', async () => {
       await this.#deps.port.setSetting(SETTING.mapping(mapping.sheet), JSON.stringify(mapping));
-      this.#set({ mapping, detection: null, screen: { name: 'dashboard' } });
+      this.#set({
+        mapping,
+        detection: null,
+        screen: { name: 'dashboard' },
+        otherSheets: this.#state.otherSheets.filter((s) => s !== mapping.sheet),
+      });
       void this.#act('saveMapping', () => this.api.saveMapping(workbookId, mapping), {
         key: `mapping:${mapping.sheet}`,
         label: t('addin.offline.mapping'),
@@ -1213,6 +1285,236 @@ export class Controller {
     });
     this.notify('success', t('addin.customers.removed', { name: party?.legalName ?? '' }));
     void this.sync();
+  };
+
+  // ── Registre: the workbook's other sheets (R1) ────────────────────────────────────────────────
+  #isSource(sheet: string): boolean {
+    return this.#state.sources.some((s) => s.sheet === sheet);
+  }
+
+  /**
+   * Visible sheets that are neither included nor an invoice sheet (one with confirmed columns); those
+   * whose name says orders, delivery notes, purchases or prices first.
+   */
+  async #proposals(sheets: string[], sources: Source[]): Promise<string[]> {
+    const included = new Set(sources.map((s) => s.sheet));
+    const out: string[] = [];
+    for (const sheet of sheets) {
+      if (included.has(sheet) || (sheet === this.#state.sheet && this.#state.mapping)) continue;
+      if (await this.#deps.port.getSetting(SETTING.mapping(sheet))) continue;
+      out.push(sheet);
+    }
+    return [...out.filter(namedLikeSource), ...out.filter((s) => !namedLikeSource(s))];
+  }
+
+  /** At sign-in: the included sheets of this workbook. Never stops the invoices from opening. */
+  async #loadSources(): Promise<void> {
+    const { workbookId } = this.#state;
+    if (!workbookId) return;
+    try {
+      const [{ sources }, sheets] = await Promise.all([
+        this.api.sources(workbookId),
+        this.#deps.port.sheetNames(),
+      ]);
+      this.#set({ sources, sheets, otherSheets: await this.#proposals(sheets, sources) });
+    } catch {
+      // Offline or a hiccup: the Registre asks again when it opens.
+    }
+  }
+
+  /**
+   * Listens to every included sheet still in the workbook, and reads the new ones once: changes made
+   * while the pane was closed reach the Registre too. Stops listening to the sheets removed elsewhere.
+   */
+  async #followSources(): Promise<void> {
+    try {
+      const wanted = new Set(this.#state.sources.map((s) => s.sheet));
+      for (const sheet of this.#sourceWatch.keys()) {
+        if (!wanted.has(sheet)) await this.#unwatchSource(sheet);
+      }
+      for (const { sheet } of this.#state.sources) {
+        if (this.#sourceWatch.has(sheet) || !this.#state.sheets.includes(sheet)) continue;
+        await this.#watchSource(sheet);
+        void this.syncSource(sheet);
+      }
+    } catch (e) {
+      this.#fail(e);
+    }
+  }
+
+  async #watchSource(sheet: string): Promise<void> {
+    if (this.#sourceWatch.has(sheet)) return;
+    const watch: SourceWatch = { stop: null, timer: null, reading: null, again: false };
+    this.#sourceWatch.set(sheet, watch);
+    try {
+      watch.stop = await this.#deps.port.onChange(sheet, () => {
+        if (!this.#state.me) return;
+        if (watch.timer !== null) this.#deps.timers.clearTimeout(watch.timer);
+        watch.timer = this.#deps.timers.setTimeout(() => {
+          watch.timer = null;
+          void this.syncSource(sheet);
+        }, AUTO_SYNC_MS);
+      });
+    } catch (e) {
+      this.#sourceWatch.delete(sheet);
+      throw e;
+    }
+  }
+
+  async #unwatchSource(sheet: string): Promise<void> {
+    const watch = this.#sourceWatch.get(sheet);
+    if (!watch) return;
+    this.#sourceWatch.delete(sheet);
+    if (watch.timer !== null) this.#deps.timers.clearTimeout(watch.timer);
+    await watch.stop?.();
+  }
+
+  #putSource(source: Source): void {
+    const sources = [...this.#state.sources.filter((s) => s.sheet !== source.sheet), source];
+    this.#set({ sources: sources.sort((a, b) => a.sheet.localeCompare(b.sheet)) });
+  }
+
+  /** « Lire maintenant », and every change to an included sheet: only what changed is written. */
+  syncSource = async (sheet: string): Promise<void> => {
+    const watch = this.#sourceWatch.get(sheet);
+    if (watch?.reading) {
+      watch.again = true;
+      return watch.reading;
+    }
+    const reading = (async () => {
+      do {
+        if (watch) watch.again = false;
+        await this.#act(`source:${sheet}`, () => this.#syncSourceOnce(sheet), {
+          key: `source:${sheet}`,
+          label: t('addin.offline.source', { sheet }),
+        });
+      } while (watch?.again);
+    })().finally(() => {
+      if (watch) watch.reading = null;
+    });
+    if (watch) watch.reading = reading;
+    return reading;
+  };
+
+  async #syncSourceOnce(sheet: string): Promise<void> {
+    const { workbookId } = this.#state;
+    if (!workbookId || !this.#state.me || !this.#isSource(sheet)) return;
+    const { snapshot } = readUsedRange(sheet, await this.#deps.port.usedRange(sheet));
+    let read: SourceRead;
+    try {
+      read = await this.api.syncSource(workbookId, snapshot);
+    } catch (e) {
+      // Removed from another pane in the meantime: nothing left to read.
+      if (e instanceof ApiFailure && e.status === 404) return this.#forgetSource(sheet);
+      throw e;
+    }
+    const before = this.#state.sources.find((s) => s.sheet === sheet)?.stats;
+    this.#putSource(read.source);
+    if (before?.headerFound !== false && read.source.stats?.headerFound === false) {
+      this.notify('warning', t('addin.registry.headerLost', { sheet }));
+    }
+    const changed = read.written > 0 || read.removed > 0;
+    if (changed && this.#state.screen.name === 'registry') await this.#refreshRegistry();
+  }
+
+  async #forgetSource(sheet: string): Promise<void> {
+    await this.#unwatchSource(sheet);
+    const sources = this.#state.sources.filter((s) => s.sheet !== sheet);
+    this.#set({ sources, otherSheets: await this.#proposals(this.#state.sheets, sources) });
+  }
+
+  async #refreshRegistry(): Promise<void> {
+    try {
+      this.#set({ registry: await this.api.registry() });
+    } catch {
+      // Not worth a notice: the screen keeps what it showed, the next read asks again.
+    }
+  }
+
+  /** The « Registre » screen: the totals, this workbook's sheets, and the sheets to propose. */
+  loadRegistry = async (): Promise<void> => {
+    const { workbookId } = this.#state;
+    if (!workbookId) return;
+    await this.#act('registry', async () => {
+      const [registry, { sources }, sheets] = await Promise.all([
+        this.api.registry(),
+        this.api.sources(workbookId),
+        this.#deps.port.sheetNames(),
+      ]);
+      this.#set({
+        registry,
+        sources,
+        sheets,
+        otherSheets: await this.#proposals(sheets, sources),
+      });
+    });
+    await this.#followSources();
+  };
+
+  /** « Inclure cette feuille » / « Revoir les colonnes »: what the sheet holds. Nothing is saved. */
+  includeSheet = async (sheet: string): Promise<void> => {
+    const { workbookId } = this.#state;
+    if (!workbookId) return;
+    this.#inclusionReading = null;
+    this.#set({ inclusion: null });
+    await this.#act(`include:${sheet}`, async () => {
+      const reading = readUsedRange(sheet, await this.#deps.port.usedRange(sheet));
+      if (reading.snapshot.rows.length === 0) {
+        this.notify('info', t('addin.detect.empty', { sheet }));
+        return;
+      }
+      const detection = await this.api.detectSource(workbookId, detectionSample(reading.snapshot));
+      this.#inclusionReading = reading;
+      const headers = headersOf(reading.snapshot, detection.layout.headerRow);
+      this.#set({ inclusion: { sheet, detection, headers }, notice: null });
+    });
+  };
+
+  /** The column headers of another row, when the company moves the header row. */
+  inclusionHeaders = (row: number): Header[] =>
+    this.#inclusionReading ? headersOf(this.#inclusionReading.snapshot, row) : [];
+
+  cancelInclusion = (): void => {
+    this.#inclusionReading = null;
+    this.#set({ inclusion: null });
+  };
+
+  /** The company confirmed what the sheet holds: the whole sheet is read once, then followed. */
+  confirmLayout = async (layout: LayoutMapping): Promise<void> => {
+    const { workbookId } = this.#state;
+    if (!workbookId) return;
+    const { sheet } = layout;
+    const read = await this.#act('include', async () => {
+      const { snapshot } = readUsedRange(sheet, await this.#deps.port.usedRange(sheet));
+      return this.api.includeSource(workbookId, layout, snapshot);
+    });
+    if (!read) return;
+    this.#inclusionReading = null;
+    this.#putSource(read.source);
+    this.#set({ inclusion: null, otherSheets: this.#state.otherSheets.filter((s) => s !== sheet) });
+    this.notify(
+      'success',
+      t('addin.registry.included', { sheet, docs: read.source.stats?.docs ?? 0 }),
+    );
+    await this.#act('include', () => this.#watchSource(sheet));
+    await this.#refreshRegistry();
+  };
+
+  /** « Retirer »: the sheet leaves the check, its documents leave the Registre; the sheet stays. */
+  removeSource = async (sheet: string): Promise<void> => {
+    const { workbookId } = this.#state;
+    if (!workbookId) return;
+    const done = await this.#act(`source:${sheet}`, () => this.api.removeSource(workbookId, sheet));
+    if (!done) return;
+    await this.#forgetSource(sheet);
+    this.notify('success', t('addin.registry.removed', { sheet }));
+    await this.#refreshRegistry();
+  };
+
+  /** « Voir la feuille »: activates it at its header row. */
+  showSheet = async (sheet: string): Promise<void> => {
+    const row = this.#state.sources.find((s) => s.sheet === sheet)?.layout.headerRow ?? 1;
+    await this.#act('select', () => this.#deps.port.select(sheet, `A${row}`));
   };
 
   // ── Réglages ──────────────────────────────────────────────────────────────────────────────────
