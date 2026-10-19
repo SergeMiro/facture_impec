@@ -32,8 +32,13 @@ pnpm --filter @fi/site dev       # http://localhost:4321
 pnpm --filter @fi/site build     # static pages + Vercel function in apps/site/.vercel/output
 ```
 
-Trial requests need a Supabase project: run `apps/site/sql/001_trial_requests.sql` once in its SQL
-editor, then set `SUPABASE_URL` and `SUPABASE_SECRET_KEY` (server secret, `sb_secret_…`) in Vercel.
+Trial requests go to the Supabase project `facture-impec` (`adphrypzszrohihaetnu`, Paris, org « SergeMiro
+Projects », free plan, created 2026-10-19). `apps/site/sql/001_trial_requests.sql` then `002_submit_trial_request.sql`
+are applied there: the table has RLS and no grant, and the site writes only through the function
+`submit_trial_request`, so the key it holds is the project's **publishable** key (`sb_publishable_…`), which
+can do nothing else. Vercel has `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in production; a secret key is
+never needed by the site. Supabase's advisor flags the function as « SECURITY DEFINER executable by
+anon »: that is the intended door.
 Without them, `pnpm dev` accepts the form and only logs it; production answers 503 with a calm
 French message. Optional: `TRIAL_NOTIFY_TELEGRAM_BOT_TOKEN` + `TRIAL_NOTIFY_TELEGRAM_CHAT_ID`.
 

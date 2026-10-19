@@ -92,7 +92,7 @@ describe('ServerEnvSchema', () => {
       'PUBLIC_SITE_URL',
       'PUBLIC_CONTACT_EMAIL',
       'SUPABASE_URL',
-      'SUPABASE_SECRET_KEY',
+      'SUPABASE_PUBLISHABLE_KEY',
       'TRIAL_NOTIFY_TELEGRAM_BOT_TOKEN',
       'TRIAL_NOTIFY_TELEGRAM_CHAT_ID',
     ];

@@ -1,6 +1,7 @@
 -- Trial-access requests from the marketing site (apps/site/src/pages/api/trial.ts).
--- Apply once to the Supabase project whose URL and secret key the site uses.
--- Only the server-side secret key reads or writes this table: RLS is on and there is no policy.
+-- Apply once, then 002_submit_trial_request.sql, to the Supabase project the site uses (facture-impec,
+-- adphrypzszrohihaetnu, Paris, since 2026-10-19). RLS is on and there is no policy: the site writes
+-- only through submit_trial_request (002); people read the table in the Supabase dashboard.
 
 create table if not exists public.trial_requests (
   id uuid primary key default gen_random_uuid(),
@@ -20,7 +21,7 @@ create table if not exists public.trial_requests (
   consent_at timestamptz not null default now()
 );
 
--- One request per e-mail: a repeated submission is ignored by the endpoint (on_conflict=email).
+-- One request per e-mail: a repeated submission is ignored (submit_trial_request, on conflict do nothing).
 create unique index if not exists trial_requests_email_key on public.trial_requests (email);
 
 alter table public.trial_requests enable row level security;

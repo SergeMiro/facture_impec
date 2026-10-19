@@ -60,34 +60,34 @@ export async function handleTrial(request: Request, config: TrialConfig): Promis
       console.info('[trial] storage not configured, request accepted in dev only:', req);
       return json(200, { ok: true });
     }
-    console.error('[trial] SUPABASE_URL / SUPABASE_SECRET_KEY missing: request rejected');
+    console.error('[trial] SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY missing: request rejected');
     return json(503, { ok: false, message: messages.unavailable });
   }
 
   const headers: Record<string, string> = {
     apikey: supabaseKey,
     'content-type': 'application/json',
-    // A repeated request from the same e-mail is a success, not an error.
-    prefer: 'resolution=ignore-duplicates,return=minimal',
   };
-  // Legacy service_role keys are JWTs and also go in Authorization; sb_secret_ keys must not.
+  // Legacy anon keys are JWTs and also go in Authorization; sb_publishable_ keys must not.
   if (supabaseKey.startsWith('eyJ')) headers.authorization = `Bearer ${supabaseKey}`;
 
   try {
-    const res = await fetch(`${supabaseUrl}/rest/v1/trial_requests?on_conflict=email`, {
+    // The only thing the key may do (apps/site/sql/002_submit_trial_request.sql): insert one request.
+    // A repeated e-mail is ignored there, so it is a success here too.
+    const res = await fetch(`${supabaseUrl}/rest/v1/rpc/submit_trial_request`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        first_name: req.firstName,
-        last_name: req.lastName,
-        email: req.email,
-        company: req.company,
-        siren: req.siren ?? null,
-        profile: req.profile,
-        invoices_per_month: req.invoicesPerMonth,
-        excel: req.excel,
-        plan: req.plan ?? null,
-        message: req.message ?? null,
+        p_first_name: req.firstName,
+        p_last_name: req.lastName,
+        p_email: req.email,
+        p_company: req.company,
+        p_siren: req.siren ?? null,
+        p_profile: req.profile,
+        p_invoices_per_month: req.invoicesPerMonth,
+        p_excel: req.excel,
+        p_plan: req.plan ?? null,
+        p_message: req.message ?? null,
       }),
       signal: AbortSignal.timeout(8_000),
     });

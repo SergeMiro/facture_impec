@@ -24,7 +24,11 @@ export default defineConfig({
   env: {
     schema: {
       SUPABASE_URL: envField.string({ context: 'server', access: 'secret', optional: true }),
-      SUPABASE_SECRET_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
+      SUPABASE_PUBLISHABLE_KEY: envField.string({
+        context: 'server',
+        access: 'secret',
+        optional: true,
+      }),
       TRIAL_NOTIFY_TELEGRAM_BOT_TOKEN: envField.string({
         context: 'server',
         access: 'secret',

@@ -16,7 +16,7 @@ const valid = {
 const human = () => Date.now() - 10_000;
 const stored: TrialConfig = {
   supabaseUrl: 'https://example.supabase.co',
-  supabaseKey: 'sb_secret_test',
+  supabaseKey: 'sb_publishable_test',
   dev: false,
 };
 
@@ -72,27 +72,26 @@ describe('handleTrial', () => {
     expect(prod.body.message).toContain('n’a pas été enregistrée');
   });
 
-  it('inserts one normalised row through PostgREST, idempotent on e-mail', async () => {
+  it('stores one normalised request through the only function the key may call', async () => {
     const fetch = stubFetch(201);
     expect((await call({ ...valid, startedAt: human() }, stored)).status).toBe(200);
     expect(fetch).toHaveBeenCalledTimes(1);
     const [url, init] = fetch.mock.calls[0] ?? [];
-    expect(url).toBe('https://example.supabase.co/rest/v1/trial_requests?on_conflict=email');
+    expect(url).toBe('https://example.supabase.co/rest/v1/rpc/submit_trial_request');
     const headers = init?.headers as Record<string, string>;
-    expect(headers.apikey).toBe('sb_secret_test');
+    expect(headers.apikey).toBe('sb_publishable_test');
     expect(headers.authorization).toBeUndefined();
-    expect(headers.prefer).toContain('resolution=ignore-duplicates');
     expect(JSON.parse(String(init?.body))).toEqual({
-      first_name: 'Claire',
-      last_name: 'Martin',
-      email: 'claire@example.fr',
-      company: 'Boulangerie Martin',
-      siren: '812345676',
-      profile: 'company',
-      invoices_per_month: '20to100',
-      excel: 'mac',
-      plan: 'croissance',
-      message: null,
+      p_first_name: 'Claire',
+      p_last_name: 'Martin',
+      p_email: 'claire@example.fr',
+      p_company: 'Boulangerie Martin',
+      p_siren: '812345676',
+      p_profile: 'company',
+      p_invoices_per_month: '20to100',
+      p_excel: 'mac',
+      p_plan: 'croissance',
+      p_message: null,
     });
   });
 
