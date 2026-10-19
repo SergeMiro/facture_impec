@@ -45,6 +45,16 @@ French message. Optional: `TRIAL_NOTIFY_TELEGRAM_BOT_TOKEN` + `TRIAL_NOTIFY_TELE
 Read new requests: Supabase table editor → `trial_requests` (newest first); set `status` to
 `contacted`, `active` or `declined` as you go.
 
+Keep-alive: a free project is paused after ~7 days without database activity, and trial requests are
+too rare to count on. `apps/site/sql/003_keepalive.sql` (applied 2026-10-19) adds a one-row `heartbeat`
+table and `keepalive()`, callable only with the project's **secret** key. On the VPS, cron
+`47 5 * * *` (UTC) runs `~/.local/bin/fi-supabase-keepalive`, which calls `POST /rest/v1/rpc/keepalive`
+(3 attempts), logs `OK 200 seen_at=…` to `~/.local/log/fi-supabase-keepalive.log` and, on failure, sends a
+Telegram alert. Its settings (project ref, secret key, alert bot) are in
+`~/.config/facture-impec/supabase-keepalive.env` (chmod 600); after rotating the secret key, replace the
+line there. Proof it runs: `select seen_at, hits from public.heartbeat`. If the project is paused anyway,
+restore it from the Supabase dashboard; data is kept.
+
 Deploy: Vercel project `facture-impec-site` (team `sergemiros-projects`, created 2026-10-18, framework
 Astro, Node 22), production https://facture-impec-site.vercel.app. It is not linked to git: pushes deploy
 nothing, the CLI does. Link the folder once (`apps/site/.vercel` is ignored), then build with Astro, whose
