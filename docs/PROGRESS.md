@@ -527,3 +527,59 @@ Criteria, written here before the work:
 | Load test | `pnpm load:sync`, PGlite in memory, 2026-10-19: first sync of 4 999 rows (one invoice each) 62.4 s, 34 993 writes (7 per new invoice); repeat sync 2.0 s, 0 writes; one cell changed 1.9 s, 7 writes, 1 invoice written; registry of 52 000 lines (13 sheets of 800 invoices × 5 lines) projected in 17.1 s (target < 30 s), again 0.1 s. The first sync of a full sheet is the slow one: `docs/DEFERRED.md`. |
 | Docs | `docs/ARCHITECTURE.md` › The add-in never owns business logic (the API validates), › What R0 added and its decisions; `docs/DEFERRED.md` › registry tables of the later stages, sweep split per company, percentage discounts, BT-156/157 in the sheet, first sync in batches. |
 | Gate | `pnpm verify` green on 2026-10-19 (tests with `--concurrency=2`, the server's swap being full): api 198, core 530 + oracle 276, agents 89, add-in 53, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. |
+
+## R1 — Every sheet of the workbook (started 2026-10-19)
+
+R0 gave the registry its tables and filled them with invoices. R1 lets the company's other sheets in:
+customer orders, delivery notes, purchases, price lists. An agent reads a layout it has never seen, the
+user confirms it in the pane, and from then on every edit of that sheet reaches the registry. Nothing is
+checked against them yet (R2). Criteria, written here before the work:
+
+- **Four kinds of sheet**: `packages/core` reads a sheet of customer orders (« Commandes »), delivery
+  notes (« BL »), purchases (« Achats ») or a price list (« Tarifs ») into registry documents: number,
+  date, customer or supplier (name, SIREN), the order a delivery note delivers, and lines (article
+  reference, designation, quantity, unit, unit price, net amount in cents, VAT rate, source cell). A row
+  it cannot place is counted, never guessed. A dictionary proposes the kind (sheet name, headers) and the
+  columns, as `detectMapping` does for invoices.
+- **LayoutAgent**: an extension of MappingAgent (same masking, budget, orchestrator and guardrails),
+  prompt `packages/agents/prompts/layout.md`. It sees the headers and about twenty rows, pseudonymized,
+  and answers the kind and the columns, each with a confidence; it is called only when the company has
+  no profile for those headers. AI off or failing: the dictionary answers, and the pane says so.
+- **Eval**: 20 layouts (5 orders, 5 delivery notes, 5 purchases, 5 price lists, each with a trap), scored
+  on the key fields (the kind, number, date, customer or supplier, article reference, designation,
+  quantity, unit price): ≥ 95 % with a live model, recorded and replayed by `pnpm verify`; the
+  dictionary's score recorded as the floor.
+- **Layout profiles**: `layout_profiles` keeps a confirmed layout per company (fingerprint of the
+  headers, kind, columns → fields, who confirmed, version); a sheet with known headers, in any workbook,
+  is recognized without calling the model.
+- **Confirmation in the pane**: a sheet is read only after the user confirmed its kind and columns
+  (« Inclure cette feuille »), columns under 0.8 marked « à confirmer ». `sources` keeps each included
+  sheet with the date of that consent; « Retirer » deletes its documents from the registry.
+- **Events on every included sheet**: while the workbook is open, each included sheet is followed by its
+  own change event and read once when the pane opens. An edit in « Commandes » reaches the registry in
+  one sync: API test (one cell changed → one document written again; the same sheet again → 0 writes)
+  and pane test (typing in « Commandes » while « Factures » is the active sheet syncs « Commandes »).
+- **Screen « Registre »**: one card per source (kind, rows, documents, last change, rows not understood),
+  the invoice sheet included; the workbook's other sheets, those whose name suggests a kind first, with
+  « Inclure »; a click on a document selects its cell in the workbook. The tableau de bord points to
+  sheets that look like orders, delivery notes, purchases or price lists and are not included yet.
+- **Audit and RGPD**: including, confirming, removing and every read that changed the registry write an
+  audit event; the export and the deletion of a company cover `layout_profiles` and `sources`;
+  `docs/RGPD.md` lists the new processing.
+- **Docs**: `docs/ARCHITECTURE.md` (what R1 added, its decisions), `docs/DEFERRED.md` (what waits),
+  `docs/AI_PROVIDERS.md` (the LayoutAgent eval).
+
+### Evidence (2026-10-19)
+
+| Criterion | Evidence |
+|---|---|
+| Four kinds of sheet | `packages/core/src/layout/layout.test.ts` › reads it in the sheet name, purchases first, › reads it in the headers when the name says nothing, and asks when they disagree, › maps an order sheet below its title rows, › tells the delivered order from the delivery note, and the delivered quantity from the ordered one, › takes the supplier and the purchase price on a purchase sheet, never the sale price, › reads a price list as the company own prices, without number, date or company, › never takes a customer code, an invoice number or a later date for the document, › keeps a « TVA » column of amounts out of the rate, › groups the lines of each order, the number repeated or left blank, › makes a row without a number its own document, and reads a price list as one document, › says what is missing, and what it cannot read (a row it cannot place is counted in `unreadRows`). |
+| LayoutAgent | `packages/agents/src/layout.test.ts` › falls back to the header dictionary when AI is off, and says so first, › uses the agent answer under its own phase, flagging columns under 0.8, › never shows the model the suppliers or their identifiers, › falls back with degraded "error" when the model keeps failing, › drops unknown fields, bad or empty columns, and keeps one column per field, › keeps the dictionary kind when the model invents one, › refuses a SIREN column whose header does not say SIREN, › re-hydrates the model warnings and drops those with invented tokens (12 tests). The model sees the headers and 25 rows. Called only without a profile: `apps/api/src/sources.test.ts` › finds a confirmed layout again for the same headers, even lower in another sheet. |
+| Eval | `packages/agents/evals/evals.test.ts` › LayoutAgent eval fixtures › are 20 sheets, five of each kind; › header dictionary alone: 96.25 % (the floor, optimistic); › recording llmfp-smart: made with the current prompt, 97.5 % (free models, not a gate: `delivery-04` fell back after 3 retries). A gating recording waits for the owner's choice of provider (`docs/DEFERRED.md`, `docs/AI_PROVIDERS.md`). |
+| Layout profiles | Migration `0010_sources.sql`; `apps/api/src/sources.test.ts` › finds a confirmed layout again for the same headers, even lower in another sheet (same profile, no agent call, the version rises only when the kind or a column changes), › reads every document again under another kind. |
+| Confirmation in the pane | `apps/addin/src/controller.test.ts` › proposes the other sheets, then includes « Commandes » once the company confirms it (nothing saved before « Confirmer et inclure »); `apps/api/src/sources.test.ts` › proposes what it holds, reads it into the registry once included, cell by cell, › refuses an invoice sheet, a sheet it never included, and a sheet another company included. Columns under 0.8 carry « À confirmer » (`RegistryView.tsx`, the agent's `needsConfirmation`). « Retirer »: › shows each included sheet and its latest documents; « Retirer » takes them out. |
+| Events on every included sheet | API: `apps/api/src/sources.test.ts` › rewrites the one document it touched; the same snapshot again writes nothing. Pane: `apps/addin/src/controller.test.ts` › reads « Commandes » again when a cell changes there, while « Factures » stays active (two quick edits, one read, no invoice sync), › stops listening at sign-out; the next pane reads what changed meanwhile, then follows it, › « Retirer » takes the orders out of the registry and stops reading the sheet. E2E (`apps/addin/e2e/harness.spec.ts`, local Chrome, browser: local) › Registre: « Commandes » is included, and an edit there reaches the registry: F2 typed in « Commandes », the order C-41 goes from 480,00 € to 565,00 € HT in « Registre » ([confirmation](evidence/r1-registry-confirm.png), [registre](evidence/r1-registry.png)). |
+| Screen « Registre » | `RegistryView.tsx`: the invoice sheet's card, one card per included sheet (kind, sheet rows, documents and lines, last read, last change, rows not understood, the header lost), the other visible sheets with orders, delivery notes, purchases and price lists first (`Controller` › proposes the other sheets…), « Voir dans la feuille » on each document selects its cell (`apps/api/src/sources.test.ts` › the cells; E2E: name box `E2`). An included sheet made active opens the Registre: › opens the Registre instead of checking « Commandes » as invoices. The Tableau de bord's hint names only sheets whose name says orders, delivery notes, purchases or price lists. The sixth tab wraps the tab list instead of scrolling the pane sideways; the E2E step checks the pane's width. Office.js: `WorksheetCollection.items`, `Worksheet.visibility` in `docs/OFFICE.md` §5. |
+| Audit and RGPD | `apps/api/src/sources.test.ts` counts `layout_profile.confirm`, `source.include`, `source.read` (only when the registry changed) and `source.remove`; › exports the included sheets and their layouts, and deletes them with the account; `packages/db/src/db.test.ts` lists the new tables. `docs/RGPD.md`: included sheets, layout profiles, the registry from sheets, export and erasure. |
+| Docs | `docs/ARCHITECTURE.md` › What R1 added: every sheet of the workbook, and its decisions; `docs/DEFERRED.md` › registry tables (row_state not needed), FI_Registre sheet, changed rows only, more than 5 000 rows, supplier price lists, cost price, one mapping table, a status column, a gating LayoutAgent recording, suggestions from headers, a renamed sheet; `docs/AI_PROVIDERS.md` › LayoutAgent. |
+| Gate | `pnpm verify` green on 2026-10-19 (tests with `--concurrency=2`): api 206, core 544 + oracle 276, agents 105, add-in 58, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local). |

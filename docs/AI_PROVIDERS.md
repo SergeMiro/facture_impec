@@ -118,6 +118,15 @@ credit note / contact the customer; gate when one is set: ≥ 85 %, and never a 
 |---|---|---|---|
 | 2026-10-18 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 11/13 (85 %) | `total`: the draft was refused by the guardrail and fell back to the three options; `billed-twice`: no proposal; `monitor.llmfp-smart.json`, not a gate |
 
+LayoutAgent (R1), 20 sheets of `evals/layout.fixtures.ts` (five orders, delivery notes, purchases and
+price lists), the kind and 7 key fields (number, date, other party, reference, designation, quantity,
+unit price; gate: ≥ 95 %):
+
+| Date | Provider / model | Kind + key fields | Notes |
+|---|---|---|---|
+| 2026-10-19 | none (dictionary only, `detectLayout`) | 96.25 % | optimistic: the dictionary was tuned next to these sheets; the floor, not a proof |
+| 2026-10-19 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 97.5 % | `delivery-04` fell back to the dictionary after 3 retries, `delivery-01` missed the reference column; `layout.llmfp-smart.json`, not a gate |
+
 Not recorded yet: Mistral and Claude (need a paid key: owner), and ExplainAgent against a live model
 (its guardrail tests run on scripted answers).
 

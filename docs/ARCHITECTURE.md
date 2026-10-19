@@ -432,6 +432,50 @@ whole list), `packages/core/src/sheet/sheet.test.ts` › article reference and d
 | An article's identity | The company's own reference, else its normalized name; a bought line without the company's reference stays the supplier's article | Which of the company's articles a supplier line is will be a decision of a later stage (with its evidence), never a guess while projecting. |
 | A percentage discount | Not supported: left unmapped with a warning, or stopped by BR-41 when mapped by hand | A percentage needs its base amount and rounding rules (BT-137/138); the smallest correct version takes the amount (`docs/DEFERRED.md`). |
 
+## What R1 added: every sheet of the workbook
+
+R1 lets the company's other sheets into the registry: customer orders, delivery notes, purchases and price
+lists (criteria in `docs/PROGRESS.md` R1). Nothing is checked against them yet (R2).
+
+```
+« Inclure cette feuille » ─► the first 50 rows ─► a profile for these headers? ─► yes: reused as is
+                                                └─► no: LayoutAgent (pseudonymized) ─► guard ─► else the dictionary
+the user checks the kind and columns ─► PUT …/sources/:sheet ─► layout_profiles (version +1 if changed)
+                                                             └─► sources (consent) ─► first read
+a change in that sheet (its own event, 1.5 s) ─► POST …/sources/:sheet/sync with the whole sheet
+   same rows as last time ─► nothing written
+   header row moved ─► found again by its fingerprint      not found ─► nothing read, the pane says so
+   else ─► only the documents whose content changed are written again; those gone are deleted
+```
+
+| Path | What it does |
+|---|---|
+| `packages/core/src/layout` | The four kinds and their fields (`fields.ts`); the dictionary that proposes a kind from the sheet's name and headers, and the columns (`detect.ts`); `readLayout` turns a confirmed layout into documents and lines in cents with their source cells, a row it cannot place counted, never guessed (`read.ts`). A price list is one document, the company's own prices; a row is an article only with a price, or a reference and a name. |
+| `packages/agents/src/layout.ts`, `prompts/layout.md` | LayoutAgent: MappingAgent's masking, budget and orchestrator under its own phase `layout`. The supplier column is masked too (a sole trader is a person); article references stay readable. `guardLayout` keeps only real columns and fields the kind reads, a SIREN column only under a SIREN header, and the dictionary's sure columns where the model said nothing. |
+| `apps/api/src/sources.ts` | `detectSource` (a profile first, else the agent, nothing saved), `includeSource` (profile and consent, then a first read), `syncSource` (the etag of the rows, the header found again, one version per document), `removeSource`, `registryView` (the « Registre » screen, each document with the cell it starts at). |
+| `apps/addin/src/controller.ts` | One change listener per included sheet, independent of the invoice sheet's; each one read when the pane opens. An included sheet made active opens the Registre, never the invoice detection. |
+| `apps/addin/src/ui/RegistryView.tsx` | « Registre »: the invoice sheet, each included sheet (documents, lines, last read, rows not understood, the header lost), the other sheets with « Inclure cette feuille » (names that say orders or purchases first), the confirmation of a layout, the latest documents with « Voir dans la feuille ». |
+
+Tables: migration `0010_sources.sql` (`layout_profiles`, `sources`; `docs.kind`, `source_id`, `source_key`,
+`order_ref`). Eval: `pnpm --filter @fi/agents eval:record layout` (`docs/AI_PROVIDERS.md`).
+
+Tests: `packages/core/src/layout/layout.test.ts`, `packages/agents/src/layout.test.ts`,
+`packages/agents/evals/evals.test.ts` › LayoutAgent, `apps/api/src/sources.test.ts`,
+`apps/addin/src/controller.test.ts` › the other sheets of the workbook (R1), `apps/addin/e2e/harness.spec.ts`
+› Registre.
+
+### Decisions taken in R1
+
+| Topic | Decision | Why |
+|---|---|---|
+| What a sheet holds | Proposed by a profile, LayoutAgent or the dictionary; read only after the user confirmed the kind and every column | An LLM never decides what the company's data means (plan §0); the confirmation is also the consent recorded in `sources`. |
+| Remembering a layout | One profile per company and header fingerprint, in any workbook; its version rises only when the kind or a column changed | Next month's sheet with the same headers needs no agent call and no question. |
+| A changed sheet | The pane sends the whole sheet; the API compares the etag of the rows, then one version per document, and writes only what changed | The simplest exact answer: a row-level state table (`row_state`) would save upload, not writes, below the 5 000-row limit (`docs/DEFERRED.md`). |
+| A row inserted above the headers | The confirmed header row is found again by its fingerprint; if it is gone, nothing is read and the documents stay | Reading with the wrong header row would turn the headers into a document or shift every column. |
+| An invoice sheet or « Autre » | Not included (`422 layout_kind_unsupported`); invoices keep their own path | Invoices are validated and sent; a registry copy would be a second truth. |
+| Sheets proposed on the Tableau de bord | By their name only (« Commandes », « BL », « Achats », « Tarifs ») | The pane reads no other sheet before the user asks for it. |
+| A purchase line's article | The supplier's article (`supplier:<supplier>:ref:<reference>`) | Which of the company's own articles it is will be decided later with its evidence (R0 rule), never guessed while reading. |
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than
