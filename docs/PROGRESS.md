@@ -507,9 +507,23 @@ Criteria, written here before the work:
   RGPD export and deletion cover the new tables.
 - **Mapping fields**: « Référence article » (BT-155) and « Remise » (line discount amount, BT-136) can
   be mapped, by detection or by hand, and reach the invoice and the registry.
-- **Load test**: `pnpm load:sync` (in-process, PGlite, or Postgres with `DATABASE_URL`) measures the
-  first sync of a 5 000-row sheet, a repeat sync (0 writes), a one-cell edit (1 invoice written), and
-  the registry projection of 50 000 lines (target < 30 s). Results recorded here.
+- **Load test**: `pnpm load:sync` (in-process, PGlite, or a throwaway Postgres with `--database-url`)
+  measures the first sync of a 5 000-row sheet, a repeat sync (0 writes), a one-cell edit (1 invoice
+  written), and the registry projection of 50 000 lines (target < 30 s). Results recorded here.
 - **Docs**: `docs/ARCHITECTURE.md` stops saying the pane validates (it never called `validate()`);
   `docs/DEFERRED.md` lists the registry tables later stages bring (`row_state`, `layout_profiles`,
   `sources`, `links`, `findings`, `rule_exceptions`) and the sweep split per company.
+
+### Evidence (2026-10-19)
+
+| Criterion | Evidence |
+|---|---|
+| Customer settings reach the rules | `apps/api/src/parties.test.ts` › checks the invoices not yet sent again when the customer requires its order number (the switch, then FF-PO-01 on its invoices, `recheckParty`); `apps/addin/src/controller.test.ts` › finds the fiche's customer in the directory, saves it, then opts it in (a switch saved, its notice). BR-FR-14 in `docs/DEFERRED.md`. |
+| Numbering history in proportion | `packages/core/src/rules/history.test.ts` › gives every history rule the verdict of the whole list (1 000 random histories), › hands each invoice a few entries, never itself. 5 000 invoices of one series (`validate` alone, this server, 2026-10-19): 0.80 s without history, 8.45 s with the whole list, 0.70 s with `NumberingHistory`. |
+| A sync that changes nothing writes nothing | `apps/api/src/sync.test.ts` › writes nothing when the sheet did not change (0 INSERT/UPDATE/DELETE through the database logger), › writes and checks only the invoice whose cell changed, › checks again, without a new verdict, when only the day changed (one UPDATE). |
+| Rows that move keep their invoice | `apps/api/src/sync.test.ts` › follows an invoice without a number when rows are inserted above it, › keeps the invoice of a row whose number was changed in place, › cancels the invoice of a removed row, unless it already left (`row_removed`). |
+| Registry, first tables | `apps/api/src/registry.test.ts` › item keys, › holds every invoice line by line and projects again only what changed, › is queued after a sync that changed something, › holds received invoices once read, under the supplier, › RGPD export and deletion. Migration `0009_registry.sql`. |
+| Mapping fields | `packages/core/src/sheet/sheet.test.ts` › maps the article reference and a discount in euros, never a percentage (and warns about it), › reads the article reference and the discount of each line (BT-155, BT-136 with reason code 95, quantity × price − discount, a percentage stopped by BR-41 on its cell); `packages/agents/src/mapping.test.ts` › refuses a percentage as the line discount; `apps/api/src/registry.test.ts` › ties a line to the company's article reference. By hand: the Detection screen lists every field of `INVOICE_FIELDS`. The MappingAgent prompt is unchanged (the new fields reach it in its field list; the percentage rule is in the guard), so its recordings stay valid. |
+| Load test | `pnpm load:sync`, PGlite in memory, 2026-10-19: first sync of 4 999 rows (one invoice each) 62.4 s, 34 993 writes (7 per new invoice); repeat sync 2.0 s, 0 writes; one cell changed 1.9 s, 7 writes, 1 invoice written; registry of 52 000 lines (13 sheets of 800 invoices × 5 lines) projected in 17.1 s (target < 30 s), again 0.1 s. The first sync of a full sheet is the slow one: `docs/DEFERRED.md`. |
+| Docs | `docs/ARCHITECTURE.md` › The add-in never owns business logic (the API validates), › What R0 added and its decisions; `docs/DEFERRED.md` › registry tables of the later stages, sweep split per company, percentage discounts, BT-156/157 in the sheet, first sync in batches. |
+| Gate | `pnpm verify` green on 2026-10-19 (tests with `--concurrency=2`, the server's swap being full): api 198, core 530 + oracle 276, agents 89, add-in 53, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. |

@@ -18,8 +18,9 @@ React 18 + Vite, thin client                      PdpAdapter, webhooks + status 
                     apps/mock-pdp — fake PDP for local dev and CI (plan §3)
 ```
 
-The add-in never owns business logic. Validation lives once, in `packages/core`, and runs in two
-places: in the task pane for instant hints, and in the API as the authoritative verdict.
+The add-in never owns business logic. Validation lives once, in `packages/core`, and runs in the API:
+the pane sends the sheet's cells (`POST /workbooks/:id/sync`) and shows the verdict that comes back,
+row by row. The pane never calls `validate()`, and neither detection nor the totals run in it.
 
 ## What exists after M0
 
@@ -385,6 +386,51 @@ Tests: `packages/agents/src/party.test.ts`, `packages/core/src/party.test.ts`,
 | RGPD deletion and the archive | The archive stays for its ten years; customers and the company's key go | The legal retention of invoices outweighs erasure (art. 17.3.b), the rest has no such basis (`docs/RGPD.md`). |
 | A company's own key | Sealed with AES-256-GCM under `PDP_KEY_SEALING_KEY`, tested before it is saved, shown by its last four characters, used for real invoices only | A secret the company gave us must be useless if the database leaks, and « Mode test » must never reach its real account. |
 | A key the deployment cannot open | Real sends stop (« Envoyer » answers `pdp_not_configured`, the invoice stays); we never fall back to our own key | Sending a company's invoices from our account would be an invoice from the wrong sender. |
+
+## What R0 added: cheap syncs, checks that follow the customer, the document registry
+
+R0 prepares the checks of documents together (an order against its invoice, what was bought against what
+was sold) that run in the background in later stages (criteria in `docs/PROGRESS.md` R0).
+
+```
+sync ─► the sheet's invoices read in one query ─► computed in memory ─► written only if changed
+     └─► check key = hash(ruleset, fingerprint, day, history witnesses, company, customer switches)
+           same key ─► nothing written      new key, same verdict ─► one UPDATE for all of them
+           new verdict ─► validation_results + event, as before
+rows left the sheet ─► cancel (reason row_removed), unless the invoice already left
+sync that wrote / supplier invoice triaged ─► registry.refresh (one per company) ─► docs, doc_lines, items
+```
+
+| Path | What it does |
+|---|---|
+| `packages/core/src/rules/history.ts` | `NumberingHistory`: an index of the numbers issued; `for(invoice)` hands the history rules (BR-FR-CO-02, FF-NUM-01/02, FF-CN-01) the few earlier invoices that decide them instead of the whole list. |
+| `apps/api/src/ruleset.ts` | `RULESET`: a digest of `packages/core`'s code and `fr.json`. A deploy that changes a rule or a message gives every invoice a new check key, so each one is checked once more. |
+| `apps/api/src/invoices.ts` | `checkOf` (the key and the check), `rememberChecks` (every new key whose verdict did not change, in one statement), `recheckParty` (a customer switch changed: its invoices not yet sent are checked again). |
+| `apps/api/src/workbooks.ts` | The sync: one read of the sheet's invoices, unchanged ones skipped; an invoice found unchanged elsewhere in the sheet follows its rows; the ones whose rows are gone are cancelled with `row_removed`. |
+| `apps/api/src/registry.ts` | `refreshRegistry`: projects the invoices whose fingerprint moved and the supplier invoices read since, removes the cancelled ones, in batches of 200; `itemKey` ties a line to the company's article (its own reference BT-155 sold or BT-156 bought, else the normalized name; a bought line without it stays the supplier's article). `registryBehind` lets the sweep catch up. |
+| `packages/core/src/sheet` | Two mapping fields: « Référence de l'article » (BT-155) and « Remise sur la ligne » (an amount, BT-136, reason code 95). A percentage is never taken for an amount: detection and the MappingAgent's guard leave it out and say so; typed by hand, it becomes a discount without an amount that BR-41 stops on its cell. |
+| `apps/addin/src/ui/CustomersView.tsx` | Two switches per customer: « Exige son numéro de bon de commande » (FF-PO-01) and « Organisme public » (DGFIP-G2.32). |
+
+Tables: migration `0008_sync_checks.sql` (`invoices.validated_key`, the two customer switches) and
+`0009_registry.sql` (`items`, `docs`, `doc_lines`). Load: `pnpm load:sync` (`docs/PROGRESS.md` R0).
+
+Tests: `apps/api/src/sync.test.ts` (writes counted through the database logger),
+`apps/api/src/registry.test.ts`, `packages/core/src/rules/history.test.ts` (property test against the
+whole list), `packages/core/src/sheet/sheet.test.ts` › article reference and discount,
+`packages/agents/src/mapping.test.ts` › percentage discount, `parties.test.ts` › order number,
+`controller.test.ts` › customer switches.
+
+### Decisions taken in R0
+
+| Topic | Decision | Why |
+|---|---|---|
+| When an invoice is checked again | When its check key changes: the rules' code, its content, the day, its numbering neighbours, the company's VAT setting or its customer's switches | A verdict is a pure function of these; anything else checking again is wasted work, and anything less could leave a stale verdict. |
+| A deploy that changes the rules | `RULESET` is part of the key, so the first sync after it checks every invoice once | An invoice validated under old rules must never leave under them. |
+| The history rules | An index gives each invoice its few witnesses; a property test compares with the whole list | The whole list made each check grow with the company's age (5 000 invoices: 8.5 s instead of 0.8 s). |
+| Rows removed from the sheet | Their invoice is cancelled (`row_removed` on the timeline) unless it already left for the platform | The sheet is the user's truth; once an invoice is at the platform, only the platform's lifecycle changes it. |
+| The registry | Derived data in three tables, rebuilt from `invoices` and `inbound_queue` at any time, written by one job per company | The checks of later stages read lines and articles across documents; a projection keeps the invoice itself the single source, and one writer per company avoids races. |
+| An article's identity | The company's own reference, else its normalized name; a bought line without the company's reference stays the supplier's article | Which of the company's articles a supplier line is will be a decision of a later stage (with its evidence), never a guess while projecting. |
+| A percentage discount | Not supported: left unmapped with a warning, or stopped by BR-41 when mapped by hand | A percentage needs its base amount and rounding rules (BT-137/138); the smallest correct version takes the amount (`docs/DEFERRED.md`). |
 
 ## Decision: port the Rust core to TypeScript, archive Rust
 
