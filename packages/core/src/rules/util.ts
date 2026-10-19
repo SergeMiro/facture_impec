@@ -120,4 +120,18 @@ export const isDomesticB2B = (inv: Invoice) => (inv.buyer.address?.country ?? 'F
 
 export const SIREN_SCHEME = '0002';
 export const SIRET_SCHEME = '0009';
+
+export const sirenOf = (party: Party) =>
+  party.legalId?.scheme === SIREN_SCHEME ? party.legalId.id : undefined;
+
+/** An invoice number as a series: « F2026-0042 » is prefix « F2026- », number 42, four digits. */
+export function series(number: string) {
+  const m = /^(.*?)(\d+)$/.exec(number);
+  if (!m) return null;
+  const [, prefix = '', digits = ''] = m;
+  return { prefix, n: Number(digits), width: digits.length };
+}
+
+export const year = (date: string | undefined) => date?.slice(0, 4);
+
 export const FR_ADDRESS_SCHEME = '0225';

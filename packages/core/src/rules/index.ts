@@ -9,6 +9,7 @@ import { FR_RULES } from './fr';
 import type { Finding, Issue, Rule, RuleContext } from './types';
 import { VAT_RULES } from './vat';
 
+export { type HistoryEntry, type HistorySubject, NumberingHistory } from './history';
 export type * from './types';
 
 export const RULES: readonly Rule[] = [

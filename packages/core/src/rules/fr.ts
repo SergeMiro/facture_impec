@@ -8,7 +8,7 @@ import {
   isValidSiren,
   isValidSiret,
 } from '../ids';
-import type { Invoice, Party } from '../model';
+import type { Invoice } from '../model';
 import { compareDecimal, decimalPlaces, isDecimal, normalizeDecimal } from '../money';
 import type { Rule } from './types';
 import {
@@ -29,7 +29,10 @@ import {
   rule,
   SIREN_SCHEME,
   SIRET_SCHEME,
+  series,
+  sirenOf,
   when,
+  year,
 } from './util';
 
 const INVOICE_NUMBER = /^[A-Za-z0-9+\-_/]+$/;
@@ -107,9 +110,6 @@ const G232_CODES = new Set([
   ...['1', '2'].map((n) => `VATEX-FR-CGI261E-${n}`),
 ]);
 
-const sirenOf = (party: Party) =>
-  party.legalId?.scheme === SIREN_SCHEME ? party.legalId.id : undefined;
-
 const rateIn = (rate: string | undefined, list: readonly string[]) =>
   rate !== undefined && isDecimal(rate) && list.includes(normalizeDecimal(rate) ?? '');
 
@@ -163,15 +163,6 @@ function decimals(inv: Invoice): { path: string; value: string | undefined }[] {
 }
 
 /** "F2026-0042" → { prefix: "F2026-", n: 42, width: 4 }. */
-function series(number: string) {
-  const m = /^(.*?)(\d+)$/.exec(number);
-  if (!m) return null;
-  const [, prefix = '', digits = ''] = m;
-  return { prefix, n: Number(digits), width: digits.length };
-}
-
-const year = (date: string | undefined) => date?.slice(0, 4);
-
 const fr = { severity: 'error', source: 'AFNOR', autoFixable: false } as const;
 const ff = { severity: 'error', source: 'FF', autoFixable: false } as const;
 const dgfip = { severity: 'error', source: 'DGFIP', autoFixable: false } as const;
