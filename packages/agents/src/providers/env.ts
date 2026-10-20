@@ -7,6 +7,9 @@ export interface AiEnv {
   AI_MODEL_CLASSIFY?: string | undefined;
   AI_BASE_URL?: string | undefined;
   AI_API_KEY?: string | undefined;
+  AI_STRUCTURED_OUTPUTS?: boolean | undefined;
+  /** JSON object merged into every request body (openai-compatible), e.g. OpenRouter routing. */
+  AI_REQUEST_BODY?: string | undefined;
 }
 
 /** Null when the operator configured no provider. Throws on a half-written configuration. */
@@ -18,6 +21,8 @@ export function includedAi(env: AiEnv): ResolvedAi | null {
     provider: env.AI_PROVIDER,
     models: { agent, classify: env.AI_MODEL_CLASSIFY ?? agent },
     ...(env.AI_BASE_URL && { baseUrl: env.AI_BASE_URL }),
+    ...(env.AI_STRUCTURED_OUTPUTS && { structuredOutputs: true }),
+    ...(env.AI_REQUEST_BODY && { body: JSON.parse(env.AI_REQUEST_BODY) }),
   });
   return { settings, apiKey: env.AI_API_KEY };
 }

@@ -21,6 +21,7 @@ describe('ServerEnvSchema', () => {
       ADDIN_ORIGINS: ['https://localhost:3000'],
       AI_RUN_TOKENS: 30_000,
       AI_DAILY_TOKENS: 300_000,
+      AI_STRUCTURED_OUTPUTS: false,
       SIRENE_URL: 'https://recherche-entreprises.api.gouv.fr',
       STRIPE_AUTOMATIC_TAX: false,
       MOCK_STRIPE_WEBHOOK_SECRET: 'whsec_local-mock-stripe-secret',

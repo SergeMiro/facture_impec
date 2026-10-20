@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { APICallError } from 'ai';
-import { describe, expect, it } from 'vitest';
+import { APICallError, generateText } from 'ai';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { aiHandle } from '../ai';
 import { failingModel, mockModel, textResult, toolCallResult } from '../test-model';
 import { includedAi } from './env';
@@ -80,6 +80,71 @@ describe('includedAi', () => {
     });
     expect(ai?.apiKey).toBe('k');
     expect(() => includedAi({ AI_PROVIDER: 'mistral' })).toThrow();
+  });
+
+  it('reads the structured output switch and the extra request body, refusing a broken one', () => {
+    const openRouter = {
+      AI_PROVIDER: 'openai-compatible',
+      AI_MODEL_AGENT: 'deepseek/deepseek-v4.1-flash',
+      AI_BASE_URL: 'https://openrouter.ai/api/v1',
+      AI_STRUCTURED_OUTPUTS: true,
+    };
+    const ai = includedAi({
+      ...openRouter,
+      AI_REQUEST_BODY: '{"provider":{"zdr":true,"data_collection":"deny"}}',
+    });
+    expect(ai?.settings).toMatchObject({
+      structuredOutputs: true,
+      body: { provider: { zdr: true, data_collection: 'deny' } },
+    });
+    expect(() => includedAi({ ...openRouter, AI_REQUEST_BODY: '{"provider":' })).toThrow();
+    expect(() => includedAi({ ...openRouter, AI_REQUEST_BODY: '[1]' })).toThrow();
+  });
+});
+
+describe('an OpenAI-compatible request', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('carries the extra body fields, so OpenRouter routes only where data is not kept', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response(
+        JSON.stringify({
+          id: 'c',
+          object: 'chat.completion',
+          created: 0,
+          model: 'm',
+          choices: [
+            { index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' },
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    });
+    const routed = settings({
+      provider: 'openai-compatible',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      body: { provider: { zdr: true, data_collection: 'deny' } },
+    });
+    const { text } = await generateText({
+      model: createModel({ settings: routed, apiKey: 'k' }, 'agent'),
+      prompt: 'bonjour',
+    });
+    expect(text).toBe('ok');
+    expect(bodies[0]).toMatchObject({
+      model: 'big',
+      provider: { zdr: true, data_collection: 'deny' },
+    });
+
+    await generateText({
+      model: createModel({ settings: { ...routed, body: undefined }, apiKey: 'k' }, 'agent'),
+      prompt: 'bonjour',
+    });
+    expect(bodies[1]).not.toHaveProperty('provider');
   });
 });
 

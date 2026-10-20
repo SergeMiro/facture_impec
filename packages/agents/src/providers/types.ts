@@ -44,6 +44,11 @@ export const AiSettings = z
     apiVersion: z.string().min(1).max(40).optional(),
     /** OpenAI-compatible endpoints that accept a JSON schema (`response_format: json_schema`). */
     structuredOutputs: z.boolean().optional(),
+    /**
+     * Fields added to every request body of an OpenAI-compatible endpoint, e.g. OpenRouter's
+     * `provider` routing (`docs/AI_PROVIDERS.md`).
+     */
+    body: z.record(z.string().min(1).max(60), z.json()).optional(),
     capabilities: Capabilities.optional(),
   })
   .superRefine((s, ctx) => {

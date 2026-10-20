@@ -106,6 +106,8 @@ export const ServerEnvSchema = z
     AI_MODEL_CLASSIFY: optionalText(),
     AI_BASE_URL: z.preprocess(blank, z.url().optional()),
     AI_API_KEY: optionalText(),
+    AI_STRUCTURED_OUTPUTS: flag(false),
+    AI_REQUEST_BODY: optionalText(),
     AI_KEY_SEALING_KEY: z.preprocess(
       blank,
       z

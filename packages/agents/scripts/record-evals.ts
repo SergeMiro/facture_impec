@@ -5,7 +5,8 @@
 //   EVAL_MODEL='auto - Smart models - Hermes' EVAL_LABEL=llmfp-smart \
 //   pnpm --filter @fi/agents eval:record [mapping|layout|explain|monitor]
 //
-// EVAL_GATE=true marks the recording as the one the plan's thresholds apply to.
+// EVAL_GATE=true marks the recording as the one the plan's thresholds apply to. EVAL_STRUCTURED=true
+// and EVAL_REQUEST_BODY='{"provider":{…}}' as for AI_STRUCTURED_OUTPUTS and AI_REQUEST_BODY.
 
 import { EXPLAIN_FIXTURES } from '../evals/explain.fixtures';
 import { type Recording, ratio, saveRecording, scoreLayout, scoreMapping } from '../evals/harness';
@@ -42,6 +43,7 @@ const settings = AiSettings.parse({
   models: { agent: env.EVAL_MODEL, classify: env.EVAL_MODEL_CLASSIFY ?? env.EVAL_MODEL },
   ...(env.EVAL_BASE_URL && { baseUrl: env.EVAL_BASE_URL }),
   structuredOutputs: env.EVAL_STRUCTURED === 'true',
+  ...(env.EVAL_REQUEST_BODY && { body: JSON.parse(env.EVAL_REQUEST_BODY) }),
 });
 const ai = aiHandle({ settings, apiKey: env.EVAL_API_KEY });
 if (!ai) throw new Error('AI is off');

@@ -44,6 +44,9 @@ export function createModel({ settings, apiKey }: ResolvedAi, role: Role): Langu
         ...(settings.headers && { headers: settings.headers }),
         includeUsage: true,
         supportsStructuredOutputs: settings.structuredOutputs ?? false,
+        ...(settings.body && {
+          transformRequestBody: (args: Record<string, unknown>) => ({ ...args, ...settings.body }),
+        }),
       })(id);
   }
 }

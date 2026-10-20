@@ -101,6 +101,24 @@ French SMEs) and Anthropic Claude (the plan's original choice; current ids `clau
 Paying for either is the owner's decision (CLAUDE.md rule 9); until then `AI_PROVIDER` stays empty and
 every agent gives its deterministic answer.
 
+**Owner's decision, 2026-10-20:** production uses **Mistral**; preprod (the test deployment) uses a
+**free OpenRouter model**. The gating eval recordings are therefore made with the Mistral model that
+production runs: a score measured on another model says nothing about it.
+
+| Environment | `AI_PROVIDER` | Model | Notes |
+|---|---|---|---|
+| prod | `mistral` | chosen by the gating evals | EU residency; the key is the owner's |
+| preprod | `openai-compatible`, `AI_BASE_URL=https://openrouter.ai/api/v1` | `nvidia/nemotron-3-super-120b-a12b:free` (structured output and tools, 262k context; listed 2026-10-20) | Free models may keep or train on prompts: preprod holds test data only, never a customer's. `AI_STRUCTURED_OUTPUTS=true`. |
+
+OpenRouter routing (`https://openrouter.ai/docs/guides/routing/provider-selection`, read 2026-10-20): the
+request body takes a `provider` object; `data_collection: "deny"` uses "only providers which do not
+collect user data", `zdr: true` only Zero Data Retention endpoints, `require_parameters: true` only
+providers that support every parameter sent (the JSON schema among them), `sort: "price"` the cheapest.
+`AI_REQUEST_BODY` (and `EVAL_REQUEST_BODY` for recordings) adds such a JSON object to every
+OpenAI-compatible request. A free model has no endpoint that keeps nothing, so `zdr` is for a paid one:
+the cheapest such DeepSeek, `deepseek/deepseek-v4.1-flash`, had ZDR endpoints with structured output
+from $0.035 / $0.011 per million tokens in and out (fp4) or $0.112 / $0.336 (fp8) on 2026-10-20.
+
 ### Eval results so far
 
 MappingAgent, 20 messy sheets of `evals/mapping.fixtures.ts`, the 8 core fields (gate: ≥ 95 %).

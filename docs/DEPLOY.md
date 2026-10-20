@@ -38,7 +38,7 @@ on a wrong combination (a live key outside prod, a test key in prod, a missing s
 | `MAIL_SMTP_URL`, `MAIL_FROM` | the mail provider | sign-in links, sign-up, chasing, weekly report; without them no link is sent |
 | `TERMS_URL` | the published CGU | without it « Créer un compte » is not offered |
 | `STRIPE_SECRET_KEY` (restricted `rk_live_…` advised), `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICES_*`, `STRIPE_METER_EVENT`, `STRIPE_AUTOMATIC_TAX` | `docs/BILLING.md` §11 | without a key nobody is billed |
-| `AI_PROVIDER`, `AI_MODEL_AGENT`, `AI_API_KEY`, `AI_KEY_SEALING_KEY` | `docs/AI_PROVIDERS.md` | without them the agents answer deterministically |
+| `AI_PROVIDER`, `AI_MODEL_AGENT`, `AI_API_KEY`, `AI_KEY_SEALING_KEY` (and for OpenRouter `AI_BASE_URL`, `AI_STRUCTURED_OUTPUTS`, `AI_REQUEST_BODY`) | `docs/AI_PROVIDERS.md` § Default for "included": prod Mistral, preprod a free OpenRouter model | without them the agents answer deterministically |
 | `PDP_KEY_SEALING_KEY` | random 32 bytes, `openssl rand -base64 32`; keep a copy outside the server | seals the B2Brouter keys companies connect in Réglages (`docs/B2BROUTER.md` §12); without it the form is not shown. Changing it later makes the saved keys unreadable and stops those companies' real sends until they paste their key again |
 
 `DATABASE_URL`, `API_HOST` and `API_PORT` are set by compose and the image; the `MOCK_*` variables are
