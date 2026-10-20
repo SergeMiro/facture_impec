@@ -3,15 +3,27 @@
 import type {
   Address,
   ChaseStep,
+  Evidence,
   InboundTriage,
   Invoice,
   InvoiceDefaultsInput,
   InvoiceDraft,
   Issue,
   LayoutMapping,
+  SheetCheck,
   SheetMapping,
 } from '@fi/core';
-import { DOC_KINDS, INBOUND_STATES, STATES } from '@fi/core';
+import {
+  CHECK_MESSAGES,
+  CHECK_RULES,
+  DOC_KINDS,
+  FINDING_SEVERITIES,
+  INBOUND_STATES,
+  LINK_KINDS,
+  LINK_METHODS,
+  LINK_STATUSES,
+  STATES,
+} from '@fi/core';
 import { BILLING_INTERVALS, BILLING_STATUSES, PLANS, type Plan, type WhiteLabel } from '@fi/shared';
 import { sql } from 'drizzle-orm';
 import {
@@ -302,6 +314,8 @@ export interface ExcelBinding {
   /** Sheet rows of the invoice, and model path → cell address, as of the last sync. */
   rows?: number[];
   cells?: Record<string, string>;
+  /** A1–A3 its own rows showed (core `SheetProblem.check`), for the checks across documents (R2). */
+  checks?: SheetCheck[];
 }
 
 export const invoices = pgTable(
@@ -773,10 +787,12 @@ export const docs = pgTable(
     partySiren: text('party_siren'),
     partyName: text('party_name'),
     currency: text('currency'),
-    /** On a delivery note: the order it delivers. */
+    /** On an invoice the order it bills (BT-13); on a delivery note the order it delivers. */
     orderRef: text('order_ref'),
     /** BT-109; on a sheet document, the sum of its lines when every one has an amount. */
     netTotal: cents('net_total'),
+    /** What advances already paid of it (BT-113), brought to HT: B5 counts an advance once. */
+    prepaid: cents('prepaid'),
     /** What the lines were read from (the invoice's fingerprint, a sheet document's hash): another one projects them again. */
     sourceVersion: text('source_version').notNull(),
     updatedAt: updatedAt(),
@@ -822,6 +838,92 @@ export const docLines = pgTable(
   (t) => [index('doc_lines_doc').on(t.docId), index('doc_lines_item').on(t.tenantId, t.itemId)],
 );
 
+// ── Checks across documents (R2) ───────────────────────────────────────────────────────────────
+// Which order an invoice bills (links), and what the rules found reading them together (findings).
+// Written by apps/api/src/checks.ts after each registry refresh and before a send; a person's yes or
+// no on a link stays, everything else is found again each time.
+
+export const links = pgTable(
+  'links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    kind: text('kind', { enum: LINK_KINDS }).notNull(),
+    /** billed_by: the order (or delivery note) → its invoice; fulfils: the delivery note → its order. */
+    fromDocId: uuid('from_doc_id')
+      .notNull()
+      .references(() => docs.id, { onDelete: 'cascade' }),
+    toDocId: uuid('to_doc_id')
+      .notNull()
+      .references(() => docs.id, { onDelete: 'cascade' }),
+    score: integer('score').notNull(),
+    method: text('method', { enum: LINK_METHODS }).notNull(),
+    status: text('status', { enum: LINK_STATUSES }).notNull(),
+    /** Who said « Oui » or « Non » (a user id, or `key`), and when. */
+    decidedBy: text('decided_by'),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('links_pair').on(t.fromDocId, t.toDocId, t.kind),
+    index('links_tenant').on(t.tenantId, t.status),
+  ],
+);
+
+export const findings = pgTable(
+  'findings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    rule: text('rule', { enum: CHECK_RULES }).notNull(),
+    /** fr.json `check.message.<message>`, filled with `params`. */
+    message: text('message', { enum: CHECK_MESSAGES }).notNull(),
+    severity: text('severity', { enum: FINDING_SEVERITIES }).notNull(),
+    /** The document it is about: an invoice, an order, a delivery note. */
+    docId: uuid('doc_id')
+      .notNull()
+      .references(() => docs.id, { onDelete: 'cascade' }),
+    /** When that document is one of the company's invoices: the send gate reads this. */
+    invoiceId: uuid('invoice_id').references(() => invoices.id, { onDelete: 'cascade' }),
+    /** Who it is from one check to the next (core `CheckFinding.key`). */
+    key: text('key').notNull(),
+    /** SHA-256 of its amount, values and cells: another one is a change worth an audit event. */
+    fingerprint: text('fingerprint').notNull(),
+    amount: cents('amount'),
+    params: jsonb('params_json').$type<Record<string, string>>().notNull(),
+    evidence: jsonb('evidence_json').$type<Evidence[]>().notNull(),
+    status: text('status', { enum: ['open', 'resolved'] })
+      .notNull()
+      .default('open'),
+    isTest: boolean('is_test').notNull(),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('findings_key').on(t.tenantId, t.key),
+    index('findings_open').on(t.tenantId, t.status),
+    index('findings_invoice').on(t.invoiceId),
+  ],
+);
+
+/** What the last check of a company read: the sweep checks again when the registry moved, or daily. */
+export const checkState = pgTable('check_state', {
+  tenantId: uuid('tenant_id')
+    .primaryKey()
+    .references(() => tenants.id),
+  checkedAt: timestamp('checked_at', { withTimezone: true }).notNull(),
+  /** Europe/Paris day of the check: a delivery note gets late without anything changing (B3). */
+  checkedOn: date('checked_on', { mode: 'string' }).notNull(),
+  /** The registry's documents when it ran: their count and last change. */
+  mark: text('mark').notNull(),
+});
+
 /** Stripe events already applied: an endpoint may receive the same event twice (docs/BILLING.md). */
 export const stripeEvents = pgTable('stripe_events', {
   id: text('id').primaryKey(),
@@ -847,3 +949,5 @@ export type DocRow = typeof docs.$inferSelect;
 export type DocLineRow = typeof docLines.$inferSelect;
 export type LayoutProfileRow = typeof layoutProfiles.$inferSelect;
 export type SourceRow = typeof sources.$inferSelect;
+export type LinkRow = typeof links.$inferSelect;
+export type FindingRow = typeof findings.$inferSelect;
