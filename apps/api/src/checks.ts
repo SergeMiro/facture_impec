@@ -31,6 +31,7 @@ import {
   invoices,
   links,
   rows,
+  type SQL,
   sources,
   sql,
   type TenantRow,
@@ -50,11 +51,15 @@ import { refreshRegistry } from './registry';
  */
 const markOf = sql<string>`count(d.id)::text || ':'
   || coalesce(sum(hashtext(d.id::text || d.source_version || coalesce(i.status, '')))::text, '')`;
+/** And what the company set that the rules read: its margin (B2). */
+const settingsMark = (margin: SQL) => sql<string>`'|' || coalesce(${margin}::text, '')`;
 
 async function markNow(db: DbOrTx, tenantId: string): Promise<string> {
+  const margin = sql`(select t.min_margin_percent from ${tenants} t where t.id = ${tenantId})`;
   const [found] = await rows<{ mark: string }>(
     db,
-    sql`select ${markOf} as mark from ${docs} d left join ${invoices} i on i.id = d.invoice_id
+    sql`select ${markOf} || ${settingsMark(margin)} as mark
+          from ${docs} d left join ${invoices} i on i.id = d.invoice_id
          where d.tenant_id = ${tenantId}`,
   );
   return found?.mark ?? '';
@@ -87,6 +92,7 @@ async function loadDocs(tx: Tx, tenantId: string): Promise<CheckDoc[]> {
       direction: doc.direction,
       kind: doc.kind,
       typeCode: doc.typeCode,
+      currency: doc.currency,
       isTest: doc.isTest,
       number: doc.number,
       issueDate: doc.issueDate,
@@ -108,6 +114,7 @@ async function loadDocs(tx: Tx, tenantId: string): Promise<CheckDoc[]> {
           netAmount: l.netAmount,
           discount: l.discount,
           vatRate: l.vatRate,
+          unitCode: l.unitCode,
           cell: l.cell,
           priceCell: cells[`lines[${l.position}].price.net`] ?? null,
           rateCell: cells[`lines[${l.position}].vat.rate`] ?? null,
@@ -156,7 +163,12 @@ export async function runChecks(db: Db, tenantId: string, now: Date): Promise<Ch
         : [],
     );
     const checkDocs = await loadDocs(tx, tenantId);
-    const out = checkRegistry({ docs: checkDocs, decisions, today: parisToday(now) });
+    const out = checkRegistry({
+      docs: checkDocs,
+      decisions,
+      today: parisToday(now),
+      minMarginPercent: tenant.minMarginPercent,
+    });
 
     // Links: what a person decided stays; the rest is what was found now.
     const storedById = new Map(stored.map((l) => [linkId(l), l]));
@@ -355,7 +367,9 @@ export async function checksBehind(db: Db, now: Date): Promise<string[]> {
       select m.tenant_id from m
         join ${tenants} t on t.id = m.tenant_id and t.deleted_at is null
         left join ${checkState} s on s.tenant_id = m.tenant_id
-       where s.tenant_id is null or s.mark <> m.mark or s.checked_on < ${parisToday(now)}`,
+       where s.tenant_id is null
+          or s.mark <> (m.mark || ${settingsMark(sql`t.min_margin_percent`)})
+          or s.checked_on < ${parisToday(now)}`,
   );
   return found.map((r) => r.tenant_id);
 }
@@ -366,6 +380,8 @@ interface Place {
   number: string | null;
   sheet: string | null;
   workbookId: string | null;
+  /** A received invoice: « Voir la facture du fournisseur » opens it in « Réception ». */
+  inboundId: string | null;
 }
 
 /** Where each document is: its number, and the sheet and workbook it was read from. */
@@ -377,6 +393,7 @@ async function placesOf(db: DbOrTx, ids: readonly string[]): Promise<Map<string,
       number: docs.number,
       sheet: sources.sheet,
       workbookId: sources.workbookId,
+      inboundId: docs.inboundId,
       binding: invoices.excelBinding,
     })
     .from(docs)
@@ -390,16 +407,26 @@ async function placesOf(db: DbOrTx, ids: readonly string[]): Promise<Map<string,
         number: d.number,
         sheet: d.sheet ?? d.binding?.sheet ?? null,
         workbookId: d.workbookId ?? d.binding?.workbookId ?? null,
+        inboundId: d.inboundId,
       },
     ]),
   );
 }
 
-export function findingView(row: FindingRow, places: Map<string, Place>) {
+export function findingView(
+  row: FindingRow,
+  places: Map<string, Place>,
+  costLinks: Map<string, string> = new Map(),
+) {
   // The pane selects the cell when the document is in the open workbook.
   const place = (e: Evidence) => {
     const p = places.get(e.docId);
-    return { ...e, sheet: p?.sheet ?? null, workbookId: p?.workbookId ?? null };
+    return {
+      ...e,
+      sheet: p?.sheet ?? null,
+      workbookId: p?.workbookId ?? null,
+      inboundId: p?.inboundId ?? null,
+    };
   };
   return {
     id: row.id,
@@ -413,9 +440,20 @@ export function findingView(row: FindingRow, places: Map<string, Place>) {
     fingerprint: row.fingerprint,
     isTest: row.isTest,
     evidence: row.evidence.map(place),
+    /** B2: the link that says this purchase gave the cost, for « Ce n'est pas le même article ». */
+    costLinkId:
+      costLinks.get(
+        costKey(
+          row.evidence.find((e) => e.role === 'purchase'),
+          row,
+        ),
+      ) ?? null,
     firstSeenAt: row.firstSeenAt.toISOString(),
   };
 }
+
+const costKey = (purchase: Evidence | undefined, row: Pick<FindingRow, 'docId'>) =>
+  purchase ? `${purchase.docId}>${row.docId}` : '';
 
 const bySize = (a: FindingRow, b: FindingRow) =>
   (b.amount ?? -1) - (a.amount ?? -1) ||
@@ -427,7 +465,15 @@ async function views(db: DbOrTx, found: FindingRow[]) {
     db,
     found.flatMap((f) => [f.docId, ...f.evidence.map((e) => e.docId)]),
   );
-  return found.sort(bySize).map((f) => findingView(f, places));
+  const sold = found.filter((f) => f.rule === 'B2').map((f) => f.docId);
+  const cost = sold.length
+    ? await db
+        .select({ id: links.id, from: links.fromDocId, to: links.toDocId })
+        .from(links)
+        .where(and(eq(links.kind, 'cost'), inArray(links.toDocId, [...new Set(sold)])))
+    : [];
+  const costLinks = new Map(cost.map((l) => [`${l.from}>${l.to}`, l.id]));
+  return found.sort(bySize).map((f) => findingView(f, places, costLinks));
 }
 
 /** The open findings on one invoice, for its detail. */

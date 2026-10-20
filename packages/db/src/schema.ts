@@ -77,6 +77,8 @@ export const tenants = pgTable('tenants', {
     .notNull()
     .default('review'),
   autopilotMaxAmount: cents('autopilot_max_amount'),
+  /** The margin the company wants on what it resells, % of the sale price (rule B2, R3); null: none. */
+  minMarginPercent: integer('min_margin_percent'),
   sandboxEnabled: boolean('sandbox_enabled').notNull().default(true),
   pseudonymizeLlm: boolean('pseudonymize_llm').notNull().default(true),
   /** Option pour le paiement de la TVA d'après les débits: the context of rule FF-DEB-01. */
@@ -297,10 +299,12 @@ export const parties = pgTable(
     requiresPurchaseOrder: boolean('requires_purchase_order').notNull().default(false),
     /** A public body (B2G): DGFiP G2.32 does not apply. */
     publicEntity: boolean('public_entity').notNull().default(false),
-    source: text('source', { enum: ['sirene'] })
+    /** sirene: a customer looked up in the directory; invoice: a supplier as its own invoice names it (R3). */
+    source: text('source', { enum: ['sirene', 'invoice'] })
       .notNull()
       .default('sirene'),
-    verifiedAt: timestamp('verified_at', { withTimezone: true }).notNull(),
+    /** When the directory confirmed it; null for a supplier nobody looked up. */
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

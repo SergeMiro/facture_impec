@@ -260,7 +260,17 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       reportedAt: u.reportedAt?.toISOString() ?? null,
     })),
     accountantExports: sent.map((e) => ({ ...exportView(e), fec: e.fec, csv: e.csv })),
-    customers: customers.map(partyView),
+    customers: customers.filter((p) => p.kind === 'customer').map(partyView),
+    /** The suppliers of received invoices, as their invoices name them (R3). */
+    suppliers: customers
+      .filter((p) => p.kind === 'supplier')
+      .map((p) => ({
+        legalName: p.legalName,
+        siren: p.siren,
+        address: p.address,
+        source: p.source,
+        createdAt: p.createdAt.toISOString(),
+      })),
     /** The ten-year register; the documents themselves are the invoices above and their XML. */
     archive,
     /**

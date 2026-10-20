@@ -79,7 +79,7 @@ export function partyView(row: PartyRow) {
     autopilot: row.autopilot,
     requiresPurchaseOrder: row.requiresPurchaseOrder,
     publicEntity: row.publicEntity,
-    verifiedAt: row.verifiedAt.toISOString(),
+    verifiedAt: row.verifiedAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -271,11 +271,12 @@ export async function confirmCustomer(
   });
 }
 
+/** A customer of the company: a supplier (R3) is not changed or forgotten from « Clients ». */
 async function lockParty(tx: Tx, tenant: TenantRow, id: string) {
   const [row] = await tx
     .select()
     .from(parties)
-    .where(and(eq(parties.id, id), eq(parties.tenantId, tenant.id)))
+    .where(and(eq(parties.id, id), eq(parties.tenantId, tenant.id), eq(parties.kind, 'customer')))
     .for('update');
   if (!row) throw new ApiError(404, 'party_missing');
   return row;

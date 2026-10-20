@@ -5,7 +5,7 @@
 // cancelled) and `inbound_queue` (once triaged and read). One job per company writes it
 // (registry.refresh, src/jobs.ts), after a sync that changed something and after received invoices;
 // the sweep queues it for a company left behind.
-import type { Invoice, Line } from '@fi/core';
+import { type Invoice, type Line, normalizeName, partySiren } from '@fi/core';
 import {
   and,
   asc,
@@ -22,21 +22,15 @@ import {
   items,
   ne,
   or,
+  parties,
   rows,
   sql,
   type Tx,
   tenants,
 } from '@fi/db';
 
-/** Lowercase, no accents, no punctuation, single spaces: « Journée  de conseil. » → journee de conseil. */
-export function normalizeName(name: string): string {
-  return name
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim();
-}
+// The checks match a bought line to a sold one by this name (core src/checks/cost.ts).
+export { normalizeName };
 
 const clean = (s: string | undefined) => s?.trim() || undefined;
 const ref = (s: string | undefined) => clean(s)?.replace(/\s+/g, ' ').toUpperCase();
@@ -240,6 +234,34 @@ export async function ensureItems(
   return itemOf;
 }
 
+/**
+ * The suppliers of received invoices (R3): each one with a SIREN joins the company's parties as its
+ * invoice names it, never looked up in the directory (source « invoice »). One already there, even
+ * under another name, is left as it is. A « Mode test » invoice's supplier is made up: never kept.
+ */
+async function noteSuppliers(tx: Tx, tenantId: string, sources: readonly Source[]) {
+  const found = new Map<string, Invoice['seller']>();
+  for (const s of sources) {
+    const siren = s.direction === 'in' && !s.isTest ? partySiren(s.document.seller) : undefined;
+    if (siren && !found.has(siren)) found.set(siren, s.document.seller);
+  }
+  if (found.size === 0) return;
+  await tx
+    .insert(parties)
+    .values(
+      [...found].map(([siren, seller]) => ({
+        tenantId,
+        kind: 'supplier' as const,
+        legalName: seller.name?.trim() || siren,
+        siren,
+        address: seller.address ?? null,
+        source: 'invoice' as const,
+        verifiedAt: null,
+      })),
+    )
+    .onConflictDoNothing();
+}
+
 const BATCH = 200;
 
 /**
@@ -336,29 +358,26 @@ export async function refreshRegistry(
       .limit(BATCH);
     if (unread.length === 0) break;
     after = unread.at(-1)?.id ?? after;
-    await db.transaction((tx) =>
-      project(
-        tx,
-        tenantId,
-        unread.flatMap((r) =>
-          r.parsed
-            ? [
-                {
-                  direction: 'in' as const,
-                  invoiceId: null,
-                  inboundId: r.id,
-                  isTest: r.isTest,
-                  version: 'read',
-                  document: r.parsed,
-                  cells: {},
-                  supplier: r.supplierKey,
-                },
-              ]
-            : [],
-        ),
-        now,
-      ),
+    const received = unread.flatMap((r): Source[] =>
+      r.parsed
+        ? [
+            {
+              direction: 'in',
+              invoiceId: null,
+              inboundId: r.id,
+              isTest: r.isTest,
+              version: 'read',
+              document: r.parsed,
+              cells: {},
+              supplier: r.supplierKey,
+            },
+          ]
+        : [],
     );
+    await db.transaction(async (tx) => {
+      await project(tx, tenantId, received, now);
+      await noteSuppliers(tx, tenantId, received);
+    });
     projected += unread.length;
   }
   return { projected, removed: removed.length };

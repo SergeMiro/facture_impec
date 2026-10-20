@@ -31,6 +31,7 @@ import {
   inArray,
   isNotNull,
   layoutProfiles,
+  parties,
   type SourceRow,
   type SourceStats,
   sha256,
@@ -505,6 +506,10 @@ export async function registryView(deps: ApiDeps, tenant: TenantRow) {
     .from(docs)
     .where(and(eq(docs.tenantId, tenant.id), eq(docs.kind, 'invoice'), eq(docs.isTest, false)))
     .groupBy(docs.direction);
+  const [suppliers] = await deps.db
+    .select({ n: count() })
+    .from(parties)
+    .where(and(eq(parties.tenantId, tenant.id), eq(parties.kind, 'supplier')));
   const recent = await deps.db
     .select({
       id: docs.id,
@@ -544,6 +549,8 @@ export async function registryView(deps: ApiDeps, tenant: TenantRow) {
       sent: invoiceCounts.find((c) => c.direction === 'out')?.n ?? 0,
       received: invoiceCounts.find((c) => c.direction === 'in')?.n ?? 0,
     },
+    /** Recognised from the received invoices (R3). */
+    suppliers: suppliers?.n ?? 0,
     recent: recent.map(({ sourceId, updatedAt, ...d }) => ({
       ...d,
       sheet: sourceId ? (sheetOf.get(sourceId) ?? null) : null,

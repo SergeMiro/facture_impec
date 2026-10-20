@@ -38,6 +38,8 @@ export const SettingsPatch = z
     mode: z.enum(['review', 'autopilot']),
     /** Cents; the highest invoice amount the autopilot sends and chases by itself. */
     autopilotMaxAmount: z.number().int().min(0).max(100_000_000).nullable(),
+    /** The margin wanted on what the company resells, % of the sale price (rule B2); null: none. */
+    minMarginPercent: z.number().int().min(1).max(90).nullable(),
   })
   .partial()
   // The pseudonymization switch is not settable yet (docs/DEFERRED.md).
@@ -86,6 +88,7 @@ export function settingsView(deps: ApiDeps, tenant: TenantRow) {
     /** The autopilot sends chasing e-mails itself: only where the deployment can send mail. */
     autopilotAvailable: Boolean(deps.mailer),
     autopilotMaxAmount: tenant.autopilotMaxAmount,
+    minMarginPercent: tenant.minMarginPercent,
     sandboxEnabled: tenant.sandboxEnabled,
     testPlatform: deps.test !== null,
     /** Always on during the pilot (docs/DEFERRED.md). */
@@ -142,7 +145,7 @@ async function save(
   });
 }
 
-export function updateSettings(
+export async function updateSettings(
   deps: ApiDeps,
   tenant: TenantRow,
   patch: z.infer<typeof SettingsPatch>,
@@ -154,7 +157,10 @@ export function updateSettings(
       patch.autopilotMaxAmount === undefined ? tenant.autopilotMaxAmount : patch.autopilotMaxAmount;
     if (ceiling === null) throw new ApiError(400, 'autopilot_needs_ceiling');
   }
-  return save(deps, tenant, patch, 'settings.update', patch);
+  const row = await save(deps, tenant, patch, 'settings.update', patch);
+  // The margin the rules read moved: the company's documents are checked again (src/checks.ts).
+  if (row.minMarginPercent !== tenant.minMarginPercent) await deps.jobs.enqueueRegistry(row.id);
+  return row;
 }
 
 export async function saveAi(deps: ApiDeps, tenant: TenantRow, choice: AiChoice) {
