@@ -12,6 +12,8 @@ export const RawCell = z.object({
   text: z.string(),
   /** Excel number format, e.g. "dd/mm/yyyy" or "0%". */
   format: z.string().optional(),
+  /** The cell holds a formula (only said when the snapshot read formulas). */
+  formula: z.literal(true).optional(),
 });
 
 export const RawRow = z.object({ row: z.number().int().positive(), cells: z.array(RawCell) });
@@ -19,6 +21,8 @@ export const RawRow = z.object({ row: z.number().int().positive(), cells: z.arra
 export const SheetSnapshot = z.object({
   sheet: z.string().min(1).max(31),
   rows: z.array(RawRow),
+  /** The reader looked at formulas: a cell without `formula` was typed (A2). */
+  formulas: z.boolean().optional(),
 });
 
 export type RawCell = z.infer<typeof RawCell>;

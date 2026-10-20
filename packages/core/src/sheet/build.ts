@@ -2,10 +2,11 @@
 // selects `Feuil1!F15` (plan §5 « Corriger dans la feuille »). The seller side comes from the tenant;
 // nothing the sheet lacks is invented, except what follows from the tenant's own settings.
 import { t } from '@fi/shared';
+import type { SheetCheck } from '../checks/types';
 import { computeInvoice } from '../compute';
 import type { AllowanceCharge, InvoiceDraft, Line } from '../model';
-import { divRound, formatAmount, isDecimal, lineAmount, roundToCents } from '../money';
-import { frMoney } from '../pdf/format';
+import { divRound, formatAmount, isDecimal, lineAmount, percentOf, roundToCents } from '../money';
+import { frDecimal, frMoney } from '../pdf/format';
 import { cellAddress, isBlank, type RawCell, type SheetSnapshot } from './cells';
 import { isTotalRow } from './detect';
 import {
@@ -20,6 +21,8 @@ export interface SheetProblem {
   code: 'group_conflict' | 'line_total_mismatch' | 'total_mismatch' | 'discount_percent';
   cell: string;
   messageFr: string;
+  /** When the contradiction is a mistake a check names (A1–A3, R2): kept with the invoice. */
+  check?: SheetCheck;
 }
 
 export interface SheetInvoice {
@@ -210,6 +213,11 @@ export function readSheet(
     return isBlank(cell) ? undefined : cell;
   };
   const read = (row: Row, field: InvoiceField) => READERS[field](cellOf(row, field));
+  // Typed or computed, when the reader looked at formulas; unknown otherwise.
+  const formula = (row: Row, field: InvoiceField) => {
+    const cell = cellOf(row, field);
+    return cell && snapshot.formulas ? cell.formula === true : undefined;
+  };
   const address = (row: Row, field: InvoiceField) => {
     const cell = cellOf(row, field);
     return cell ? cellAddress(sheet, cell.col, row.row) : undefined;
@@ -252,13 +260,14 @@ export function readSheet(
   }
 
   const invoices = [...groups.entries()].map(([rowKey, group]) =>
-    buildInvoice(rowKey, group, { read, address, slot, hasLine, defaults, seller }),
+    buildInvoice(rowKey, group, { read, formula, address, slot, hasLine, defaults, seller }),
   );
   return { invoices, ignoredRows };
 }
 
 interface BuildContext {
   read: (row: Row, field: InvoiceField) => string | undefined;
+  formula: (row: Row, field: InvoiceField) => boolean | undefined;
   address: (row: Row, field: InvoiceField) => string | undefined;
   /** The mapped column's cell on that row, even when blank. */
   slot: (row: Row, field: InvoiceField) => string | undefined;
@@ -383,17 +392,28 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
       netCell
     ) {
       const amount = lineAmount(quantity, price);
-      const computed = amount === null ? null : amount - off;
       const typed = roundToCents(net);
-      if (computed !== null && typed !== null && computed !== typed) {
+      if (amount !== null && typed !== null && amount - off !== typed) {
+        const computed = amount - off;
         const key = off > 0 ? 'line_total_mismatch_discount' : 'line_total_mismatch';
+        const values = { sheet: frMoney(typed, currency), computed: frMoney(computed, currency) };
+        const check = lineCheck({
+          amount,
+          off,
+          typed,
+          discount,
+          rate: read(row, 'vatRate'),
+          formula: ctx.formula(row, 'lineNet'),
+          params: { ...values, invoice: number ?? t('check.noNumber'), cell: netCell },
+          currency,
+        });
         problems.push({
           code: 'line_total_mismatch',
           cell: netCell,
-          messageFr: t(`sheet.problem.${key}`, {
-            sheet: frMoney(typed, currency),
-            computed: frMoney(computed, currency),
-          }),
+          messageFr: check
+            ? t(`check.message.${check.message}`, check.params)
+            : t(`sheet.problem.${key}`, values),
+          ...(check && { check }),
         });
       }
     }
@@ -471,13 +491,30 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
     const computed = taxInclusive(draft);
     const typed = roundToCents(total.value);
     if (computed !== undefined && typed !== null && computed !== typed) {
+      const values = { sheet: frMoney(typed, currency), computed: frMoney(computed, currency) };
+      // A2: a total typed as a number, that no formula keeps in step with the lines.
+      const gap = Math.abs(typed - computed);
+      const check: SheetCheck | undefined = total.typed
+        ? {
+            rule: 'A2',
+            message: 'A2.total',
+            cell: total.cell,
+            amount: gap,
+            params: {
+              ...values,
+              invoice: number ?? t('check.noNumber'),
+              cell: total.cell,
+              amount: frMoney(gap, currency),
+            },
+          }
+        : undefined;
       problems.push({
         code: 'total_mismatch',
         cell: total.cell,
-        messageFr: t('sheet.problem.total_mismatch', {
-          sheet: frMoney(typed, currency),
-          computed: frMoney(computed, currency),
-        }),
+        messageFr: check
+          ? t('check.message.A2.total', check.params)
+          : t('sheet.problem.total_mismatch', values),
+        ...(check && { check }),
       });
     }
   }
@@ -485,20 +522,85 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
   return { rowKey, rows: group.map((r) => r.row), draft, cells, problems };
 }
 
+/**
+ * A line whose amount the sheet contradicts, when a mistake explains it: the TTC in the HT column
+ * (A1), the discount taken twice or a percentage typed as euros (A3), else a typed amount no formula
+ * keeps in step (A2). A formula that computes something else, or a sheet read without formulas, is
+ * only the problem's warning.
+ */
+function lineCheck(c: {
+  amount: number;
+  off: number;
+  typed: number;
+  discount: string | undefined;
+  rate: string | undefined;
+  formula: boolean | undefined;
+  params: Record<string, string>;
+  currency: string;
+}): SheetCheck | undefined {
+  const { amount, off, typed, params } = c;
+  const computed = amount - off;
+  const cell = params.cell ?? '';
+  const near = (a: number, b: number) => Math.abs(a - b) <= 1;
+  const rate = c.rate !== undefined && isDecimal(c.rate) && Number(c.rate) > 0 ? c.rate : undefined;
+  const vat = rate ? percentOf(computed, rate) : null;
+  if (rate && vat !== null && near(typed, computed + vat)) {
+    const params2 = {
+      ...params,
+      rate: frDecimal(rate),
+      amount: frMoney(typed - computed, c.currency),
+    };
+    return { rule: 'A1', message: 'A1.sheet', cell, amount: typed - computed, params: params2 };
+  }
+  const discount = frMoney(off, c.currency);
+  if (off > 0 && near(typed, amount - 2 * off)) {
+    return { rule: 'A3', message: 'A3.twice', cell, amount: off, params: { ...params, discount } };
+  }
+  const percent = c.discount !== undefined ? Math.abs(Number(c.discount)) : 0;
+  const asPercent = percent > 0 && percent <= 100 ? percentOf(amount, String(percent)) : null;
+  if (asPercent !== null && near(typed, amount - asPercent)) {
+    return {
+      rule: 'A3',
+      message: 'A3.percent',
+      cell,
+      amount: Math.abs(computed - typed),
+      params: { ...params, discount, percent: frDecimal(String(percent)) },
+    };
+  }
+  if (c.formula !== false) return undefined;
+  const gap = Math.abs(typed - computed);
+  return {
+    rule: 'A2',
+    message: 'A2.line',
+    cell,
+    amount: gap,
+    params: { ...params, amount: frMoney(gap, c.currency) },
+  };
+}
+
 /** The sheet's own TTC: one value repeated (or alone) is the invoice total; several are line totals. */
-function sheetTotal(group: Row[], ctx: BuildContext): { value: string; cell: string } | undefined {
+function sheetTotal(
+  group: Row[],
+  ctx: BuildContext,
+): { value: string; cell: string; typed: boolean } | undefined {
   const found = group
     .map((row) => ({
       value: ctx.read(row, 'totalInclVat'),
       cell: ctx.address(row, 'totalInclVat'),
+      formula: ctx.formula(row, 'totalInclVat'),
     }))
-    .filter((v): v is { value: string; cell: string } => v.value !== undefined && !!v.cell)
+    .filter(
+      (v): v is { value: string; cell: string; formula: boolean | undefined } =>
+        v.value !== undefined && !!v.cell,
+    )
     .filter((v) => isDecimal(v.value));
   const first = found[0];
   if (!first) return undefined;
-  if (found.every((v) => v.value === first.value)) return first;
+  // Typed when none of its cells is a formula, as far as the reader knows.
+  const typed = found.every((v) => v.formula === false);
+  if (found.every((v) => v.value === first.value)) return { ...first, typed };
   const cents = found.map((v) => roundToCents(v.value) ?? 0).reduce((a, b) => a + b, 0);
-  return { value: (cents / 100).toFixed(2), cell: first.cell };
+  return { value: (cents / 100).toFixed(2), cell: first.cell, typed };
 }
 
 function taxInclusive(draft: InvoiceDraft): number | undefined {

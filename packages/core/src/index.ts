@@ -1,5 +1,6 @@
 // Invoice model, EN 16931 + French rules, CII/UBL builders, Factur-X embedding, state machine, money math (M1, plan §4, §7); Excel sheets → drafts (M3, plan §5).
 export * from './chase';
+export * from './checks';
 export * from './compute';
 export * from './dates';
 export * from './export';

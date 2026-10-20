@@ -554,6 +554,82 @@ describe('readSheet', () => {
     expect(computeInvoice(one(only).draft).lines[0]?.netAmount).toBe(9_000);
   });
 
+  it('names a TTC amount, a discount taken twice and a percentage typed as euros (A1, A3)', () => {
+    const sheet = grid('S', [
+      ['N° facture', 'Désignation', 'Qté', 'PU HT', 'Remise', 'Montant HT', 'Taux TVA'],
+      ['F1', 'Chaise', 10, 40, null, 480, 20],
+      ['F2', 'Chaise', 10, 40, 40, 320, 20],
+      ['F3', 'Chaise', 10, 40, 10, 360, 20],
+      ['F4', 'Chaise', 10, 40, null, 410, 20],
+      ['F5', 'Chaise', 10, 40, null, 400, 20],
+    ]);
+    const { invoices } = readSheet(sheet, detectMapping(sheet), SELLER);
+    const checks = invoices.map((i) =>
+      i.problems.map((p) => p.check && [p.check.message, p.check.cell, p.check.amount]),
+    );
+    expect(checks).toEqual([
+      [['A1.sheet', 'S!F2', 8_000]],
+      [['A3.twice', 'S!F3', 4_000]],
+      [['A3.percent', 'S!F4', 3_000]],
+      // Without formulas read, a different amount is a warning, not a mistake: the sheet may round.
+      [undefined],
+      [],
+    ]);
+    expect(invoices[0]?.problems[0]?.messageFr).toBe(
+      "Sur la facture F1, le montant de la ligne en S!F2 (480,00\u00a0€) comprend la TVA à 20 % : le montant HT est 400,00\u00a0€. La facture électronique utilise 400,00\u00a0€ HT ; corrigez la feuille pour qu'elle dise la même chose.",
+    );
+    expect(invoices[2]?.problems[0]?.messageFr).toContain('a retiré 10 %');
+    // The electronic invoice keeps quantity × price − discount whatever the sheet says.
+    expect(computeInvoice(one(invoices[0]).draft).lines[0]?.netAmount).toBe(40_000);
+  });
+
+  it('calls a typed amount that no formula keeps in step a mistake (A2)', () => {
+    const rows = [
+      ['N° facture', 'Désignation', 'Qté', 'PU HT', 'Montant HT', 'Taux TVA', 'TTC'],
+      ['F1', 'Chaise', 10, 40, 410, 20, 490],
+      ['F2', 'Chaise', 10, 40, { v: 410, fx: true }, 20, { v: 490, fx: true }],
+      ['F3', 'Chaise', 10, 40, 400, 20, 480],
+    ] as const;
+    const read = (formulas?: boolean) => {
+      const sheet = { ...grid('S', rows), ...(formulas !== undefined && { formulas }) };
+      return readSheet(sheet, detectMapping(sheet), SELLER).invoices.map((i) =>
+        i.problems.map((p) => [p.code, p.check?.message, p.check?.amount]),
+      );
+    };
+    expect(read(true)).toEqual([
+      [
+        ['line_total_mismatch', 'A2.line', 1_000],
+        ['total_mismatch', 'A2.total', 1_000],
+      ],
+      // A formula that computes something else: the sheet's own logic, a warning.
+      [
+        ['line_total_mismatch', undefined, undefined],
+        ['total_mismatch', undefined, undefined],
+      ],
+      [],
+    ]);
+    // A reader that did not look at formulas cannot tell typed from computed.
+    expect(read()).toEqual(read(false).map((p) => p.map(([code]) => [code, undefined, undefined])));
+    const sheet = { ...grid('S', rows), formulas: true };
+    const [f1] = readSheet(sheet, detectMapping(sheet), SELLER).invoices;
+    expect(f1?.problems.map((p) => p.messageFr)).toEqual([
+      "Sur la facture F1, le montant de la ligne en S!E2 est tapé à la main (410,00\u00a0€) et ne suit plus quantité × prix (400,00\u00a0€) : 10,00\u00a0€ d'écart. La facture électronique utiliserait 400,00\u00a0€ ; remettez la formule, ou corrigez la quantité ou le prix.",
+      "Sur la facture F1, le total TTC en S!G2 est tapé à la main (490,00\u00a0€) et ne correspond plus aux lignes (480,00\u00a0€) : 10,00\u00a0€ d'écart. La facture électronique utiliserait 480,00\u00a0€ ; remettez la formule du total, ou corrigez les lignes.",
+    ]);
+  });
+
+  it('names an invoice without a number in its checks', () => {
+    const sheet = {
+      ...grid('S', [
+        ['Désignation', 'Qté', 'PU HT', 'Montant HT', 'Taux TVA'],
+        ['Chaise', 10, 40, 410, 20],
+      ]),
+      formulas: true,
+    };
+    const [only] = readSheet(sheet, detectMapping(sheet), SELLER).invoices;
+    expect(only?.problems[0]?.messageFr).toMatch(/^Sur la facture sans numéro, /);
+  });
+
   it('takes the SIREN from a SIRET, the due date from the payment delay, and nothing it cannot know', () => {
     const sheet = grid('S', [
       ['N° facture', 'Date', 'SIRET', 'Désignation', 'PU HT', 'Taux TVA', 'Pays', 'E-mail'],
