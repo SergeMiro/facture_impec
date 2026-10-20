@@ -1,4 +1,4 @@
-// R2 corpus: small companies' registries with the findings a person expects, money first. Each
+// R2–R3 corpus: small companies' registries with the findings a person expects, money first. Each
 // scenario says which rules it shows firing and which it shows staying quiet; corpus.test.ts runs them
 // all and checks that every rule has both. Amounts are cents, quantities and prices decimal text.
 
@@ -22,6 +22,8 @@ export interface CheckScenario {
   docs: CheckDoc[];
   decisions?: LinkDecision[];
   today?: string;
+  /** The company's margin in Réglages (B2). */
+  minMarginPercent?: number;
   /** Exactly these findings: the message, the number of the document it is on, the cents. */
   expected: { message: CheckMessage; doc: string; amount: number | null }[];
   /** These links, by document numbers (others may exist). */
@@ -36,6 +38,9 @@ interface L {
   net?: number | null;
   off?: number;
   rate?: string | null;
+  /** The registry's item when it is not the name's (a supplier's own article). */
+  key?: string;
+  unit?: string;
 }
 
 const lines = (ls: L[]): CheckLine[] =>
@@ -46,13 +51,14 @@ const lines = (ls: L[]): CheckLine[] =>
       q !== null && price !== null ? (lineAmount(q, price) ?? 0) - (l.off ?? 0) : null;
     return {
       position: i + 1,
-      itemId: `item-${l.item.toLowerCase()}`,
+      itemId: l.key ?? `item-${l.item.toLowerCase()}`,
       name: l.item,
       quantity: q,
       netPrice: price,
       netAmount: l.net === undefined ? computed : l.net,
       discount: l.off ?? null,
       vatRate: l.rate === undefined ? '20' : l.rate,
+      ...(l.unit && { unitCode: l.unit }),
       cell: `B${i + 2}`,
       priceCell: `D${i + 2}`,
       rateCell: `E${i + 2}`,
@@ -100,6 +106,33 @@ export const prices = (number: string, ls: L[], o: Partial<CheckDoc> = {}) =>
     issueDate: '2026-01-01',
     partySiren: null,
     partyName: null,
+    ...o,
+  });
+
+/** A supplier invoice received through the platform: no sheet, no cell. */
+export const bought = (number: string, ls: L[], o: Partial<CheckDoc> = {}) => {
+  const d = doc('invoice', number, ls, {
+    id: `in:${number}`,
+    direction: 'in',
+    issueDate: '2026-08-20',
+    partySiren: '600000004',
+    partyName: 'Grossiste Martin',
+    invoiceId: null,
+    sheet: null,
+    ...o,
+  });
+  return {
+    ...d,
+    lines: d.lines.map((l) => ({ ...l, cell: null, priceCell: null, rateCell: null })),
+  };
+};
+/** A row of the « Achats » sheet. */
+export const purchase = (number: string, ls: L[], o: Partial<CheckDoc> = {}) =>
+  doc('purchase', number, ls, {
+    direction: 'in',
+    issueDate: '2026-08-20',
+    partySiren: null,
+    partyName: 'Dupont Négoce',
     ...o,
   });
 
@@ -698,6 +731,136 @@ export const CHECK_CORPUS: CheckScenario[] = [
     docs: [C118, invoice('F-33', [{ item: 'Chaise', q: '10', price: '30' }], ref)],
     decisions: [
       { kind: 'billed_by', fromDocId: 'order:C-118', toDocId: 'invoice:F-33', status: 'rejected' },
+    ],
+    expected: [],
+  },
+  {
+    name: 'b2-300-400-bought-35',
+    about:
+      'The plan’s example with its purchase: the supplier billed the 10 chairs 35 € each, the invoice sells them 30 €.',
+    fires: ['B1', 'B2'],
+    quiet: [],
+    docs: [
+      C118,
+      invoice('F-2026-042', [{ item: 'Chaise', q: '10', price: '30' }], ref),
+      bought('FA-77', [{ item: 'Chaise', q: '10', price: '35' }]),
+    ],
+    expected: [
+      { message: 'B1.under', doc: 'F-2026-042', amount: 10_000 },
+      { message: 'B2.loss', doc: 'F-2026-042', amount: 5_000 },
+    ],
+    links: [
+      { from: 'C-118', to: 'F-2026-042', status: 'auto' },
+      { from: 'FA-77', to: 'F-2026-042', status: 'auto' },
+    ],
+  },
+  {
+    name: 'b2-achats-by-name',
+    about:
+      'A row of « Achats » with the supplier’s own article, the same name as the one sold: 35 € bought, 32 € sold.',
+    fires: ['B2'],
+    quiet: [],
+    docs: [
+      purchase('A-3', [
+        {
+          item: 'Chaise pliante',
+          key: 'supplier:name:dupont negoce:name:chaise pliante',
+          q: '20',
+          price: '35',
+        },
+      ]),
+      invoice('F-50', [{ item: 'Chaise  pliante.', q: '10', price: '32' }]),
+    ],
+    expected: [{ message: 'B2.loss', doc: 'F-50', amount: 3_000 }],
+    links: [{ from: 'A-3', to: 'F-50', status: 'auto' }],
+  },
+  {
+    name: 'b2-above-cost-and-margin',
+    about: 'Bought 25 €, sold 30 €: a 16.7 % margin, above the 15 % the company asks for.',
+    fires: [],
+    quiet: ['B2'],
+    minMarginPercent: 15,
+    docs: [
+      bought('FA-80', [{ item: 'Chaise', q: '10', price: '25' }]),
+      invoice('F-51', [{ item: 'Chaise', q: '10', price: '30' }]),
+    ],
+    expected: [],
+    links: [{ from: 'FA-80', to: 'F-51', status: 'auto' }],
+  },
+  {
+    name: 'b2-margin-warning',
+    about: 'Bought 25 €, sold 30 € when the company asks for 25 %: 33,33 € a chair would keep it.',
+    fires: ['B2'],
+    quiet: [],
+    minMarginPercent: 25,
+    docs: [
+      bought('FA-80', [{ item: 'Chaise', q: '10', price: '25' }]),
+      invoice('F-52', [{ item: 'Chaise', q: '10', price: '30' }]),
+    ],
+    expected: [{ message: 'B2.margin', doc: 'F-52', amount: 3_333 }],
+  },
+  {
+    name: 'b2-latest-purchase',
+    about:
+      'The latest purchase before the sale gives the cost (28 €, not 40 € in June nor 45 € after); a sale before any purchase takes the first one after it.',
+    fires: ['B2'],
+    quiet: [],
+    docs: [
+      bought('FA-81', [{ item: 'Chaise', q: '10', price: '40' }], { issueDate: '2026-06-01' }),
+      bought('FA-82', [{ item: 'Chaise', q: '10', price: '28' }], { issueDate: '2026-09-05' }),
+      bought('FA-83', [{ item: 'Chaise', q: '10', price: '45' }], { issueDate: '2026-09-20' }),
+      invoice('F-53', [{ item: 'Chaise', q: '10', price: '30' }]),
+      invoice('F-54', [{ item: 'Chaise', q: '10', price: '30' }], { issueDate: '2026-05-01' }),
+    ],
+    expected: [{ message: 'B2.loss', doc: 'F-54', amount: 10_000 }],
+    links: [
+      { from: 'FA-82', to: 'F-53', status: 'auto' },
+      { from: 'FA-81', to: 'F-54', status: 'auto' },
+    ],
+  },
+  {
+    name: 'b2-test-purchases-apart',
+    about:
+      'A « Mode test » supplier invoice gives its cost to a test invoice, never to a real one.',
+    fires: ['B2'],
+    quiet: [],
+    docs: [
+      bought('TEST-FD-1', [{ item: 'Chaise', q: '10', price: '35' }], { isTest: true }),
+      invoice('F-55', [{ item: 'Chaise', q: '10', price: '30' }]),
+      invoice('TEST-3', [{ item: 'Chaise', q: '10', price: '30' }], { isTest: true }),
+    ],
+    expected: [{ message: 'B2.loss', doc: 'TEST-3', amount: 5_000 }],
+  },
+  {
+    name: 'b2-rejected-cost',
+    about:
+      'A person said the September purchase is not this article: the August one, 28 €, gives the cost.',
+    fires: [],
+    quiet: ['B2'],
+    docs: [
+      bought('FA-89', [{ item: 'Chaise', q: '10', price: '28' }], { issueDate: '2026-08-01' }),
+      bought('FA-90', [{ item: 'Chaise', q: '10', price: '35' }], { issueDate: '2026-09-05' }),
+      invoice('F-56', [{ item: 'Chaise', q: '10', price: '30' }]),
+    ],
+    decisions: [
+      { kind: 'cost', fromDocId: 'in:FA-90', toDocId: 'invoice:F-56', status: 'rejected' },
+    ],
+    expected: [],
+    links: [{ from: 'FA-89', to: 'F-56', status: 'auto' }],
+  },
+  {
+    name: 'b2-not-a-cost',
+    about:
+      'A box of chairs, a supplier’s credit note and a purchase in dollars are no cost for chairs sold by the piece in euros; a credit note sells nothing.',
+    fires: [],
+    quiet: ['B2'],
+    docs: [
+      bought('FA-91', [{ item: 'Chaise', q: '1', price: '320', unit: 'XBX' }]),
+      bought('AV-92', [{ item: 'Chaise', q: '10', price: '50' }], { typeCode: '381' }),
+      bought('FA-93', [{ item: 'Chaise', q: '10', price: '50' }], { currency: 'USD' }),
+      invoice('F-57', [{ item: 'Chaise', q: '10', price: '30', unit: 'H87' }]),
+      bought('FA-94', [{ item: 'Table', q: '1', price: '200' }]),
+      invoice('AV-58', [{ item: 'Table', q: '1', price: '150' }], { typeCode: '381' }),
     ],
     expected: [],
   },

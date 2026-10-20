@@ -4,7 +4,19 @@
 // no model decides one.
 import type { DocKind } from '../layout';
 
-export const CHECK_RULES = ['A1', 'A2', 'A3', 'A4', 'A5', 'B1', 'B3', 'B4', 'B5', 'B6'] as const;
+export const CHECK_RULES = [
+  'A1',
+  'A2',
+  'A3',
+  'A4',
+  'A5',
+  'B1',
+  'B2',
+  'B3',
+  'B4',
+  'B5',
+  'B6',
+] as const;
 export type CheckRule = (typeof CHECK_RULES)[number];
 
 /** blocking: the autopilot stops and « Envoyer » asks « Envoyer quand même »; warning: to read. */
@@ -25,6 +37,8 @@ export const CHECK_MESSAGES = [
   'A5.price',
   'B1.under',
   'B1.several',
+  'B2.loss',
+  'B2.margin',
   'B3.unbilled',
   'B3.unbilledNoAmount',
   'B4.quantity',
@@ -56,6 +70,9 @@ export const SEVERITY: Readonly<Record<CheckMessage, FindingSeverity>> = {
   'A5.price': 'warning',
   'B1.under': 'blocking',
   'B1.several': 'blocking',
+  'B2.loss': 'blocking',
+  // Above the cost, under the margin the company set: money earned, less than it wants.
+  'B2.margin': 'warning',
   'B3.unbilled': 'warning',
   'B3.unbilledNoAmount': 'warning',
   'B4.quantity': 'blocking',
@@ -67,7 +84,10 @@ export const SEVERITY: Readonly<Record<CheckMessage, FindingSeverity>> = {
   'B6.name': 'warning',
 };
 
-/** billed_by: an order (or a delivery note) → the invoice that bills it; fulfils: a delivery note → its order; cost: R3. */
+/**
+ * billed_by: an order (or a delivery note) → the invoice that bills it; fulfils: a delivery note → its
+ * order; cost: a purchase → the invoice whose sold lines it gives their cost (R3).
+ */
 export const LINK_KINDS = ['billed_by', 'fulfils', 'cost'] as const;
 export type LinkKind = (typeof LINK_KINDS)[number];
 export const LINK_METHODS = ['number', 'item', 'similarity', 'agent', 'human'] as const;
@@ -98,6 +118,8 @@ export interface CheckLine {
   /** Cents. */
   discount: number | null;
   vatRate: string | null;
+  /** UN/ECE rec. 20 (« H87 » a piece); a purchase in boxes is no cost for a sale by the piece. */
+  unitCode?: string | null;
   /** The cell of the designation; of the price and of the rate when the invoice's sheet maps them. */
   cell: string | null;
   priceCell?: string | null;
@@ -110,6 +132,8 @@ export interface CheckDoc {
   kind: 'invoice' | DocKind;
   /** 380 invoice, 381 credit note, 386 advance (prepayment) invoice. */
   typeCode: string | null;
+  /** ISO 4217; none is euros (a sheet). */
+  currency?: string | null;
   isTest: boolean;
   number: string | null;
   issueDate: string | null;
@@ -148,7 +172,7 @@ export interface Link {
 }
 
 export interface Evidence {
-  role: 'invoice' | 'order' | 'delivery' | 'price_list' | 'history';
+  role: 'invoice' | 'order' | 'delivery' | 'price_list' | 'history' | 'purchase';
   docId: string;
   number: string | null;
   cell: string | null;
@@ -174,6 +198,8 @@ export interface CheckInput {
   decisions: readonly LinkDecision[];
   /** Europe/Paris, ISO. */
   today: string;
+  /** The margin the company wants on what it resells, in % of the sale price (Réglages); null: none. */
+  minMarginPercent?: number | null;
 }
 
 export interface CheckOutput {

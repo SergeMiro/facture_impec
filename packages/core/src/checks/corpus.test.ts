@@ -7,7 +7,7 @@ import { CHECK_RULES } from './types';
 
 const TODAY = '2026-10-20';
 
-describe('R2 corpus', () => {
+describe('R2–R3 corpus', () => {
   it('has at least 30 scenarios, each rule firing in one and quiet in another', () => {
     expect(CHECK_CORPUS.length).toBeGreaterThanOrEqual(30);
     expect(new Set(CHECK_CORPUS.map((s) => s.name)).size).toBe(CHECK_CORPUS.length);
@@ -29,6 +29,7 @@ describe('R2 corpus', () => {
         docs: s.docs,
         decisions: s.decisions ?? [],
         today: s.today ?? TODAY,
+        minMarginPercent: s.minMarginPercent ?? null,
       });
       const number = (id: string) => s.docs.find((d) => d.id === id)?.number;
       const got = out.findings.map((f) => ({

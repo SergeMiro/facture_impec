@@ -2,9 +2,11 @@
 // invoice bills. Each finding is a rule in this file, with the cents at stake and the cells that prove
 // it; the wording's values are written in French here, the sentences live in fr.json.
 import { daysBetween } from '../dates';
-import { isDecimal, lineAmount, normalizeDecimal, percentOf } from '../money';
+import { isDecimal, normalizeDecimal } from '../money';
 import { partyKey } from '../party';
 import { frDate, frDecimal, frMoney, frPrice } from '../pdf/format';
+import { near, positiveRate, sheetNet, unitCents, unitNet } from './amounts';
+import { type Cost, findCosts } from './cost';
 import { isInvoice, itemQuantities, linkDocs, linkId, quantityOf } from './link';
 import {
   type CheckDoc,
@@ -33,13 +35,7 @@ const rateText = (line: CheckLine) => frDecimal(text(line.vatRate));
 const byDate = (a: CheckDoc, b: CheckDoc) =>
   text(a.issueDate).localeCompare(text(b.issueDate)) || (a.id < b.id ? -1 : 1);
 const quantityText = (n: number) => frDecimal(String(Math.round(n * 10_000) / 10_000));
-/** A unit price in cents, kept with its fractions: 39.995 € is 3999.5. */
-const unitCents = (price: string | null) =>
-  price !== null && isDecimal(price) ? Number(price) * 100 : null;
 const unitText = (cents: number) => frPrice(String(Math.round(cents * 100) / 10_000));
-const near = (a: number, b: number, tolerance = 1) => Math.abs(a - b) <= tolerance;
-const positiveRate = (rate: string | null) =>
-  rate !== null && isDecimal(rate) && Number(rate) > 0 ? rate : null;
 
 function finding(
   message: CheckMessage,
@@ -79,25 +75,17 @@ function subjectOf(invoices: readonly CheckDoc[]): CheckDoc | undefined {
   return latest(invoices.filter((i) => !i.locked)) ?? latest(invoices);
 }
 
-const sign = (doc: CheckDoc) => (doc.typeCode === '381' ? -1 : 1);
-
-/**
- * A line's net amount, its VAT taken out when a sheet wrote the TTC in the amount column (A1): the
- * amount equals quantity × price × (1 + rate). Only a sheet's own documents: an invoice's amounts are
- * computed.
- */
-function sheetNet(doc: CheckDoc, line: CheckLine): { net: number | null; inclVat: number | null } {
-  const rate = positiveRate(line.vatRate);
-  if (doc.kind === 'invoice' || line.netAmount === null || !rate || !line.quantity) {
-    return { net: line.netAmount, inclVat: null };
+/** Where a cost comes from, for the wording: « la facture FA-77 de Grossiste SA », « la feuille « Achats » ». */
+function purchaseText(doc: CheckDoc): string {
+  if (doc.kind === 'invoice') {
+    const from = doc.partyName ? ` de ${doc.partyName}` : '';
+    return doc.number ? `la facture ${doc.number}${from}` : `une facture${from}`;
   }
-  const ht = line.netPrice ? lineAmount(line.quantity, line.netPrice) : null;
-  if (ht === null || ht === line.netAmount) return { net: line.netAmount, inclVat: null };
-  const vat = percentOf(ht, rate);
-  return vat !== null && near(line.netAmount, ht + vat)
-    ? { net: ht, inclVat: line.netAmount }
-    : { net: line.netAmount, inclVat: null };
+  const sheet = `la feuille « ${text(doc.sheet)} »`;
+  return doc.number ? `l'achat ${doc.number} de ${sheet}` : sheet;
 }
+
+const sign = (doc: CheckDoc) => (doc.typeCode === '381' ? -1 : 1);
 
 interface Part {
   doc: CheckDoc;
@@ -157,6 +145,9 @@ class World {
     readonly docs: readonly CheckDoc[],
     readonly links: readonly Link[],
     readonly today: string,
+    /** What each sold line cost, by `invoiceId:position` (src/checks/cost.ts). */
+    readonly costs: ReadonlyMap<string, Cost> = new Map(),
+    readonly minMarginPercent: number | null = null,
   ) {
     this.byId = new Map(docs.map((d) => [d.id, d]));
     for (const l of links) {
@@ -179,6 +170,7 @@ class World {
       if (d.kind === 'order' || (d.kind === 'delivery' && this.billedBy.has(d.id))) this.source(d);
     }
     this.priceList();
+    this.margins();
     this.usualRate();
     this.deliveries();
     this.parties();
@@ -393,6 +385,60 @@ class World {
     }
   }
 
+  /** B2: a line sold under what its article cost; above it but under the company's margin, a warning. */
+  margins() {
+    for (const inv of this.docs.filter(isInvoice)) {
+      for (const line of inv.lines) {
+        const cost = this.costs.get(`${inv.id}:${line.position}`);
+        const price = unitNet(inv, line);
+        const quantity = quantityOf(line.quantity);
+        // A line given away is a choice, not a price to judge.
+        if (!cost || price === null || price <= 0 || quantity === null || quantity <= 0) continue;
+        const params = {
+          invoice: text(inv.number),
+          item: text(line.name ?? cost.line.name),
+          quantity: quantityText(quantity),
+          price: unitText(price),
+          cost: unitText(cost.unit),
+          purchase: purchaseText(cost.doc),
+        };
+        const evidence = [
+          evidenceOf('invoice', inv, line, 'priceCell'),
+          evidenceOf('purchase', cost.doc, cost.line),
+        ];
+        const key = `${inv.id}:${line.position}`;
+        const loss = Math.round((cost.unit - price) * quantity);
+        if (loss >= NOISE) {
+          this.findings.push(
+            finding('B2.loss', inv, key, loss, { ...params, amount: money(loss) }, evidence),
+          );
+          continue;
+        }
+        const minimum = this.minMarginPercent;
+        if (minimum === null) continue;
+        // The price that keeps the margin: cost / (1 − margin).
+        const missing = Math.round((cost.unit / (1 - minimum / 100) - price) * quantity);
+        if (missing < NOISE) continue;
+        const margin = Math.round(((price - cost.unit) / price) * 1_000) / 10;
+        this.findings.push(
+          finding(
+            'B2.margin',
+            inv,
+            key,
+            missing,
+            {
+              ...params,
+              margin: frDecimal(String(margin)),
+              minimum: frDecimal(String(minimum)),
+              amount: money(missing),
+            },
+            evidence,
+          ),
+        );
+      }
+    }
+  }
+
   /** A4: an article's VAT rate other than the one nearly all its earlier invoices use. */
   usualRate() {
     const invoices = this.docs.filter((d) => isInvoice(d) && d.typeCode !== '386');
@@ -583,8 +629,15 @@ export function checkRegistry(input: CheckInput): CheckOutput {
     const docs = input.docs.filter((d) => d.kind !== 'invoice' || d.isTest === isTest);
     if (isTest && !docs.some((d) => d.kind === 'invoice')) continue;
     const found = linkDocs(docs, input.decisions);
-    for (const l of found) links.set(linkId(l), l);
-    const world = new World(docs, found, input.today).run();
+    const bought = findCosts(docs, input.decisions);
+    for (const l of [...found, ...bought.links]) links.set(linkId(l), l);
+    const world = new World(
+      docs,
+      found,
+      input.today,
+      bought.costs,
+      input.minMarginPercent ?? null,
+    ).run();
     if (!isTest) {
       findings.push(...world);
       continue;

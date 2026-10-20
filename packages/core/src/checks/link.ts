@@ -85,6 +85,8 @@ export function linkDocs(docs: readonly CheckDoc[], decisions: readonly LinkDeci
     const from = byId.get(d.fromDocId);
     if (d.status !== 'confirmed' || !from || !byId.has(d.toDocId)) continue;
     links.set(linkId(d), { ...d, score: 100, method: 'human', status: 'confirmed' });
+    // A purchase's cost settles nothing here (src/checks/cost.ts).
+    if (d.kind === 'cost') continue;
     settled.add(d.kind === 'billed_by' && from.kind === 'order' ? d.toDocId : d.fromDocId);
   }
 

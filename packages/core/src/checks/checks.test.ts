@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { delivery, invoice, order, prices } from '../../test/checks-corpus';
+import { bought, delivery, invoice, order, prices, purchase } from '../../test/checks-corpus';
 import { checkRegistry, NOISE } from './check';
+import { findCosts, normalizeName } from './cost';
 import { itemQuantities, linkDocs, sameParty, similarity } from './link';
 import { ruleOf, SEVERITY } from './types';
 
@@ -296,5 +297,93 @@ describe('checker', () => {
       invoice('F-1', [{ item: 'Livre', price: '30', rate: '20', net: null }]),
     ]);
     expect(findings).toEqual([]);
+  });
+});
+
+describe('what a sold line cost (R3)', () => {
+  const sale = (o = {}) => invoice('F-1', chairs('10', '30'), o);
+
+  it('names an article the same way whatever its accents, case and punctuation', () => {
+    expect(normalizeName('  Chaise  PLIANTE. ')).toBe('chaise pliante');
+    expect(normalizeName('Œuvre — Été 2026 !')).toBe('œuvre ete 2026');
+  });
+
+  it('takes a purchase a person confirmed over a later one, and says it was a person', () => {
+    const later = bought('FA-2', chairs('10', '35'), { issueDate: '2026-09-05' });
+    const chosen = bought('FA-1', chairs('10', '20'), { issueDate: '2026-08-01' });
+    const { costs, links } = findCosts(
+      [later, chosen, sale()],
+      [{ kind: 'cost', fromDocId: chosen.id, toDocId: 'invoice:F-1', status: 'confirmed' }],
+    );
+    expect(costs.get('invoice:F-1:1')?.doc.id).toBe(chosen.id);
+    expect(links.map(shape)).toEqual(['in:FA-1>invoice:F-1 confirmed human']);
+  });
+
+  it('takes the latest purchase for a sale without a date, and one without a date last', () => {
+    const undated = bought('FA-0', chairs('10', '50'), { issueDate: null });
+    const dated = bought('FA-1', chairs('10', '35'), { issueDate: '2026-12-01' });
+    expect(
+      findCosts([undated, dated, sale({ issueDate: null })], []).costs.get('invoice:F-1:1')?.doc.id,
+    ).toBe(dated.id);
+    // Sold on 10 September: December is too late, the undated purchase is the one known before.
+    expect(findCosts([undated, dated, sale()], []).costs.get('invoice:F-1:1')?.doc.id).toBe(
+      undated.id,
+    );
+  });
+
+  it('ties a purchase once to an invoice, by its item when one line says so', () => {
+    const twoLines = bought('FA-1', [
+      { item: 'Chaise', q: '10', price: '35' },
+      { item: 'Table', key: 'supplier:siren:600000004:ref:T-9', q: '1', price: '90' },
+    ]);
+    const sold = invoice('F-1', [{ item: 'Table', q: '1', price: '100' }, ...chairs('10', '30')]);
+    const { costs, links } = findCosts([twoLines, sold], []);
+    expect([...costs.values()].map((c) => c.by)).toEqual(['name', 'item']);
+    expect(links).toMatchObject([{ score: 100, method: 'item', status: 'auto' }]);
+  });
+
+  it('reads « one », « piece » and « each » as the same unit, a box as another', () => {
+    const cost = (sold: string, bought_: string) =>
+      findCosts(
+        [
+          bought('FA-1', [{ item: 'Chaise', q: '10', price: '35', unit: bought_ }]),
+          invoice('F-1', [{ item: 'Chaise', q: '10', price: '30', unit: sold }]),
+        ],
+        [],
+      ).costs.size;
+    expect(cost('C62', 'H87')).toBe(1);
+    expect(cost('EA', 'C62')).toBe(1);
+    expect(cost('C62', 'XBX')).toBe(0);
+    expect(cost('KGM', 'KGM')).toBe(1);
+  });
+
+  it('writes where the cost comes from when the purchase has no number', () => {
+    const findings = run([
+      bought('', chairs('10', '35'), { id: 'in:x', number: null, partyName: null }),
+      sale(),
+    ]).findings;
+    expect(findings[0]?.params.purchase).toBe('une facture');
+    const sheet = run([purchase('', chairs('10', '35'), { number: null }), sale()]).findings;
+    expect(sheet[0]?.params.purchase).toBe('la feuille « Achats »');
+    const named = run([bought('', chairs('10', '35'), { number: null }), sale()]).findings;
+    expect(named[0]?.params.purchase).toBe('une facture de Grossiste Martin');
+  });
+
+  it('judges no line given away, and no line without a quantity', () => {
+    const cost = bought('FA-1', [...chairs('10', '35'), { item: 'Table', q: '1', price: '90' }]);
+    const sold = invoice('F-1', [
+      { item: 'Chaise', q: '1', price: '0' },
+      { item: 'Table', q: null, price: '50' },
+      ...chairs('10', '30'),
+    ]);
+    const out = checkRegistry({
+      docs: [cost, sold],
+      decisions: [],
+      today: TODAY,
+      minMarginPercent: 20,
+    });
+    expect(out.findings.map((f) => [f.message, f.key, f.amount])).toEqual([
+      ['B2.loss', 'B2:invoice:F-1:3', 5_000],
+    ]);
   });
 });

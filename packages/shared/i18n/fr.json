@@ -1222,6 +1222,8 @@
   "check.message.B5.lines": "Les factures {invoices} facturent ensemble {quantity} « {item} », alors que {source} n'en prévoyait que {ordered} : {amount} facturés deux fois.",
   "check.message.B5.total": "Les factures et acomptes {invoices} facturent ensemble {billed} HT, alors que {source} prévoyait {ordered} : {amount} de trop. Un acompte n'a peut-être pas été déduit.",
   "check.message.B6.siren": "La facture {invoice} reprend la commande {order}, mais pas le même client : SIREN {invoiceSiren} sur la facture, {orderSiren} sur la commande.",
+  "check.message.B2.loss": "Sur la facture {invoice}, vous vendez {quantity} « {item} » à {price} l'unité, en dessous de votre prix d'achat de {cost} ({purchase}) : {amount} de perte.",
+  "check.message.B2.margin": "Sur la facture {invoice}, vous vendez {quantity} « {item} » à {price} l'unité pour un prix d'achat de {cost} ({purchase}) : votre marge est de {margin} %, sous les {minimum} % fixés dans vos réglages. Il manque {amount} pour l'atteindre.",
   "check.message.B6.name": "La facture {invoice} reprend la commande {order}, mais pas le même client : « {invoiceName} » sur la facture, « {orderName} » sur la commande.",
   "check.blocked": "Votre facture n'est pas envoyée : corrigez-la, ou envoyez-la quand même si c'est voulu."
 }
