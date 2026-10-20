@@ -476,6 +476,54 @@ Tests: `packages/core/src/layout/layout.test.ts`, `packages/agents/src/layout.te
 | Sheets proposed on the Tableau de bord | By their name only (« Commandes », « BL », « Achats », « Tarifs ») | The pane reads no other sheet before the user asks for it. |
 | A purchase line's article | The supplier's article (`supplier:<supplier>:ref:<reference>`) | Which of the company's own articles it is will be decided later with its evidence (R0 rule), never guessed while reading. |
 
+## What R2 added: checks across documents
+
+R2 reads the registry's documents together: which order an invoice bills, which order a delivery note
+delivers, and what does not add up between them, always as a rule in code with its money at stake and its
+cells (criteria in `docs/PROGRESS.md` R2). A blocking finding can stop a send; nothing here asks a model.
+
+```
+an invoice synced, a sheet read, a sheet removed ─► registry job ─► registry brought up to date ─► checkNow
+the sweep (every few minutes) ─► companies whose documents moved, or not checked today ─► checkNow
+GET /checks, « Envoyer » ─► checkNow first
+
+checkNow ─► mark of the documents unchanged and checked today? ─► nothing
+          └─► runChecks (one at a time per company: advisory lock)
+                docs + lines + cells ─► linkDocs (decisions of people kept) ─► checkRegistry (A1–A5, B1, B3–B6)
+                ─► links written (proposed/auto), findings diffed (open / resolved / reopened), check_state
+                ─► an invoice now held or freed ─► autopilot replanned; one it was about to send is cancelled
+                   with the reason on its timeline
+```
+
+| Path | What it does |
+|---|---|
+| `packages/core/src/checks/link.ts` | The Linker: the order number first (score 100, every order of that number proposed when there are several), else the same customer (SIREN, else the normalized name), the same articles and quantities, in a window of dates (−30/+120 days for an invoice, −7/+180 for a delivery note). One clear candidate ≥ 80 links on its own; close ones (within 25 points) are proposed, three at most. A person's « Oui » settles the document; a « Non » takes that candidate out, and the others are weighed without it. |
+| `packages/core/src/checks/check.ts` | The Checker. Inside an invoice: A1 HT/TTC confused, A2 a total typed by hand that no formula keeps in step, A3 a discount taken twice or a percentage typed as euros, A4 a VAT rate that is not this article's usual one (≥ 3 earlier invoices), A5 a price other than « Tarifs ». Across documents: B1 billed less than the order (blocking), B3 delivered and not billed after 30 days (warning), B4 billed more than ordered or delivered (blocking), B5 billed twice or advances above the order (blocking), B6 another customer than the order (warning). Test invoices are checked against the same sheets, apart from the real ones. Every finding: a key (stable across runs), a message key and its parameters, the cents at stake, the evidence (role, document, cell). |
+| `packages/core/src/sheet` | The invoice sheet's own checks for A1–A3 (`build.ts`): an amount that includes VAT, a typed total, a discount twice; they need the formula of each cell, which the pane now reads (`Range.formulas`, `docs/OFFICE.md` § 5) and sends as a flag, never the formula itself. |
+| `apps/api/src/checks.ts` | `runChecks` (above), `checkNow`, `checksBehind` (the sweep), `checksView` (the screen: open findings by money, the links waiting for a person, the money at stake on real invoices), `decideLink`, `blockingFindings` (the send gate). |
+| `apps/api/src/invoices.ts` › `requestSend` | Checks again, then refuses `409 blocking_findings` unless the request names the fingerprint of every open blocking finding of that invoice (`{ acknowledge: [...] }`); a send despite findings writes a timeline note and the audit event `invoice.send_despite_findings` with them. |
+| `apps/api/src/autopilot.ts` | A blocking finding is a reason not to plan (`findings`); the run checks each company before sending its due invoices, and a company whose check failed sends nothing that round. |
+| `apps/addin/src/ui/ChecksView.tsx` | « Contrôles »: the money at stake, the links to confirm with « Oui » / « Non », one card per finding with « Corriger la ligne », « Voir la commande » (or the delivery note, the price list, the earlier invoice) and « Ouvrir la facture ». The fiche shows the same cards, and « Envoyer quand même » with the amount at stake. |
+
+Tables: migration `0011_checks.sql` (`links`, `findings`, `check_state`; `docs.prepaid`).
+
+Tests: `packages/core/src/checks/checks.test.ts`, `packages/core/src/checks/corpus.test.ts` (the scenarios
+of `packages/core/test/checks-corpus.ts`), `packages/core/src/sheet/sheet.test.ts`, `apps/api/src/checks.test.ts`,
+`apps/addin/src/controller.test.ts` › the checks across documents (R2), `apps/addin/e2e/harness.spec.ts` › Contrôles.
+
+### Decisions taken in R2
+
+| Topic | Decision | Why |
+|---|---|---|
+| Who decides a finding | Rules in `packages/core`; the wording from `fr.json` templates filled with the rule's numbers | Plan §0: an LLM never decides validity. MatchAgent and ExplainAgent wait (`docs/DEFERRED.md`). |
+| When the checks run | After the registry job, in the sweep when the documents' mark moved or the day changed, and before a send or the screen; never in a request that edits an invoice | The edit stays fast; what blocks a send is checked on what is current at the moment of sending. |
+| Knowing nothing changed | A mark per company: the count and a hash of each document's version and its invoice's status | `updated_at` misses changes made in the same instant; the mark is cheap and exact. |
+| A finding over time | One row per (company, key): open, resolved when it is no longer found, reopened if it comes back; the fingerprint changes with its amount or cells | The screen and the audit tell a new problem from the same one; an acknowledgement is valid only for what the user saw. |
+| « Envoyer quand même » | The pane sends the fingerprints the user saw; the API refuses a send that leaves one out | A finding that appeared or changed after the fiche was opened is not acknowledged by a click made before it. |
+| The autopilot | Never sends past an open blocking finding: unplanned, a note with the reason; replanned by itself when the finding is resolved | Plan R2: the autopilot cancels and says why; only a person can send despite a finding. |
+| A link a person decided | Kept as it is, whatever the next run finds; a confirmed link settles its document | People correct the Linker; it never undoes them. |
+| Money at stake in the summary | Real invoices only; findings on test invoices are shown with « Test », never added up | Plan R2: a test invoice is never added to the real ones. |
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

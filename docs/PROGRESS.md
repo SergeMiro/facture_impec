@@ -583,3 +583,62 @@ checked against them yet (R2). Criteria, written here before the work:
 | Audit and RGPD | `apps/api/src/sources.test.ts` counts `layout_profile.confirm`, `source.include`, `source.read` (only when the registry changed) and `source.remove`; › exports the included sheets and their layouts, and deletes them with the account; `packages/db/src/db.test.ts` lists the new tables. `docs/RGPD.md`: included sheets, layout profiles, the registry from sheets, export and erasure. |
 | Docs | `docs/ARCHITECTURE.md` › What R1 added: every sheet of the workbook, and its decisions; `docs/DEFERRED.md` › registry tables (row_state not needed), FI_Registre sheet, changed rows only, more than 5 000 rows, supplier price lists, cost price, one mapping table, a status column, a gating LayoutAgent recording, suggestions from headers, a renamed sheet; `docs/AI_PROVIDERS.md` › LayoutAgent. |
 | Gate | `pnpm verify` green on 2026-10-19 (tests with `--concurrency=2`): api 206, core 544 + oracle 276, agents 105, add-in 58, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local). |
+
+## R2 — Checks across documents (started 2026-10-20)
+
+R1 brought the company's orders, delivery notes, purchases and price lists into the registry. R2 reads
+them against the invoices: a deterministic Linker ties each invoice to the order it bills, a Checker
+runs rules on documents together, and what it finds — always a rule in code, with the money at stake
+and the cells that prove it — can stop a send. Criteria, written here before the work:
+
+- **Linker**: an invoice is tied to its order by the order number (BT-13 on the invoice, the sheet's
+  « N° commande »; score 1.0), else by customer + article + quantity within a window of dates (lower
+  score); a delivery note to its order the same way. One candidate links on its own; several stay
+  « proposée » until a person confirms one, and a confirmed or rejected link is never undone by the
+  Linker. Table `links` (kind billed_by / fulfils, score, method number / item / similarity / human,
+  status auto / proposed / confirmed / rejected).
+- **Rules inside an invoice**: A1 HT and TTC confused (an amount ≈ quantity × price × (1 + rate), or a
+  price ≈ the order's or the price list's × (1 + rate)); A2 a total typed as a number instead of a
+  formula that no longer matches (the pane sends which cells hold a formula, not the formulas); A3 a
+  discount applied twice, or a percentage typed as an amount; A4 a VAT rate that is not this article's
+  usual one; A5 a price that differs from the price list (« Tarifs »).
+- **Rules across documents**: B1 invoiced less than the order for the same quantity, the rest invoiced
+  nowhere → « N € non facturés » (blocking); B3 delivered but not invoiced after 30 days (warning); B4
+  invoiced more than ordered or delivered (blocking); B5 the same order lines in two invoices, or
+  invoices and advances above the order (blocking); B6 customer or SIREN differs from the order
+  (warning). Each finding has its amount at stake in cents, its cells, a fingerprint; the list is sorted
+  by money. Table `findings`.
+- **When it runs**: in the company's registry job, after the registry is brought up to date (an invoice
+  synced, a sheet read, received invoices); before a send, the checks run again on what is current. A
+  test invoice is checked against the sheets like a real one, never added to the real ones.
+- **Send gate**: in Review, an open blocking finding turns « Envoyer » into « Envoyer quand même »: the
+  pane lists the findings and asks for a confirmation, the API refuses a send that does not name them,
+  and the send writes an audit event with them. The autopilot never sends an invoice with an open
+  blocking finding: its send is cancelled with the reason on the timeline, and the invoice waits for
+  « Envoyer ».
+- **Screen « Contrôles »**: the open findings, largest amount first, each with its explanation in plain
+  French (templates in `fr.json`; ExplainAgent's wording later), « Corriger la ligne » (selects the
+  cell), « Voir la commande », « Ouvrir la facture »; the links waiting for a person, with « Oui » /
+  « Non ». The invoice's fiche shows its findings.
+- **Corpus**: at least 30 scenarios with their expected findings, among them 300 € / 400 € (order C-118
+  10 × 40 €, invoice F-2026-042 10 units for 300 € → B1 100 €); every rule has a scenario where it fires
+  and one where it does not; API test: the autopilot does not send with a blocking finding.
+- **Audit and RGPD**: a check run that opened or closed findings, a link confirmed or rejected, and a
+  send despite findings write audit events; the export and the deletion of a company cover `links` and
+  `findings`; `docs/RGPD.md` lists them.
+- **Docs**: `docs/ARCHITECTURE.md` (what R2 added, its decisions), `docs/DEFERRED.md` (what waits).
+
+### Evidence (2026-10-20)
+
+| Criterion | Evidence |
+|---|---|
+| Linker | `packages/core/src/checks/checks.test.ts` › linker › compares customers by SIREN, else by name, else says nothing, › scores the articles and quantities a document shares with another, › reads an order number however it is written, › proposes every order that carries the same number, › asks a person before a third invoice bills an order already billed in full, › leaves out other customers, dates out of the window, advances and weak matches, › proposes a partial match instead of linking it, › links a clear leader and proposes at most three close ones, › ties a delivery note to its order, else to the invoice that bills it, › keeps what a person decided. Corpus: `link-by-articles`, `link-ambiguous`, `link-confirmed`, `link-one-refused` (a « Non » to one of two orders: the other links by itself), `link-rejected`. Table `links` (migration `0011_checks.sql`); `apps/api/src/checks.test.ts` › asks between two orders, and keeps « Oui » and « Non » from one check to the next. |
+| Rules inside an invoice | Corpus scenarios `a1-vat-on-order-price`, `a1-order-sheet-ttc`, `a1-vat-on-list-price`, `a3-discount-twice-order`, `a3-discount-twice-list`, `a4-unusual-rate` / `a4-short-history` / `a4-mixed-history`, `a5-price-list` / `a5-list-price` / `a5-order-wins` / `a5-latest-list` / `a5-credit-note`, `sheet-checks`. The invoice sheet's own A1–A3: `packages/core/src/sheet/sheet.test.ts` › names a TTC amount, a discount taken twice and a percentage typed as euros (A1, A3), › calls a typed amount that no formula keeps in step a mistake (A2), › names an invoice without a number in its checks. The pane reads `Range.formulas` (`docs/OFFICE.md` § 5) and sends a flag per cell, never the formula: `apps/addin/src/excel/excel.test.ts` › says which cells a formula computes, once it read the formulas. |
+| Rules across documents | Corpus: B1 `b1-300-400`, `b1-partial-invoice`, `b1-two-invoices-complete`, `b1-second-invoice-under`, `b1-rounding`, `b1-granted-discount`; B3 `b3-unbilled`, `b3-recent`, `b3-billed`, `b3-partly-billed`, `b3-no-price`, `b3-billed-directly`; B4 `b4-quantity`, `b4-price`, `b4-exact`, `b4-several-over-price`, `b4-delivery-billed-directly`; B5 `b5-lines`, `b5-lines-sent-first`, `b5-advance-not-deducted`, `b5-advance-deducted`, `b5-credit-note`; B6 `b6-siren`, `b6-name`, `b6-name-variant`. `checks.test.ts` › checker › gives every message a rule and a severity, › sorts the money at stake first, blocking before warning at the same amount, › skips lines it cannot read, › does not judge an advance alone, nor an invoice that bills two orders. Table `findings`: one row per company and key, open / resolved / reopened, a fingerprint. |
+| When it runs | `apps/api/src/checks.test.ts` › the sweep › checks a company again when its registry moved, and every new day (`checksBehind` before and after a check, after a change, the next day); the registry job runs `checkNow` (`workers.ts`); « Envoyer » and `GET /checks` check first. Test invoices: corpus `test-invoice-apart`, `test-invoice-under`; `checks.test.ts` › says how a credit note and a test invoice stay apart; the screen adds up real invoices only. |
+| Send gate | `apps/api/src/checks.test.ts` › the send gate › turns « Envoyer » into « Envoyer quand même », and keeps the user’s word in the audit (409 `blocking_findings` without the fingerprint and with a stale one, 202 with it, then the timeline note and `invoice.send_despite_findings`), › sends with a plain « Envoyer » when nothing blocks. Autopilot: › the autopilot › never sends past a blocking finding: it cancels and says why on the timeline (unplanned, not replanned by an edit, replanned once the order is corrected), › cancels a planned invoice as soon as a check finds what holds it. Pane: `apps/addin/src/controller.test.ts` › turns « Envoyer » into « Envoyer quand même »; a finding found meanwhile stops the send (the order changed after the fiche opened: 409, the fiche shows the new amount, then the send goes). E2E: [« Envoyer quand même »](evidence/r2-send-despite.png). |
+| Screen « Contrôles » | `ChecksView.tsx`, `InvoiceView.tsx` (the fiche's cards and « Envoyer quand même »). `apps/addin/src/controller.test.ts` › the checks across documents (R2) › shows the 150 € a day the invoice leaves out, with the cells to look at (« Voir la commande » selects `Commandes!D2`, « Corriger la ligne » `Factures!K2`, another workbook's document is named), › asks « Oui » or « Non » when two orders look alike, and checks again with the answer. E2E (`apps/addin/e2e/harness.spec.ts`, local Chrome, browser: local) › Contrôles: the order says 1 200 €, the invoice 900 €; « Envoyer quand même »: an edit of « Commandes » ties C-42 to F2026-102, « 300,00 € en jeu sur 1 écart(s) », « Voir la commande » selects E4, « Corriger la ligne » K3 ([contrôles](evidence/r2-checks.png)); the pane does not scroll sideways. |
+| Corpus | `packages/core/src/checks/corpus.test.ts` › R2 corpus › has at least 30 scenarios, each rule firing in one and quiet in another: 46 scenarios in `packages/core/test/checks-corpus.ts`, each run as its own test with exactly its findings (message, document, cents) and links. The plan's example: `b1-300-400` (C-118 10 × 40 €, F-2026-042 10 for 300 € → B1, 100 €); API: › the 300/400 example › finds 100 € missing against order C-118, with the cells of both documents. Autopilot: see Send gate. |
+| Audit and RGPD | `apps/api/src/checks.test.ts` counts `checks.run` (only when findings opened, changed or resolved), `link.confirm`, `link.reject`, `invoice.send_despite_findings`, `invoice.autopilot_cancel`; › RGPD › exports the links and findings, and erases them with the account; `packages/db/src/db.test.ts` lists `check_state`, `findings`, `links`. `docs/RGPD.md`: checks across documents, export and erasure. |
+| Docs | `docs/ARCHITECTURE.md` › What R2 added: checks across documents, and its decisions; `docs/DEFERRED.md` › `rule_exceptions` and « C'est normal » (R7), MatchAgent and ExplainAgent, legal forms in the Linker, B6 on the address, units, an article no order announced, B4 against delivery notes of an order, the 30 days as a setting, checking only what a change touches, the fiche's findings as fresh as « Contrôles ». |
+| Gate | `pnpm verify` green on 2026-10-20 (tests with `--concurrency=1`, memory being short): api 214, core 612 (branches 94.09 %) + oracle 276, agents 107, add-in 62, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local). |
