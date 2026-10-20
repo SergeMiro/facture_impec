@@ -49,7 +49,7 @@ export function officeExcelPort(): ExcelPort {
     usedRange: (sheet) =>
       run(async (context): Promise<UsedRange | null> => {
         const range = context.workbook.worksheets.getItem(sheet).getUsedRangeOrNullObject(true);
-        range.load('address, values, text, numberFormat');
+        range.load('address, values, text, numberFormat, formulas');
         await context.sync();
         if (range.isNullObject) return null;
         return {
@@ -57,6 +57,7 @@ export function officeExcelPort(): ExcelPort {
           values: range.values,
           text: range.text,
           numberFormat: range.numberFormat,
+          formulas: range.formulas,
         };
       }),
 

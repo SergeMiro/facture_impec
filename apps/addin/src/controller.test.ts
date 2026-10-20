@@ -14,7 +14,7 @@ import {
   testDatabase,
   type WorkerDeps,
 } from '@fi/api/testing';
-import { addDays, parisToday } from '@fi/core';
+import { addDays, frMoney, parisToday } from '@fi/core';
 import { type MessageKey, TERMS_VERSION, TRIAL_REAL_SENDS, t } from '@fi/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -646,6 +646,154 @@ describe('the other sheets of the workbook (R1)', () => {
     expect(sourceReads()).toBe(before);
     // The sheet itself is untouched.
     expect(book.cell('Commandes', 'A2')?.text).toBe('C-41');
+  });
+});
+
+describe('the checks across documents (R2)', () => {
+  const SIREN = '999000201';
+  const day = (text: string, value: number) => ({ value, text, format: 'dd/mm/yyyy' });
+  // C-41 orders what F2026-101 bills, at 600 € a day instead of 450 €; C-42 is someone else's.
+  const book = new FakeWorkbook({
+    [DEMO_SHEET]: demoSheet(),
+    [DEMO_ORDERS]: {
+      A1: 'N° commande',
+      B1: 'Date',
+      C1: 'Client',
+      D1: 'Désignation',
+      E1: 'Qté',
+      F1: 'PU HT',
+      A2: 'C-41',
+      B2: day('01/10/2026', 46296),
+      C2: 'Boulangerie Martin SAS',
+      D2: 'Journée de conseil',
+      E2: 2,
+      F2: 600,
+      A3: 'C-42',
+      B3: day('06/10/2026', 46301),
+      C3: 'Garage des Lilas',
+      D3: 'Étagère murale',
+      E3: 2,
+      F3: 140,
+    },
+  });
+  const { controller, state } = pane(book);
+  const invoiceId = () => {
+    const id = controller.rowAt(2)?.invoiceId;
+    if (!id) throw new Error('F2026-101 has no invoice');
+    return id;
+  };
+  const b1 = () => state().checks?.findings.find((f) => f.rule === 'B1');
+
+  beforeAll(async () => {
+    const vatId = `FR${String((12 + 3 * (Number(SIREN) % 97)) % 97).padStart(2, '0')}${SIREN}`;
+    const key = (
+      await newTenant(api.request, {
+        ...SELLER,
+        siren: SIREN,
+        vatId,
+        ownerEmail: 'controles@entreprise-demo.test',
+      })
+    ).apiKey;
+    const res = await api.request('/settings', {
+      method: 'PATCH',
+      token: key,
+      body: { invoiceDefaults: { ...DEFAULTS, siret: `${SIREN}00015` } },
+    });
+    expect(res.status).toBe(200);
+    await controller.start();
+    await controller.signInWithKey(key);
+    await until(() => state().detection !== null, 'the invoice columns');
+    const columns = state().detection?.mapping;
+    if (!columns) throw new Error('no invoice columns');
+    await controller.confirmMapping(columns);
+    await controller.includeSheet(DEMO_ORDERS);
+    const inclusion = state().inclusion;
+    if (!inclusion) throw new Error('no proposal');
+    await controller.confirmLayout({ ...inclusion.detection.layout, source: 'user' });
+  });
+
+  it('shows the 150 € a day the invoice leaves out, with the cells to look at', async () => {
+    controller.navigate({ name: 'checks' });
+    await until(() => state().checks !== null, 'the checks');
+    expect(state().checks).toMatchObject({ atStake: 30_000, blocking: 1, links: [] });
+    expect(b1()).toMatchObject({
+      severity: 'blocking',
+      amount: 30_000,
+      invoiceId: invoiceId(),
+      isTest: false,
+    });
+    for (const part of ['F2026-101', 'C-41', 'Journée de conseil', frMoney(30_000, 'EUR')]) {
+      expect(b1()?.message).toContain(part);
+    }
+
+    const evidence = b1()?.evidence ?? [];
+    const fix = evidence.findLast((e) => e.role === 'invoice' && e.cell);
+    const order = evidence.find((e) => e.role === 'order' && e.cell);
+    if (!fix || !order) throw new Error('no cells');
+    // « Voir la commande »: the line of the order.
+    await controller.showEvidence(order);
+    expect(book.active).toEqual({ sheet: DEMO_ORDERS, cell: 'D2' });
+    await controller.showEvidence(fix);
+    expect(book.active).toEqual({ sheet: DEMO_SHEET, cell: 'K2' });
+
+    // A document kept by another workbook is named, not selected.
+    await controller.showEvidence({ ...order, workbookId: 'another' });
+    expect(state().notice?.text).toBe(t('addin.checks.otherWorkbook', { sheet: DEMO_ORDERS }));
+    expect(book.active).toEqual({ sheet: DEMO_SHEET, cell: 'K2' });
+  });
+
+  it('asks « Oui » or « Non » when two orders look alike, and checks again with the answer', async () => {
+    // C-42 becomes the same order as C-41: the invoice no longer says which one it bills.
+    book.type(DEMO_ORDERS, 'C3', 'Boulangerie Martin SAS');
+    book.type(DEMO_ORDERS, 'D3', 'Journée de conseil');
+    book.type(DEMO_ORDERS, 'F3', 600);
+    await until(() => (state().checks?.links.length ?? 0) === 2, 'the two proposals', 15_000);
+    expect(state().checks?.links.map((l) => [l.from?.number, l.to?.number])).toEqual(
+      expect.arrayContaining([
+        ['C-41', 'F2026-101'],
+        ['C-42', 'F2026-101'],
+      ]),
+    );
+    // Without a link the prices are not compared.
+    expect(b1()).toBeUndefined();
+
+    const c42 = state().checks?.links.find((l) => l.from?.number === 'C-42');
+    if (!c42) throw new Error('no C-42 proposal');
+    await controller.decideLink(c42.id, 'rejected');
+    expect(state().notice?.text).toBe(t('addin.checks.decided.rejected'));
+    expect(state().checks?.links).toEqual([]);
+    expect(b1()?.amount).toBe(30_000);
+  });
+
+  it('turns « Envoyer » into « Envoyer quand même »; a finding found meanwhile stops the send', async () => {
+    await controller.openInvoice(invoiceId());
+    await until(() => state().invoice?.detail.id === invoiceId(), 'the fiche');
+    expect(state().invoice?.detail.findings.map((f) => [f.rule, f.amount])).toEqual([
+      ['B1', 30_000],
+    ]);
+
+    // The order changes while the fiche is open: what the user saw is not what is at stake.
+    const reads = () => calls.filter((c) => c.includes(`/sources/${DEMO_ORDERS}/sync`)).length;
+    const before = reads();
+    book.type(DEMO_ORDERS, 'F2', 700);
+    await until(
+      () => reads() > before && !state().busy.includes(`source:${DEMO_ORDERS}`),
+      'the read of the order',
+      15_000,
+    );
+    controller.askSend();
+    await controller.send();
+    expect(state().notice?.tone).toBe('error');
+    expect(state().notice?.text).toBe(t('api.error.blocking_findings', { count: 1 }));
+    expect(state().invoice?.detail.status).toBe('validated');
+    // The fiche now shows what is at stake.
+    expect(state().invoice?.detail.findings.map((f) => f.amount)).toEqual([50_000]);
+
+    controller.askSend();
+    await controller.send();
+    expect(state().notice?.text).toBe(t('addin.send.done', { number: 'F2026-101' }));
+    expect(calls.filter((c) => c === `POST /invoices/${invoiceId()}/send`)).toHaveLength(2);
+    expect(state().invoice?.detail.events.map((e) => e.event)).toContain('sent_despite_findings');
   });
 });
 

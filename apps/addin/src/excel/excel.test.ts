@@ -63,6 +63,15 @@ describe('SheetReader', () => {
     });
   });
 
+  it('says which cells a formula computes, once it read the formulas', () => {
+    const r = range('S!A1:C1', [[400, 410, '=x']]);
+    r.formulas = [['=A2*B2', 410, '=x']];
+    const { snapshot } = readUsedRange('S', r);
+    expect(snapshot.formulas).toBe(true);
+    expect(snapshot.rows[0]?.cells.map((c) => c.formula)).toEqual([true, undefined, undefined]);
+    expect(readUsedRange('S', range('S!A1:A1', [[1]])).snapshot.formulas).toBeUndefined();
+  });
+
   it('never reads back its own FI columns, and reuses them for the statuses', () => {
     const reading = readUsedRange(
       'S',

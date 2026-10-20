@@ -15,8 +15,10 @@ import {
   ApiClient,
   ApiFailure,
   type BillingView,
+  type Checks,
   type Degraded,
   type DirectoryCompany,
+  type Evidence,
   type Explained,
   type ExportFile,
   type Inbound,
@@ -66,6 +68,7 @@ export type Screen =
   | { name: 'reception' }
   | { name: 'customers' }
   | { name: 'registry' }
+  | { name: 'checks' }
   | { name: 'settings' };
 
 export interface Notice {
@@ -139,6 +142,8 @@ export interface FiState {
   customers: Customers | null;
   /** « Registre » (R1): what the included sheets brought, the latest documents; null until loaded. */
   registry: Registry | null;
+  /** « Contrôles » (R2): the open findings and the links to confirm; null until loaded. */
+  checks: Checks | null;
   /** The sheets of this workbook included in the check: each one is read again when it changes. */
   sources: Source[];
   /** The visible sheets of the workbook. */
@@ -238,6 +243,7 @@ const INITIAL: FiState = {
   reception: null,
   customers: null,
   registry: null,
+  checks: null,
   sources: [],
   sheets: [],
   otherSheets: [],
@@ -331,6 +337,7 @@ export class Controller {
     if (screen.name === 'reception') void this.loadReception();
     if (screen.name === 'customers') void this.loadCustomers();
     if (screen.name === 'registry') void this.loadRegistry();
+    if (screen.name === 'checks') void this.loadChecks();
   };
 
   /** The connection is back (browser `online` event). */
@@ -671,6 +678,7 @@ export class Controller {
       reception: null,
       customers: null,
       registry: null,
+      checks: null,
       sources: [],
       sheets: [],
       otherSheets: [],
@@ -795,6 +803,7 @@ export class Controller {
     const open = this.#state.invoice?.detail;
     const row = open && result.rows.find((r) => r.invoiceId === open.id);
     if (open && row && row.status !== open.status) await this.#refreshInvoice();
+    if (this.#state.screen.name === 'checks') await this.#refreshChecks();
   }
 
   /**
@@ -976,16 +985,23 @@ export class Controller {
     if (s.name === 'invoice') this.#set({ screen: { ...s, confirmSend: false } });
   };
 
-  /** « Envoyer », after the user confirmed it on the fiche (Review mode, plan §0). */
+  /**
+   * « Envoyer », after the user confirmed it on the fiche (Review mode, plan §0). With blocking
+   * findings open, the user confirmed « Envoyer quand même » for those very findings: a new one
+   * found meanwhile stops the send, and the fiche shows it.
+   */
   send = async (): Promise<void> => {
     const invoice = this.#state.invoice?.detail;
     if (!invoice) return;
     this.cancelSend();
     const number = invoice.number ?? '';
+    const acknowledge = invoice.findings
+      .filter((f) => f.severity === 'blocking')
+      .map((f) => f.fingerprint);
     const sent = await this.#act(
       'send',
       async () => {
-        const result = await this.api.send(invoice.id);
+        const result = await this.api.send(invoice.id, acknowledge);
         this.notify(
           'success',
           t(result.alreadySent ? 'addin.send.already' : 'addin.send.done', { number }),
@@ -1000,6 +1016,9 @@ export class Controller {
       { key: `send:${invoice.id}`, label: t('addin.offline.send', { number }) },
     );
     if (!sent && this.#state.offline) this.notify('warning', t('addin.send.queued', { number }));
+    else if (!sent && this.#state.invoice?.detail.id === invoice.id) {
+      await this.#act('invoice', () => this.#refreshInvoice());
+    }
   };
 
   playScenario = async (scenario: Scenario): Promise<void> => {
@@ -1415,6 +1434,7 @@ export class Controller {
     }
     const changed = read.written > 0 || read.removed > 0;
     if (changed && this.#state.screen.name === 'registry') await this.#refreshRegistry();
+    if (changed && this.#state.screen.name === 'checks') await this.#refreshChecks();
   }
 
   async #forgetSource(sheet: string): Promise<void> {
@@ -1515,6 +1535,43 @@ export class Controller {
   showSheet = async (sheet: string): Promise<void> => {
     const row = this.#state.sources.find((s) => s.sheet === sheet)?.layout.headerRow ?? 1;
     await this.#act('select', () => this.#deps.port.select(sheet, `A${row}`));
+  };
+
+  // ── Contrôles (R2) ────────────────────────────────────────────────────────────────────────────
+  async #refreshChecks(): Promise<void> {
+    try {
+      this.#set({ checks: await this.api.checks() });
+    } catch {
+      // Not worth a notice: the screen keeps what it showed, the next read asks again.
+    }
+  }
+
+  /** The « Contrôles » screen: the API checks the documents again first when they moved. */
+  loadChecks = async (): Promise<void> => {
+    const checks = await this.#act('checks', () => this.api.checks());
+    if (checks) this.#set({ checks });
+  };
+
+  /** « Oui » / « Non » on documents that look alike: the checks run again with the answer. */
+  decideLink = async (id: string, status: 'confirmed' | 'rejected'): Promise<void> => {
+    const checks = await this.#act(`link:${id}`, () => this.api.decideLink(id, status));
+    if (!checks) return;
+    this.#set({ checks });
+    this.notify('success', t(`addin.checks.decided.${status}`));
+  };
+
+  /**
+   * « Corriger la ligne », « Voir la commande »…: selects the cell in the open workbook; a document
+   * of another workbook is named instead.
+   */
+  showEvidence = async (evidence: Evidence): Promise<void> => {
+    const target = evidence.cell ? parseAddress(evidence.cell) : null;
+    if (!target) return;
+    if (evidence.workbookId && evidence.workbookId !== this.#state.workbookId) {
+      this.notify('info', t('addin.checks.otherWorkbook', { sheet: target.sheet }));
+      return;
+    }
+    await this.#act('select', () => this.#deps.port.select(target.sheet, target.cell));
   };
 
   // ── Réglages ──────────────────────────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 // Screen 4, Fiche facture (plan §5): what to fix and where, the rehearsal, sending, the XML and PDF,
 // « Relancer », the MonitorAgent's next step, the timeline, and in Mode test the scenario panel. An
-// invoice the autopilot will send says when, with « Annuler l'envoi automatique ».
+// invoice the autopilot will send says when, with « Annuler l'envoi automatique ». A blocking finding
+// of the checks across documents turns « Envoyer » into « Envoyer quand même ».
 import { frDate, frMoney } from '@fi/core';
 import { isMessageKey, type MessageKey, t } from '@fi/shared';
 import {
@@ -23,6 +24,7 @@ import { useState } from 'react';
 import { type InvoiceEvent, MONITOR_PROPOSALS, SCENARIOS, type Scenario } from '../api';
 import type { OpenInvoice } from '../controller';
 import { ChasePanel, dayLabel, kindLabel, NextStepCard, stepStatus } from './ChasePanel';
+import { FindingCard } from './ChecksView';
 import { parisDateTime, parisTime, useFi } from './context';
 import { TEST_ORANGE } from './theme';
 
@@ -113,6 +115,9 @@ function eventText(e: InvoiceEvent): string {
     text = t('addin.invoice.event.autopilotCancelled');
   } else if (e.type === 'note' && e.event === 'autopilot_held') {
     text = t('addin.invoice.event.autopilotHeld');
+  } else if (e.type === 'note' && e.event === 'sent_despite_findings') {
+    const found = 'findings' in payload && Array.isArray(payload.findings) ? payload.findings : [];
+    text = t('addin.invoice.event.sentDespite', { count: found.length });
   } else if (e.toStatus) {
     const auto = 'autopilot' in payload && payload.autopilot === true;
     text = auto
@@ -157,6 +162,8 @@ export function InvoiceView() {
   const number = d.number ?? '';
   const amount = d.payable !== null ? frMoney(d.payable, d.currency ?? 'EUR') : '';
   const sendable = d.status === 'validated' && errors.length === 0;
+  const blocking = d.findings.filter((f) => f.severity === 'blocking');
+  const atStake = blocking.reduce((sum, f) => sum + (f.amount ?? 0), 0);
   const chaseOpen =
     chaseShown ??
     (CHASE_FIRST.includes(d.status) || Boolean(d.chase?.steps.some((s) => s.status === 'drafted')));
@@ -212,6 +219,15 @@ export function InvoiceView() {
 
       <Issues open={open} />
 
+      {d.findings.length > 0 && (
+        <>
+          <Subtitle2 as="h3">{t('addin.invoice.checks')}</Subtitle2>
+          {d.findings.map((f) => (
+            <FindingCard key={f.id} finding={f} onFiche />
+          ))}
+        </>
+      )}
+
       <Subtitle2 as="h3">{t('addin.invoice.rehearsal')}</Subtitle2>
       <Caption1 className={styles.muted}>{t('addin.invoice.rehearsalIntro')}</Caption1>
       <div className={styles.actions}>
@@ -244,11 +260,19 @@ export function InvoiceView() {
             {d.isTest
               ? t('addin.invoice.confirmSendTest', { number })
               : t('addin.invoice.confirmSend', { number, amount, buyer: d.buyerName ?? '' })}
+            {blocking.length > 0 && (
+              <div data-testid="confirm-despite">
+                {t('addin.invoice.confirmSendDespite', {
+                  count: blocking.length,
+                  amount: frMoney(atStake, 'EUR'),
+                })}
+              </div>
+            )}
             {!sendable && <div>{t('addin.invoice.sendBlocked')}</div>}
           </MessageBarBody>
           <MessageBarActions>
             <Button appearance="primary" disabled={!sendable} onClick={() => void fi.send()}>
-              {t('addin.invoice.confirm')}
+              {blocking.length > 0 ? t('addin.invoice.sendDespite') : t('addin.invoice.confirm')}
             </Button>
             <Button onClick={fi.cancelSend}>{t('addin.invoice.cancel')}</Button>
           </MessageBarActions>
@@ -260,7 +284,11 @@ export function InvoiceView() {
             disabled={!sendable || state.busy.includes('send')}
             onClick={fi.askSend}
           >
-            {d.isTest ? t('addin.invoice.sendTest') : t('addin.invoice.send')}
+            {blocking.length > 0
+              ? t('addin.invoice.sendDespite')
+              : d.isTest
+                ? t('addin.invoice.sendTest')
+                : t('addin.invoice.send')}
           </Button>
           <Button onClick={() => showChase(!chaseOpen)} aria-expanded={chaseOpen}>
             {chaseOpen ? t('addin.invoice.chaseHide') : t('addin.invoice.chase')}

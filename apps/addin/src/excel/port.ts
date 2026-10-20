@@ -9,6 +9,8 @@ export interface UsedRange {
   values: unknown[][];
   text: string[][];
   numberFormat: unknown[][];
+  /** The formula of each cell, its value when it has none (docs/OFFICE.md § 5); absent: not read. */
+  formulas?: unknown[][];
 }
 
 export type Tone = 'ok' | 'warning' | 'error' | 'progress' | 'neutral';

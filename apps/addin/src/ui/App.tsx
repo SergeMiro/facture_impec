@@ -1,5 +1,5 @@
 // The task pane: banners on every screen (Mode test, offline, the last notice), then one screen.
-// No router: office.js breaks the history API (docs/OFFICE.md §8), and the pane has nine screens.
+// No router: office.js breaks the history API (docs/OFFICE.md §8), and the pane has ten screens.
 import { t } from '@fi/shared';
 import {
   Button,
@@ -16,6 +16,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import type { Controller } from '../controller';
+import { ChecksView } from './ChecksView';
 import { CustomersView } from './CustomersView';
 import { ControllerContext, useFi } from './context';
 import { Dashboard } from './Dashboard';
@@ -55,7 +56,7 @@ const useStyles = makeStyles({
   },
   brand: { display: 'flex', flexDirection: 'column' },
   center: { display: 'flex', justifyContent: 'center', padding: '48px 0' },
-  // Six tabs are wider than a task pane: they wrap instead of scrolling the pane sideways.
+  // Seven tabs are wider than a task pane: they wrap instead of scrolling the pane sideways.
   tabs: { flexWrap: 'wrap' },
 });
 
@@ -151,6 +152,7 @@ function Pane() {
               name === 'reception' ||
               name === 'customers' ||
               name === 'registry' ||
+              name === 'checks' ||
               name === 'settings'
             ) {
               fi.navigate({ name });
@@ -163,6 +165,7 @@ function Pane() {
           <Tab value="reception">{t('addin.nav.reception')}</Tab>
           <Tab value="customers">{t('addin.nav.customers')}</Tab>
           <Tab value="registry">{t('addin.nav.registry')}</Tab>
+          <Tab value="checks">{t('addin.nav.checks')}</Tab>
           <Tab value="settings">{t('addin.nav.settings')}</Tab>
         </TabList>
       )}
@@ -201,6 +204,8 @@ function Screen() {
       return <CustomersView />;
     case 'registry':
       return <RegistryView />;
+    case 'checks':
+      return <ChecksView />;
     case 'settings':
       return <SettingsView />;
   }

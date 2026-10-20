@@ -216,6 +216,64 @@ export const Registry = z.object({
 });
 export type Registry = z.infer<typeof Registry>;
 
+/** What the checks across documents found (R2): its money at stake and the cells to look at. */
+export const Finding = z.object({
+  id: z.string(),
+  rule: z.string(),
+  severity: z.enum(['blocking', 'warning', 'info']),
+  message: z.string(),
+  /** Cents at stake; null when nothing tells the amount. */
+  amount: z.number().nullable(),
+  invoiceId: z.string().nullable(),
+  /** « Envoyer quand même » sends it back: a finding that changed since asks again. */
+  fingerprint: z.string(),
+  isTest: z.boolean(),
+  evidence: z.array(
+    z.object({
+      role: z.enum(['invoice', 'order', 'delivery', 'price_list', 'history']),
+      docId: z.string(),
+      number: z.string().nullable(),
+      /** The cell to select, e.g. `Commandes!D2`, in that sheet of that workbook. */
+      cell: z.string().nullable(),
+      sheet: z.string().nullable(),
+      workbookId: z.string().nullable(),
+    }),
+  ),
+  firstSeenAt: z.string(),
+});
+export type Finding = z.infer<typeof Finding>;
+export type Evidence = Finding['evidence'][number];
+
+const DocBrief = z.object({
+  id: z.string(),
+  kind: z.enum(['invoice', ...DOC_KINDS]),
+  number: z.string().nullable(),
+  issueDate: z.string().nullable(),
+  partyName: z.string().nullable(),
+  netTotal: z.number().nullable(),
+});
+
+/** The « Contrôles » screen. */
+export const Checks = z.object({
+  checkedAt: z.string().nullable(),
+  /** Cents at stake on the real documents. */
+  atStake: z.number(),
+  blocking: z.number(),
+  findings: z.array(Finding),
+  /** Documents that look alike with no number to tie them: « Oui » / « Non ». */
+  links: z.array(
+    z.object({
+      id: z.string(),
+      kind: z.enum(['billed_by', 'fulfils', 'cost']),
+      score: z.number(),
+      from: DocBrief.nullable(),
+      to: DocBrief.nullable(),
+    }),
+  ),
+});
+export type Checks = z.infer<typeof Checks>;
+export type ProposedLink = Checks['links'][number];
+
 export const Issue = z.object({
   ruleId: z.string(),
   severity: z.enum(['error', 'warning']),
@@ -289,6 +347,8 @@ export type NextStep = z.infer<typeof NextStep>;
 
 export const InvoiceDetail = InvoiceSummary.extend({
   issues: z.array(Issue),
+  /** Open findings of the checks across documents; a blocking one makes « Envoyer quand même ». */
+  findings: z.array(Finding).default([]),
   events: z.array(InvoiceEvent),
   chase: ChasePlan.nullable(),
   nextStep: NextStep.nullable(),
@@ -656,6 +716,10 @@ export class ApiClient {
       body: { snapshot },
     });
   registry = () => this.#json(Registry, '/registry');
+  /** « Contrôles » (R2): the open findings, the money at stake, the links to confirm. */
+  checks = () => this.#json(Checks, '/checks');
+  decideLink = (id: string, status: 'confirmed' | 'rejected') =>
+    this.#json(Checks, `/links/${id}`, { method: 'POST', body: { status } });
 
   invoice = (id: string) => this.#json(InvoiceDetail, `/invoices/${id}`);
   /** Where these invoices are now: cheaper than a sync, which reads and validates the whole sheet. */
@@ -666,7 +730,12 @@ export class ApiClient {
     );
   explain = (id: string) => this.#json(Explained, `/invoices/${id}/explain`, { method: 'POST' });
   rehearse = (id: string) => this.#json(Rehearsal, `/invoices/${id}/rehearse`, { method: 'POST' });
-  send = (id: string) => this.#json(Sent, `/invoices/${id}/send`, { method: 'POST' });
+  /** `acknowledge`: the blocking findings the user saw and sends past (« Envoyer quand même »). */
+  send = (id: string, acknowledge: string[] = []) =>
+    this.#json(Sent, `/invoices/${id}/send`, {
+      method: 'POST',
+      ...(acknowledge.length > 0 && { body: { acknowledge } }),
+    });
   scenario = (id: string, scenario: Scenario) =>
     this.#json(InvoiceDetail, `/invoices/${id}/scenario`, { method: 'POST', body: { scenario } });
   /** « Encaissée »: the customer paid; chasing stops and the platform is told. */

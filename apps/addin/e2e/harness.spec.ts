@@ -184,4 +184,41 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
     // Every screen fits the pane's width: nothing scrolls sideways.
     expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
   });
+
+  await test.step('Contrôles: the order says 1 200 €, the invoice 900 €; « Envoyer quand même »', async () => {
+    // C-42 becomes the order F2026-102 bills: same customer, same article, no number to tie them.
+    await page.locator('.tabs').getByRole('button', { name: DEMO_ORDERS }).click();
+    await typeInCell(page, 'C4', 'Garage Dupont');
+    await typeInCell(page, 'D4', '');
+    await typeInCell(page, 'E4', 'Audit atelier');
+    await typeInCell(page, 'F4', '1');
+    await typeInCell(page, 'G4', '1200');
+    await page.locator('.tabs').getByRole('button', { name: DEMO_SHEET }).click();
+
+    await pane.getByRole('tab', { name: t('addin.nav.checks') }).click();
+    await expect(pane.getByTestId('checks-summary')).toHaveText(
+      t('addin.checks.atStake', { amount: frMoney(30_000, 'EUR'), count: 1 }),
+    );
+    const finding = pane
+      .getByTestId('finding')
+      .filter({ hasText: 'C-42' })
+      // The real invoice's, not the one on TEST-F2026-102.
+      .filter({ hasText: 'La facture F2026-102' });
+    await expect(finding).toContainText(
+      t('addin.checks.amount', { amount: frMoney(30_000, 'EUR') }),
+    );
+    await finding.getByRole('button', { name: t('addin.checks.see.order') }).click();
+    await expect(page.getByTestId('name-box')).toHaveText('E4');
+    await finding.getByRole('button', { name: t('addin.checks.fixLine') }).click();
+    await expect(page.getByTestId('name-box')).toHaveText('K3');
+    await page.screenshot({ path: info.outputPath('checks.png') });
+    expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+
+    await finding.getByRole('button', { name: t('addin.checks.openInvoice') }).click();
+    await pane.getByRole('button', { name: t('addin.invoice.sendDespite') }).click();
+    await expect(pane.getByTestId('confirm-despite')).toContainText(
+      t('addin.invoice.confirmSendDespite', { count: 1, amount: frMoney(30_000, 'EUR') }),
+    );
+    await page.screenshot({ path: info.outputPath('send-despite.png') });
+  });
 });

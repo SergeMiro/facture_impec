@@ -9,6 +9,8 @@ export interface FakeCell {
   value: string | number | boolean;
   text: string;
   format?: string;
+  /** E.g. `=C2*D2`; the cell's value stays what the formula gives. */
+  formula?: string;
   fill?: string;
   bold?: boolean;
 }
@@ -97,6 +99,7 @@ export class FakeWorkbook implements ExcelPort {
       values: grid((c) => c?.value ?? ''),
       text: grid((c) => c?.text ?? ''),
       numberFormat: grid((c) => c?.format ?? 'General'),
+      formulas: grid((c) => c?.formula ?? c?.value ?? ''),
     };
   }
 

@@ -75,11 +75,18 @@ export function readUsedRange(sheet: string, range: UsedRange | null): SheetRead
       const value = cellValue(raw);
       if ((value === null || value === '') && text.trim() === '') return;
       const format = range.numberFormat[r]?.[c];
+      // Excel gives a cell's value where it has no formula; text typed as « '=x » is its value too.
+      const formula = range.formulas?.[r]?.[c];
       cells.push({
         col,
         value,
         text,
         ...(typeof format === 'string' && format !== 'General' && { format }),
+        ...(typeof formula === 'string' &&
+          formula.startsWith('=') &&
+          formula !== raw && {
+            formula: true as const,
+          }),
       });
       lastCol = Math.max(lastCol, origin.col + c);
     });
@@ -87,7 +94,7 @@ export function readUsedRange(sheet: string, range: UsedRange | null): SheetRead
   });
   if (rows.length > MAX_ROWS) throw new TooManyRows(rows.length);
   return {
-    snapshot: { sheet, rows },
+    snapshot: { sheet, rows, ...(range.formulas && { formulas: true }) },
     owned,
     lastCol: lastCol > 0 ? columnLetters(lastCol) : '',
     lastRow: origin.row + range.values.length - 1,
