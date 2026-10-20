@@ -2,6 +2,7 @@
 import type { Issue } from '@fi/core';
 import type { ChasePlanRow, InvoiceEventRow, InvoiceRow, TenantRow } from '@fi/db';
 import { t } from '@fi/shared';
+import type { findingView } from './checks';
 import { chaseView } from './collect';
 import { ADVISED } from './monitor';
 
@@ -89,13 +90,16 @@ export interface DetailData {
   issues: Issue[];
   events: InvoiceEventRow[];
   plan?: ChasePlanRow | undefined;
+  /** Open findings of the checks across documents (R2, src/checks.ts). */
+  findings?: ReturnType<typeof findingView>[];
 }
 
-export function invoiceDetail(row: InvoiceRow, { issues, events, plan }: DetailData) {
+export function invoiceDetail(row: InvoiceRow, { issues, events, plan, findings }: DetailData) {
   return {
     ...invoiceSummary(row),
     document: row.document,
     issues,
+    findings: findings ?? [],
     events: events.map(eventView),
     chase: chaseView(plan),
     nextStep: nextStep(row, events),

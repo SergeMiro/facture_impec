@@ -11,6 +11,7 @@ import {
   type DbOrTx,
   desc,
   eq,
+  findings,
   type InvoiceRow,
   inArray,
   invoiceEvents,
@@ -30,6 +31,7 @@ import {
 import { PdpUnavailableError } from '@fi/pdp-adapter';
 import { t } from '@fi/shared';
 import { assertMaySend } from './billing';
+import { checkNow } from './checks';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { awaitsGoLive, routeFor } from './platform';
@@ -48,6 +50,7 @@ export type AutopilotBlocker =
   | 'mode'
   | 'status'
   | 'issues'
+  | 'findings'
   | 'kind'
   | 'amount'
   | 'party'
@@ -98,6 +101,19 @@ export async function autopilotBlocker(
     .limit(1);
   // A warning is for a person to read: the autopilot does not send past one.
   if (last?.severity !== 'none') return 'issues';
+  // A check across documents found money at stake (src/checks.ts): a person decides.
+  const [held] = await db
+    .select({ id: findings.id })
+    .from(findings)
+    .where(
+      and(
+        eq(findings.invoiceId, row.id),
+        eq(findings.status, 'open'),
+        eq(findings.severity, 'blocking'),
+      ),
+    )
+    .limit(1);
+  if (held) return 'findings';
   const typeCode = row.document.typeCode ?? '380';
   if (typeCode !== '380' || row.document.currency !== 'EUR') return 'kind';
   if (row.payable === null || row.payable <= 0 || row.payable > ceiling) return 'amount';
@@ -320,7 +336,7 @@ export async function runAutopilot(
   log: (message: string) => void = () => {},
 ): Promise<{ sent: number; cancelled: number }> {
   const due = await deps.db
-    .select({ id: invoices.id })
+    .select({ id: invoices.id, tenantId: invoices.tenantId })
     .from(invoices)
     .where(
       and(
@@ -332,9 +348,21 @@ export async function runAutopilot(
     )
     .orderBy(invoices.autopilotAt)
     .limit(BATCH);
+  // Today's findings first: an invoice one of them now holds is cancelled with its reason there. A
+  // company whose check failed sends nothing this time, rather than past a finding nobody saw.
+  const unchecked = new Set<string>();
+  for (const tenantId of new Set(due.map((d) => d.tenantId))) {
+    try {
+      await checkNow(deps.db, tenantId, deps.now());
+    } catch (e) {
+      unchecked.add(tenantId);
+      log(`checks ${tenantId}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
   let sent = 0;
   let cancelled = 0;
-  for (const { id } of due) {
+  for (const { id, tenantId } of due) {
+    if (unchecked.has(tenantId)) continue;
     try {
       const outcome = await fire(deps, id);
       if (outcome === 'sent') sent++;

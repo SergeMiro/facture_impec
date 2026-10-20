@@ -21,13 +21,14 @@ import { z } from 'zod';
 import { adminRoutes } from './admin';
 import { archivedPdf } from './archive';
 import { explainInvoice, invoicePdf, rehearseInvoice } from './assist';
-import { type TenantEnv, tenantAuth } from './auth';
+import { type TenantEnv, tenantAuth, who } from './auth';
 import { holdAutopilot } from './autopilot';
 import { billingPages, billingRoutes, handleStripeWebhook } from './billing';
+import { checksView, decideLink } from './checks';
 import { markStepSent, prepareChase, recordPromise } from './collect';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
-import { body, parse, uuid } from './http';
+import { body, optionalBody, parse, uuid } from './http';
 import {
   ApproveBody,
   approveInbound,
@@ -141,6 +142,9 @@ const ListQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+/** « Envoyer quand même »: the fingerprints of the blocking findings the user saw (src/checks.ts). */
+const SendBody = z.object({ acknowledge: z.array(z.string().max(128)).max(200).default([]) });
+const LinkDecisionBody = z.object({ status: z.enum(['confirmed', 'rejected']) });
 const PromiseBody = z.object({ until: z.string().refine(isIsoDate, 'YYYY-MM-DD').nullable() });
 
 const fileName = (row: { number: string | null; id: string }, ext: string) =>
@@ -256,6 +260,8 @@ export function createApp(deps: ApiDeps) {
     '/detect',
     '/workbooks/*',
     '/registry',
+    '/checks',
+    '/links/*',
     '/invoices',
     '/invoices/*',
     '/inbound',
@@ -412,6 +418,15 @@ export function createApp(deps: ApiDeps) {
 
   api.get('/registry', async (c) => c.json(await registryView(deps, c.get('tenant'))));
 
+  // ── Checks across documents (R2) ──────────────────────────────────────────────────────────────
+  api.get('/checks', async (c) => c.json(await checksView(deps, c.get('tenant'))));
+
+  api.post('/links/:id', async (c) => {
+    const { status } = await body(c, LinkDecisionBody);
+    const by = who(c.get('principal'));
+    return c.json(await decideLink(deps, c.get('tenant'), by, uuid(c.req.param('id')), status));
+  });
+
   // ── Invoices ──────────────────────────────────────────────────────────────────────────────────
   api.post('/invoices', async (c) => {
     const tenant = c.get('tenant');
@@ -461,7 +476,10 @@ export function createApp(deps: ApiDeps) {
   });
 
   api.post('/invoices/:id/send', async (c) => {
-    const { row, alreadySent } = await requestSend(deps, c.get('tenant'), uuid(c.req.param('id')));
+    const { acknowledge } = await optionalBody(c, SendBody);
+    const tenant = c.get('tenant');
+    const id = uuid(c.req.param('id'));
+    const { row, alreadySent } = await requestSend(deps, tenant, id, acknowledge);
     return c.json({ ...invoiceSummary(row), alreadySent }, 202);
   });
 

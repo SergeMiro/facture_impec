@@ -216,6 +216,10 @@ interface SheetRow {
   refused?: ApiError;
 }
 
+/** A1–A3 its rows showed (R2): the checks across documents read them from the binding. */
+const checksOf = (sheetInvoice: SheetInvoice) =>
+  sheetInvoice.problems.flatMap((p) => (p.check ? [p.check] : []));
+
 function push<K, V>(map: Map<K, V[]>, key: K, value: V) {
   const list = map.get(key);
   if (list) list.push(value);
@@ -314,6 +318,7 @@ export async function syncSheet(
       rowKey: sheetInvoice.rowKey,
       rows: sheetInvoice.rows,
       cells: sheetInvoice.cells,
+      ...(checksOf(sheetInvoice).length > 0 && { checks: checksOf(sheetInvoice) }),
     };
     const enriched = book.enrich(sheetInvoice.draft);
     try {

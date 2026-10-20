@@ -11,10 +11,12 @@ import {
   auditEvents,
   billingUsage,
   chasePlans,
+  checkState,
   type Db,
   docLines,
   docs,
   eq,
+  findings,
   inArray,
   inboundExports,
   inboundQueue,
@@ -23,6 +25,7 @@ import {
   isNull,
   items,
   layoutProfiles,
+  links,
   lt,
   magicLinks,
   or,
@@ -85,6 +88,9 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     lines,
     profiles,
     sheets,
+    linked,
+    found,
+    checked,
   ] = await Promise.all([
     db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
     db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
@@ -149,6 +155,13 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       .from(sources)
       .where(eq(sources.tenantId, tenant.id))
       .orderBy(asc(sources.workbookId), asc(sources.sheet)),
+    db.select().from(links).where(eq(links.tenantId, tenant.id)).orderBy(asc(links.createdAt)),
+    db
+      .select()
+      .from(findings)
+      .where(eq(findings.tenantId, tenant.id))
+      .orderBy(asc(findings.firstSeenAt), asc(findings.key)),
+    db.select().from(checkState).where(eq(checkState.tenantId, tenant.id)),
   ]);
   const sheetOf = new Map(sheets.map((s) => [s.id, s.sheet]));
   const itemKeys = new Map(articles.map((a) => [a.id, a.key]));
@@ -257,6 +270,7 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     registry: {
       items: articles.map((a) => ({ key: a.key, name: a.name })),
       documents: documents.map((d) => ({
+        id: d.id,
         direction: d.direction,
         kind: d.kind,
         invoiceId: d.invoiceId,
@@ -277,6 +291,31 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
           item: itemId ? (itemKeys.get(itemId) ?? null) : null,
         })),
       })),
+      /** R2: which order each invoice bills (documents by `id` above), and who said « Oui » or « Non ». */
+      links: linked.map((l) => ({
+        kind: l.kind,
+        from: l.fromDocId,
+        to: l.toDocId,
+        score: l.score,
+        method: l.method,
+        status: l.status,
+        decidedAt: l.decidedAt?.toISOString() ?? null,
+      })),
+      /** What the checks across documents found, open or resolved. */
+      findings: found.map((f) => ({
+        rule: f.rule,
+        message: f.message,
+        severity: f.severity,
+        document: f.docId,
+        amount: f.amount,
+        params: f.params,
+        evidence: f.evidence,
+        status: f.status,
+        isTest: f.isTest,
+        firstSeenAt: f.firstSeenAt.toISOString(),
+        resolvedAt: f.resolvedAt?.toISOString() ?? null,
+      })),
+      checkedAt: checked[0]?.checkedAt.toISOString() ?? null,
     },
     agentRuns: runs.map((r) => ({
       agent: r.agent,
@@ -333,6 +372,10 @@ export async function deleteTenant(
       );
     const ids = gone.map((r) => r.id);
     // The registry is rebuilt from the invoices at any time; nothing reads it once the account is gone.
+    // Its links and findings go with it, a person's « Oui » and « Non » too.
+    await tx.delete(findings).where(eq(findings.tenantId, tenant.id));
+    await tx.delete(links).where(eq(links.tenantId, tenant.id));
+    await tx.delete(checkState).where(eq(checkState.tenantId, tenant.id));
     await tx.delete(docLines).where(eq(docLines.tenantId, tenant.id));
     await tx.delete(docs).where(eq(docs.tenantId, tenant.id));
     await tx.delete(items).where(eq(items.tenantId, tenant.id));

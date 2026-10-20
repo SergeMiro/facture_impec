@@ -78,8 +78,11 @@ export function isoDate(value: string | undefined): string | null {
 /**
  * What an outgoing document is projected from: the invoice's content, and its rows in the sheet (the
  * lines keep their cell). Computed by Postgres, so that finding what is behind is one query.
+ * `PROJECTION` changes when a document keeps more of its invoice: every one is projected again
+ * (2: the order it bills and its advances, R2).
  */
-const outVersion = sql<string>`${invoices.fingerprint} || ':' || md5(coalesce(${invoices.excelBinding}::text, ''))`;
+const PROJECTION = '2';
+const outVersion = sql<string>`${invoices.fingerprint} || ':' || md5(coalesce(${invoices.excelBinding}::text, '')) || ':' || ${PROJECTION}`;
 
 interface Source {
   direction: Direction;
@@ -93,6 +96,18 @@ interface Source {
   cells: Record<string, string>;
   /** Who sold it, for a received invoice (inbound_queue.supplier_key). */
   supplier: string | null;
+}
+
+/**
+ * What advances already paid of an invoice (BT-113 is TTC), brought to HT in the invoice's own
+ * proportion so B5 compares it with net amounts.
+ */
+export function prepaidNet(d: Invoice): number | null {
+  const { prepaid, taxExclusive, taxInclusive } = d.totals;
+  if (!prepaid) return null;
+  return taxExclusive !== undefined && taxInclusive
+    ? Math.round((prepaid * taxExclusive) / taxInclusive)
+    : prepaid;
 }
 
 /** Writes the documents of `sources` and their lines again, in one transaction. */
@@ -113,7 +128,9 @@ async function project(tx: Tx, tenantId: string, sources: Source[], now: Date) {
       partySiren: party.legalId?.id ?? null,
       partyName: party.name ?? null,
       currency: d.currency ?? null,
+      orderRef: d.purchaseOrderReference ?? null,
       netTotal: d.totals.taxExclusive ?? null,
+      prepaid: prepaidNet(d),
       sourceVersion: s.version,
       updatedAt: now,
     };
@@ -126,7 +143,9 @@ async function project(tx: Tx, tenantId: string, sources: Source[], now: Date) {
     partySiren: sql`excluded.party_siren`,
     partyName: sql`excluded.party_name`,
     currency: sql`excluded.currency`,
+    orderRef: sql`excluded.order_ref`,
     netTotal: sql`excluded.net_total`,
+    prepaid: sql`excluded.prepaid`,
     sourceVersion: sql`excluded.source_version`,
     updatedAt: sql`excluded.updated_at`,
   };
@@ -354,7 +373,7 @@ export async function registryBehind(db: Db): Promise<string[]> {
         join ${tenants} t on t.id = i.tenant_id and t.deleted_at is null
         left join ${docs} d on d.invoice_id = i.id
        where (i.status <> 'cancelled' and (d.id is null
-               or d.source_version <> i.fingerprint || ':' || md5(coalesce(i.excel_binding_json::text, ''))))
+               or d.source_version <> i.fingerprint || ':' || md5(coalesce(i.excel_binding_json::text, '')) || ':' || ${PROJECTION}))
           or (i.status = 'cancelled' and d.id is not null)
       union
       select distinct q.tenant_id from ${inboundQueue} q

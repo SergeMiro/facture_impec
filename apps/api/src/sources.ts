@@ -41,7 +41,7 @@ import {
 } from '@fi/db';
 import { z } from 'zod';
 import { tenantAi } from './ai';
-import type { Principal } from './auth';
+import { type Principal, who } from './auth';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { ensureItems, isoDate, itemKey } from './registry';
@@ -51,7 +51,6 @@ export const ConfirmBody = z.object({ layout: LayoutMapping, snapshot: Snapshot 
 export const SourceSync = z.object({ snapshot: Snapshot });
 
 const fingerprintOf = (signature: string) => sha256(`layout\u0000${signature}`);
-const who = (p: Principal) => (p.kind === 'session' ? p.userId : 'key');
 
 /**
  * What a sheet holds. A profile the company confirmed for the same header row first (no agent, no
@@ -235,7 +234,7 @@ export async function removeSource(
   workbookId: string,
   sheet: string,
 ) {
-  return deps.db.transaction(async (tx) => {
+  const result = await deps.db.transaction(async (tx) => {
     const [row] = await tx
       .delete(sources)
       .where(sourceIs(tenant.id, workbookId, sheet))
@@ -251,6 +250,9 @@ export async function removeSource(
     });
     return { removed: true, sheet };
   });
+  // Findings against its documents are resolved by the next check.
+  await deps.jobs.enqueueRegistry(tenant.id);
+  return result;
 }
 
 /** The sheets of a workbook the company included: the pane listens to each one. */
@@ -380,6 +382,8 @@ async function readSource(
     }
     return updated;
   });
+  // After the commit: the registry job checks the documents again (src/checks.ts).
+  if (touched) await deps.jobs.enqueueRegistry(tenant.id);
   return view(row, changed.length, gone.length);
 }
 

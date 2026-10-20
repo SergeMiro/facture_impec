@@ -30,6 +30,9 @@ export type Principal =
   | { kind: 'key' }
   | { kind: 'session'; sessionId: string; userId: string; email: string; role: UserRole };
 
+/** Who decided, as stored with what they decided: the person's id, or `key`. */
+export const who = (p: Principal) => (p.kind === 'session' ? p.userId : 'key');
+
 export type TenantEnv = { Variables: { tenant: TenantRow; principal: Principal } };
 
 function bearer(header: string | undefined): string | undefined {

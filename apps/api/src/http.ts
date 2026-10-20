@@ -13,6 +13,19 @@ export async function body<T>(c: Context, schema: z.ZodType<T>): Promise<T> {
   return parse(schema, raw);
 }
 
+/** A body that may be left out: none reads as `{}`. */
+export async function optionalBody<T>(c: Context, schema: z.ZodType<T>): Promise<T> {
+  const text = await c.req.text();
+  if (!text.trim()) return parse(schema, {});
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new ApiError(400, 'invalid_request', undefined, 'body is not JSON');
+  }
+  return parse(schema, raw);
+}
+
 export function parse<T>(schema: z.ZodType<T>, raw: unknown): T {
   const result = schema.safeParse(raw);
   if (!result.success) {

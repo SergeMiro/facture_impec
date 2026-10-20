@@ -42,6 +42,7 @@ import {
 import { t } from '@fi/shared';
 import { planAutopilot } from './autopilot';
 import { assertMaySend } from './billing';
+import { blockingFindings, checkNow, invoiceFindings } from './checks';
 import { chasePlanOf } from './collect';
 import type { ApiDeps } from './deps';
 import { ApiError, isUniqueViolation } from './errors';
@@ -361,7 +362,12 @@ export async function invoiceDetailData(deps: ApiDeps, row: InvoiceRow) {
     .from(invoiceEvents)
     .where(eq(invoiceEvents.invoiceId, row.id))
     .orderBy(invoiceEvents.id);
-  return { issues: last?.issues ?? [], events, plan: await chasePlanOf(deps.db, row.id) };
+  return {
+    issues: last?.issues ?? [],
+    events,
+    plan: await chasePlanOf(deps.db, row.id),
+    findings: await invoiceFindings(deps.db, row.id),
+  };
 }
 
 /** Locks the tenant's invoice for the rest of the transaction. */
@@ -589,8 +595,16 @@ export async function revalidateInvoice(deps: ApiDeps, tenant: TenantRow, id: st
 /**
  * « Envoyer » (Review mode, plan §0.2): approves the invoice and queues the send job. Pressing it
  * again — double click, retried request — returns the invoice as it is and queues nothing new.
+ * An open blocking finding (R2, src/checks.ts) stops it unless the user acknowledged that very finding
+ * (« Envoyer quand même », its fingerprint in `acknowledge`); one that changed since asks again.
  */
-export async function requestSend(deps: ApiDeps, tenant: TenantRow, id: string) {
+export async function requestSend(
+  deps: ApiDeps,
+  tenant: TenantRow,
+  id: string,
+  acknowledge: readonly string[] = [],
+) {
+  await checkNow(deps.db, tenant.id, deps.now());
   const alreadySent = await deps.db.transaction(async (tx) => {
     const row = await lockOwn(tx, tenant, id);
     if (ON_ITS_WAY.includes(row.status)) return true;
@@ -605,7 +619,33 @@ export async function requestSend(deps: ApiDeps, tenant: TenantRow, id: string) 
     }
     if (!row.isTest && awaitsGoLive(deps, tenant)) throw new ApiError(409, 'not_live');
     if (!row.isTest) await assertMaySend(deps, tx, tenant);
+    const held = await blockingFindings(tx, row.id);
+    if (held.some((f) => !acknowledge.includes(f.fingerprint))) {
+      throw new ApiError(409, 'blocking_findings', { count: held.length });
+    }
     await applyTransition(tx, { invoiceId: row.id, event: 'approve', actor: 'user' });
+    if (held.length) {
+      const despite = held.map((f) => ({
+        key: f.key,
+        amount: f.amount,
+        fingerprint: f.fingerprint,
+      }));
+      await tx.insert(invoiceEvents).values({
+        invoiceId: row.id,
+        type: 'note',
+        actor: 'user',
+        event: 'sent_despite_findings',
+        payload: { findings: despite.map(({ key, amount }) => ({ key, amount })) },
+      });
+      await audit(tx, {
+        tenantId: tenant.id,
+        actor: 'user',
+        action: 'invoice.send_despite_findings',
+        objectType: 'invoice',
+        objectId: row.id,
+        after: { fingerprint: row.fingerprint, findings: despite },
+      });
+    }
     if (row.autopilotAt) {
       await tx
         .update(invoices)

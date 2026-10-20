@@ -33,6 +33,7 @@ import { z } from 'zod';
 import { archiveReceived, archiveSent, runArchive } from './archive';
 import { runAutopilot } from './autopilot';
 import { type Billing, recordUsage, runUsageReport } from './billing';
+import { checkNow, checksBehind } from './checks';
 import { runCollect } from './collect';
 import type {
   AiDeps,
@@ -49,7 +50,7 @@ import { QUEUES } from './jobs';
 import { ADVISED, awaitingAdvice, runMonitor } from './monitor';
 import { runReportPayment } from './payments';
 import { adapterFor, awaitsGoLive, routeFor } from './platform';
-import { refreshRegistry, registryBehind } from './registry';
+import { registryBehind } from './registry';
 import { runWeeklyReports } from './report';
 import { purgeExpired } from './rgpd';
 
@@ -277,7 +278,7 @@ export async function runSync(deps: WorkerDeps, target: SyncTarget): Promise<voi
 
 /**
  * Refreshes every invoice the platform still has news about, re-queues unfinished sends, and queues
- * the advice, payment reports and registry refreshes whose job was lost.
+ * the advice, payment reports and registry refreshes (with their checks) whose job was lost.
  */
 export async function runSweep(deps: WorkerDeps): Promise<{
   synced: number;
@@ -314,7 +315,10 @@ export async function runSweep(deps: WorkerDeps): Promise<{
     .from(paymentReports)
     .where(eq(paymentReports.status, 'pending'));
   for (const p of payments) await deps.jobs.enqueueReportPayment(p.id);
-  const behind = await registryBehind(deps.db);
+  // The registry job also checks the documents again (src/checks.ts): behind on either, it runs.
+  const behind = [
+    ...new Set([...(await registryBehind(deps.db)), ...(await checksBehind(deps.db, deps.now()))]),
+  ];
   for (const tenantId of behind) await deps.jobs.enqueueRegistry(tenantId);
   return {
     synced: inFlight.length,
@@ -465,7 +469,7 @@ export async function startWorkers(
     if (job) await runReportPayment(deps, InvoiceJob.parse(job.data).invoiceId);
   });
   await boss.work(QUEUES.registry, polling, async ([job]) => {
-    if (job) await refreshRegistry(deps.db, RegistryJob.parse(job.data).tenantId, deps.now());
+    if (job) await checkNow(deps.db, RegistryJob.parse(job.data).tenantId, deps.now());
   });
   const tick = () =>
     boss
