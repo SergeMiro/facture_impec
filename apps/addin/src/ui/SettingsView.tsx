@@ -50,6 +50,15 @@ export function parseCadence(text: string): number[] | null {
   return valid ? days : null;
 }
 
+/** « 15 », « 15 % » → 15; « » → null (no minimum); undefined unless a whole percentage from 1 to 90. */
+export function parseMargin(text: string): number | null | undefined {
+  const clean = text.replace(/[\s\u00a0\u202f%]/g, '');
+  if (clean === '') return null;
+  if (!/^\d+$/.test(clean)) return undefined;
+  const margin = Number(clean);
+  return margin >= 1 && margin <= 90 ? margin : undefined;
+}
+
 /** « 2 000 », « 1500,50 » → cents; null unless a positive amount in euros with at most 2 decimals. */
 export function parseEuros(text: string): number | null {
   const clean = text.replace(/[\s\u00a0\u202f€]/g, '').replace(',', '.');
@@ -153,6 +162,9 @@ function General({ settings }: { settings: Settings }) {
   const [cadence, setCadence] = useState(settings.chaseCadence.join(', '));
   const [cadenceError, setCadenceError] = useState(false);
   useEffect(() => setCadence(settings.chaseCadence.join(', ')), [settings.chaseCadence]);
+  const [margin, setMargin] = useState(String(settings.minMarginPercent ?? ''));
+  const [marginError, setMarginError] = useState(false);
+  useEffect(() => setMargin(String(settings.minMarginPercent ?? '')), [settings.minMarginPercent]);
   const saving = state.busy.includes('saveSettings');
 
   const saveCadence = (e: FormEvent) => {
@@ -160,6 +172,13 @@ function General({ settings }: { settings: Settings }) {
     const days = parseCadence(cadence);
     setCadenceError(days === null);
     if (days) void fi.saveSettings({ chaseCadence: days });
+  };
+
+  const saveMargin = (e: FormEvent) => {
+    e.preventDefault();
+    const percent = parseMargin(margin);
+    setMarginError(percent === undefined);
+    if (percent !== undefined) void fi.saveSettings({ minMarginPercent: percent });
   };
 
   return (
@@ -188,6 +207,26 @@ function General({ settings }: { settings: Settings }) {
           validationMessage={cadenceError ? t('addin.settings.cadenceInvalid') : undefined}
         >
           <Input value={cadence} onChange={(_, d) => setCadence(d.value)} />
+        </Field>
+        <Button type="submit" disabled={saving}>
+          {t('addin.settings.save')}
+        </Button>
+      </form>
+
+      <form className={styles.form} onSubmit={saveMargin}>
+        <Field
+          label={t('addin.settings.margin')}
+          hint={t('addin.settings.marginHint')}
+          validationState={marginError ? 'error' : 'none'}
+          validationMessage={marginError ? t('addin.settings.marginInvalid') : undefined}
+        >
+          <Input
+            value={margin}
+            onChange={(_, d) => setMargin(d.value)}
+            contentAfter="%"
+            inputMode="numeric"
+            data-testid="min-margin"
+          />
         </Field>
         <Button type="submit" disabled={saving}>
           {t('addin.settings.save')}

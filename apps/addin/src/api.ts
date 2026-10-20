@@ -197,6 +197,8 @@ export type SourceRead = z.infer<typeof SourceRead>;
 export const Registry = z.object({
   sources: z.array(Source),
   invoices: z.object({ sent: z.number(), received: z.number() }),
+  /** Suppliers known from the invoices they sent (R3). */
+  suppliers: z.number().default(0),
   recent: z.array(
     z.object({
       id: z.string(),
@@ -230,15 +232,19 @@ export const Finding = z.object({
   isTest: z.boolean(),
   evidence: z.array(
     z.object({
-      role: z.enum(['invoice', 'order', 'delivery', 'price_list', 'history']),
+      role: z.enum(['invoice', 'order', 'delivery', 'price_list', 'history', 'purchase']),
       docId: z.string(),
       number: z.string().nullable(),
       /** The cell to select, e.g. `Commandes!D2`, in that sheet of that workbook. */
       cell: z.string().nullable(),
       sheet: z.string().nullable(),
       workbookId: z.string().nullable(),
+      /** A supplier invoice received through the platform: « Réception » shows it. */
+      inboundId: z.string().nullable().default(null),
     }),
   ),
+  /** B2: the purchase's link to the invoice, for « Ce n'est pas le même article ». */
+  costLinkId: z.string().nullable().default(null),
   firstSeenAt: z.string(),
 });
 export type Finding = z.infer<typeof Finding>;
@@ -406,6 +412,8 @@ export const Settings = z.object({
   testPlatform: z.boolean(),
   pseudonymizeLlm: z.boolean(),
   chaseCadence: z.array(z.number()),
+  /** Under this margin over the purchase price, a sold line is « À vérifier » (R3); null: none. */
+  minMarginPercent: z.number().nullable().default(null),
   // Loose: the fields this pane does not edit (payment means, legal notes) go back unchanged, since
   // PATCH /settings replaces the whole object.
   invoiceDefaults: z.looseObject({
@@ -442,6 +450,7 @@ export type SettingsPatch = Partial<{
   invoiceDefaults: Settings['invoiceDefaults'];
   mode: Settings['mode'];
   autopilotMaxAmount: number | null;
+  minMarginPercent: number | null;
 }>;
 
 /** A customer of the fiche clients, confirmed against the company directory (plan §4 parties). */

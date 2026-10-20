@@ -4,14 +4,16 @@
 // the test platform is B2Brouter's stand-in (a test_ key), which cannot play scenarios: the API
 // writes the rejection as the platform would have (apps/api/src/sandbox.ts). Since M6 it also
 // receives test supplier invoices on « Réception » and exports them for the accountant. Since R1 it
-// includes the « Commandes » sheet in the « Registre », and an edit there reaches the registry.
+// includes the « Commandes » sheet in the « Registre », and an edit there reaches the registry. Since R2
+// it shows the checks across documents; since R3 the « Achats » sheet gives the purchase price: a sale
+// under it blocks, a margin under the one of « Réglages » warns.
 // browser: local (Chrome of this server; Browserbase cannot reach localhost).
 
 import { readFile } from 'node:fs/promises';
 import { frMoney } from '@fi/core';
 import { t } from '@fi/shared';
 import { expect, test } from '@playwright/test';
-import { DEMO_ORDERS, DEMO_OWNER, DEMO_SHEET } from '../src/harness/demo';
+import { DEMO_ORDERS, DEMO_OWNER, DEMO_PURCHASES, DEMO_SHEET } from '../src/harness/demo';
 import { seedDemo } from '../src/harness/seed';
 import { E2E, LIVE } from './env';
 import { api, row, signIn, typeInCell, typeInSelectedCell } from './helpers';
@@ -220,5 +222,49 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
       t('addin.invoice.confirmSendDespite', { count: 1, amount: frMoney(30_000, 'EUR') }),
     );
     await page.screenshot({ path: info.outputPath('send-despite.png') });
+  });
+
+  await test.step('Achats: « Audit atelier » sold 900 €, bought 1 000 €; then a 20 % margin', async () => {
+    await pane.getByRole('tab', { name: t('addin.nav.registry') }).click();
+    await pane
+      .getByTestId(`other-${DEMO_PURCHASES}`)
+      .getByRole('button', { name: t('addin.registry.include') })
+      .click();
+    await pane
+      .getByTestId('inclusion')
+      .getByRole('button', { name: t('addin.registry.confirm') })
+      .click();
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.registry.included', { sheet: DEMO_PURCHASES, docs: 2 }),
+    );
+
+    await pane.getByRole('tab', { name: t('addin.nav.checks') }).click();
+    const loss = pane.getByTestId('finding').filter({ hasText: 'Sur la facture F2026-102,' });
+    await expect(loss).toContainText("l'achat A-7 de la feuille « Achats »");
+    await expect(loss).toContainText(t('addin.checks.blocking'));
+    await loss.getByRole('button', { name: t('addin.checks.see.purchase') }).click();
+    await expect(page.getByTestId('name-box')).toHaveText('D3');
+    await page.screenshot({ path: info.outputPath('purchase.png') });
+
+    // Not the same audit: A-6, bought 800 €, gives the cost; 900 € is no loss.
+    await loss.getByRole('button', { name: t('addin.checks.notSameItem') }).click();
+    await expect(pane.getByTestId('notice')).toContainText(t('addin.checks.decided.notSameItem'));
+    await expect(loss).toHaveCount(0);
+
+    await pane.getByRole('tab', { name: t('addin.nav.settings') }).click();
+    await pane.getByTestId('min-margin').fill('20');
+    await pane
+      .getByTestId('min-margin')
+      .locator('xpath=ancestor::form')
+      .getByRole('button', { name: t('addin.settings.save') })
+      .click();
+    await expect(pane.getByTestId('notice')).toContainText(t('addin.settings.saved'));
+    await pane.getByRole('tab', { name: t('addin.nav.checks') }).click();
+    const margin = pane.getByTestId('finding').filter({ hasText: 'Sur la facture F2026-102,' });
+    await expect(margin).toContainText('votre marge est de 11,1 %, sous les 20 %');
+    await expect(margin).toContainText(t('addin.checks.warning'));
+    await margin.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('margin.png') });
+    expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
   });
 });

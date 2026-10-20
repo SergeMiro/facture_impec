@@ -6,10 +6,21 @@ import { Controller } from '../controller';
 import { FakeWorkbook } from '../excel/fake';
 import { tokenStore } from '../storage';
 import { App } from '../ui/App';
-import { DEMO_ORDERS, DEMO_SHEET, demoOrders, demoSheet } from './demo';
+import {
+  DEMO_ORDERS,
+  DEMO_PURCHASES,
+  DEMO_SHEET,
+  demoOrders,
+  demoPurchases,
+  demoSheet,
+} from './demo';
 import { Grid } from './Grid';
 
-const workbook = new FakeWorkbook({ [DEMO_SHEET]: demoSheet(), [DEMO_ORDERS]: demoOrders() });
+const workbook = new FakeWorkbook({
+  [DEMO_SHEET]: demoSheet(),
+  [DEMO_ORDERS]: demoOrders(),
+  [DEMO_PURCHASES]: demoPurchases(),
+});
 const controller = new Controller({
   port: workbook,
   tokens: tokenStore(),

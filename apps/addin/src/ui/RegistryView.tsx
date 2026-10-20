@@ -146,6 +146,9 @@ export function RegistryView() {
       ) : (
         <>
           <Caption1>{t('addin.registry.invoices', registry.invoices)}</Caption1>
+          {registry.suppliers > 0 && (
+            <Caption1>{t('addin.registry.suppliers', { count: registry.suppliers })}</Caption1>
+          )}
           <Text weight="semibold">{t('addin.registry.recent')}</Text>
           {registry.recent.length === 0 ? (
             <Caption1 className={styles.muted}>{t('addin.registry.noDocs')}</Caption1>

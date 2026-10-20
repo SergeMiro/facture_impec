@@ -797,6 +797,105 @@ describe('the checks across documents (R2)', () => {
   });
 });
 
+describe('purchases and margin (R3)', () => {
+  const SIREN = '999000300';
+  const day = (text: string, value: number) => ({ value, text, format: 'dd/mm/yyyy' });
+  // F2026-101 sells 2 days at 450 €; the latest purchase of the same day cost 500 €, the one before 400 €.
+  const PURCHASES = 'Achats';
+  const book = new FakeWorkbook({
+    [DEMO_SHEET]: demoSheet(),
+    [PURCHASES]: {
+      A1: 'N° achat',
+      B1: 'Date',
+      C1: 'Fournisseur',
+      D1: 'Désignation',
+      E1: 'Qté',
+      F1: 'Prix d’achat HT',
+      A2: 'A-1',
+      B2: day('01/09/2026', 46266),
+      C2: 'Conseil Partenaires',
+      D2: 'Journée de conseil',
+      E2: 5,
+      F2: 400,
+      A3: 'A-2',
+      B3: day('01/10/2026', 46296),
+      C3: 'Conseil Partenaires',
+      D3: 'Journée de conseil',
+      E3: 5,
+      F3: 500,
+    },
+  });
+  const { controller, state } = pane(book);
+  const b2 = () => state().checks?.findings.find((f) => f.rule === 'B2');
+
+  beforeAll(async () => {
+    const vatId = `FR${String((12 + 3 * (Number(SIREN) % 97)) % 97).padStart(2, '0')}${SIREN}`;
+    const key = (
+      await newTenant(api.request, {
+        ...SELLER,
+        siren: SIREN,
+        vatId,
+        ownerEmail: 'achats@entreprise-demo.test',
+      })
+    ).apiKey;
+    const res = await api.request('/settings', {
+      method: 'PATCH',
+      token: key,
+      body: { invoiceDefaults: { ...DEFAULTS, siret: `${SIREN}00015` } },
+    });
+    expect(res.status).toBe(200);
+    await controller.start();
+    await controller.signInWithKey(key);
+    await until(() => state().detection !== null, 'the invoice columns');
+    const columns = state().detection?.mapping;
+    if (!columns) throw new Error('no invoice columns');
+    await controller.confirmMapping(columns);
+    await controller.includeSheet(PURCHASES);
+    const inclusion = state().inclusion;
+    if (!inclusion) throw new Error('no proposal');
+    expect(inclusion.detection.layout.kind).toBe('purchase');
+    await controller.confirmLayout({ ...inclusion.detection.layout, source: 'user' });
+  });
+
+  it('shows a line sold under its purchase price, and the purchase to look at', async () => {
+    controller.navigate({ name: 'checks' });
+    await until(() => b2() !== undefined, 'the loss');
+    expect(b2()).toMatchObject({ severity: 'blocking', amount: 10_000 });
+    expect(b2()?.message).toContain("l'achat A-2 de la feuille « Achats »");
+    expect(b2()?.costLinkId).toEqual(expect.any(String));
+
+    // « Voir l'achat »: the row of « Achats ».
+    const purchase = b2()?.evidence.find((e) => e.role === 'purchase');
+    if (!purchase) throw new Error('no purchase');
+    await controller.showEvidence(purchase);
+    expect(book.active).toEqual({ sheet: PURCHASES, cell: 'D3' });
+    // A supplier invoice received through the platform opens in « Réception ».
+    controller.showEvidence({ ...purchase, cell: null, inboundId: 'inbound-1' });
+    expect(state().screen).toEqual({ name: 'reception', focus: 'inbound-1' });
+    controller.navigate({ name: 'checks' });
+  });
+
+  it('takes the purchase before on « Ce n’est pas le même article », and warns under the margin', async () => {
+    const link = b2()?.costLinkId;
+    if (!link) throw new Error('no cost link');
+    await controller.notSameItem(link);
+    expect(state().notice?.text).toBe(t('addin.checks.decided.notSameItem'));
+    // Bought 400 €, sold 450 €: no loss.
+    expect(b2()).toBeUndefined();
+
+    controller.navigate({ name: 'settings' });
+    await until(() => state().settings !== null, 'the settings');
+    expect(state().settings?.minMarginPercent).toBeNull();
+    expect(await controller.saveSettings({ minMarginPercent: 20 })).toBe(true);
+    expect(state().settings?.minMarginPercent).toBe(20);
+    controller.navigate({ name: 'checks' });
+    await until(() => b2() !== undefined, 'the margin');
+    // 400 € / 0,8 = 500 €: 50 € short on each day.
+    expect(b2()).toMatchObject({ severity: 'warning', amount: 10_000 });
+    expect(b2()?.message).toContain('votre marge est de 11,1 %, sous les 20 %');
+  });
+});
+
 describe('signing in', () => {
   it('collects the session once the e-mailed link is confirmed', async () => {
     const book = new FakeWorkbook({ [DEMO_SHEET]: demoSheet() });

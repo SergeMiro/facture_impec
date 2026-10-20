@@ -1,7 +1,8 @@
 // Contrôles (R2): what the checks across documents found — an invoice against its order, its delivery
 // notes, the price list — each with its money at stake and the cells to look at; and the documents
-// that look alike with no number to tie them, for a « Oui » or a « Non ». The fiche of an invoice
-// shows its own findings with the same card.
+// that look alike with no number to tie them, for a « Oui » or a « Non ». A line sold under its
+// purchase price (R3) points at the purchase: a row of « Achats », or the supplier's invoice in
+// « Réception ». The fiche of an invoice shows its own findings with the same card.
 import { frDate, frMoney } from '@fi/core';
 import { type MessageKey, t } from '@fi/shared';
 import {
@@ -47,7 +48,11 @@ const SEE: Record<Exclude<Evidence['role'], 'invoice'>, MessageKey> = {
   delivery: 'addin.checks.see.delivery',
   price_list: 'addin.checks.see.price_list',
   history: 'addin.checks.see.history',
+  purchase: 'addin.checks.see.purchase',
 };
+
+const seeLabel = (e: Evidence): MessageKey =>
+  e.role === 'purchase' && !e.cell ? 'addin.checks.see.inbound' : SEE[e.role as keyof typeof SEE];
 
 const money = (cents: number) => frMoney(cents, 'EUR');
 
@@ -59,7 +64,7 @@ export function FindingCard({ finding, onFiche }: { finding: Finding; onFiche?: 
   const fix = finding.evidence.findLast((e) => e.role === 'invoice' && e.cell);
   const seen = new Set<string>();
   const others = finding.evidence.filter((e) => {
-    if (e.role === 'invoice' || !e.cell || seen.has(e.role)) return false;
+    if (e.role === 'invoice' || !(e.cell || e.inboundId) || seen.has(e.role)) return false;
     seen.add(e.role);
     return true;
   });
@@ -99,9 +104,19 @@ export function FindingCard({ finding, onFiche }: { finding: Finding; onFiche?: 
             disabled={state.busy.includes('select')}
             onClick={() => void fi.showEvidence(e)}
           >
-            {t(SEE[e.role as keyof typeof SEE])}
+            {t(seeLabel(e))}
           </Button>
         ))}
+        {finding.costLinkId && (
+          <Button
+            size="small"
+            appearance="subtle"
+            disabled={state.busy.includes(`link:${finding.costLinkId}`)}
+            onClick={() => finding.costLinkId && void fi.notSameItem(finding.costLinkId)}
+          >
+            {t('addin.checks.notSameItem')}
+          </Button>
+        )}
         {!onFiche && finding.invoiceId && (
           <Button
             size="small"

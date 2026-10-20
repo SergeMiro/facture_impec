@@ -116,15 +116,34 @@ const ORDER_ROWS: (string | number | FakeCell)[][] = [
   ],
 ];
 
-export function demoOrders(): Record<string, FakeCell | string | number> {
+function table(rows: (string | number | FakeCell)[][]): Record<string, FakeCell | string | number> {
   const cells: Record<string, FakeCell | string | number> = {};
-  [ORDER_HEADERS, ...ORDER_ROWS].forEach((row, r) => {
+  rows.forEach((row, r) => {
     row.forEach((value, c) => {
       if (value !== '') cells[`${COLS[c]}${r + 1}`] = value;
     });
   });
   return cells;
 }
+
+export const demoOrders = () => table([ORDER_HEADERS, ...ORDER_ROWS]);
+
+/** What the company bought (R3): the « Audit atelier » it resells, at 800 €, then at 1 000 €. */
+export const DEMO_PURCHASES = 'Achats';
+const PURCHASE_HEADERS = [
+  'N° achat',
+  'Date',
+  'Fournisseur',
+  'Désignation',
+  'Qté',
+  'Prix d’achat HT',
+];
+const PURCHASE_ROWS: (string | number | FakeCell)[][] = [
+  ['A-6', date('01/09/2026', 46266), 'Audits Associés', 'Audit atelier', 1, money(800)],
+  ['A-7', date('01/10/2026', 46296), 'Audits Associés', 'Audit atelier', 1, money(1000)],
+];
+
+export const demoPurchases = () => table([PURCHASE_HEADERS, ...PURCHASE_ROWS]);
 
 /** The header row and the three invoices, cells as the harness holds them. */
 export const demoTable = (): (string | number | FakeCell)[][] => [HEADERS, ...ROWS];

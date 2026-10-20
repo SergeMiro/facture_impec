@@ -65,7 +65,8 @@ export type Screen =
   | { name: 'detect' }
   | { name: 'dashboard' }
   | { name: 'invoice'; id: string; confirmSend: boolean }
-  | { name: 'reception' }
+  /** `focus`: the supplier invoice to show, from « Voir la facture du fournisseur ». */
+  | { name: 'reception'; focus?: string }
   | { name: 'customers' }
   | { name: 'registry' }
   | { name: 'checks' }
@@ -1560,11 +1561,24 @@ export class Controller {
     this.notify('success', t(`addin.checks.decided.${status}`));
   };
 
+  /** « Ce n'est pas le même article »: this purchase gives no cost to the invoice; the one before does. */
+  notSameItem = async (linkId: string): Promise<void> => {
+    const checks = await this.#act(`link:${linkId}`, () => this.api.decideLink(linkId, 'rejected'));
+    if (!checks) return;
+    this.#set({ checks });
+    this.notify('success', t('addin.checks.decided.notSameItem'));
+  };
+
   /**
    * « Corriger la ligne », « Voir la commande »…: selects the cell in the open workbook; a document
-   * of another workbook is named instead.
+   * of another workbook is named instead. A supplier invoice received through the platform has no
+   * cell: « Réception » shows it.
    */
   showEvidence = async (evidence: Evidence): Promise<void> => {
+    if (!evidence.cell && evidence.inboundId) {
+      this.navigate({ name: 'reception', focus: evidence.inboundId });
+      return;
+    }
     const target = evidence.cell ? parseAddress(evidence.cell) : null;
     if (!target) return;
     if (evidence.workbookId && evidence.workbookId !== this.#state.workbookId) {

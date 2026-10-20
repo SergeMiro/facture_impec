@@ -15,12 +15,13 @@ import {
   MessageBar,
   MessageBarBody,
   makeStyles,
+  mergeClasses,
   Spinner,
   Subtitle2,
   Text,
   tokens,
 } from '@fluentui/react-components';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   type ExportFile,
   type Inbound,
@@ -41,6 +42,7 @@ const useStyles = makeStyles({
     gap: '8px',
   },
   card: { display: 'flex', flexDirection: 'column', gap: '6px', padding: '10px' },
+  focused: { outline: `2px solid ${tokens.colorBrandStroke1}` },
   line: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
   head: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' },
   muted: { color: tokens.colorNeutralForeground3 },
@@ -75,8 +77,13 @@ function Flag({ flag }: { flag: InboundFlag }) {
   );
 }
 
-function Received({ row }: { row: Inbound }) {
+function Received({ row, focused = false }: { row: Inbound; focused?: boolean }) {
   const styles = useStyles();
+  const card = useRef<HTMLDivElement>(null);
+  // « Voir la facture du fournisseur » (Contrôles) comes to this one.
+  useEffect(() => {
+    if (focused) card.current?.scrollIntoView?.({ block: 'center' });
+  }, [focused]);
   const [state, fi] = useFi();
   const [ibanChecked, setIbanChecked] = useState(false);
   const [disputing, setDisputing] = useState(false);
@@ -88,7 +95,13 @@ function Received({ row }: { row: Inbound }) {
 
   return (
     <li>
-      <Card className={styles.card} data-testid="inbound" data-status={row.status}>
+      <Card
+        ref={card}
+        className={mergeClasses(styles.card, focused && styles.focused)}
+        data-testid="inbound"
+        data-status={row.status}
+        data-focused={focused || undefined}
+      >
         <div className={styles.head}>
           <Text weight="semibold">{row.supplierName}</Text>
           <span className={styles.line}>
@@ -241,7 +254,11 @@ export function ReceptionView() {
       ) : (
         <ul className={styles.list}>
           {reception.inbound.map((row) => (
-            <Received key={row.id} row={row} />
+            <Received
+              key={row.id}
+              row={row}
+              focused={state.screen.name === 'reception' && state.screen.focus === row.id}
+            />
           ))}
         </ul>
       )}
