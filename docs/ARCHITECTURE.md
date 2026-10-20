@@ -524,6 +524,52 @@ of `packages/core/test/checks-corpus.ts`), `packages/core/src/sheet/sheet.test.t
 | A link a person decided | Kept as it is, whatever the next run finds; a confirmed link settles its document | People correct the Linker; it never undoes them. |
 | Money at stake in the summary | Real invoices only; findings on test invoices are shown with « Test », never added up | Plan R2: a test invoice is never added to the real ones. |
 
+## What R3 added: purchases and margin
+
+R3 gives each sold line what it cost, from what the company bought: the supplier invoices received
+through the platform and the rows of an included « Achats » sheet. Rule B2 then says when a line is sold
+under that cost (blocking), or above it but under the margin the company set in « Réglages » (warning).
+Criteria in `docs/PROGRESS.md` R3. Like R2, every step is a rule in code; nothing asks a model.
+
+```
+supplier invoice polled from the platform ─► registry job ─► docs (in, invoice) + supplier in parties
+« Achats » sheet included ─► docs (in, purchase) from its rows
+checkRegistry ─► findCosts: each sold line ─► the purchase of the same article ─► cost links (auto)
+              ─► World.margins (B2): price < cost ─► « vente à perte » ; price < cost / (1 − margin) ─► warning
+PATCH /settings { minMarginPercent } ─► audit settings.update ─► registry job ─► the mark moved: checked again
+« Ce n'est pas le même article » ─► POST /links/:id rejected ─► the purchase before gives the cost
+```
+
+| Path | What it does |
+|---|---|
+| `packages/core/src/checks/cost.ts` | `findCosts`: a purchase is a received invoice (not a credit note or an advance) or a purchase sheet's document. The same article is the company's own item on both sides, else the same name once accents, case and punctuation are dropped (`normalizeName`); the same currency, and a unit that does not contradict (C62, H87 and EA are one piece; a box is another article). A purchase a person confirmed for the invoice comes first, one they rejected never counts. The latest purchase on or before the sale counts, else the first in the 60 days after it. Each purchase used is one link of kind « cost » (purchase → invoice): score 100 by item, 80 by name. |
+| `packages/core/src/checks/amounts.ts` | A line's unit price as the checks read it, its discount and a sheet's TTC taken out; shared by A1–A5, B2 and the cost. |
+| `packages/core/src/checks/check.ts` › `margins` | B2: a line given away (price 0) or without a quantity is not judged; a loss of a euro or more is blocking, with « la facture FA-77 de Grossiste SA » or « l'achat A-2 de la feuille « Achats » » in the wording; above the cost, a margin on the selling price under the company's minimum is a warning with the euros missing to reach it. Evidence: the invoice's price cell and the purchase (its cell, or for a received invoice its id). |
+| `apps/api/src/registry.ts` › `noteSuppliers` | A real received invoice whose seller has a SIREN puts that supplier in `parties` (kind supplier, source « invoice », not verified, no names); one already there stays as it is. A « Mode test » invoice adds none. |
+| `apps/api/src/parties.ts` | « Clients » lists and changes customers only: a supplier's id answers 404. |
+| `apps/api/src/checks.ts` | The mark of a company ends with its minimum margin, so changing it checks again; the documents carry their currency and the lines their unit; each piece of evidence its received invoice (`inboundId`), each B2 finding the id of its cost link (`costLinkId`). |
+| `apps/api/src/settings.ts` | `minMarginPercent`: a whole percentage from 1 to 90, or null; a change queues the registry job. |
+| `apps/addin/src/ui/ChecksView.tsx`, `ReceptionView.tsx`, `SettingsView.tsx`, `RegistryView.tsx` | « Voir l'achat » selects the row of « Achats »; « Voir la facture du fournisseur » opens « Réception » on that invoice; « Ce n'est pas le même article » rejects the cost link; « Marge minimale sur le prix de vente (%) » in « Réglages »; « Registre » counts the suppliers. |
+
+Tables: migration `0012_purchases.sql` (`tenants.min_margin_percent`; `parties.verified_at` may be null for
+a supplier no directory confirmed).
+
+Tests: `packages/core/src/checks/checks.test.ts` › what a sold line cost (R3), the B2 scenarios of
+`packages/core/test/checks-corpus.ts`, `apps/api/src/purchases.test.ts`, `apps/addin/src/controller.test.ts` ›
+purchases and margin (R3), `apps/addin/e2e/harness.spec.ts` › Achats.
+
+### Decisions taken in R3
+
+| Topic | Decision | Why |
+|---|---|---|
+| Which purchase gives the cost | The latest one of the same article on or before the sale, else the first in the 60 days after | What the company paid last is what it knows when it sets a price; the supplier's invoice often arrives after the sale. A weighted average or FIFO waits for stock data (`docs/DEFERRED.md`). |
+| The same article | The company's own item on both sides, else the same name; a supplier's reference alone never ties | A supplier's « GM-CH-01 » says nothing about the company's « CH-01 ». Mapping one to the other is R7's job (catalogue). |
+| Units | One piece is one piece whatever the code (C62, H87, EA); any other unit must be the same on both sides | Invoices built from a sheet say C62, suppliers' invoices often H87; a box of 12 against a piece would give a false loss. |
+| Which margin | On the selling price (« taux de marque »): margin = (price − cost) / price, and the hint gives an example (20 %: bought 80 €, sold at least 100 € HT) | The figure a seller reasons in when pricing; the example removes the doubt with « taux de marge » on cost. |
+| A loss against a margin | A loss blocks; a margin under the minimum warns; no minimum set, no warning | Plan R3: « продажа в убыток » blocking, the margin a warning; a company that never set one is not nagged. |
+| Suppliers in `parties` | Only from real received invoices with a SIREN, as the invoice names them; never verified against the directory, never shown or changed in « Clients » | A supplier is known from its own invoice; an « Achats » row without SIREN is not a company we can name. |
+| « Ce n'est pas le même article » | A « Non » on the cost link, through the same `POST /links/:id` as R2's links; the purchase before then counts | One way to correct the matcher, kept by the next runs like every decision of a person. |
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

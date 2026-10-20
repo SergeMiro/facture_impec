@@ -642,3 +642,51 @@ and the cells that prove it — can stop a send. Criteria, written here before t
 | Audit and RGPD | `apps/api/src/checks.test.ts` counts `checks.run` (only when findings opened, changed or resolved), `link.confirm`, `link.reject`, `invoice.send_despite_findings`, `invoice.autopilot_cancel`; › RGPD › exports the links and findings, and erases them with the account; `packages/db/src/db.test.ts` lists `check_state`, `findings`, `links`. `docs/RGPD.md`: checks across documents, export and erasure. |
 | Docs | `docs/ARCHITECTURE.md` › What R2 added: checks across documents, and its decisions; `docs/DEFERRED.md` › `rule_exceptions` and « C'est normal » (R7), MatchAgent and ExplainAgent, legal forms in the Linker, B6 on the address, units, an article no order announced, B4 against delivery notes of an order, the 30 days as a setting, checking only what a change touches, the fiche's findings as fresh as « Contrôles ». |
 | Gate | `pnpm verify` green on 2026-10-20 (tests with `--concurrency=1`, memory being short): api 214, core 612 (branches 94.09 %) + oracle 276, agents 107, add-in 62, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local). |
+
+## R3 — Purchases and margin (started 2026-10-20)
+
+R2 checks what is sold against what was ordered and delivered. R3 adds what it cost: the supplier
+invoices received through the platform and the « Achats » sheet give each sold article its purchase
+price, and rule B2 says when a sale loses money or falls under the company's margin. Criteria, written
+here before the work:
+
+- **Suppliers**: a supplier invoice received through the platform (not a « Mode test » one) puts its
+  supplier in `parties` (kind supplier, source « invoice », found by SIREN; one already there is not
+  changed). A supplier never shows in « Clients » and the customers' API cannot change one. The
+  « Registre » screen counts the suppliers recognised.
+- **What it cost**: each sold line of an invoice (not a credit note, not an advance) takes its cost from
+  a purchase of the same article — a received invoice's line or a row of an included « Achats » sheet.
+  The same article: the company's own reference on both sides (BT-155 sold, BT-156 bought), else the
+  same name once accents, case and punctuation are set aside; a different unit or currency is not the
+  same article (« pièce », « unité » and « each » — C62, H87, EA — are one unit: an invoice built from a
+  sheet says C62 where suppliers say H87). The purchase is the latest one on or before the sale's date, else the first one in the
+  60 days after it. The tie is a `links` row of kind « cost » (purchase → invoice); a « Non » on it
+  makes the next purchase count. A test invoice takes its cost from test purchases and the sheets, a
+  real invoice never from a test purchase.
+- **B2**: sold under its cost → « vente à perte N € » (blocking: « Envoyer quand même », the autopilot
+  stops); sold above its cost but under the margin the company set in « Réglages » → warning, with the
+  euros missing to reach it. No margin set: no margin warning. Changing the margin checks again.
+  « Voir l'achat » selects the purchase's row in « Achats », or opens the supplier invoice in
+  « Réception ».
+- **Acceptance** (architecture document, R3): « sold under its cost » is caught from a supplier
+  invoice received from the mock platform, and from the « Achats » sheet. The 300 € / 400 € example
+  with the supplier's 10 × 35 € gives B1 100 € and B2 50 €.
+- **Corpus**: B2 fires and stays quiet in its own scenarios (cost from a received invoice, from the
+  « Achats » sheet by name, the margin warning, the latest purchase, test purchases kept apart, a
+  rejected cost, another unit).
+- **Audit and RGPD**: the margin setting is audited with the other settings; suppliers and cost links
+  are in the company's export and its erasure; `docs/RGPD.md`, `docs/DEFERRED.md` and
+  `docs/ARCHITECTURE.md` updated.
+
+### Evidence (2026-10-20)
+
+| Criterion | Evidence |
+|---|---|
+| Suppliers | `apps/api/src/purchases.test.ts` › a supplier invoice received through the platform › gives the cost…: « Grossiste Martin SAS » (SIREN 600000004) is in `parties` with kind supplier, source invoice, `verifiedAt` null, no names; `GET /parties` does not list it, `PATCH /parties/:id` answers 404; `GET /registry` says `suppliers: 1`; a second invoice of that supplier leaves one party. › « Mode test » supplier invoices › give no supplier to the parties. « Registre » shows the count (`RegistryView.tsx`, `addin.registry.suppliers`). |
+| What it cost | `packages/core/src/checks/checks.test.ts` › what a sold line cost (R3) › names an article the same way whatever its accents, case and punctuation, › takes a purchase a person confirmed over a later one, and says it was a person, › takes the latest purchase for a sale without a date, and one without a date last, › ties a purchase once to an invoice, by its item when one line says so, › reads « one », « piece » and « each » as the same unit, a box as another. Corpus `b2-latest-purchase` (FA-81 before the sale counts, not FA-82 after it; 60 days after), `b2-rejected-cost` (« Non » makes the purchase before count), `b2-test-purchases-apart`, `b2-not-a-cost` (a box, a credit note, another currency, a credit-note sale). API: the cost link of a received invoice is `auto`, method `similarity`, score 80 (the supplier's reference is not the company's). |
+| B2 | Corpus `b2-300-400-bought-35`, `b2-achats-by-name`, `b2-above-cost-and-margin` (quiet), `b2-margin-warning`; core › judges no line given away, and no line without a quantity, › writes where the cost comes from when the purchase has no number. `apps/api/src/purchases.test.ts` › the « Achats » sheet › gives the cost; « Non » takes the purchase before; the margin of « Réglages » warns: A-2 at 35 € → blocking 50 €, evidence `Achats!D3` and `Factures!K2`; the cost link rejected → A-1 at 28 € → nothing; `minMarginPercent: 20` queues the registry job, audits `settings.update`, gives a warning of 50 € (« votre marge est de 6,7 %, sous les 20 % »); 0 refused (400), null clears it. The blocking B2 stops « Envoyer » (409) like B1. Add-in: `apps/addin/src/controller.test.ts` › purchases and margin (R3) › shows a line sold under its purchase price, and the purchase to look at (« Voir l'achat » selects `Achats!D3`; a received invoice opens « Réception » on it), › takes the purchase before on « Ce n'est pas le même article », and warns under the margin. `apps/addin/src/ui/settings.test.ts` (the « Marge minimale » field). |
+| Acceptance | From the mock platform: `apps/api/src/purchases.test.ts` › a supplier invoice received through the platform › gives the cost: 300/400 sold 10 × 35 € bought is 100 € missing and 50 € lost — the invoice is polled by `runInboundPoll`, projected into the registry, and F-2026-042 gets B1 10 000 and B2 5 000 cents, « … en dessous de votre prix d'achat de 35,00 € (la facture FA-2026-311 de Grossiste Martin SAS) : 50,00 € de perte. », its evidence names the received invoice (`inboundId`, readable through `GET /inbound/:id`). From « Achats »: the test above, and E2E (`apps/addin/e2e/harness.spec.ts`, local Chrome, browser: local) › Achats: « Audit atelier » sold 900 €, bought 1 000 €; then a 20 % margin — the sheet is included from « Registre », the loss of 100 € shows « Bloquant », « Voir l'achat » selects D3 ([achat](evidence/r3-purchase.png)), « Ce n'est pas le même article » takes A-6 at 800 €, « Marge minimale » 20 % in « Réglages » gives « À vérifier » « votre marge est de 11,1 % » ([marge](evidence/r3-margin.png)); the pane does not scroll sideways. |
+| Corpus | `packages/core/src/checks/corpus.test.ts` › R2–R3 corpus: 54 scenarios, 8 of them B2 (above); B2 fires in some and stays quiet in others, like every rule. |
+| Audit and RGPD | `settings.update` counted in `purchases.test.ts`; « Ce n'est pas le même article » is `link.reject` (R2's route). The export gives `suppliers` apart from `customers` (`purchases.test.ts`: customers empty, the supplier with source invoice); the erasure deletes every party and every link (`apps/api/src/rgpd.ts`, R2's test › RGPD). `docs/RGPD.md`: Suppliers (R3), cost links in the checks row, export and erasure. |
+| Docs | `docs/ARCHITECTURE.md` › What R3 added: purchases and margin, and its decisions (which purchase, the same article, units, which margin, loss against margin, suppliers, « Ce n'est pas le même article »); `docs/DEFERRED.md` › money at stake counted twice by B1 and B2, supplier references tied to the company's (R7), weighted average or FIFO, charges of the whole purchase invoice, « Achats » suppliers in `parties`, a margin per article or customer, the supplier's other details; units row updated. |
+| Gate | `pnpm verify` green on 2026-10-20 (tests with `--concurrency=1`, memory being short): api 217, core 627 (branches 94.04 %) + oracle 276, agents 107, add-in 66, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local). |
