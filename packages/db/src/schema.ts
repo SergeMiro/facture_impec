@@ -3,6 +3,7 @@
 import type {
   Address,
   ChaseStep,
+  CheckFix,
   Evidence,
   InboundTriage,
   Invoice,
@@ -368,6 +369,11 @@ export const invoices = pgTable(
      * when it changed.
      */
     validatedKey: text('validated_key'),
+    /**
+     * Document lock (R8): a correction of this invoice waits for its click until then. Meanwhile the
+     * background keeps its findings as they are and the autopilot does not send it.
+     */
+    editLockUntil: timestamp('edit_lock_until', { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -901,6 +907,8 @@ export const findings = pgTable(
     amount: cents('amount'),
     params: jsonb('params_json').$type<Record<string, string>>().notNull(),
     evidence: jsonb('evidence_json').$type<Evidence[]>().notNull(),
+    /** The price cell the code knows how to correct, and to what (R8). */
+    fix: jsonb('fix_json').$type<CheckFix>(),
     status: text('status', { enum: ['open', 'resolved'] })
       .notNull()
       .default('open'),
@@ -927,6 +935,71 @@ export const checkState = pgTable('check_state', {
   /** The registry's documents when it ran: their count and last change. */
   mark: text('mark').notNull(),
 });
+
+// ── Chat and edits (R8) ────────────────────────────────────────────────────────────────────────
+// A conversation per finding, and the journal of the cells the pane changed for it. Written by
+// apps/api/src/edits.ts and apps/api/src/chat.ts; the pane writes the cell, the API keeps the record.
+
+/**
+ * proposed: the « Avant → Après » card waits for its click · applied · declined · reverted: « Avant »
+ * written back · conflict: the cell held something else, nothing was written.
+ */
+export const EDIT_STATUSES = ['proposed', 'applied', 'declined', 'reverted', 'conflict'] as const;
+export type EditStatus = (typeof EDIT_STATUSES)[number];
+
+export const edits = pgTable(
+  'edits',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    invoiceId: uuid('invoice_id')
+      .notNull()
+      .references(() => invoices.id, { onDelete: 'cascade' }),
+    findingId: uuid('finding_id').references(() => findings.id, { onDelete: 'set null' }),
+    /** Who asked: the agent in the chat, or a person from the finding's card. */
+    by: text('by', { enum: ['agent', 'person'] }).notNull(),
+    /** The chat's tool call that asked for it. */
+    toolCallId: text('tool_call_id'),
+    workbookId: text('workbook_id'),
+    sheet: text('sheet').notNull(),
+    /** A1, without the sheet. */
+    cell: text('cell').notNull(),
+    field: text('field', { enum: ['price'] }).notNull(),
+    /** Decimal text the cell held, and its formula when the pane found one. */
+    beforeValue: text('before_value').notNull(),
+    beforeFormula: text('before_formula'),
+    afterValue: text('after_value').notNull(),
+    status: text('status', { enum: EDIT_STATUSES }).notNull().default('proposed'),
+    /** At a conflict: what the cell held instead, and why nothing was written. */
+    foundValue: text('found_value'),
+    reason: text('reason', { enum: ['changed', 'formula', 'missing'] }),
+    appliedAt: timestamp('applied_at', { withTimezone: true }),
+    revertedAt: timestamp('reverted_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('edits_invoice').on(t.invoiceId), index('edits_tenant').on(t.tenantId)],
+);
+
+/** One conversation per finding: the messages as the pane shows them (UI messages of `ai`). */
+export const chats = pgTable(
+  'chats',
+  {
+    findingId: uuid('finding_id')
+      .primaryKey()
+      .references(() => findings.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    /** The pane's UI messages (`ai`'s UIMessage), the opening first. */
+    messages: jsonb('messages_json').$type<object[]>().notNull().default([]),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('chats_tenant').on(t.tenantId)],
+);
 
 /** Stripe events already applied: an endpoint may receive the same event twice (docs/BILLING.md). */
 export const stripeEvents = pgTable('stripe_events', {
@@ -955,3 +1028,5 @@ export type LayoutProfileRow = typeof layoutProfiles.$inferSelect;
 export type SourceRow = typeof sources.$inferSelect;
 export type LinkRow = typeof links.$inferSelect;
 export type FindingRow = typeof findings.$inferSelect;
+export type EditRow = typeof edits.$inferSelect;
+export type ChatRow = typeof chats.$inferSelect;
