@@ -2,7 +2,9 @@
 // add-in's Zod schemas, so a change on either side that breaks the other fails here.
 import {
   fakeAdapter,
+  handleFor,
   linkToken,
+  mockModel,
   newTenant,
   runCollect,
   runSend,
@@ -10,8 +12,11 @@ import {
   SIRENE_CASES,
   standInBilling,
   type testApi as TestApi,
+  testAi,
   testApi,
   testDatabase,
+  textResult,
+  toolCallResult,
   type WorkerDeps,
 } from '@fi/api/testing';
 import { addDays, frMoney, parisToday } from '@fi/core';
@@ -20,6 +25,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   Controller,
   type ControllerDeps,
+  decimalFr,
   type FiState,
   SETTING,
   SHEET_POLL_MAX_MS,
@@ -893,6 +899,250 @@ describe('purchases and margin (R3)', () => {
     // 400 € / 0,8 = 500 €: 50 € short on each day.
     expect(b2()).toMatchObject({ severity: 'warning', amount: 10_000 });
     expect(b2()?.message).toContain('votre marge est de 11,1 %, sous les 20 %');
+  });
+});
+
+describe('corrections and the assistant (R8)', () => {
+  const SIREN = '999000409';
+  const day = (text: string, value: number) => ({ value, text, format: 'dd/mm/yyyy' });
+  // C-41 orders what F2026-101 bills, at 600 € a day: B1 proposes K2 450 → 600.
+  const book = new FakeWorkbook({
+    [DEMO_SHEET]: demoSheet(),
+    [DEMO_ORDERS]: {
+      A1: 'N° commande',
+      B1: 'Date',
+      C1: 'Client',
+      D1: 'Désignation',
+      E1: 'Qté',
+      F1: 'PU HT',
+      A2: 'C-41',
+      B2: day('01/10/2026', 46296),
+      C2: 'Boulangerie Martin SAS',
+      D2: 'Journée de conseil',
+      E2: 2,
+      F2: 600,
+    },
+  });
+  const K2 = { ...(book.cell(DEMO_SHEET, 'K2') ?? { value: 450, text: '450' }) };
+  const CELL = `${DEMO_SHEET}!K2`;
+  // The assistant answers only once a test turns it on: the sheets are read without it.
+  let assistantOn = false;
+  let model = mockModel(textResult('…'));
+  let withAi: ReturnType<typeof TestApi>;
+  const aiFetch: typeof fetch = async (input, init) => withAi.app.request(String(input), init);
+  const { controller, state } = pane(book, memoryStore(), { fetch: aiFetch });
+  const b1 = () => state().checks?.findings.find((f) => f.rule === 'B1');
+  const k2 = () => book.cell(DEMO_SHEET, 'K2')?.value;
+  const openB1 = async () => {
+    await until(() => b1()?.fix?.before === '450', 'B1 at 450 €', 15_000);
+    const finding = b1();
+    if (!finding) throw new Error('no B1');
+    return finding;
+  };
+
+  beforeAll(async () => {
+    withAi = testApi(database, { mock: adapter }, undefined, {
+      ai: testAi(database, {
+        included: {
+          settings: {
+            mode: 'included',
+            provider: 'mistral',
+            models: { agent: 'mock-agent', classify: 'mock-classify' },
+          },
+          apiKey: 'test',
+        },
+        handle: (resolved) => (resolved && assistantOn ? handleFor(model) : null),
+      }),
+    });
+    const vatId = `FR${String((12 + 3 * (Number(SIREN) % 97)) % 97).padStart(2, '0')}${SIREN}`;
+    const key = (
+      await newTenant(withAi.request, {
+        ...SELLER,
+        siren: SIREN,
+        vatId,
+        ownerEmail: 'corrections@entreprise-demo.test',
+      })
+    ).apiKey;
+    const res = await withAi.request('/settings', {
+      method: 'PATCH',
+      token: key,
+      body: { invoiceDefaults: { ...DEFAULTS, siret: `${SIREN}00015` } },
+    });
+    expect(res.status).toBe(200);
+    await controller.start();
+    await controller.signInWithKey(key);
+    await until(() => state().detection !== null, 'the invoice columns');
+    const columns = state().detection?.mapping;
+    if (!columns) throw new Error('no invoice columns');
+    await controller.confirmMapping(columns);
+    await controller.includeSheet(DEMO_ORDERS);
+    const inclusion = state().inclusion;
+    if (!inclusion) throw new Error('no proposal');
+    await controller.confirmLayout({ ...inclusion.detection.layout, source: 'user' });
+    controller.navigate({ name: 'checks' });
+  });
+
+  it('« Corriger pour moi » shows Avant → Après, writes only on « Appliquer », then undoes', async () => {
+    const finding = await openB1();
+    expect(finding.fix).toMatchObject({ sheet: DEMO_SHEET, cell: 'K2', field: 'price' });
+    expect(Number(finding.fix?.after)).toBe(600);
+    expect(state().checks?.assistant).toBe(false);
+
+    await controller.fixFinding(finding.id);
+    expect(state().card).toMatchObject({
+      kind: 'fix',
+      findingId: finding.id,
+      toolCallId: null,
+      conflict: null,
+      edit: { status: 'proposed', sheet: DEMO_SHEET, cell: 'K2', before: '450' },
+    });
+    // Nothing is written before the click.
+    expect(k2()).toBe(450);
+
+    await controller.applyCard();
+    expect(k2()).toBe(600);
+    expect(book.cell(DEMO_SHEET, 'K2')?.format).toBe(K2.format);
+    expect(book.active).toEqual({ sheet: DEMO_SHEET, cell: 'K2' });
+    expect(state().card).toBeNull();
+    expect(state().notice?.text).toBe(
+      t('addin.edit.applied', {
+        cell: CELL,
+        before: '450',
+        after: decimalFr(finding.fix?.after ?? ''),
+      }),
+    );
+    const corrected = state().corrected;
+    expect(corrected).toMatchObject({ status: 'applied', undoable: true });
+    await until(() => b1() === undefined, 'B1 closed');
+    if (!corrected) throw new Error('no correction');
+
+    // « Annuler la correction »: the card the other way round, then « Remettre comme avant ».
+    await controller.undoCorrection(corrected);
+    expect(state().card).toMatchObject({ kind: 'undo', edit: { id: corrected.id } });
+    expect(k2()).toBe(600);
+    await controller.applyCard();
+    expect(k2()).toBe(450);
+    expect(state().corrected).toBeNull();
+    expect(state().notice?.text).toBe(t('addin.edit.reverted', { cell: CELL, value: '450' }));
+    await openB1();
+  });
+
+  it('writes nothing over a cell typed since the card, nor over a formula', async () => {
+    let finding = await openB1();
+    await controller.fixFinding(finding.id);
+    // The person types 500 while the card waits.
+    book.type(DEMO_SHEET, 'K2', 500);
+    await controller.applyCard();
+    expect(k2()).toBe(500);
+    expect(state().card).toBeNull();
+    expect(state().notice).toMatchObject({
+      tone: 'warning',
+      text: t('addin.edit.conflict.changed', {
+        cell: CELL,
+        found: '500',
+        expected: '450',
+        value: decimalFr(finding.fix?.after ?? ''),
+      }),
+    });
+
+    book.type(DEMO_SHEET, 'K2', 450);
+    finding = await openB1();
+    book.sheets.get(DEMO_SHEET)?.set('K2', { ...K2, formula: '=450' });
+    await controller.fixFinding(finding.id);
+    await controller.applyCard();
+    expect(book.cell(DEMO_SHEET, 'K2')?.formula).toBe('=450');
+    expect(state().notice?.text).toBe(
+      t('addin.edit.conflict.formula', {
+        cell: CELL,
+        found: '=450',
+        expected: '450',
+        value: decimalFr(finding.fix?.after ?? ''),
+      }),
+    );
+    book.sheets.get(DEMO_SHEET)?.set('K2', { ...K2 });
+  });
+
+  it('asks before undoing over a value typed since: « Laisser », then « Remettre quand même »', async () => {
+    const finding = await openB1();
+    await controller.fixFinding(finding.id);
+    await controller.applyCard();
+    expect(k2()).toBe(600);
+    const corrected = state().corrected;
+    if (!corrected) throw new Error('no correction');
+
+    book.type(DEMO_SHEET, 'K2', 700);
+    await controller.undoCorrection(corrected);
+    await controller.applyCard();
+    expect(k2()).toBe(700);
+    expect(state().card).toMatchObject({
+      kind: 'undo',
+      conflict: { reason: 'changed', found: '700' },
+    });
+
+    await controller.declineCard();
+    expect(state().card).toBeNull();
+    expect(state().notice?.text).toBe(t('addin.edit.leftAsIs', { cell: CELL, found: '700' }));
+    expect(state().corrected).toMatchObject({ id: corrected.id, undoable: true });
+    expect(k2()).toBe(700);
+
+    // Asked again later: the cell still differs, and only « Remettre quand même » writes.
+    await controller.undoCorrection(corrected);
+    await controller.applyCard();
+    expect(state().card?.conflict?.found).toBe('700');
+    await controller.overwrite();
+    expect(k2()).toBe(450);
+    expect(state().card).toBeNull();
+    expect(state().corrected).toBeNull();
+    await openB1();
+  });
+
+  it('opens the chat on the finding; the card the agent asks for waits for « Appliquer »', async () => {
+    const finding = await openB1();
+    // The assistant off: the chat says so, and « Corriger pour moi » stays.
+    await controller.openChat(finding.id);
+    expect(state().screen).toEqual({ name: 'chat', findingId: finding.id });
+    expect(state().chat?.available).toBe(false);
+
+    assistantOn = true;
+    controller.navigate({ name: 'checks' });
+    await until(() => state().checks?.assistant === true, 'the assistant');
+    await controller.openChat(finding.id);
+    expect(state().chat?.available).toBe(true);
+    const [opening] = state().chat?.messages ?? [];
+    expect(opening?.role).toBe('assistant');
+    expect(opening?.parts).toContainEqual({ type: 'text', text: finding.message });
+
+    model = mockModel(
+      toolCallResult('proposeFix', {}),
+      textResult('C’est corrigé : la facture reprend les 600 € par jour de la commande.'),
+    );
+    await controller.ask('Corrigez-la pour moi.');
+    await until(() => state().card?.toolCallId === 'call-proposeFix', 'the agent’s card');
+    expect(state().card).toMatchObject({ kind: 'fix', findingId: finding.id, conflict: null });
+    expect(k2()).toBe(450);
+
+    // The pane closes on the card: it waits in the conversation, and comes back with it.
+    controller.navigate({ name: 'checks' });
+    expect(state().chat).toBeNull();
+    await controller.openChat(finding.id);
+    await until(() => state().card?.toolCallId === 'call-proposeFix', 'the card again');
+    expect(model.doStreamCalls).toHaveLength(1);
+
+    await controller.applyCard();
+    expect(k2()).toBe(600);
+    // The click goes back to the agent, which says what came of it.
+    await until(
+      () =>
+        state().chat?.status === 'ready' &&
+        JSON.stringify(state().chat?.messages.at(-1)).includes('C’est corrigé'),
+      'the agent’s answer',
+    );
+    expect(model.doStreamCalls).toHaveLength(2);
+    const told = JSON.stringify(model.doStreamCalls[1]?.prompt);
+    expect(told).toContain('"status":"applied"');
+    expect(told).toContain('"resolved":true');
+    expect(state().chat?.messages.map((m) => m.role)).toEqual(['assistant', 'user', 'assistant']);
+    await until(() => b1() === undefined, 'B1 closed');
   });
 });
 

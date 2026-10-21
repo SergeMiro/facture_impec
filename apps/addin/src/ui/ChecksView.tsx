@@ -18,6 +18,7 @@ import {
 } from '@fluentui/react-components';
 import type { Evidence, Finding, ProposedLink } from '../api';
 import { parisTime, useFi } from './context';
+import { CorrectedCard, EditCardView } from './EditCard';
 import { TEST_ORANGE } from './theme';
 
 const useStyles = makeStyles({
@@ -62,6 +63,7 @@ export function FindingCard({ finding, onFiche }: { finding: Finding; onFiche?: 
   const [state, fi] = useFi();
   // The invoice's own cell is the one to correct: the last invoice evidence is the one it is about.
   const fix = finding.evidence.findLast((e) => e.role === 'invoice' && e.cell);
+  const card = state.card?.findingId === finding.id ? state.card : null;
   const seen = new Set<string>();
   const others = finding.evidence.filter((e) => {
     if (e.role === 'invoice' || !(e.cell || e.inboundId) || seen.has(e.role)) return false;
@@ -127,6 +129,26 @@ export function FindingCard({ finding, onFiche }: { finding: Finding; onFiche?: 
           </Button>
         )}
       </span>
+      {(finding.fix || state.checks?.assistant) && !card && (
+        <span className={styles.line}>
+          {finding.fix && (
+            <Button
+              size="small"
+              appearance="primary"
+              disabled={state.busy.includes(`fix:${finding.id}`) || state.card !== null}
+              onClick={() => void fi.fixFinding(finding.id)}
+            >
+              {t('addin.checks.fixForMe')}
+            </Button>
+          )}
+          {state.checks?.assistant && (
+            <Button size="small" onClick={() => void fi.openChat(finding.id)}>
+              {t('addin.checks.ask')}
+            </Button>
+          )}
+        </span>
+      )}
+      {card && <EditCardView card={card} />}
     </Card>
   );
 }
@@ -162,6 +184,9 @@ export function ChecksView() {
     return state.busy.includes('checks') ? <Spinner label={t('addin.loading')} /> : null;
   }
   const real = checks.findings.filter((f) => !f.isTest);
+  // An undo card for a finding the correction closed: it is no longer in the list.
+  const loose =
+    state.card && !checks.findings.some((f) => f.id === state.card?.findingId) ? state.card : null;
   return (
     <section className={styles.section} aria-labelledby="checks-title">
       <Subtitle2 as="h2" id="checks-title">
@@ -181,6 +206,9 @@ export function ChecksView() {
         )}
         {state.busy.includes('checks') && <Spinner size="tiny" />}
       </span>
+
+      {loose && <EditCardView card={loose} />}
+      {state.corrected?.undoable && !loose && <CorrectedCard edit={state.corrected} />}
 
       {checks.links.length > 0 && (
         <>

@@ -1,7 +1,7 @@
 // An in-memory workbook behind the ExcelPort: the unit tests and the harness page (a sheet in the
 // browser, no Excel) drive the same task pane code as Excel does.
 import { columnIndex, columnLetters } from '@fi/core';
-import type { ExcelPort, StatusPlan, UsedRange } from './port';
+import type { CellContent, ExcelPort, StatusPlan, UsedRange } from './port';
 import { DETAIL_HEADER, STATUS_HEADER } from './reader';
 import { planValues } from './writer';
 
@@ -109,6 +109,23 @@ export class FakeWorkbook implements ExcelPort {
     }
     this.active = { sheet, cell };
     this.#notify();
+  }
+
+  async readCell(sheet: string, address: string): Promise<CellContent> {
+    const cells = this.sheets.get(sheet);
+    if (!cells) throw Object.assign(new Error(`No sheet ${sheet}`), { code: 'ItemNotFound' });
+    const cell = cells.get(address);
+    return { value: cell?.value ?? '', text: cell?.text ?? '', formula: cell?.formula ?? null };
+  }
+
+  /** The pane's correction: the number goes in, the cell's format stays, the change event fires. */
+  async writeCell(sheet: string, address: string, value: number) {
+    const cells = this.sheets.get(sheet);
+    if (!cells) throw Object.assign(new Error(`No sheet ${sheet}`), { code: 'ItemNotFound' });
+    const { formula: _formula, ...previous } = cells.get(address) ?? { value: '', text: '' };
+    cells.set(address, { ...previous, value, text: String(value) });
+    this.#notify();
+    for (const h of this.#changeHandlers.get(sheet) ?? []) h(address);
   }
 
   async writeStatus(plans: StatusPlan[]) {

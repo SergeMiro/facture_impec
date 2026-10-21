@@ -6,7 +6,10 @@
 // receives test supplier invoices on « Réception » and exports them for the accountant. Since R1 it
 // includes the « Commandes » sheet in the « Registre », and an edit there reaches the registry. Since R2
 // it shows the checks across documents; since R3 the « Achats » sheet gives the purchase price: a sale
-// under it blocks, a margin under the one of « Réglages » warns.
+// under it blocks, a margin under the one of « Réglages » warns. Since R8 « Corriger pour moi » writes
+// the order's price into the cell on « Appliquer » and puts it back on « Annuler la correction », and the
+// assistant proposes the same card in the chat; its two answers are played by the page (no model in the
+// E2E stack), everything else is the real API.
 // browser: local (Chrome of this server; Browserbase cannot reach localhost).
 
 import { readFile } from 'node:fs/promises';
@@ -266,5 +269,127 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
     await margin.scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath('margin.png') });
     expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+  });
+
+  const cell = `${DEMO_SHEET}!K3`;
+  const missing = pane.getByTestId('finding').filter({ hasText: 'C-42' });
+  // In Mode test the row feeds TEST-F2026-102: that one is corrected from the sheet, not the real one.
+  const b1 = missing.filter({ hasText: 'La facture TEST-F2026-102' });
+
+  await test.step('Corrections: « Corriger pour moi » writes 1 200 € on « Appliquer », then undoes it', async () => {
+    await missing
+      .filter({ hasText: 'La facture F2026-102' })
+      .getByRole('button', { name: t('addin.checks.fixForMe') })
+      .click();
+    await expect(pane.getByTestId('notice')).toContainText(t('addin.edit.otherMode.test'));
+    await expect(pane.getByTestId('edit-card')).toHaveCount(0);
+
+    await b1.getByRole('button', { name: t('addin.checks.fixForMe') }).click();
+    const card = pane.getByTestId('edit-card');
+    await expect(card.getByTestId('edit-before')).toHaveText('900');
+    await expect(card.getByTestId('edit-after')).toHaveText('1200');
+    await expect(card).toContainText(t('addin.edit.safe'));
+    // Nothing is written before the click.
+    await page.locator('.tabs').getByRole('button', { name: DEMO_SHEET }).click();
+    await expect(page.getByTestId('cell-K3')).toHaveText('900,00 €');
+    await card.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('card.png') });
+
+    await card.getByRole('button', { name: t('addin.edit.apply'), exact: true }).click();
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.edit.applied', { cell, before: '900', after: '1200' }),
+    );
+    await expect(page.getByTestId('cell-K3')).toHaveText('1200');
+    await expect(page.getByTestId('name-box')).toHaveText('K3');
+    await expect(b1).toHaveCount(0);
+    const corrected = pane.getByTestId('corrected');
+    await expect(corrected).toContainText(
+      t('addin.edit.corrected', { cell, before: '900', after: '1200' }),
+    );
+    await page.screenshot({ path: info.outputPath('applied.png') });
+
+    await corrected.getByRole('button', { name: t('addin.edit.undo') }).click();
+    await pane
+      .getByTestId('edit-card')
+      .getByRole('button', { name: t('addin.edit.applyUndo') })
+      .click();
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.edit.reverted', { cell, value: '900' }),
+    );
+    await expect(page.getByTestId('cell-K3')).toHaveText('900');
+    await expect(b1).toHaveCount(1);
+  });
+
+  await test.step('Assistant: the agent proposes the same card in the chat; « Appliquer », then it says so', async () => {
+    const ofApi = (path: RegExp) => (url: URL) => path.test(url.pathname);
+    const sse = (...chunks: object[]) =>
+      `${chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('')}data: [DONE]\n\n`;
+    // The two answers of the model, as the API streams them (apps/api/src/chat.test.ts plays them there).
+    const answers = [
+      sse(
+        { type: 'start' },
+        { type: 'start-step' },
+        { type: 'tool-input-available', toolCallId: 'call-1', toolName: 'proposeFix', input: {} },
+        { type: 'finish-step' },
+        { type: 'finish' },
+      ),
+      sse(
+        { type: 'start' },
+        { type: 'start-step' },
+        { type: 'text-start', id: 't1' },
+        {
+          type: 'text-delta',
+          id: 't1',
+          delta: 'C’est corrigé : la ligne reprend les 1 200 € de C-42.',
+        },
+        { type: 'text-end', id: 't1' },
+        { type: 'finish-step' },
+        { type: 'finish' },
+      ),
+    ];
+    const asked: unknown[] = [];
+    await page.route(ofApi(/^\/api\/checks$/), async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...(await response.json()), assistant: true } });
+    });
+    await page.route(ofApi(/^\/api\/findings\/[^/]+\/chat$/), async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...(await response.json()), available: true } });
+    });
+    await page.route(ofApi(/^\/api\/chat$/), async (route) => {
+      asked.push(route.request().postDataJSON());
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'text/event-stream', 'x-vercel-ai-ui-message-stream': 'v1' },
+        body: answers.shift() ?? '',
+      });
+    });
+
+    await pane.getByRole('tab', { name: t('addin.nav.registry') }).click();
+    await pane.getByRole('tab', { name: t('addin.nav.checks') }).click();
+    await b1.getByRole('button', { name: t('addin.checks.ask') }).click();
+    const chat = pane.getByTestId('chat-messages');
+    // It opens on the finding, already read.
+    await expect(chat.getByTestId('chat-assistant').first()).toContainText(
+      'La facture TEST-F2026-102',
+    );
+    await pane.getByLabel(t('addin.chat.question')).fill('Corrigez-la pour moi.');
+    await pane.getByRole('button', { name: t('addin.chat.send') }).click();
+    const card = pane.getByTestId('edit-card');
+    await expect(card.getByTestId('edit-after')).toHaveText('1200');
+    await expect(pane.getByText(t('addin.chat.cardFirst'))).toBeVisible();
+    await expect(page.getByTestId('cell-K3')).toHaveText('900');
+    await page.screenshot({ path: info.outputPath('chat-card.png') });
+
+    await card.getByRole('button', { name: t('addin.edit.apply'), exact: true }).click();
+    await expect(chat.getByTestId('chat-assistant').last()).toContainText('C’est corrigé');
+    await expect(chat).toContainText(t('addin.chat.card.applied'));
+    await expect(page.getByTestId('cell-K3')).toHaveText('1200');
+    // The second question carried the click to the agent.
+    expect(asked).toHaveLength(2);
+    expect(JSON.stringify(asked[1])).toContain('"status":"applied"');
+    await page.screenshot({ path: info.outputPath('chat.png') });
+    expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+    await page.unrouteAll();
   });
 });

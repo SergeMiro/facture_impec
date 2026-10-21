@@ -2,6 +2,7 @@
 // docs/OFFICE.md §2). Screens render `state`; nothing here knows about React.
 import {
   columnIndex,
+  compareDecimal,
   frDate,
   isDocKind,
   kindFromName,
@@ -15,12 +16,16 @@ import {
   ApiClient,
   ApiFailure,
   type BillingView,
+  type ChatMessage,
   type Checks,
   type Degraded,
   type DirectoryCompany,
+  type Edit,
+  type EditDecided,
   type Evidence,
   type Explained,
   type ExportFile,
+  type FixOutcome,
   type Inbound,
   type InboundExport,
   type InvoiceDetail,
@@ -44,9 +49,11 @@ import {
   type SourceRead,
   type SyncResult,
   type TestInboundKind,
+  type UndoOutcome,
   type WeeklyReport,
 } from './api';
-import type { ExcelPort, StatusPlan } from './excel/port';
+import { type CardCall, type ChatStatus, PaneChat, waitingCards } from './chat';
+import type { CellContent, ExcelPort, StatusPlan } from './excel/port';
 import {
   detectionSample,
   headersOf,
@@ -55,6 +62,7 @@ import {
   statusColumns,
   TooManyRows,
 } from './excel/reader';
+import { isPermanent } from './excel/retry';
 import { StatusWriter, type WriterClock } from './excel/writer';
 import { OfflineQueue, systemTimers, type Timers } from './offline';
 import type { KeyValueStore } from './storage';
@@ -70,6 +78,8 @@ export type Screen =
   | { name: 'customers' }
   | { name: 'registry' }
   | { name: 'checks' }
+  /** R8: the conversation about one finding, from « Demander à l'assistant ». */
+  | { name: 'chat'; findingId: string }
   | { name: 'settings' };
 
 export interface Notice {
@@ -122,6 +132,34 @@ export interface Inclusion {
   headers: Header[];
 }
 
+/** R8: the conversation about one finding, as `ai`'s Chat holds it. */
+export interface Conversation {
+  findingId: string;
+  /** False when the assistant is off: the finding's own « Corriger pour moi » stays. */
+  available: boolean;
+  messages: ChatMessage[];
+  status: ChatStatus;
+}
+
+/** Why nothing was written: the cell no longer holds what the card says it holds. */
+export interface CellConflict {
+  reason: 'changed' | 'formula' | 'missing';
+  /** What the cell shows now (its formula, for a formula). */
+  found: string;
+  formula?: string;
+}
+
+/** R8: a correction, or its undo, shown « Avant → Après »: nothing is written before the click. */
+export interface EditCard {
+  kind: 'fix' | 'undo';
+  findingId: string;
+  edit: Edit;
+  /** The chat's call it answers; null when asked from the finding's card. */
+  toolCallId: string | null;
+  /** The undo found something else in the cell: writing over it takes « Remettre quand même ». */
+  conflict: CellConflict | null;
+}
+
 export interface FiState {
   booted: boolean;
   /** Office could not start in this window (opened outside Excel, or blocked). */
@@ -145,6 +183,12 @@ export interface FiState {
   registry: Registry | null;
   /** « Contrôles » (R2): the open findings and the links to confirm; null until loaded. */
   checks: Checks | null;
+  /** R8: the conversation open in the pane; null when none is. */
+  chat: Conversation | null;
+  /** R8: the correction card waiting for a click. */
+  card: EditCard | null;
+  /** R8: the correction last applied from this pane, for « Annuler la correction ». */
+  corrected: Edit | null;
   /** The sheets of this workbook included in the check: each one is read again when it changes. */
   sources: Source[];
   /** The visible sheets of the workbook. */
@@ -181,6 +225,9 @@ export const SHEET_POLL_MS = 30_000;
 export const SHEET_POLL_MAX_MS = 300_000;
 
 const TOKEN_KEY = 'token';
+
+/** « 29.5 » as the person reads it: « 29,5 ». */
+export const decimalFr = (value: string) => value.replace('.', ',');
 
 /** The sheet's name says orders, delivery notes, purchases or a price list (« Commandes », « BL »). */
 export const namedLikeSource = (sheet: string): boolean => {
@@ -245,6 +292,9 @@ const INITIAL: FiState = {
   customers: null,
   registry: null,
   checks: null,
+  chat: null,
+  card: null,
+  corrected: null,
   sources: [],
   sheets: [],
   otherSheets: [],
@@ -282,6 +332,7 @@ export class Controller {
   #sheetPoll: { timer: unknown; delay: number } | null = null;
   readonly #sourceWatch = new Map<string, SourceWatch>();
   #inclusionReading: SheetReading | null = null;
+  #chat: PaneChat | null = null;
 
   constructor(deps: ControllerDeps) {
     this.#deps = {
@@ -329,6 +380,7 @@ export class Controller {
 
   navigate = (screen: Screen): void => {
     if (screen.name !== 'invoice') this.#closeInvoice();
+    if (screen.name !== 'chat' || screen.findingId !== this.#chat?.findingId) this.#closeChat();
     this.#set({ screen, notice: null });
     if (screen.name === 'settings') {
       if (!this.#state.settings) void this.loadSettings();
@@ -444,9 +496,8 @@ export class Controller {
     void this.#followSources();
   }
 
-  /** The mapping of this sheet: from the workbook first, else the server's copy. */
+  /** Opens this sheet with its mapping: from the workbook first, else the server's copy. */
   async #openSheet(sheet: string): Promise<void> {
-    const { port } = this.#deps;
     if (this.#isSource(sheet)) {
       // An included sheet is read into the Registre, never checked as invoices.
       if (this.#state.sheet === sheet) this.#set({ sheet: null, mapping: null, sync: null });
@@ -454,20 +505,7 @@ export class Controller {
       this.notify('info', t('addin.registry.isSource', { sheet }));
       return;
     }
-    let mapping: SheetMapping | null = null;
-    const local = await port.getSetting(SETTING.mapping(sheet));
-    if (local) {
-      const parsed = SheetMapping.safeParse(JSON.parse(local));
-      if (parsed.success && parsed.data.sheet === sheet) mapping = parsed.data;
-    }
-    if (!mapping && this.#state.workbookId) {
-      try {
-        mapping = (await this.api.getMapping(this.#state.workbookId, sheet)).mapping;
-        await port.setSetting(SETTING.mapping(sheet), JSON.stringify(mapping));
-      } catch (e) {
-        if (!(e instanceof ApiFailure && e.status === 404)) throw e;
-      }
-    }
+    const mapping = await this.#mappingOf(sheet);
     this.#stopFollowing();
     this.#set({ sheet, mapping, sync: null, detection: null });
     await this.#listen(sheet);
@@ -478,6 +516,25 @@ export class Controller {
     } else {
       this.#set({ screen: { name: 'detect' } });
       void this.detect();
+    }
+  }
+
+  /** The sheet's confirmed columns: saved in the workbook, or asked from the server. */
+  async #mappingOf(sheet: string): Promise<SheetMapping | null> {
+    const { port } = this.#deps;
+    const local = await port.getSetting(SETTING.mapping(sheet));
+    if (local) {
+      const parsed = SheetMapping.safeParse(JSON.parse(local));
+      if (parsed.success && parsed.data.sheet === sheet) return parsed.data;
+    }
+    if (!this.#state.workbookId) return null;
+    try {
+      const { mapping } = await this.api.getMapping(this.#state.workbookId, sheet);
+      await port.setSetting(SETTING.mapping(sheet), JSON.stringify(mapping));
+      return mapping;
+    } catch (e) {
+      if (e instanceof ApiFailure && e.status === 404) return null;
+      throw e;
     }
   }
 
@@ -662,6 +719,7 @@ export class Controller {
     await this.#deps.tokens.remove(TOKEN_KEY);
     this.#queue.clear();
     this.#closeInvoice();
+    this.#closeChat();
     this.#stopFollowing();
     await this.#stopListening?.();
     this.#stopListening = null;
@@ -680,6 +738,8 @@ export class Controller {
       customers: null,
       registry: null,
       checks: null,
+      card: null,
+      corrected: null,
       sources: [],
       sheets: [],
       otherSheets: [],
@@ -1587,6 +1647,337 @@ export class Controller {
     }
     await this.#act('select', () => this.#deps.port.select(target.sheet, target.cell));
   };
+
+  // ── Assistant and corrections (R8) ────────────────────────────────────────────────────────────
+  /** « Demander à l'assistant »: the conversation kept with the finding, or its opening. */
+  openChat = async (findingId: string): Promise<void> => {
+    this.#closeChat();
+    this.navigate({ name: 'chat', findingId });
+    const opened = await this.#act('chat', () => this.api.chat(findingId));
+    const screen = this.#state.screen;
+    if (!opened || screen.name !== 'chat' || screen.findingId !== findingId) return;
+    const chat = new PaneChat({
+      findingId,
+      messages: opened.messages,
+      api: this.api,
+      changed: (messages, status) => {
+        const open = this.#state.chat;
+        if (this.#chat === chat && open) this.#set({ chat: { ...open, messages, status } });
+      },
+      onCard: (call) => void this.#cardFor(findingId, call),
+      onError: (e) => this.#chatFailed(e),
+    });
+    this.#chat = chat;
+    this.#set({
+      chat: { findingId, available: opened.available, messages: opened.messages, status: 'ready' },
+    });
+    // A card the pane closed on before the click: the agent still waits for its answer.
+    for (const call of waitingCards(opened.messages)) void this.#cardFor(findingId, call);
+  };
+
+  /** The question typed in the chat; the answer streams into the conversation. */
+  ask = async (text: string): Promise<void> => {
+    const chat = this.#chat;
+    const question = text.trim();
+    if (!chat || !question || !this.#state.chat?.available) return;
+    this.#set({ notice: null });
+    await chat.sendMessage({ text: question });
+  };
+
+  /** « Arrêter »: the answer stops where it is. */
+  stopAnswer = async (): Promise<void> => {
+    await this.#chat?.stop();
+  };
+
+  #closeChat(): void {
+    const chat = this.#chat;
+    this.#chat = null;
+    if (chat) void chat.stop();
+    if (this.#state.chat) this.#set({ chat: null });
+  }
+
+  #chatFailed(e: Error): void {
+    if (e instanceof Offline) {
+      this.#set({ offline: this.#queue.labels });
+      this.notify('warning', t('addin.offline.notQueued'));
+    } else if (e instanceof ApiFailure) {
+      this.#fail(e);
+    } else {
+      // The server's stream says only that the answer failed; nothing of the question is lost.
+      console.error(e);
+      this.notify('error', t('api.error.chat_failed'));
+    }
+  }
+
+  /** The agent asked for a card: the server builds it from the finding, or says why it cannot. */
+  async #cardFor(findingId: string, call: CardCall): Promise<void> {
+    const other = this.#otherMode(findingId);
+    if (other) {
+      this.#answer(findingId, call.toolCallId, call.tool, 'refused', call.editId ?? null, {
+        message: other,
+      });
+      return;
+    }
+    try {
+      const edit =
+        call.tool === 'proposeFix'
+          ? await this.api.fix(findingId, { by: 'agent', toolCallId: call.toolCallId })
+          : await this.api.undoEdit(call.editId ?? (await this.api.lastEdit(findingId)).id);
+      const kind = call.tool === 'proposeFix' ? 'fix' : 'undo';
+      this.#set({ card: { kind, findingId, edit, toolCallId: call.toolCallId, conflict: null } });
+    } catch (e) {
+      if (e instanceof ApiFailure && e.status !== 401) {
+        // An invoice already sent, nothing one cell corrects, nothing to undo: the agent says why.
+        this.#answer(findingId, call.toolCallId, call.tool, 'refused', call.editId ?? null, {
+          message: e.message,
+        });
+        return;
+      }
+      // Offline: the card is asked again when the chat opens next.
+      if (e instanceof Offline) this.notify('warning', t('addin.offline.notQueued'));
+      else this.#fail(e);
+    }
+  }
+
+  /**
+   * The row feeds the invoice of the pane's mode (Mode test or not): written there, a correction of the
+   * other mode's invoice would be read into the wrong one, and its finding would stay.
+   */
+  #otherMode(findingId: string): string | null {
+    const finding = this.#state.checks?.findings.find((f) => f.id === findingId);
+    if (!finding || finding.isTest === this.#state.testMode) return null;
+    return t(finding.isTest ? 'addin.edit.otherMode.real' : 'addin.edit.otherMode.test');
+  }
+
+  /** « Corriger pour moi » on the finding's card: the same card, without the chat. */
+  fixFinding = async (findingId: string): Promise<void> => {
+    const other = this.#otherMode(findingId);
+    if (other) {
+      this.notify('warning', other);
+      return;
+    }
+    const edit = await this.#act(`fix:${findingId}`, () =>
+      this.api.fix(findingId, { by: 'person' }),
+    );
+    if (edit)
+      this.#set({ card: { kind: 'fix', findingId, edit, toolCallId: null, conflict: null } });
+  };
+
+  /** « Annuler la correction »: the card that puts « Avant » back. */
+  undoCorrection = async (edit: Edit): Promise<void> => {
+    const other = edit.findingId ? this.#otherMode(edit.findingId) : null;
+    if (other) {
+      this.notify('warning', other);
+      return;
+    }
+    const undo = await this.#act(`fix:${edit.findingId}`, () => this.api.undoEdit(edit.id));
+    if (!undo) return;
+    const findingId = undo.findingId ?? edit.findingId ?? '';
+    this.#set({ card: { kind: 'undo', findingId, edit: undo, toolCallId: null, conflict: null } });
+  };
+
+  /** « Appliquer »: checks the cell still holds « Avant », writes « Après », checks the invoice again. */
+  applyCard = (): Promise<void> => this.#applyCard(false);
+
+  /** « Remettre quand même »: the undo writes over what the person typed since. */
+  overwrite = (): Promise<void> => this.#applyCard(true);
+
+  async #applyCard(force: boolean): Promise<void> {
+    const card = this.#state.card;
+    if (!card) return;
+    await this.#act('edit', async () => {
+      let edit: Edit;
+      try {
+        // Asked again right before writing: the lock is renewed, and an invoice sent since refuses.
+        edit =
+          card.kind === 'fix'
+            ? await this.api.fix(card.findingId, {
+                by: card.toolCallId ? 'agent' : 'person',
+                ...(card.toolCallId && { toolCallId: card.toolCallId }),
+              })
+            : await this.api.undoEdit(card.edit.id);
+      } catch (e) {
+        if (!(e instanceof ApiFailure) || e.status === 401) throw e;
+        this.#set({ card: null });
+        this.notify('warning', e.message);
+        this.#answerCard(card, 'refused', { message: e.message });
+        return;
+      }
+      const [from, to] =
+        card.kind === 'fix' ? [edit.before, edit.after] : [edit.after, edit.before];
+      const held =
+        edit.workbookId && edit.workbookId !== this.#state.workbookId
+          ? { reason: 'missing' as const, found: '', otherWorkbook: true }
+          : force
+            ? null
+            : await this.#held(edit, from);
+      if (held) return this.#conflict({ ...card, edit }, held);
+      const { port } = this.#deps;
+      await port.select(edit.sheet, edit.cell);
+      await port.writeCell(edit.sheet, edit.cell, Number(to));
+      await this.#syncSheet(edit.sheet);
+      const decided = await this.api.decideEdit(edit.id, {
+        status: card.kind === 'fix' ? 'applied' : 'reverted',
+      });
+      this.#decided(card, decided);
+    });
+  }
+
+  /** What the cell holds instead of `expected`; null when it holds it, as a plain value. */
+  async #held(edit: Edit, expected: string): Promise<CellConflict | null> {
+    let cell: CellContent;
+    try {
+      cell = await this.#deps.port.readCell(edit.sheet, edit.cell);
+    } catch (e) {
+      if (isPermanent(e)) return { reason: 'missing', found: '' };
+      throw e;
+    }
+    if (cell.formula) return { reason: 'formula', found: cell.formula, formula: cell.formula };
+    if (cell.value === '' || cell.value === null) return { reason: 'missing', found: '' };
+    const value =
+      typeof cell.value === 'number'
+        ? String(cell.value)
+        : String(cell.value)
+            .replace(/[\s  €]/g, '')
+            .replace(',', '.');
+    return compareDecimal(value, expected) === 0
+      ? null
+      : { reason: 'changed', found: cell.text || String(cell.value) };
+  }
+
+  /** Nothing written: the server keeps why; a correction ends here, an undo asks first. */
+  async #conflict(card: EditCard, held: CellConflict & { otherWorkbook?: boolean }): Promise<void> {
+    const { edit } = card;
+    const decided = await this.api.decideEdit(edit.id, {
+      status: 'conflict',
+      found: held.found,
+      reason: held.reason,
+      ...(held.formula && { formula: held.formula }),
+    });
+    const cell = `${edit.sheet}!${edit.cell}`;
+    const [from, to] = card.kind === 'fix' ? [edit.before, edit.after] : [edit.after, edit.before];
+    if (card.kind === 'undo' && !held.otherWorkbook) {
+      this.#set({ card: { ...card, edit: decided.edit, conflict: held }, corrected: decided.edit });
+      void this.#deps.port.select(edit.sheet, edit.cell).catch(() => {});
+      return;
+    }
+    const message = held.otherWorkbook
+      ? t('addin.edit.otherWorkbook', { sheet: edit.sheet })
+      : t(`addin.edit.conflict.${held.reason}`, {
+          cell,
+          found: held.found,
+          expected: decimalFr(from),
+          value: decimalFr(to),
+        });
+    this.#set({ card: null });
+    this.notify('warning', message);
+    this.#answerCard(card, 'conflict', { message });
+    await this.#refreshChecks();
+  }
+
+  /** Written and checked again: « corrigé » only when the checks closed the finding. */
+  #decided(card: EditCard, { edit, resolved, remaining }: EditDecided): void {
+    const cell = `${edit.sheet}!${edit.cell}`;
+    if (card.kind === 'fix') {
+      this.#set({ card: null, corrected: edit });
+      const values = { cell, before: decimalFr(edit.before), after: decimalFr(edit.after) };
+      this.notify(
+        'success',
+        resolved
+          ? t('addin.edit.applied', values)
+          : t('addin.edit.appliedOpen', { ...values, count: remaining.length }),
+      );
+      this.#answerCard(card, 'applied', {
+        resolved: resolved === true,
+        remaining: remaining.map((r) => r.message),
+      });
+    } else {
+      this.#set({ card: null, corrected: null });
+      this.notify('success', t('addin.edit.reverted', { cell, value: decimalFr(edit.before) }));
+      this.#answerCard(card, 'reverted', { resolved: resolved === true });
+    }
+    void this.#refreshChecks();
+  }
+
+  /** « Ne pas appliquer », « Garder la correction », « Laisser »: nothing is written. */
+  declineCard = async (): Promise<void> => {
+    const card = this.#state.card;
+    if (!card) return;
+    const decided = await this.#act('edit', () =>
+      this.api.decideEdit(card.edit.id, { status: card.kind === 'fix' ? 'declined' : 'kept' }),
+    );
+    if (!decided) return;
+    const { edit } = decided;
+    if (card.kind === 'fix') {
+      this.#set({ card: null });
+      this.notify('info', t('addin.edit.declined'));
+      this.#answerCard(card, 'declined');
+    } else if (card.conflict) {
+      const values = { cell: `${edit.sheet}!${edit.cell}`, found: card.conflict.found };
+      this.#set({ card: null, corrected: edit });
+      this.notify('info', t('addin.edit.leftAsIs', values));
+      this.#answerCard(card, 'conflict', { message: t('addin.edit.leftAsIs', values) });
+    } else {
+      this.#set({ card: null, corrected: edit });
+      this.notify('info', t('addin.edit.kept'));
+      this.#answerCard(card, 'declined');
+    }
+    void this.#refreshChecks();
+  };
+
+  #answerCard(
+    card: EditCard,
+    status: 'applied' | 'declined' | 'conflict' | 'refused' | 'reverted',
+    more: { resolved?: boolean; remaining?: string[]; message?: string } = {},
+  ): void {
+    if (!card.toolCallId) return;
+    const tool = card.kind === 'fix' ? 'proposeFix' : 'undoEdit';
+    this.#answer(card.findingId, card.toolCallId, tool, status, card.edit.id, more);
+  }
+
+  /** The person's click, told to the agent: the chat asks it again to say what came of it. */
+  #answer(
+    findingId: string,
+    toolCallId: string,
+    tool: CardCall['tool'],
+    status: 'applied' | 'declined' | 'conflict' | 'refused' | 'reverted',
+    editId: string | null,
+    more: { resolved?: boolean; remaining?: string[]; message?: string },
+  ): void {
+    const chat = this.#chat;
+    // The chat was closed: the call stays open, and is asked again when it opens next.
+    if (!chat || chat.findingId !== findingId) return;
+    if (tool === 'proposeFix' && status !== 'reverted') {
+      const output: FixOutcome = { status, editId, ...more };
+      void chat.addToolOutput({ tool, toolCallId, output });
+    } else if (tool === 'undoEdit' && status !== 'applied') {
+      const { remaining: _, ...rest } = more;
+      const output: UndoOutcome = { status, editId: editId ?? '', ...rest };
+      void chat.addToolOutput({ tool, toolCallId, output });
+    }
+  }
+
+  /** Reads an invoice sheet again and tells the server, the active one or not (after a correction). */
+  async #syncSheet(sheet: string): Promise<void> {
+    if (this.#syncing) await this.#syncing;
+    if (sheet === this.#state.sheet && this.#state.mapping) {
+      await this.#syncOnce();
+    } else {
+      const { workbookId, testMode } = this.#state;
+      const mapping = await this.#mappingOf(sheet);
+      if (!mapping || !workbookId) return;
+      const reading = readUsedRange(sheet, await this.#deps.port.usedRange(sheet));
+      const result = await this.api.sync(workbookId, {
+        snapshot: reading.snapshot,
+        mapping,
+        test: testMode,
+      });
+      await this.#writer.write(this.#plan(reading, mapping, result));
+    }
+    // The write fired the change event: the sheet was just read, no second sync.
+    if (this.#autoSync !== null) this.#deps.timers.clearTimeout(this.#autoSync);
+    this.#autoSync = null;
+  }
 
   // ── Réglages ──────────────────────────────────────────────────────────────────────────────────
   loadSettings = async (): Promise<void> => {

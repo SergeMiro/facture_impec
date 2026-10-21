@@ -8,6 +8,7 @@ import {
   SheetMapping,
   type SheetSnapshot,
 } from '@fi/core';
+import type { UIDataTypes, UIMessage } from 'ai';
 import { z } from 'zod';
 
 export class ApiFailure extends Error {
@@ -245,6 +246,18 @@ export const Finding = z.object({
   ),
   /** B2: the purchase's link to the invoice, for « Ce n'est pas le même article ». */
   costLinkId: z.string().nullable().default(null),
+  /** R8: the one cell that corrects it, « Avant → Après »; null when no single cell does. */
+  fix: z
+    .object({
+      sheet: z.string(),
+      cell: z.string(),
+      workbookId: z.string().nullable(),
+      field: z.string(),
+      before: z.string(),
+      after: z.string(),
+    })
+    .nullable()
+    .default(null),
   firstSeenAt: z.string(),
 });
 export type Finding = z.infer<typeof Finding>;
@@ -265,6 +278,8 @@ export const Checks = z.object({
   /** Cents at stake on the real documents. */
   atStake: z.number(),
   blocking: z.number(),
+  /** R8: « Demander à l'assistant » on each finding; false when AI is off or calls no tools. */
+  assistant: z.boolean().default(false),
   findings: z.array(Finding),
   /** Documents that look alike with no number to tie them: « Oui » / « Non ». */
   links: z.array(
@@ -279,6 +294,87 @@ export const Checks = z.object({
 });
 export type Checks = z.infer<typeof Checks>;
 export type ProposedLink = Checks['links'][number];
+
+/** A correction of one cell (R8), « Avant → Après »: proposed, then applied or not, then maybe undone. */
+export const Edit = z.object({
+  id: z.string(),
+  findingId: z.string().nullable(),
+  invoiceId: z.string(),
+  status: z.enum(['proposed', 'applied', 'declined', 'conflict', 'reverted']),
+  workbookId: z.string().nullable(),
+  sheet: z.string(),
+  /** A1, without the sheet. */
+  cell: z.string(),
+  field: z.string(),
+  /** Decimal text: « 30 » → « 40 ». */
+  before: z.string(),
+  after: z.string(),
+  found: z.string().nullable(),
+  reason: z.enum(['changed', 'formula', 'missing']).nullable(),
+  /** Written, so « Annuler la correction » can take it back. */
+  undoable: z.boolean(),
+});
+export type Edit = z.infer<typeof Edit>;
+
+/** What the pane reports after a click: written or not, and what the checks say since. */
+export type EditDecision =
+  | { status: 'applied' | 'declined' | 'reverted' | 'kept' }
+  | {
+      status: 'conflict';
+      found: string;
+      formula?: string;
+      reason: 'changed' | 'formula' | 'missing';
+    };
+
+export const EditDecided = z.object({
+  edit: Edit,
+  /** Closed by the checks: only then is it « corrigé ». */
+  resolved: z.boolean().nullable(),
+  remaining: z.array(z.object({ id: z.string(), message: z.string() })),
+});
+export type EditDecided = z.infer<typeof EditDecided>;
+
+/** The pane's answers to the agent's cards (the server's FixOutcome and UndoOutcome). */
+export interface FixOutcome {
+  status: 'applied' | 'declined' | 'conflict' | 'refused';
+  editId: string | null;
+  resolved?: boolean;
+  remaining?: string[];
+  message?: string;
+}
+export interface UndoOutcome {
+  status: 'reverted' | 'declined' | 'conflict' | 'refused';
+  editId: string;
+  resolved?: boolean;
+  message?: string;
+}
+
+/** The agent's tools as the pane sees them: only proposeFix and undoEdit wait for the pane. */
+export type ChatTools = {
+  finding: { input: Record<string, never>; output: unknown };
+  document: { input: { docId: string }; output: unknown };
+  itemHistory: { input: { itemId: string }; output: unknown };
+  proposeFix: { input: Record<string, never>; output: FixOutcome };
+  undoEdit: { input: { editId?: string }; output: UndoOutcome };
+};
+export type ChatMessage = UIMessage<unknown, UIDataTypes, ChatTools>;
+
+const ChatOpened = z.object({
+  /** False when the assistant is off: « Corriger pour moi » stays. */
+  available: z.boolean(),
+  // The server validated them against the agent's tools before keeping them.
+  messages: z.array(
+    z.looseObject({
+      id: z.string(),
+      role: z.enum(['system', 'user', 'assistant']),
+      parts: z.array(z.looseObject({ type: z.string() })),
+    }),
+  ),
+});
+export interface ChatOpened {
+  available: boolean;
+  messages: ChatMessage[];
+}
 
 export const Issue = z.object({
   ruleId: z.string(),
@@ -590,6 +686,9 @@ const sourcesPath = (workbookId: string, sheet?: string) =>
 interface RequestOptions {
   method?: string;
   body?: unknown;
+  /** A body already in JSON (the chat's, from `ai`), sent as it is. */
+  json?: string;
+  signal?: AbortSignal;
 }
 
 export class ApiClient {
@@ -608,19 +707,26 @@ export class ApiClient {
     this.#fetch = fetchFn;
   }
 
-  async #send(path: string, { method = 'GET', body }: RequestOptions = {}): Promise<Response> {
+  async #send(
+    path: string,
+    { method = 'GET', body, json, signal }: RequestOptions = {},
+  ): Promise<Response> {
     const headers: Record<string, string> = {};
     const token = this.#token();
     if (token) headers.authorization = `Bearer ${token}`;
-    if (body !== undefined) headers['content-type'] = 'application/json';
+    const payload = json ?? (body === undefined ? undefined : JSON.stringify(body));
+    if (payload !== undefined) headers['content-type'] = 'application/json';
     let res: Response;
     try {
       res = await this.#fetch(`${this.#base}${path}`, {
         method,
         headers,
-        ...(body !== undefined && { body: JSON.stringify(body) }),
+        ...(payload !== undefined && { body: payload }),
+        ...(signal && { signal }),
       });
     } catch (e) {
+      // Stopped on purpose (« Arrêter », the pane closed): not a lost connection.
+      if (signal?.aborted) throw e;
       throw new Offline(e instanceof Error ? e.message : String(e));
     }
     // A proxy or gateway answering for an API that is down is the same as no connection.
@@ -729,6 +835,27 @@ export class ApiClient {
   checks = () => this.#json(Checks, '/checks');
   decideLink = (id: string, status: 'confirmed' | 'rejected') =>
     this.#json(Checks, `/links/${id}`, { method: 'POST', body: { status } });
+
+  /** « Corriger pour moi » (R8): the card; asked again right before writing, the same card. */
+  fix = (findingId: string, body: { by: 'agent' | 'person'; toolCallId?: string }) =>
+    this.#json(Edit, `/findings/${findingId}/fix`, { method: 'POST', body });
+  /** The latest correction of the finding that can be taken back. */
+  lastEdit = (findingId: string) => this.#json(Edit, `/findings/${findingId}/edits/last`);
+  undoEdit = (id: string) => this.#json(Edit, `/edits/${id}/undo`, { method: 'POST' });
+  decideEdit = (id: string, decision: EditDecision) =>
+    this.#json(EditDecided, `/edits/${id}`, { method: 'POST', body: decision });
+  /** The conversation kept for the finding, or its opening. */
+  chat = async (findingId: string): Promise<ChatOpened> => {
+    const opened = await this.#json(ChatOpened, `/findings/${findingId}/chat`);
+    return { available: opened.available, messages: opened.messages as ChatMessage[] };
+  };
+  /** The chat's answers as a stream, for `ai`'s Chat: its fetch, with this client's errors. */
+  chatFetch = (init: RequestInit | undefined): Promise<Response> =>
+    this.#send('/chat', {
+      method: 'POST',
+      ...(typeof init?.body === 'string' && { json: init.body }),
+      ...(init?.signal && { signal: init.signal }),
+    });
 
   invoice = (id: string) => this.#json(InvoiceDetail, `/invoices/${id}`);
   /** Where these invoices are now: cheaper than a sync, which reads and validates the whole sheet. */

@@ -33,6 +33,14 @@ export interface StatusPlan {
   cells: StatusCell[];
 }
 
+/** One cell as it is now: a correction (R8) checks it before writing over it. */
+export interface CellContent {
+  value: unknown;
+  text: string;
+  /** `=…` when the cell holds a formula; null otherwise. */
+  formula: string | null;
+}
+
 export interface ExcelPort {
   activeSheet(): Promise<string>;
   /** The visible sheets, in tab order: the « Registre » proposes those not checked yet. */
@@ -42,6 +50,10 @@ export interface ExcelPort {
   usedRange(sheet: string): Promise<UsedRange | null>;
   /** Activates the sheet and selects the cell (« Corriger dans la feuille »). */
   select(sheet: string, cell: string): Promise<void>;
+  /** Throws ItemNotFound when the sheet is gone. */
+  readCell(sheet: string, cell: string): Promise<CellContent>;
+  /** « Appliquer » on a correction card: one number into one cell, its format kept. */
+  writeCell(sheet: string, cell: string, value: number): Promise<void>;
   /** All plans in one batch: one sync. */
   writeStatus(plans: StatusPlan[]): Promise<void>;
   /** Per-workbook, non-secret settings (docs/OFFICE.md §4): saved inside the file. */

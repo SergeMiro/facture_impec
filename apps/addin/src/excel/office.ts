@@ -1,7 +1,7 @@
 // The ExcelPort over Office.js (docs/OFFICE.md §5): named loads only, one sync per call, every
 // Excel.run behind withRetry.
 import { parseAddress } from '@fi/core';
-import type { ExcelPort, UsedRange } from './port';
+import type { CellContent, ExcelPort, UsedRange } from './port';
 import { DETAIL_HEADER, STATUS_HEADER } from './reader';
 import { withRetry } from './retry';
 import { planValues } from './writer';
@@ -66,6 +66,25 @@ export function officeExcelPort(): ExcelPort {
         const ws = context.workbook.worksheets.getItem(sheet);
         ws.activate();
         ws.getRange(cell).select();
+        await context.sync();
+      }),
+
+    readCell: (sheet, cell) =>
+      run(async (context): Promise<CellContent> => {
+        const range = context.workbook.worksheets.getItem(sheet).getRange(cell);
+        range.load('values, text, formulas');
+        await context.sync();
+        const formula: unknown = range.formulas[0]?.[0];
+        return {
+          value: range.values[0]?.[0] ?? '',
+          text: range.text[0]?.[0] ?? '',
+          formula: typeof formula === 'string' && formula.startsWith('=') ? formula : null,
+        };
+      }),
+
+    writeCell: (sheet, cell, value) =>
+      run(async (context) => {
+        context.workbook.worksheets.getItem(sheet).getRange(cell).values = [[value]];
         await context.sync();
       }),
 

@@ -16,6 +16,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import type { Controller } from '../controller';
+import { ChatView } from './ChatView';
 import { ChecksView } from './ChecksView';
 import { CustomersView } from './CustomersView';
 import { ControllerContext, useFi } from './context';
@@ -74,7 +75,12 @@ function Pane() {
   const styles = useStyles();
   const [state, fi] = useFi();
   const signedIn = state.me !== null;
-  const tab = state.screen.name === 'invoice' ? 'dashboard' : state.screen.name;
+  const tab =
+    state.screen.name === 'invoice'
+      ? 'dashboard'
+      : state.screen.name === 'chat'
+        ? 'checks'
+        : state.screen.name;
 
   if (state.outsideExcel) {
     return (
@@ -206,6 +212,8 @@ function Screen() {
       return <RegistryView />;
     case 'checks':
       return <ChecksView />;
+    case 'chat':
+      return <ChatView />;
     case 'settings':
       return <SettingsView />;
   }
