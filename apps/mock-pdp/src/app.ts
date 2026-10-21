@@ -12,6 +12,7 @@ import {
   MockUnavailable,
   MockUnreadable,
 } from './engine';
+import { MicrosoftStandIn, type MicrosoftStandInOptions } from './microsoft';
 import { sireneStandIn } from './sirene';
 import { StripeStandIn, type StripeStandInOptions } from './stripe';
 
@@ -109,10 +110,23 @@ export interface MockPdpOptions extends EngineOptions {
   b2brouter?: Omit<B2BrouterStandInOptions, 'webhookSecret'> & { webhookSecret?: string };
   /** Stripe's API for billing, at /stripe (./stripe.ts). */
   stripe?: Partial<StripeStandInOptions>;
+  /** Microsoft's sign-in and Graph for the OneDrive connector, at /microsoft (./microsoft.ts). */
+  microsoft?: Partial<MicrosoftStandInOptions>;
 }
 
+/** The app the stand-in knows, as MICROSOFT_CLIENT_ID / _SECRET say in local (.env.example). */
+export const MICROSOFT_STAND_IN_APP = {
+  clientId: '00000000-0000-4000-8000-00000000f1f1',
+  clientSecret: 'local-microsoft-client-secret',
+};
+
 export function createMockPdp(options: MockPdpOptions) {
-  const { b2brouter: standIn, stripe: stripeOptions, ...engineOptions } = options;
+  const {
+    b2brouter: standIn,
+    stripe: stripeOptions,
+    microsoft: microsoftOptions,
+    ...engineOptions
+  } = options;
   const engine = new MockPdpEngine(engineOptions);
   const app = createApp(engine);
   const b2brouter = new B2BrouterStandIn(engine, {
@@ -127,5 +141,11 @@ export function createMockPdp(options: MockPdpOptions) {
   });
   app.route('/stripe', stripe.app);
   app.route('/sirene', sireneStandIn());
-  return { engine, app, b2brouter, stripe };
+  const microsoft = new MicrosoftStandIn({
+    ...MICROSOFT_STAND_IN_APP,
+    ...(options.log && { log: options.log }),
+    ...microsoftOptions,
+  });
+  app.route('/microsoft', microsoft.app);
+  return { engine, app, b2brouter, stripe, microsoft };
 }
