@@ -690,3 +690,67 @@ here before the work:
 | Audit and RGPD | `settings.update` counted in `purchases.test.ts`; « Ce n'est pas le même article » is `link.reject` (R2's route). The export gives `suppliers` apart from `customers` (`purchases.test.ts`: customers empty, the supplier with source invoice); the erasure deletes every party and every link (`apps/api/src/rgpd.ts`, R2's test › RGPD). `docs/RGPD.md`: Suppliers (R3), cost links in the checks row, export and erasure. |
 | Docs | `docs/ARCHITECTURE.md` › What R3 added: purchases and margin, and its decisions (which purchase, the same article, units, which margin, loss against margin, suppliers, « Ce n'est pas le même article »); `docs/DEFERRED.md` › money at stake counted twice by B1 and B2, supplier references tied to the company's (R7), weighted average or FIFO, charges of the whole purchase invoice, « Achats » suppliers in `parties`, a margin per article or customer, the supplier's other details; units row updated. |
 | Gate | `pnpm verify` green on 2026-10-20 (tests with `--concurrency=1`, memory being short): api 217, core 627 (branches 94.04 %) + oracle 276, agents 107, add-in 66, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local). |
+
+## R8 — Chat and edits (started 2026-10-21)
+
+R2–R3 find what does not add up and point at the cells; the person still corrects the sheet by hand.
+R8 lets them ask « pourquoi ? » about a finding, have the cell corrected, and take the correction back,
+all in the pane. Criteria, written here before the work:
+
+- **A correction the code builds**: a finding whose correction is one price in the invoice's sheet (an
+  invoice billing less or more than its order — B1, B4 —, a price other than « Tarifs » — A5 —, a price
+  with the VAT on top — A1) carries it: the cell, the value it holds, the value it should hold, taken
+  from the order or the price list. Never from a model. A finding the code cannot correct says so, and
+  the chat gives the steps instead.
+- **« Avant → Après » and one click**: every correction, asked in the chat or from the finding's card,
+  shows the cell, what it holds and what it will hold, and changes nothing before « Appliquer ». Before
+  writing, the pane checks that the cell still holds « Avant » and is not a formula; otherwise it writes
+  nothing and says why.
+- **The journal**: one `edits` row per cell: the invoice, the finding, the conversation, the sheet and
+  address, the value before (and its formula), the value after, who asked (agent or person), the status
+  (proposed, applied, declined, reverted, conflict) and its times. Every step writes an audit event.
+- **Taking it back**: « Annuler la correction », or asking the agent, writes « Avant » back when the
+  cell still holds « Après », with the same card and click. If the person changed the cell since,
+  nothing is written: the pane says what the cell holds now and asks; writing over it takes another
+  explicit click.
+- **A sent invoice**: an invoice already sent through the platform, or on its way, is never edited:
+  the correction is refused and the answer proposes an avoir (or a facture rectificative) that cites
+  its number and date, with the amount.
+- **Confirmed by the checks**: after « Appliquer » the sheet is synced and the invoice checked again;
+  the agent says « corrigé » only when the finding is resolved, otherwise it names what remains.
+- **The chat**: on a finding, « Demander à l'assistant » opens a conversation tied to it and kept in
+  Postgres; its first message is the finding's own wording, shown at once. The agent (ToolLoopAgent of
+  `ai` 7.0.143) reads through tools — the finding, a document, an article's history — and every amount
+  comes from code; it corrects and takes back only through `proposeFix` and `undoEdit`, which the pane
+  carries out. Everything sent to the model is pseudonymized and the answer re-hydrated. AI off: no
+  chat, and the card's correction works without it.
+- **Document lock**: while a correction of invoice X waits for its click (five minutes at most), the
+  background leaves X alone — its findings stay as they are, the autopilot does not send it — and checks
+  and sends the other invoices as usual. The click (applied, declined, conflict) ends the lock and X is
+  checked at once.
+- **The background goes on**: a chat turn does not take one of the orchestrator's two background slots
+  of the company; while the model answers, another invoice's sync, checks and autopilot run.
+- **Eval** (architecture document, R8): « expliquer → corriger → annuler » on the 300 € / 400 € example:
+  the agent explains with the finding's figures and invents none, calls `proposeFix` on that finding,
+  says it is corrected only once it is resolved, and calls `undoEdit` on that correction. Recorded on a
+  live model, replayed by `pnpm verify`; the prompt hash ties the recording to `prompts/chat.md`.
+- **Audit and RGPD**: conversations and edits are in the company's export and its erasure;
+  `docs/RGPD.md`, `docs/DEFERRED.md`, `docs/ARCHITECTURE.md` and `docs/AI_PROVIDERS.md` updated.
+
+### Evidence (2026-10-21)
+
+| Criterion | Evidence |
+|---|---|
+| A correction the code builds | `packages/core/src/checks/checks.test.ts` › the correction the code builds (R8) › sets the 300/400 invoice price to the order one, and gives a loss no correction of its own, › lowers a price above the order, and takes the VAT off a price that carries it, › takes the price list price for A5, never for a discount taken twice, › proposes nothing when one cell would not say it all, › writes a price in euros only when four decimals hold it. API: `apps/api/src/edits.test.ts` › offers 30 → 40 in its cell… (`finding.fix` = `Factures!K2`, price, 30 → 40, its workbook), › says so when no single cell corrects the finding, or when it is not there (ordered 10, billed 12: `fix` null, `/fix` answers 422 `no_fix`). The model gives no value: `proposeFix` takes none (`packages/agents/src/chat.test.ts` › reads through its tools, then leaves proposeFix to the pane). |
+| « Avant → Après » and one click | `apps/addin/src/controller.test.ts` › corrections and the assistant (R8) › « Corriger pour moi » shows Avant → Après, writes only on « Appliquer », then undoes (K2 stays 450 until the click, then 600 with its format kept, the cell selected), › writes nothing over a cell typed since the card, nor over a formula (`addin.edit.conflict.changed` with what the cell holds, `addin.edit.conflict.formula`). E2E (`apps/addin/e2e/harness.spec.ts`, local Chrome, browser: local) › Corrections: « Corriger pour moi » writes 1 200 € on « Appliquer », then undoes it — the card ([carte](evidence/r8-card.png)), K3 still « 900,00 € » before the click, 1200 after, « Cellule Factures!K3 corrigée : 900 → 1200 » ([appliquée](evidence/r8-applied.png)). Found in the E2E and fixed: in Mode test the row feeds the test copy, so the real invoice's finding is not corrected from it, the pane says why (`addin.edit.otherMode.test`; `docs/ARCHITECTURE.md` R8 decisions). |
+| The journal | Migration `0013_edits.sql`: `edits` (invoice, finding, `tool_call_id` of the conversation's call, workbook, sheet, cell, field, before and its formula, after, by, status, found, reason, `applied_at`, `reverted_at`). `edits.test.ts` › offers 30 → 40…: `edit.propose`, `edit.apply`, `edit.undo_propose`, `edit.revert` audited on the invoice, actor `user`; › writes nothing over a cell the person changed…: actor `agent:chat` when the chat asked, `edit.conflict` with the reason. |
+| Taking it back | `edits.test.ts` › offers 30 → 40…: `GET /findings/:id/edits/last` finds the correction, `/undo` gives the same card, `reverted` reopens the finding; › writes nothing over a cell the person changed, and asks before putting a value back (the undo meets 45: conflict, still undoable). Add-in › asks before undoing over a value typed since: « Laisser », then « Remettre quand même » (700 kept, the correction still undoable; asked again, only « Remettre quand même » writes 450). E2E › Corrections: « Annuler la correction » → « Remettre comme avant » → 900, the finding back. |
+| A sent invoice | `edits.test.ts` › refuses on an invoice already sent: a corrective invoice or a credit note instead — 409 `invoice_sent`, « La facture F-2026-042 du 10/09/2026 est déjà envoyée… Pour les 100,00 € en cause, établissez une facture rectificative ou un avoir qui cite son numéro et sa date. », nothing proposed. Eval fixture `sent-invoice` (the agent calls no card and says so). Drafting the avoir: `docs/DEFERRED.md`. |
+| Confirmed by the checks | `edits.test.ts` › offers 30 → 40…: `applied` → `resolved: true`, `remaining: []`; a conflict → `resolved: false`. Add-in › opens the chat on the finding…: the tool result the agent reads holds `"status":"applied"` and `"resolved":true`; `addin.edit.applied` (« Les contrôles ne trouvent plus cet écart ») only when resolved, else `addin.edit.appliedOpen` with the count. |
+| The chat | API: `apps/api/src/chat.test.ts` › opens on the finding, answers in a stream without the names, and keeps the conversation (opening = tool `finding` + the finding's wording; SSE; the model never reads « Durand » nor the company; kept in `chats`; `agent_runs` row « chat » with the prompt hash; `chat.ask` audited; 429 `ai_budget` once the day is spent), › leaves the correction to the pane, › refuses what is not a conversation, and a finding of another company, › stays off when the assistant is. Agents: `packages/agents/src/chat.test.ts` › the boundary (masks text and tool results, a token cut between two deltas is held until whole), › the chat agent, › the conversation the pane sends. Add-in: `apps/addin/src/chat.test.ts` (asks again once a card is answered, never after read tools alone), controller › opens the chat on the finding; the card the agent asks for waits for « Appliquer » (AI off: `available: false`; the card comes back when the pane reopens the chat; after the click the agent answers). E2E › Assistant: « Demander à l'assistant », the agent's card, « Répondez d'abord… », « Appliquer », « Correction appliquée » and the answer ([carte dans le chat](evidence/r8-chat-card.png), [réponse](evidence/r8-chat.png)); the model's two answers are played by the page, the rest is the real API. |
+| Document lock | `edits.test.ts` › the lock while a card waits › holds its invoice's findings and its send, and checks the other invoices as usual (send → 409 `invoice_editing`), › runs out after five minutes: a card left open is never written as it was, › keeps the autopilot from sending the invoice until the card is answered. |
+| The background goes on | By construction: `answerFinding` (`apps/api/src/chat.ts`) records its run in `agent_runs` through the run store, never through `Orchestrator.run`, whose per-company lock (two runs) the background agents take; the lock above keeps only the invoice being corrected. The add-in tests run the checks and syncs of the sheet while the chat is open. |
+| Eval | `packages/agents/evals/chat.fixtures.ts` (300/400 explain → fix → undo, a sent invoice, a finding without a fix), recorded 2026-10-21 on llmfp `auto - Smart models - Hermes`: 5/5 turns right (`docs/AI_PROVIDERS.md`); replayed by `pnpm verify` (`packages/agents/evals/evals.test.ts` › ChatAgent eval fixtures › cover explain → fix → undo on 300/400…, › recording … › was made with the current prompt, › shows the right card on each turn (300/400 whole, ≥ 80 % overall)). Mistral's recording waits for the owner's key. |
+| Audit and RGPD | `edits.test.ts` › RGPD › exports the corrections with the account, and erases them with it; `chat.test.ts` › exports the conversation with the account, and erases it with it. `docs/RGPD.md`: Corrections (R8), Conversations with the assistant (R8), AI assistance, export, erasure. |
+| Docs | `docs/ARCHITECTURE.md` › What R8 added: the chat and the corrections, and its decisions; `docs/DEFERRED.md` (avoir draft, several cells and A4, closed workbooks, a model-written first message, `candidates`, Mastra, one answer at a time, a token cap per answer, a correction written offline, two cards in one answer, Mode test); `docs/AI_PROVIDERS.md` (ChatAgent); `docs/DEPENDENCIES.md` (`ai` in the add-in); `docs/OFFICE.md` §5 (writing and reading one cell, two TODO(verify)). |
+| Gate | `pnpm verify` green on 2026-10-21 (tests with `--concurrency=1`, memory being short): api 230, core 632 (branches 94.12 %) + oracle 276, agents 120 (branches 91.84 %), add-in 72, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local). |

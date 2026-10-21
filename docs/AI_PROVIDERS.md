@@ -145,6 +145,16 @@ unit price; gate: ≥ 95 %):
 | 2026-10-19 | none (dictionary only, `detectLayout`) | 96.25 % | optimistic: the dictionary was tuned next to these sheets; the floor, not a proof |
 | 2026-10-19 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 97.5 % | `delivery-04` fell back to the dictionary after 3 retries, `delivery-01` missed the reference column; `layout.llmfp-smart.json`, not a gate |
 
+ChatAgent (R8), the conversations of `evals/chat.fixtures.ts`: « expliquer → corriger → annuler » on the
+300 € / 400 € invoice (three turns), a sent invoice and a finding no single cell corrects. A turn is
+right when the agent calls the right card (`proposeFix`, `undoEdit`, or none), says « corrigé » only once
+the tool result says the finding is resolved, and writes no amount the finding does not hold. Gate:
+the 300/400 conversation whole and ≥ 80 % of all turns.
+
+| Date | Provider / model | Right turns | Notes |
+|---|---|---|---|
+| 2026-10-21 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 5/5 | `chat.llmfp-smart.json`, `gate: true` until a Mistral recording replaces it: it holds the code path (tools, cards, re-hydrated amounts) to real answers; it says nothing of the production model |
+
 Not recorded yet: Mistral and Claude (need a paid key: owner), and ExplainAgent against a live model
 (its guardrail tests run on scripted answers).
 

@@ -570,6 +570,59 @@ purchases and margin (R3), `apps/addin/e2e/harness.spec.ts` › Achats.
 | Suppliers in `parties` | Only from real received invoices with a SIREN, as the invoice names them; never verified against the directory, never shown or changed in « Clients » | A supplier is known from its own invoice; an « Achats » row without SIREN is not a company we can name. |
 | « Ce n'est pas le même article » | A « Non » on the cost link, through the same `POST /links/:id` as R2's links; the purchase before then counts | One way to correct the matcher, kept by the next runs like every decision of a person. |
 
+## What R8 added: the chat and the corrections
+
+R8 lets the person ask « pourquoi ? » about a finding, have its cell corrected, and take the correction
+back, all in the pane. The code builds every correction (one price cell, « Avant → Après ») from the
+finding; the model only explains and asks for the card. Nothing is written before the person's click,
+and the checks, not the model, say whether it is corrected. Criteria in `docs/PROGRESS.md` R8.
+
+```
+check.ts: B1/B4 (order), A5 (price list), A1 (VAT on top) ─► finding.fix { cell, field: price, before, after }
+« Corriger pour moi »     ─► POST /findings/:id/fix {by: person}           ─► edits row (proposed) + 5 min lock
+« Demander à l'assistant » ─► GET /findings/:id/chat (opening = the finding) ─► POST /chat (SSE)
+   ChatAgent (ToolLoopAgent) ─ read tools: finding, document, itemHistory (server side, pseudonymized)
+                             └ proposeFix / undoEdit: no execute ─► the pane asks /fix or /edits/:id/undo
+card « Appliquer » ─► pane: ask again (lock renewed) ─► cell still « Avant », no formula? ─► writeCell
+                  ─► sync the sheet ─► POST /edits/:id {applied} ─► lock ends, checks run ─► {resolved, remaining}
+                  ─► addToolOutput ─► the Chat asks again ─► the agent says « corrigé » only if resolved
+« Annuler la correction » ─► POST /edits/:id/undo ─► same card the other way ─► {reverted} | conflict ─► ask
+```
+
+| Path | What it does |
+|---|---|
+| `packages/core/src/checks/check.ts` | A finding whose correction is one unit price carries `fix`: the price cell, the price it holds and the one of the order (B1, B4), of « Tarifs » (A5), or the price without VAT (A1). A loss (B2), a discount taken twice or a price that needs more than four decimals carries none. |
+| `apps/api/src/edits.ts` | The journal (`edits`), the lock and the audit: `proposeFix` (re-asked: the same card, lock renewed), `proposeUndo`, `decideEdit` (applied, declined, conflict, reverted, kept), each checked against the edit's status; an invoice already sent is refused with the avoir to make. The click ends the lock and checks the company again; the answer says whether the finding closed and what remains on the invoice. |
+| `apps/api/src/checks.ts`, `autopilot.ts`, `invoices.ts` | The lock: while `invoices.edit_lock_until` runs, the checks leave that invoice's findings as they are, the autopilot skips it, a send answers `invoice_editing`; the other invoices go on. |
+| `packages/agents/src/chat.ts`, `prompts/chat.md` | ChatAgent: `ToolLoopAgent` of `ai` 7.0.143, at most 6 steps; a middleware masks the prompt of every call and unmasks the answer, the stream included. `proposeFix` and `undoEdit` have no `execute`: their result is the person's click, sent by the pane. |
+| `apps/api/src/chat.ts` | `GET /findings/:id/chat`: the kept conversation, or its opening (the finding as the `finding` tool reads it, and its wording). `POST /chat`: one answer streamed (UI message stream), the opening read again from the finding, the conversation kept with it once the answer ends, the run in `agent_runs` (agent « chat ») within the day's token budget, `chat.ask` in the audit. |
+| `apps/addin/src/chat.ts` | `PaneChat`: the `AbstractChat` of `ai`, its state outside React like the rest of the controller. A card tool call becomes a card; an answered card asks the agent again (`sendAutomaticallyWhen`), never after read tools alone; a call left without a click is asked again when the chat opens next. |
+| `apps/addin/src/controller.ts` (R8 section) | `fixFinding`, `undoCorrection`, `openChat`, `ask`, `applyCard`, `overwrite`, `declineCard`. Before writing, `readCell`: a formula, an empty cell, a missing sheet or another value is a conflict, nothing written; after, the sheet is read again and the decision sent. A finding of the other mode (Mode test or not) is not corrected from the row. |
+| `apps/addin/src/excel/office.ts` › `readCell`, `writeCell` | One cell's value, text and formula; one number written into `Range.values`. |
+| `apps/addin/src/ui/EditCard.tsx`, `ChatView.tsx`, `ChecksView.tsx` | The « Avant → Après » card, « Annuler la correction », the conversation, « Corriger pour moi » and « Demander à l'assistant » on each finding. |
+
+Tables: migration `0013_edits.sql` (`edits`, `chats`, `findings.fix_json`, `invoices.edit_lock_until`).
+
+Tests: `packages/core/src/checks/checks.test.ts` › the correction the code builds (R8),
+`apps/api/src/edits.test.ts`, `apps/api/src/chat.test.ts`, `packages/agents/src/chat.test.ts`,
+`packages/agents/evals/evals.test.ts` › ChatAgent, `apps/addin/src/chat.test.ts`,
+`apps/addin/src/controller.test.ts` › corrections and the assistant (R8), `apps/addin/e2e/harness.spec.ts` ›
+Corrections, Assistant.
+
+### Decisions taken in R8
+
+| Topic | Decision | Why |
+|---|---|---|
+| Who writes the value | The code, from the finding (`fix`); `proposeFix` takes no value, only the finding the conversation is about | A model that types « 600 » can type « 6000 ». The card shows what the checks computed, nothing else. |
+| Where the cell is written | In the pane (Office.js), after the click, and only if the cell still holds « Avant » as a plain value | The API never touches the workbook; the person's sheet is the source. A formula or a value typed since is the person's, not ours to overwrite. |
+| « corrigé » | Said only when the checks, run again after the sync, closed the finding; otherwise the answer names what remains | Plan R8: the agent confirms through the deterministic checks, never on its own word. |
+| The chat in the pane | `AbstractChat` of `ai` with a state class that reports every change to the controller, not `@ai-sdk/react`'s `useChat` | All the pane's state lives in the controller, outside React, and its tests drive it without a DOM; one more package for one hook was not needed. |
+| The first message | The finding's own wording, built by the server without a model call | It opens at once and costs nothing; the model is asked only when the person asks. |
+| The lock | Five minutes on the invoice, renewed when the card is asked again; the click ends it | A card shown on stale findings would correct the wrong thing; a lost click must not hold an invoice for good. |
+| AI handle for the tests | `AiDeps.handle` lets the API's tests hand a scripted model | The same route code runs with a mock and a real provider. |
+| An undo over a changed cell | A conflict, then « Remettre quand même » (writes) or « Laisser » (keeps the correction undoable); a conflict may follow a conflict | Taking a correction back must never erase what the person typed since without a second click. |
+| Mode test | A finding of a real invoice is not corrected from the sheet while Mode test is on (and the other way round): the pane says why | In Mode test the row feeds the test copy; the real invoice would not be read again and its finding would stay. |
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than
