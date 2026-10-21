@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { bought, delivery, invoice, order, prices, purchase } from '../../test/checks-corpus';
-import { checkRegistry, NOISE } from './check';
+import { checkRegistry, NOISE, priceValue } from './check';
 import { findCosts, normalizeName } from './cost';
 import { itemQuantities, linkDocs, sameParty, similarity } from './link';
 import { ruleOf, SEVERITY } from './types';
@@ -385,5 +385,71 @@ describe('what a sold line cost (R3)', () => {
     expect(out.findings.map((f) => [f.message, f.key, f.amount])).toEqual([
       ['B2.loss', 'B2:invoice:F-1:3', 5_000],
     ]);
+  });
+});
+
+describe('the correction the code builds (R8)', () => {
+  const C118 = order('C-118', chairs('10'));
+  const ref = { orderRef: 'C-118' };
+
+  it('sets the 300/400 invoice price to the order one, and gives a loss no correction of its own', () => {
+    const { findings } = checkRegistry({
+      docs: [
+        C118,
+        invoice('F-2026-042', chairs('10', '30'), ref),
+        bought('FA-1', [{ item: 'Chaise', q: '10', price: '35' }]),
+      ],
+      decisions: [],
+      today: TODAY,
+    });
+    expect(findings.map((f) => [f.message, f.fix ?? null])).toEqual([
+      ['B1.under', { cell: 'D2', field: 'price', before: '30', after: '40' }],
+      ['B2.loss', null],
+    ]);
+  });
+
+  it('lowers a price above the order, and takes the VAT off a price that carries it', () => {
+    const over = run([C118, invoice('F-1', chairs('10', '45'), ref)]).findings[0];
+    expect(over).toMatchObject({ message: 'B4.price', fix: { before: '45', after: '40' } });
+    const vat = run([C118, invoice('F-1', chairs('10', '48'), ref)]).findings[0];
+    expect(vat).toMatchObject({ message: 'A1.price', fix: { before: '48', after: '40' } });
+  });
+
+  it('takes the price list price for A5, never for a discount taken twice', () => {
+    const list = prices('T-1', [{ item: 'Lampe', price: '12.5' }]);
+    const a5 = run([list, invoice('F-1', [{ item: 'Lampe', q: '4', price: '10' }])]).findings[0];
+    expect(a5).toMatchObject({ message: 'A5.price', fix: { cell: 'D2', after: '12.5' } });
+    const twice = run([list, invoice('F-1', [{ item: 'Lampe', q: '4', price: '10', off: 1_000 }])])
+      .findings[0];
+    expect(twice?.message).toBe('A3.reference');
+    expect(twice?.fix).toBeUndefined();
+  });
+
+  it('proposes nothing when one cell would not say it all', () => {
+    const fixes = (docs: Parameters<typeof run>[0]) => run(docs).findings.map((f) => f.fix);
+    // A discount on the line: the price or the discount may be the part to change.
+    expect(
+      fixes([C118, invoice('F-1', [{ ...chairs('10', '32')[0], off: 2_000 } as never], ref)]),
+    ).toEqual([undefined]);
+    // Two invoices bill the order: which one to change is a person's call.
+    expect(
+      fixes([
+        C118,
+        invoice('F-1', chairs('5', '30'), ref),
+        invoice('F-2', chairs('5', '30'), { ...ref, issueDate: '2026-09-12' }),
+      ]),
+    ).toEqual([undefined]);
+    // A price the sheet does not map, and a reference no cell can hold exactly.
+    const noCell = invoice('F-1', chairs('10', '30'), ref);
+    noCell.lines = noCell.lines.map((l) => ({ ...l, priceCell: null }));
+    expect(fixes([C118, noCell])).toEqual([undefined]);
+    const thirds = order('C-118', [{ item: 'Chaise', q: '3', price: null, net: 10_000 }]);
+    expect(fixes([thirds, invoice('F-1', chairs('3', '30'), ref)])).toEqual([undefined]);
+  });
+
+  it('writes a price in euros only when four decimals hold it', () => {
+    expect(priceValue(4_000)).toBe('40');
+    expect(priceValue(1_250.5)).toBe('12.505');
+    expect(priceValue(10_000 / 3)).toBeNull();
   });
 });

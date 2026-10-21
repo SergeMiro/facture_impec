@@ -11,6 +11,7 @@ import { isInvoice, itemQuantities, linkDocs, linkId, quantityOf } from './link'
 import {
   type CheckDoc,
   type CheckFinding,
+  type CheckFix,
   type CheckInput,
   type CheckLine,
   type CheckMessage,
@@ -44,6 +45,7 @@ function finding(
   amount: number | null,
   params: Record<string, string>,
   evidence: Evidence[],
+  fix: CheckFix | null = null,
 ): CheckFinding {
   return {
     rule: ruleOf(message),
@@ -54,7 +56,27 @@ function finding(
     amount,
     params,
     evidence,
+    ...(fix && { fix }),
   };
+}
+
+/** A unit price in cents as a cell takes it, in euros, when four decimals say it exactly. */
+export function priceValue(cents: number): string | null {
+  const tenThousandths = cents * 100;
+  if (Math.abs(tenThousandths - Math.round(tenThousandths)) > 1e-6) return null;
+  return String(Math.round(tenThousandths) / 10_000);
+}
+
+/**
+ * R8: the line's price set to the reference, when that one cell says it all: the sheet maps the price,
+ * and no discount on the line could be the part to change instead.
+ */
+function priceFix(line: CheckLine, reference: number): CheckFix | null {
+  if (!line.priceCell || line.netPrice === null || line.discount) return null;
+  const after = priceValue(reference);
+  return after === null
+    ? null
+    : { cell: line.priceCell, field: 'price', before: line.netPrice, after };
 }
 
 const evidenceOf = (
@@ -261,7 +283,9 @@ class World {
         evidenceOf('invoice', subject, part.line, 'priceCell'),
         evidenceOf(role, source, orderPart.line),
       ];
-      const report = (message: CheckMessage, amount: number) => {
+      // One order line and one invoice line of the article: the invoice's price is the one to change.
+      const single = o.parts.length === 1 && b.parts.filter((p) => p.doc === subject).length === 1;
+      const report = (message: CheckMessage, amount: number, fixable = false) => {
         found = true;
         this.findings.push(
           finding(
@@ -271,6 +295,7 @@ class World {
             amount,
             { ...params, amount: money(amount) },
             evidence,
+            fixable && alone && single ? priceFix(part.line, reference) : null,
           ),
         );
       };
@@ -280,10 +305,10 @@ class World {
       } else if (expected - b.net >= NOISE) {
         if (alone && discountTwice(part, reference))
           report('A3.reference', Number(part.line.discount));
-        else report(alone ? 'B1.under' : 'B1.several', expected - b.net);
+        else report(alone ? 'B1.under' : 'B1.several', expected - b.net, true);
       } else if (b.net - expected >= NOISE) {
-        if (alone && vatOnTop(part, reference)) report('A1.price', b.net - expected);
-        else report(alone ? 'B4.price' : 'B4.several', b.net - expected);
+        if (alone && vatOnTop(part, reference)) report('A1.price', b.net - expected, true);
+        else report(alone ? 'B4.price' : 'B4.several', b.net - expected, true);
       }
     }
     if (!found) this.advances(source, linked, sourceText);
@@ -378,8 +403,9 @@ class World {
         } else if (amount < NOISE) {
           continue;
         }
+        const fix = message === 'A3.reference' ? null : priceFix(line, list.unit);
         this.findings.push(
-          finding(message, inv, key, amount, { ...params, amount: money(amount) }, evidence),
+          finding(message, inv, key, amount, { ...params, amount: money(amount) }, evidence, fix),
         );
       }
     }

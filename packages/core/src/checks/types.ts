@@ -178,6 +178,20 @@ export interface Evidence {
   cell: string | null;
 }
 
+/**
+ * The one cell the code knows how to correct and to what (R8): an invoice line's price, set to the
+ * order's or the price list's. Never a model's value; the pane writes it only after « Appliquer ».
+ */
+export interface CheckFix {
+  /** The price cell, as the sheet reading gives it (`Factures!K2`). */
+  cell: string;
+  field: 'price';
+  /** Decimal text the cell held when checked: « 30 ». */
+  before: string;
+  /** Decimal text it should hold, in euros: « 40 ». */
+  after: string;
+}
+
 export interface CheckFinding {
   rule: CheckRule;
   severity: FindingSeverity;
@@ -191,6 +205,8 @@ export interface CheckFinding {
   /** The wording's values, already written in French. */
   params: Record<string, string>;
   evidence: Evidence[];
+  /** Present when one price cell corrects it (R8). */
+  fix?: CheckFix;
 }
 
 export interface CheckInput {
