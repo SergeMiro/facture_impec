@@ -16,6 +16,8 @@ import { StripeApi } from './stripe';
 
 import { runSend, runSync, type WorkerDeps } from './workers';
 
+// The task pane's chat tests (R8) script the model.
+export { handleFor, mockModel, textResult, toolCallResult } from '@fi/agents/testing';
 // The SIRENs the directory stand-in plays a case with.
 export { SIRENE_CASES } from '@fi/mock-pdp';
 // The task pane's tests move invoices as the workers would.

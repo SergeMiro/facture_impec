@@ -1,4 +1,4 @@
-import type { Orchestrator, ProbeResult, ResolvedAi, RunStore } from '@fi/agents';
+import type { AiHandle, Budget, Orchestrator, ProbeResult, ResolvedAi, RunStore } from '@fi/agents';
 import type { FacturXOptions } from '@fi/core/pdf';
 import type { Db, PdpProvider } from '@fi/db';
 import type { PdpAdapter, ScenarioPort } from '@fi/pdp-adapter';
@@ -53,6 +53,10 @@ export interface AiDeps {
   sealingKey: string | undefined;
   /** « Tester la connexion » before BYOK settings are saved; tests replace it. */
   probe(resolved: ResolvedAi): Promise<ProbeResult>;
+  /** The token caps (AI_RUN_TOKENS, AI_DAILY_TOKENS): the chat reads them without the orchestrator. */
+  budget: Budget;
+  /** Settings → models (default `aiHandle`); tests put a scripted model here. */
+  handle?: (resolved: ResolvedAi | null) => AiHandle | null;
 }
 
 export interface Mail {

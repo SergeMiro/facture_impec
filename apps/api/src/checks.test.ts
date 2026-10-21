@@ -2,22 +2,30 @@
 // 300/400 example found with its money and its cells, the send gate (« Envoyer quand même », audited),
 // the autopilot that never sends past a blocking finding, « Oui » / « Non » on a proposed link, the
 // sweep that checks again, and the RGPD export and erasure.
-import { detectMapping, type GridCell, grid, type InvoiceDraft } from '@fi/core';
+import type { InvoiceDraft } from '@fi/core';
 import type { Database } from '@fi/db';
-import { and, auditEvents, checkState, eq, findings, invoices, links } from '@fi/db';
+import { checkState, eq, findings, invoices, links } from '@fi/db';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AUTOPILOT_GRACE_MS, runAutopilot } from './autopilot';
 import { checkNow, checksBehind, runChecks } from './checks';
 import {
+  type Checks,
+  companies,
+  type Detail,
+  invoiceRow,
+  invoiceSheet,
+  orders,
+  SEP1,
+} from './checks.fixtures';
+import {
   deliveredInvoice,
   draft,
   fakeAdapter,
-  newTenant,
   type RecordedJobs,
   testApi,
   testDatabase,
+  today,
 } from './test-helpers';
-import type { SyncResult } from './workbooks';
 
 const adapter = fakeAdapter({ lookupRecipient: async ({ siren }) => ({ siren }) });
 
@@ -25,7 +33,8 @@ let database: Database;
 let api: ReturnType<typeof testApi>;
 let request: ReturnType<typeof testApi>['request'];
 let jobs: RecordedJobs;
-let clock = new Date('2026-10-20T08:00:00Z');
+// Today, as the drafts are dated: a fixed day turns their issue date into a future one.
+let clock = new Date(`${today()}T08:00:00Z`);
 
 beforeAll(async () => {
   database = await testDatabase();
@@ -39,154 +48,8 @@ beforeEach(async () => {
   await database.db.update(invoices).set({ autopilotAt: null, autopilotFingerprint: null });
 });
 
-const d = (serial: number, text: string): GridCell => ({ v: serial, t: text, f: 'dd/mm/yyyy' });
-const SEP1 = d(46266, '01/09/2026');
-const SEP10 = d(46275, '10/09/2026');
-
-const ORDER_HEADER: GridCell[] = ['N° commande', 'Date', 'Client', 'Désignation', 'Qté', 'PU HT'];
-const orders = (...rows: GridCell[][]) => grid('Commandes', [ORDER_HEADER, ...rows]);
-
-const INVOICE_HEADER: GridCell[] = [
-  'N° Facture',
-  'Date',
-  'Client',
-  'SIREN',
-  'Adresse',
-  'Code postal',
-  'Ville',
-  'N° commande',
-  'Désignation',
-  'Qté',
-  'P.U. HT',
-  'TVA',
-];
-const invoiceRow = (
-  number: string,
-  order: string | null,
-  item: string,
-  quantity: number,
-  price: number,
-): GridCell[] => [
-  number,
-  SEP10,
-  'Durand SARL',
-  '200000008',
-  '3 rue de la Gare',
-  '21000',
-  'Dijon',
-  order,
-  item,
-  quantity,
-  price,
-  { v: 0.2, t: '20%', f: '0%' },
-];
-const invoiceSheet = (...rows: GridCell[][]) => grid('Factures', [INVOICE_HEADER, ...rows]);
-
-interface Finding {
-  id: string;
-  rule: string;
-  severity: string;
-  message: string;
-  amount: number | null;
-  invoiceId: string | null;
-  fingerprint: string;
-  evidence: {
-    role: string;
-    number: string | null;
-    sheet: string | null;
-    workbookId: string | null;
-    cell: string | null;
-  }[];
-}
-interface Checks {
-  checkedAt: string | null;
-  atStake: number;
-  blocking: number;
-  findings: Finding[];
-  links: {
-    id: string;
-    kind: string;
-    score: number;
-    from: { number: string | null } | null;
-    to: { number: string | null } | null;
-  }[];
-}
-interface Detail {
-  id: string;
-  status: string;
-  autopilot: { at: string | null; held: boolean };
-  findings: Finding[];
-  events: { type: string; event: string | null; payload: Record<string, unknown> }[];
-}
-
-async function company(workbook: string, extra: Record<string, unknown> = {}) {
-  const t = await newTenant(request, {
-    vatId: 'FR88100000009',
-    address: { line1: '12 rue des Lilas', city: 'Dijon', postCode: '21000', country: 'FR' },
-    ...extra,
-  });
-  await request('/settings', {
-    method: 'PATCH',
-    token: t.apiKey,
-    body: {
-      invoiceDefaults: {
-        siret: '10000000900017',
-        iban: 'FR7630006000011234567890189',
-        paymentDays: 30,
-        operationCategory: 'goods',
-      },
-    },
-  });
-  const call = async (path: string, method = 'GET', body?: unknown, status = 200) => {
-    const res = await request(path, {
-      method,
-      token: t.apiKey,
-      ...(body !== undefined && { body }),
-    });
-    expect(res.status, await res.clone().text()).toBe(status);
-    return res.json();
-  };
-  const includeOrders = async (snapshot: ReturnType<typeof grid>) => {
-    const base = `/workbooks/${workbook}/sources`;
-    const { layout } = (await call(`${base}/detect`, 'POST', { snapshot })) as { layout: unknown };
-    return call(`${base}/${encodeURIComponent(snapshot.sheet)}`, 'PUT', { layout, snapshot });
-  };
-  const syncOrders = (snapshot: ReturnType<typeof grid>) =>
-    call(`/workbooks/${workbook}/sources/${encodeURIComponent(snapshot.sheet)}/sync`, 'POST', {
-      snapshot,
-    });
-  const syncInvoices = async (snapshot: ReturnType<typeof grid>) =>
-    (await call(`/workbooks/${workbook}/sync`, 'POST', {
-      snapshot,
-      mapping: detectMapping(snapshot),
-    })) as SyncResult;
-  const checks = () => call('/checks') as Promise<Checks>;
-  const detail = (id: string) => call(`/invoices/${id}`) as Promise<Detail>;
-  const audits = async (action: string) =>
-    database.db
-      .select()
-      .from(auditEvents)
-      .where(and(eq(auditEvents.tenantId, t.id), eq(auditEvents.action, action)));
-  const invoiceId = async (number: string) => {
-    const [row] = await database.db
-      .select({ id: invoices.id, status: invoices.status })
-      .from(invoices)
-      .where(and(eq(invoices.tenantId, t.id), eq(invoices.number, number)));
-    if (!row) throw new Error(`no invoice ${number}`);
-    return row.id;
-  };
-  return {
-    ...t,
-    call,
-    includeOrders,
-    syncOrders,
-    syncInvoices,
-    checks,
-    detail,
-    audits,
-    invoiceId,
-  };
-}
+const company = (workbook: string, extra: Record<string, unknown> = {}) =>
+  companies({ request, database })(workbook, extra);
 
 describe('the 300/400 example', () => {
   it('finds 100 € missing against order C-118, with the cells of both documents', async () => {
@@ -446,7 +309,7 @@ describe('the sweep', () => {
       .select()
       .from(checkState)
       .where(eq(checkState.tenantId, c.id));
-    expect(state?.checkedOn).toBe('2026-10-20');
+    expect(state?.checkedOn).toBe(today());
   });
 });
 

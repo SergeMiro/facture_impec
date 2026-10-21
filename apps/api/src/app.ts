@@ -24,9 +24,19 @@ import { explainInvoice, invoicePdf, rehearseInvoice } from './assist';
 import { type TenantEnv, tenantAuth, who } from './auth';
 import { holdAutopilot } from './autopilot';
 import { billingPages, billingRoutes, handleStripeWebhook } from './billing';
+import { answerFinding, ChatBody, chatView } from './chat';
 import { checksView, decideLink } from './checks';
 import { markStepSent, prepareChase, recordPromise } from './collect';
 import type { ApiDeps } from './deps';
+import {
+  decideEdit,
+  EditDecision,
+  FixBody,
+  getEdit,
+  lastUndoable,
+  proposeFix,
+  proposeUndo,
+} from './edits';
 import { ApiError } from './errors';
 import { body, optionalBody, parse, uuid } from './http';
 import {
@@ -262,6 +272,9 @@ export function createApp(deps: ApiDeps) {
     '/registry',
     '/checks',
     '/links/*',
+    '/findings/*',
+    '/edits/*',
+    '/chat',
     '/invoices',
     '/invoices/*',
     '/inbound',
@@ -426,6 +439,37 @@ export function createApp(deps: ApiDeps) {
     const by = who(c.get('principal'));
     return c.json(await decideLink(deps, c.get('tenant'), by, uuid(c.req.param('id')), status));
   });
+
+  // ── Chat and corrections (R8) ──────────────────────────────────────────────────────────────────
+  api.post('/findings/:id/fix', async (c) => {
+    const input = await optionalBody(c, FixBody);
+    return c.json(await proposeFix(deps, c.get('tenant'), uuid(c.req.param('id')), input));
+  });
+
+  api.get('/findings/:id/edits/last', async (c) =>
+    c.json(await lastUndoable(deps, c.get('tenant'), uuid(c.req.param('id')))),
+  );
+
+  api.get('/edits/:id', async (c) =>
+    c.json(await getEdit(deps, c.get('tenant'), uuid(c.req.param('id')))),
+  );
+
+  api.post('/edits/:id', async (c) => {
+    const decision = await body(c, EditDecision);
+    return c.json(await decideEdit(deps, c.get('tenant'), uuid(c.req.param('id')), decision));
+  });
+
+  api.post('/edits/:id/undo', async (c) =>
+    c.json(await proposeUndo(deps, c.get('tenant'), uuid(c.req.param('id')))),
+  );
+
+  api.get('/findings/:id/chat', async (c) =>
+    c.json(await chatView(deps, c.get('tenant'), uuid(c.req.param('id')))),
+  );
+
+  api.post('/chat', async (c) =>
+    answerFinding(deps, c.get('tenant'), await body(c, ChatBody), c.req.raw.signal),
+  );
 
   // ── Invoices ──────────────────────────────────────────────────────────────────────────────────
   api.post('/invoices', async (c) => {

@@ -64,6 +64,7 @@ export interface AiOptions {
   sealingKey: string | undefined;
   budget: Budget;
   probe?: AiDeps['probe'];
+  handle?: AiDeps['handle'];
 }
 
 export function createAiDeps(options: AiOptions): AiDeps {
@@ -73,6 +74,8 @@ export function createAiDeps(options: AiOptions): AiDeps {
     orchestrator: new Orchestrator({ store, budget: options.budget, now: options.now }),
     included: options.included,
     sealingKey: options.sealingKey,
+    budget: options.budget,
+    ...(options.handle && { handle: options.handle }),
     probe: options.probe ?? ((resolved) => probeModel(createModel(resolved, 'agent'), options.now)),
   };
 }
@@ -91,4 +94,4 @@ export function resolveAi(ai: AiDeps, tenant: TenantRow): ResolvedAi | null {
 }
 
 export const tenantAi = (ai: AiDeps, tenant: TenantRow): AiHandle | null =>
-  aiHandle(resolveAi(ai, tenant));
+  (ai.handle ?? aiHandle)(resolveAi(ai, tenant));

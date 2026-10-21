@@ -11,10 +11,12 @@ import {
   auditEvents,
   billingUsage,
   chasePlans,
+  chats,
   checkState,
   type Db,
   docLines,
   docs,
+  edits,
   eq,
   findings,
   inArray,
@@ -91,6 +93,8 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     linked,
     found,
     checked,
+    corrections,
+    conversations,
   ] = await Promise.all([
     db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
     db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
@@ -162,6 +166,8 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       .where(eq(findings.tenantId, tenant.id))
       .orderBy(asc(findings.firstSeenAt), asc(findings.key)),
     db.select().from(checkState).where(eq(checkState.tenantId, tenant.id)),
+    db.select().from(edits).where(eq(edits.tenantId, tenant.id)).orderBy(asc(edits.createdAt)),
+    db.select().from(chats).where(eq(chats.tenantId, tenant.id)).orderBy(asc(chats.createdAt)),
   ]);
   const sheetOf = new Map(sheets.map((s) => [s.id, s.sheet]));
   const itemKeys = new Map(articles.map((a) => [a.id, a.key]));
@@ -313,6 +319,7 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       })),
       /** What the checks across documents found, open or resolved. */
       findings: found.map((f) => ({
+        id: f.id,
         rule: f.rule,
         message: f.message,
         severity: f.severity,
@@ -326,6 +333,30 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
         resolvedAt: f.resolvedAt?.toISOString() ?? null,
       })),
       checkedAt: checked[0]?.checkedAt.toISOString() ?? null,
+      /** R8: the corrections offered in the pane (« Avant → Après ») and what became of each. */
+      edits: corrections.map((e) => ({
+        finding: e.findingId,
+        invoice: e.invoiceId,
+        by: e.by,
+        sheet: e.sheet,
+        cell: e.cell,
+        field: e.field,
+        before: e.beforeValue,
+        beforeFormula: e.beforeFormula,
+        after: e.afterValue,
+        status: e.status,
+        found: e.foundValue,
+        reason: e.reason,
+        createdAt: e.createdAt.toISOString(),
+        appliedAt: e.appliedAt?.toISOString() ?? null,
+        revertedAt: e.revertedAt?.toISOString() ?? null,
+      })),
+      /** R8: the conversations with the assistant, one per finding, as the pane shows them. */
+      chats: conversations.map((c) => ({
+        finding: c.findingId,
+        messages: c.messages,
+        updatedAt: c.updatedAt.toISOString(),
+      })),
     },
     agentRuns: runs.map((r) => ({
       agent: r.agent,
@@ -382,7 +413,10 @@ export async function deleteTenant(
       );
     const ids = gone.map((r) => r.id);
     // The registry is rebuilt from the invoices at any time; nothing reads it once the account is gone.
-    // Its links and findings go with it, a person's « Oui » and « Non » too.
+    // Its links and findings go with it, a person's « Oui » and « Non » too, and the chats and
+    // corrections made on them.
+    await tx.delete(chats).where(eq(chats.tenantId, tenant.id));
+    await tx.delete(edits).where(eq(edits.tenantId, tenant.id));
     await tx.delete(findings).where(eq(findings.tenantId, tenant.id));
     await tx.delete(links).where(eq(links.tenantId, tenant.id));
     await tx.delete(checkState).where(eq(checkState.tenantId, tenant.id));

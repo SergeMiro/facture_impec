@@ -21,6 +21,7 @@ import {
   lockInvoice,
   lte,
   ne,
+  or,
   parties,
   sql,
   type TenantRow,
@@ -245,12 +246,17 @@ async function platformBlocker(
   }
 }
 
+const editing = (row: Pick<InvoiceRow, 'editLockUntil'>, now: Date) =>
+  !!row.editLockUntil && row.editLockUntil > now;
+
 async function fire(deps: AutopilotDeps, id: string): Promise<Outcome> {
   const now = deps.now();
   const [row] = await deps.db.select().from(invoices).where(eq(invoices.id, id));
   if (row?.status !== 'validated' || !row.autopilotAt || row.autopilotAt > now) {
     return 'skipped';
   }
+  // A correction is being made on it (R8): it leaves on a later turn, once checked again.
+  if (editing(row, now)) return 'skipped';
   const [tenant] = await deps.db
     .select()
     .from(tenants)
@@ -264,6 +270,7 @@ async function fire(deps: AutopilotDeps, id: string): Promise<Outcome> {
 
   const outcome = await deps.db.transaction(async (tx): Promise<Outcome> => {
     const locked = await lockInvoice(tx, id);
+    if (locked && editing(locked, now)) return 'skipped';
     // Changed meanwhile: the change planned it again (or not); this run has nothing to say.
     if (
       locked?.status !== 'validated' ||
@@ -344,6 +351,7 @@ export async function runAutopilot(
         lte(invoices.autopilotAt, deps.now()),
         eq(invoices.status, 'validated'),
         eq(invoices.autopilotHeld, false),
+        or(isNull(invoices.editLockUntil), lte(invoices.editLockUntil, deps.now())),
       ),
     )
     .orderBy(invoices.autopilotAt)

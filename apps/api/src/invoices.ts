@@ -618,6 +618,10 @@ export async function requestSend(
       throw new ApiError(409, row.isTest ? 'test_platform_missing' : 'pdp_not_configured');
     }
     if (!row.isTest && awaitsGoLive(deps, tenant)) throw new ApiError(409, 'not_live');
+    // A correction waits for « Appliquer » or « Refuser » (R8): it goes first.
+    if (row.editLockUntil && row.editLockUntil > deps.now()) {
+      throw new ApiError(409, 'invoice_editing');
+    }
     if (!row.isTest) await assertMaySend(deps, tx, tenant);
     const held = await blockingFindings(tx, row.id);
     if (held.some((f) => !acknowledge.includes(f.fingerprint))) {

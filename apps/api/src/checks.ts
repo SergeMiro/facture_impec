@@ -6,12 +6,14 @@
 // invoice holds it: « Envoyer » asks « Envoyer quand même », the autopilot does not send it.
 import {
   type CheckDoc,
+  type CheckFix,
   type CheckLine,
   checkRegistry,
   type Evidence,
   type LinkDecision,
   linkId,
   parisToday,
+  parseAddress,
 } from '@fi/core';
 import {
   and,
@@ -25,6 +27,7 @@ import {
   eq,
   type FindingRow,
   findings,
+  gt,
   hashOf,
   inArray,
   invoiceEvents,
@@ -39,6 +42,7 @@ import {
   tenants,
 } from '@fi/db';
 import { t } from '@fi/shared';
+import { tenantAi } from './ai';
 import { planAutopilot } from './autopilot';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
@@ -140,6 +144,15 @@ async function heldInvoices(tx: Tx, tenantId: string): Promise<Set<string>> {
   return new Set(held.flatMap((h) => (h.id ? [h.id] : [])));
 }
 
+/** The invoices a correction is being made on (R8): their lock has not ended yet. */
+async function lockedInvoices(tx: Tx, tenantId: string, now: Date): Promise<Set<string>> {
+  const found = await tx
+    .select({ id: invoices.id })
+    .from(invoices)
+    .where(and(eq(invoices.tenantId, tenantId), gt(invoices.editLockUntil, now)));
+  return new Set(found.map((f) => f.id));
+}
+
 export interface CheckRun {
   /** Findings opened, changed or resolved. */
   changed: number;
@@ -206,7 +219,10 @@ export async function runChecks(db: Db, tenantId: string, now: Date): Promise<Ch
       );
     }
 
-    // Findings, by key.
+    // Findings, by key. An invoice a correction is being made on keeps its findings as they are
+    // (R8): the click that ends the correction checks it again.
+    const locked = await lockedInvoices(tx, tenantId, now);
+    const frozen = (invoiceId: string | null | undefined) => !!invoiceId && locked.has(invoiceId);
     const heldBefore = await heldInvoices(tx, tenantId);
     const docOf = new Map(checkDocs.map((d) => [d.id, d]));
     const previous = await tx.select().from(findings).where(eq(findings.tenantId, tenantId));
@@ -217,6 +233,7 @@ export async function runChecks(db: Db, tenantId: string, now: Date): Promise<Ch
     for (const f of out.findings) {
       seen.add(f.key);
       const doc = docOf.get(f.docId);
+      if (frozen(doc?.invoiceId)) continue;
       const fingerprint = hashOf({
         key: f.key,
         docId: f.docId,
@@ -226,7 +243,13 @@ export async function runChecks(db: Db, tenantId: string, now: Date): Promise<Ch
         evidence: f.evidence,
       });
       const before = byKey.get(f.key);
-      if (before?.status === 'open' && before.fingerprint === fingerprint) continue;
+      if (
+        before?.status === 'open' &&
+        before.fingerprint === fingerprint &&
+        hashOf(before.fix ?? null) === hashOf(f.fix ?? null)
+      ) {
+        continue;
+      }
       const values = {
         rule: f.rule,
         message: f.message,
@@ -237,6 +260,7 @@ export async function runChecks(db: Db, tenantId: string, now: Date): Promise<Ch
         amount: f.amount,
         params: f.params,
         evidence: f.evidence,
+        fix: f.fix ?? null,
         status: 'open' as const,
         isTest: doc?.isTest ?? false,
         resolvedAt: null,
@@ -254,7 +278,9 @@ export async function runChecks(db: Db, tenantId: string, now: Date): Promise<Ch
         .where(eq(findings.id, before.id));
       if (before.status === 'resolved') opened.push(f.key);
     }
-    const gone = previous.filter((f) => f.status === 'open' && !seen.has(f.key));
+    const gone = previous.filter(
+      (f) => f.status === 'open' && !seen.has(f.key) && !frozen(f.invoiceId),
+    );
     if (gone.length) {
       await tx
         .update(findings)
@@ -307,7 +333,9 @@ export async function runChecks(db: Db, tenantId: string, now: Date): Promise<Ch
       ...[...heldAfter].filter((id) => !heldBefore.has(id)),
       ...[...heldBefore].filter((id) => !heldAfter.has(id)),
     ];
-    for (const id of moved) await replan(tx, now, tenant, id, heldAfter.has(id));
+    for (const id of moved.filter((m) => !frozen(m))) {
+      await replan(tx, now, tenant, id, heldAfter.has(id));
+    }
     return { changed, open: out.findings.length };
   });
 }
@@ -376,7 +404,7 @@ export async function checksBehind(db: Db, now: Date): Promise<string[]> {
 
 // ── What the pane shows ─────────────────────────────────────────────────────────────────────────
 
-interface Place {
+export interface Place {
   number: string | null;
   sheet: string | null;
   workbookId: string | null;
@@ -385,7 +413,7 @@ interface Place {
 }
 
 /** Where each document is: its number, and the sheet and workbook it was read from. */
-async function placesOf(db: DbOrTx, ids: readonly string[]): Promise<Map<string, Place>> {
+export async function placesOf(db: DbOrTx, ids: readonly string[]): Promise<Map<string, Place>> {
   if (ids.length === 0) return new Map();
   const found = await db
     .select({
@@ -411,6 +439,24 @@ async function placesOf(db: DbOrTx, ids: readonly string[]): Promise<Map<string,
       },
     ]),
   );
+}
+
+/**
+ * R8: the price cell that corrects the finding, « Avant → Après », where the pane writes it. The sheet
+ * reading gives the address with its sheet; an address without one is on the document's own sheet.
+ */
+export function fixTarget(fix: CheckFix, place: Place | undefined) {
+  const at = parseAddress(fix.cell);
+  const sheet = at?.sheet ?? place?.sheet ?? null;
+  if (!sheet) return null;
+  return {
+    sheet,
+    cell: at?.cell ?? fix.cell,
+    workbookId: place?.workbookId ?? null,
+    field: fix.field,
+    before: fix.before,
+    after: fix.after,
+  };
 }
 
 export function findingView(
@@ -448,6 +494,8 @@ export function findingView(
           row,
         ),
       ) ?? null,
+    /** R8: « Corriger pour moi » writes this cell; null when no single cell corrects it. */
+    fix: row.fix ? fixTarget(row.fix, places.get(row.docId)) : null,
     firstSeenAt: row.firstSeenAt.toISOString(),
   };
 }
@@ -486,7 +534,7 @@ export async function invoiceFindings(db: DbOrTx, invoiceId: string) {
 }
 
 /** The « Contrôles » screen: the open findings, the money at stake, the links that wait for a yes or no. */
-export async function checksView(deps: Pick<ApiDeps, 'db' | 'now'>, tenant: TenantRow) {
+export async function checksView(deps: Pick<ApiDeps, 'db' | 'now' | 'ai'>, tenant: TenantRow) {
   await checkNow(deps.db, tenant.id, deps.now());
   const open = await deps.db
     .select()
@@ -518,6 +566,8 @@ export async function checksView(deps: Pick<ApiDeps, 'db' | 'now'>, tenant: Tena
     /** Cents at stake on the real documents. */
     atStake: real.reduce((sum, f) => sum + (f.amount ?? 0), 0),
     blocking: real.filter((f) => f.severity === 'blocking').length,
+    /** R8: « Demander à l'assistant » on each card; false when AI is off or calls no tools. */
+    assistant: tenantAi(deps.ai, tenant)?.tools === true,
     findings: await views(deps.db, open),
     links: proposed
       .map((l) => ({
@@ -541,7 +591,7 @@ export async function checksView(deps: Pick<ApiDeps, 'db' | 'now'>, tenant: Tena
  * « Oui » settles the document: the other proposals for it are not found again.
  */
 export async function decideLink(
-  deps: Pick<ApiDeps, 'db' | 'now'>,
+  deps: Pick<ApiDeps, 'db' | 'now' | 'ai'>,
   tenant: TenantRow,
   actor: string,
   id: string,
