@@ -2,6 +2,7 @@
 // MonitorAgent, and the deterministic PartyAgent, TestAgent, CollectAgent, ReportAgent and
 // InboundAgent. Node only: the add-in never imports this package.
 export * from './ai';
+export * from './chat';
 export * from './collect';
 export * from './explain';
 export * from './inbound';

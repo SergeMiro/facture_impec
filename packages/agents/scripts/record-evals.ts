@@ -3,17 +3,19 @@
 //
 //   EVAL_PROVIDER=openai-compatible EVAL_BASE_URL=http://127.0.0.1:47821/v1 EVAL_API_KEY=… \
 //   EVAL_MODEL='auto - Smart models - Hermes' EVAL_LABEL=llmfp-smart \
-//   pnpm --filter @fi/agents eval:record [mapping|layout|explain|monitor]
+//   pnpm --filter @fi/agents eval:record [mapping|layout|explain|monitor|chat]
 //
 // EVAL_GATE=true marks the recording as the one the plan's thresholds apply to. EVAL_STRUCTURED=true
 // and EVAL_REQUEST_BODY='{"provider":{…}}' as for AI_STRUCTURED_OUTPUTS and AI_REQUEST_BODY.
 
+import { CHAT_FIXTURES, playChat, recording, type TurnScore } from '../evals/chat.fixtures';
 import { EXPLAIN_FIXTURES } from '../evals/explain.fixtures';
 import { type Recording, ratio, saveRecording, scoreLayout, scoreMapping } from '../evals/harness';
 import { LAYOUT_FIXTURES } from '../evals/layout.fixtures';
 import { MAPPING_FIXTURES } from '../evals/mapping.fixtures';
 import { MONITOR_FIXTURES } from '../evals/monitor.fixtures';
 import { aiHandle } from '../src/ai';
+import { CHAT_PROMPT_HASH } from '../src/chat';
 import { EXPLAIN_PROMPT_HASH, explainIssues } from '../src/explain';
 import { LAYOUT_PROMPT_HASH, proposeLayout } from '../src/layout';
 import { MAPPING_PROMPT_HASH, proposeMapping } from '../src/mapping';
@@ -164,5 +166,25 @@ if (which === 'all' || which === 'monitor') {
   });
   console.log(
     `monitor: ${right}/${MONITOR_FIXTURES.length} expected proposals, rejected ${JSON.stringify(rejected)} → ${file.pathname}`,
+  );
+}
+
+if (which === 'all' || which === 'chat') {
+  const answers: Recording['answers'] = {};
+  const scores: TurnScore[] = [];
+  for (const f of CHAT_FIXTURES) {
+    const raw: unknown[] = [];
+    try {
+      scores.push(...(await playChat(f, recording(ai, raw))));
+      answers[f.name] = raw;
+    } catch (e) {
+      console.log(`${f.name}: ${e instanceof Error ? e.message : String(e)}`);
+      answers[f.name] = null;
+    }
+  }
+  for (const s of scores) console.log(`${s.fixture} #${s.turn}: ${s.ok ? 'ok' : s.why.join('; ')}`);
+  const file = saveRecording({ agent: 'chat', promptHash: CHAT_PROMPT_HASH, answers, ...base });
+  console.log(
+    `chat: ${scores.filter((s) => s.ok).length}/${scores.length} turns right → ${file.pathname}`,
   );
 }

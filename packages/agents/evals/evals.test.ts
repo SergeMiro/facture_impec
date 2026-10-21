@@ -2,6 +2,7 @@
 // A recording made with another prompt fails: re-record with `pnpm --filter @fi/agents eval:record`.
 import { detectLayout, detectMapping } from '@fi/core';
 import { describe, expect, it } from 'vitest';
+import { CHAT_PROMPT_HASH } from '../src/chat';
 import { EXPLAIN_PROMPT_HASH, explainIssues } from '../src/explain';
 import { LAYOUT_PROMPT_HASH, proposeLayout } from '../src/layout';
 import { MAPPING_PROMPT_HASH, proposeMapping } from '../src/mapping';
@@ -13,6 +14,7 @@ import {
   testOrchestrator,
   textResult,
 } from '../src/test-model';
+import { CHAT_FIXTURES, playChat, type TurnScore } from './chat.fixtures';
 import { EXPLAIN_FIXTURES } from './explain.fixtures';
 import { loadRecordings, ratio, scoreLayout, scoreMapping } from './harness';
 import { LAYOUT_FIXTURES } from './layout.fixtures';
@@ -179,6 +181,47 @@ describe('MonitorAgent eval fixtures', () => {
           if (advice.proposal === f.expected) right++;
         }
         if (rec.gate) expect(right / MONITOR_FIXTURES.length).toBeGreaterThanOrEqual(0.85);
+      });
+    });
+  }
+});
+
+describe('ChatAgent eval fixtures', () => {
+  it('cover explain → fix → undo on 300/400, a sent invoice and a finding without a fix', () => {
+    const cards = CHAT_FIXTURES.flatMap((f) => f.turns.map((t) => t.expect?.tool ?? 'none'));
+    expect(new Set(cards)).toEqual(new Set(['none', 'proposeFix', 'undoEdit']));
+    expect(CHAT_FIXTURES.some((f) => f.turns.some((t) => t.answer?.status === 'refused'))).toBe(
+      true,
+    );
+  });
+
+  for (const rec of loadRecordings('chat')) {
+    describe(`recording ${rec.label} (${rec.provider} / ${rec.model})`, () => {
+      it('was made with the current prompt', () => {
+        expect(rec.promptHash, 'prompts/chat.md or its tools changed: re-record').toBe(
+          CHAT_PROMPT_HASH,
+        );
+      });
+
+      it(`shows the right card on each turn ${rec.gate ? '(300/400 whole, ≥ 80 % overall)' : '(not gating)'}`, async () => {
+        const scores: TurnScore[] = [];
+        for (const f of CHAT_FIXTURES) {
+          const answers = rec.answers[f.name];
+          const model = Array.isArray(answers)
+            ? mockModel(...(answers as Parameters<typeof mockModel>))
+            : failingModel(new Error('recorded failure'));
+          try {
+            scores.push(...(await playChat(f, handleFor(model))));
+          } catch {
+            scores.push(
+              ...f.turns.map((_, turn) => ({ fixture: f.name, turn, ok: false, why: ['failed'] })),
+            );
+          }
+        }
+        if (!rec.gate) return;
+        const main = scores.filter((s) => s.fixture === '300-400');
+        expect(main.filter((s) => !s.ok)).toEqual([]);
+        expect(scores.filter((s) => s.ok).length / scores.length).toBeGreaterThanOrEqual(0.8);
       });
     });
   }

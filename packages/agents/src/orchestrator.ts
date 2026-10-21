@@ -13,6 +13,8 @@ export const PHASES = {
   explain: 'explain',
   rehearse: 'test',
   monitor: 'monitor',
+  /** The pane's chat (R8): recorded here, but it does not take the background's slots. */
+  chat: 'chat',
 } as const;
 export type Phase = keyof typeof PHASES;
 export type AgentName = (typeof PHASES)[Phase];

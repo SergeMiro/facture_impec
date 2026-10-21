@@ -8,7 +8,7 @@ import type { MappingFixture } from './mapping.fixtures';
 export const RECORDINGS = new URL('./recordings/', import.meta.url);
 
 export const Recording = z.object({
-  agent: z.enum(['mapping', 'layout', 'explain', 'monitor']),
+  agent: z.enum(['mapping', 'layout', 'explain', 'monitor', 'chat']),
   label: z.string(),
   provider: z.string(),
   model: z.string(),
@@ -16,7 +16,7 @@ export const Recording = z.object({
   promptHash: z.string(),
   /** A gating recording must pass the plan's thresholds; others are kept for comparison. */
   gate: z.boolean(),
-  /** Fixture name → the model's raw answer, or null when the call failed. */
+  /** Fixture name → the model's raw answer (the chat: every answer of the conversation), or null. */
   answers: z.record(z.string(), z.unknown().nullable()),
 });
 export type Recording = z.infer<typeof Recording>;

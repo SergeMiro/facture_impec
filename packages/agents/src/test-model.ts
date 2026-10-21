@@ -1,5 +1,5 @@
 // Test doubles for a model: canned answers, tool calls and failures. Never imported by app code.
-import { MockLanguageModelV4 } from 'ai/test';
+import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import type { AiHandle } from './ai';
 import { MemoryRunStore, Orchestrator } from './orchestrator';
 
@@ -30,22 +30,51 @@ export function toolCallResult(toolName: string, input: unknown): Result {
   } as Result;
 }
 
-/** A model that returns these results in order (the last one repeats). */
+type StreamPart =
+  Awaited<ReturnType<MockLanguageModelV4['doStream']>>['stream'] extends ReadableStream<infer P>
+    ? P
+    : never;
+
+/** A canned result as a stream: the text in one delta, each tool call whole. */
+function streamOf(r: Result): StreamPart[] {
+  const parts: StreamPart[] = [{ type: 'stream-start', warnings: [] }];
+  for (const [i, c] of r.content.entries()) {
+    if (c.type === 'text') {
+      const id = `text-${i}`;
+      parts.push(
+        { type: 'text-start', id },
+        { type: 'text-delta', id, delta: c.text },
+        { type: 'text-end', id },
+      );
+    } else if (c.type === 'tool-call') {
+      parts.push(c);
+    }
+  }
+  parts.push({ type: 'finish', finishReason: r.finishReason, usage: r.usage });
+  return parts;
+}
+
+/** A model that returns these results in order (the last one repeats), generated or streamed. */
 export function mockModel(...results: Result[]) {
   let i = 0;
+  const next = () => {
+    const r = results[Math.min(i, results.length - 1)];
+    i++;
+    if (!r) throw new Error('no canned result');
+    return r;
+  };
   return new MockLanguageModelV4({
-    doGenerate: async () => {
-      const r = results[Math.min(i, results.length - 1)];
-      i++;
-      if (!r) throw new Error('no canned result');
-      return r;
-    },
+    doGenerate: async () => next(),
+    doStream: async () => ({ stream: convertArrayToReadableStream(streamOf(next())) }),
   });
 }
 
 export function failingModel(error: unknown) {
   return new MockLanguageModelV4({
     doGenerate: async () => {
+      throw error;
+    },
+    doStream: async () => {
       throw error;
     },
   });

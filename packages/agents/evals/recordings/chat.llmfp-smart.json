@@ -1,0 +1,407 @@
+{
+  "agent": "chat",
+  "promptHash": "ee42b47affba55e8",
+  "answers": {
+    "300-400": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "text": "La commande C-118 dit que la chaise coûte 40 € l'unité. La facture F-2026-042 dit 30 € l'unité. Donc la facture est 10 € de moins par chaise. Pour 10 chaises, il manque 100,00 €."
+          }
+        ],
+        "finishReason": {
+          "unified": "stop",
+          "raw": "stop"
+        },
+        "usage": {
+          "inputTokens": {
+            "total": 1621,
+            "noCache": 1461,
+            "cacheRead": 160
+          },
+          "outputTokens": {
+            "total": 84,
+            "text": 84,
+            "reasoning": 0
+          },
+          "raw": {
+            "prompt_tokens": 1621,
+            "completion_tokens": 84,
+            "total_tokens": 1705,
+            "prompt_tokens_details": {
+              "cached_tokens": 160,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            },
+            "cost": 0,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 0,
+              "upstream_inference_prompt_cost": 0,
+              "upstream_inference_completions_cost": 0
+            }
+          }
+        },
+        "warnings": []
+      },
+      {
+        "content": [
+          {
+            "type": "tool-call",
+            "toolCallId": "chatcmpl-tool-e51f4714b8844f2193bcab4a9b090f95",
+            "toolName": "proposeFix",
+            "input": "{}"
+          }
+        ],
+        "finishReason": {
+          "unified": "tool-calls",
+          "raw": "tool_calls"
+        },
+        "usage": {
+          "inputTokens": {
+            "total": 1729,
+            "noCache": 1569,
+            "cacheRead": 160
+          },
+          "outputTokens": {
+            "total": 6,
+            "text": 6,
+            "reasoning": 0
+          },
+          "raw": {
+            "prompt_tokens": 1729,
+            "completion_tokens": 6,
+            "total_tokens": 1735,
+            "prompt_tokens_details": {
+              "cached_tokens": 160,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            },
+            "cost": 0,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 0,
+              "upstream_inference_prompt_cost": 0,
+              "upstream_inference_completions_cost": 0
+            }
+          }
+        },
+        "warnings": []
+      },
+      {
+        "content": [
+          {
+            "type": "text",
+            "text": "C'est corrigé. La facture F-2026-042 est passée de 30 € à 40 € l'unité, comme le demande la commande C-118."
+          }
+        ],
+        "finishReason": {
+          "unified": "stop",
+          "raw": "stop"
+        },
+        "usage": {
+          "inputTokens": {
+            "total": 1798,
+            "noCache": 70,
+            "cacheRead": 1728
+          },
+          "outputTokens": {
+            "total": 50,
+            "text": 50,
+            "reasoning": 0
+          },
+          "raw": {
+            "prompt_tokens": 1798,
+            "completion_tokens": 50,
+            "total_tokens": 1848,
+            "prompt_tokens_details": {
+              "cached_tokens": 1728,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            },
+            "cost": 0,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 0,
+              "upstream_inference_prompt_cost": 0,
+              "upstream_inference_completions_cost": 0
+            }
+          }
+        },
+        "warnings": []
+      },
+      {
+        "content": [
+          {
+            "type": "tool-call",
+            "toolCallId": "chatcmpl-tool-325449a758a44b81bca2ccc496f6cbf0",
+            "toolName": "undoEdit",
+            "input": "{\"editId\": \"e1d2c3b4-a5f6-4788-9a0b-1c2d3e4f5a6b\"}"
+          }
+        ],
+        "finishReason": {
+          "unified": "tool-calls",
+          "raw": "tool_calls"
+        },
+        "usage": {
+          "inputTokens": {
+            "total": 1868,
+            "noCache": 1868,
+            "cacheRead": 0
+          },
+          "outputTokens": {
+            "total": 56,
+            "text": 56,
+            "reasoning": 0
+          },
+          "raw": {
+            "prompt_tokens": 1868,
+            "completion_tokens": 56,
+            "total_tokens": 1924,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            },
+            "cost": 0,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 0,
+              "upstream_inference_prompt_cost": 0,
+              "upstream_inference_completions_cost": 0
+            }
+          }
+        },
+        "warnings": []
+      },
+      {
+        "content": [
+          {
+            "type": "text",
+            "text": "La correction est annulée. La facture F-2026-042 est de retour à 30 € l'unité."
+          }
+        ],
+        "finishReason": {
+          "unified": "stop",
+          "raw": "stop"
+        },
+        "usage": {
+          "inputTokens": {
+            "total": 1984,
+            "noCache": 64,
+            "cacheRead": 1920
+          },
+          "outputTokens": {
+            "total": 35,
+            "text": 35,
+            "reasoning": 0
+          },
+          "raw": {
+            "prompt_tokens": 1984,
+            "completion_tokens": 35,
+            "total_tokens": 2019,
+            "prompt_tokens_details": {
+              "cached_tokens": 1920,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            },
+            "cost": 0,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 0,
+              "upstream_inference_prompt_cost": 0,
+              "upstream_inference_completions_cost": 0
+            }
+          }
+        },
+        "warnings": []
+      }
+    ],
+    "sent-invoice": [
+      {
+        "content": [
+          {
+            "type": "tool-call",
+            "toolCallId": "chatcmpl-tool-f851ec6ebd9849b8847aebc0c7d1f64c",
+            "toolName": "proposeFix",
+            "input": "{}"
+          }
+        ],
+        "finishReason": {
+          "unified": "tool-calls",
+          "raw": "tool_calls"
+        },
+        "usage": {
+          "inputTokens": {
+            "total": 1620,
+            "noCache": 1620,
+            "cacheRead": 0
+          },
+          "outputTokens": {
+            "total": 6,
+            "text": 6,
+            "reasoning": 0
+          },
+          "raw": {
+            "prompt_tokens": 1620,
+            "completion_tokens": 6,
+            "total_tokens": 1626,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            },
+            "cost": 0,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 0,
+              "upstream_inference_prompt_cost": 0,
+              "upstream_inference_completions_cost": 0
+            }
+          }
+        },
+        "warnings": []
+      },
+      {
+        "content": [
+          {
+            "type": "text",
+            "text": "La facture F-2026-042 du 15/09/2026 est déjà envoyée : elle ne se modifie plus. Pour les 100,00 € qui manquent, établissez une facture rectificative ou un avoir qui cite son numéro et sa date."
+          }
+        ],
+        "finishReason": {
+          "unified": "stop",
+          "raw": "stop"
+        },
+        "usage": {
+          "inputTokens": {
+            "total": 1728,
+            "noCache": 1568,
+            "cacheRead": 160
+          },
+          "outputTokens": {
+            "total": 78,
+            "text": 78,
+            "reasoning": 0
+          },
+          "raw": {
+            "prompt_tokens": 1728,
+            "completion_tokens": 78,
+            "total_tokens": 1806,
+            "prompt_tokens_details": {
+              "cached_tokens": 160,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            },
+            "cost": 0,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 0,
+              "upstream_inference_prompt_cost": 0,
+              "upstream_inference_completions_cost": 0
+            }
+          }
+        },
+        "warnings": []
+      }
+    ],
+    "no-fix": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "text": "La facture F-2026-050 n’est pas encore envoyée, mais aucune correction automatique n’est disponible : la commande C-999 n’existe pas dans vos documents.\n\nIl faut que vous modifiez vous-même la référence de la commande dans la cellule Factures!F7.  \nQuel numéro de commande réel souhaitez-vous y mettre ?"
+          }
+        ],
+        "finishReason": {
+          "unified": "stop",
+          "raw": "stop"
+        },
+        "usage": {
+          "inputTokens": {
+            "total": 1500,
+            "noCache": 1340,
+            "cacheRead": 160
+          },
+          "outputTokens": {
+            "total": 104,
+            "text": 104,
+            "reasoning": 0
+          },
+          "raw": {
+            "prompt_tokens": 1500,
+            "completion_tokens": 104,
+            "total_tokens": 1604,
+            "prompt_tokens_details": {
+              "cached_tokens": 160,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            },
+            "cost": 0,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 0,
+              "upstream_inference_prompt_cost": 0,
+              "upstream_inference_completions_cost": 0
+            }
+          }
+        },
+        "warnings": []
+      }
+    ]
+  },
+  "label": "llmfp-smart",
+  "provider": "openai-compatible",
+  "model": "auto - Smart models - Hermes",
+  "recordedAt": "2026-10-21",
+  "gate": true
+}
