@@ -13,6 +13,8 @@ import {
   chasePlans,
   chats,
   checkState,
+  connectedFiles,
+  connections,
   type Db,
   docLines,
   docs,
@@ -50,6 +52,7 @@ import { archiveRegister } from './archive';
 import { isOwner, type Principal } from './auth';
 import { cancelSubscription } from './billing';
 import { chaseView } from './collect';
+import { unwatch } from './connectors';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { exportView } from './inbound';
@@ -95,6 +98,8 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     checked,
     corrections,
     conversations,
+    accounts,
+    picked,
   ] = await Promise.all([
     db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
     db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
@@ -168,6 +173,12 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     db.select().from(checkState).where(eq(checkState.tenantId, tenant.id)),
     db.select().from(edits).where(eq(edits.tenantId, tenant.id)).orderBy(asc(edits.createdAt)),
     db.select().from(chats).where(eq(chats.tenantId, tenant.id)).orderBy(asc(chats.createdAt)),
+    db.select().from(connections).where(eq(connections.tenantId, tenant.id)),
+    db
+      .select()
+      .from(connectedFiles)
+      .where(eq(connectedFiles.tenantId, tenant.id))
+      .orderBy(asc(connectedFiles.name)),
   ]);
   const sheetOf = new Map(sheets.map((s) => [s.id, s.sheet]));
   const itemKeys = new Map(articles.map((a) => [a.id, a.key]));
@@ -213,13 +224,33 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       confirmedAt: p.confirmedAt.toISOString(),
     })),
     includedSheets: sheets.map((s) => ({
+      type: s.type,
       workbookId: s.workbookId,
+      fileId: s.fileId,
       sheet: s.sheet,
       kind: s.kind,
       layout: s.layout,
       consentedAt: s.consentedAt.toISOString(),
       readAt: s.readAt?.toISOString() ?? null,
       stats: s.stats,
+    })),
+    /** The Microsoft account connected to read files (R4), its token excepted, and its files. */
+    connections: accounts.map((c) => ({
+      provider: c.provider,
+      account: c.label,
+      accountKind: c.accountKind,
+      status: c.status,
+      connectedAt: c.connectedAt.toISOString(),
+      checkedAt: c.checkedAt?.toISOString() ?? null,
+    })),
+    connectedFiles: picked.map((f) => ({
+      id: f.id,
+      name: f.name,
+      sheets: f.sheets,
+      problem: f.problem,
+      pickedAt: f.pickedAt.toISOString(),
+      checkedAt: f.checkedAt?.toISOString() ?? null,
+      changedAt: f.changedAt?.toISOString() ?? null,
     })),
     invoices: rows.map((r) => ({
       ...invoiceSummary(r),
@@ -393,6 +424,8 @@ export async function deleteTenant(
   // First, so that nothing is charged to a company that no longer exists; if Stripe cannot be
   // reached, nothing is deleted and the owner tries again.
   await cancelSubscription(deps, tenant);
+  // Best effort: Graph stops notifying us; an unrenewed subscription ends by itself anyway.
+  await unwatch(deps, tenant.id);
   const now = deps.now();
   return deps.db.transaction(async (tx) => {
     // Never transmitted: no platform reference and no send attempt (a platform may have it).
@@ -426,6 +459,9 @@ export async function deleteTenant(
     // The sheets' layouts and consents go with the account; their documents went with the registry.
     await tx.delete(sources).where(eq(sources.tenantId, tenant.id));
     await tx.delete(layoutProfiles).where(eq(layoutProfiles.tenantId, tenant.id));
+    // The connected account's token and its picked files (R4).
+    await tx.delete(connectedFiles).where(eq(connectedFiles.tenantId, tenant.id));
+    await tx.delete(connections).where(eq(connections.tenantId, tenant.id));
     // Chasing drafts quote the customer: no plan outlives the deletion, and the advice notes kept
     // on transmitted invoices lose their drafted reply.
     await tx.delete(chasePlans).where(eq(chasePlans.tenantId, tenant.id));

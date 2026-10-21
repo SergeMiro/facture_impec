@@ -1,7 +1,15 @@
 // HTTP API (plan §1): tenants, invoices, validation, platform webhooks, and the add-in's routes
 // (sign-in, sheet sync, settings, Mode test, supplier invoices, RGPD). Business rules live in the modules next to this
 // file and in @fi/core; this file reads requests (Zod) and shapes answers.
-import { Address, InvoiceDraft, isIsoDate, SheetMapping, STATES, toCii } from '@fi/core';
+import {
+  Address,
+  InvoiceDraft,
+  isIsoDate,
+  LayoutMapping,
+  SheetMapping,
+  STATES,
+  toCii,
+} from '@fi/core';
 import {
   and,
   audit,
@@ -27,6 +35,19 @@ import { billingPages, billingRoutes, handleStripeWebhook } from './billing';
 import { answerFinding, ChatBody, chatView } from './chat';
 import { checksView, decideLink } from './checks';
 import { markStepSent, prepareChase, recordPromise } from './collect';
+import {
+  ConnectBody,
+  connect,
+  connectorView,
+  detectFileSheet,
+  disconnect,
+  includeFileSheet,
+  MicrosoftNotifications,
+  notified,
+  PickBody,
+  pickFiles,
+  removeFile,
+} from './connectors';
 import type { ApiDeps } from './deps';
 import {
   decideEdit,
@@ -258,6 +279,23 @@ export function createApp(deps: ApiDeps) {
   );
   app.route('/billing', billingPages());
 
+  // Microsoft Graph change notifications (src/connectors.ts). Learn: the subscription is checked by a
+  // POST with ?validationToken, echoed as text/plain within 10 s; a notification is answered within
+  // 3 s, so it only queues the check. Its clientState proves it comes from our subscription.
+  app.post('/webhooks/microsoft', async (c) => {
+    if (!deps.microsoft) throw new ApiError(404, 'route_not_found');
+    const validationToken = c.req.query('validationToken');
+    if (validationToken !== undefined) return c.text(validationToken, 200);
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      throw new ApiError(400, 'invalid_request', undefined, 'body is not JSON');
+    }
+    const notifications = parse(MicrosoftNotifications, raw);
+    return c.json({ received: await notified(deps, notifications) }, 202);
+  });
+
   // ── Tenant API ────────────────────────────────────────────────────────────────────────────────
   const api = new Hono<TenantEnv>();
   for (const path of [
@@ -270,6 +308,7 @@ export function createApp(deps: ApiDeps) {
     '/detect',
     '/workbooks/*',
     '/registry',
+    '/connectors/*',
     '/checks',
     '/links/*',
     '/findings/*',
@@ -430,6 +469,58 @@ export function createApp(deps: ApiDeps) {
   });
 
   api.get('/registry', async (c) => c.json(await registryView(deps, c.get('tenant'))));
+
+  // ── Files read without Excel: OneDrive (R4) ───────────────────────────────────────────────────
+  const log = (message: string) => console.warn(message);
+  api.get('/connectors/microsoft', async (c) =>
+    c.json(await connectorView(deps, c.get('tenant'), c.get('principal'))),
+  );
+
+  api.post('/connectors/microsoft', async (c) => {
+    const { token } = await body(c, ConnectBody);
+    return c.json(await connect(deps, c.get('tenant'), c.get('principal'), token, log));
+  });
+
+  api.delete('/connectors/microsoft', async (c) =>
+    c.json(await disconnect(deps, c.get('tenant'), log)),
+  );
+
+  api.post('/connectors/microsoft/files', async (c) => {
+    const { files } = await body(c, PickBody);
+    return c.json(await pickFiles(deps, c.get('tenant'), c.get('principal'), files));
+  });
+
+  api.delete('/connectors/microsoft/files/:id', async (c) =>
+    c.json(await removeFile(deps, c.get('tenant'), uuid(c.req.param('id')))),
+  );
+
+  api.post('/connectors/microsoft/files/:id/sheets/:sheet/detect', async (c) =>
+    c.json(
+      await detectFileSheet(
+        deps,
+        c.get('tenant'),
+        uuid(c.req.param('id')),
+        c.req.param('sheet'),
+        c.req.raw.signal,
+      ),
+    ),
+  );
+
+  api.put('/connectors/microsoft/files/:id/sheets/:sheet', async (c) => {
+    const { layout } = await body(c, z.object({ layout: LayoutMapping }));
+    if (layout.sheet !== c.req.param('sheet')) {
+      throw new ApiError(400, 'invalid_request', undefined, 'layout.sheet differs from the path');
+    }
+    const tenant = c.get('tenant');
+    const fileId = uuid(c.req.param('id'));
+    return c.json(await includeFileSheet(deps, tenant, c.get('principal'), fileId, layout));
+  });
+
+  api.delete('/connectors/microsoft/files/:id/sheets/:sheet', async (c) =>
+    c.json(
+      await removeSource(deps, c.get('tenant'), uuid(c.req.param('id')), c.req.param('sheet')),
+    ),
+  );
 
   // ── Checks across documents (R2) ──────────────────────────────────────────────────────────────
   api.get('/checks', async (c) => c.json(await checksView(deps, c.get('tenant'))));

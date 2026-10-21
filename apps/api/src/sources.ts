@@ -22,6 +22,7 @@ import {
 import {
   and,
   audit,
+  connectedFiles,
   count,
   desc,
   docLines,
@@ -117,6 +118,8 @@ const sourceIs = (tenantId: string, workbookId: string, sheet: string) =>
 /**
  * « Inclure cette feuille »: the company confirms what the sheet holds. Keeps the layout as a profile
  * (its version raised when it changed), records the consent, then reads the sheet a first time.
+ * `fileId`: a sheet of a picked file (R4), whose snapshot the API read itself; its workbook id is the
+ * file's id.
  */
 export async function includeSource(
   deps: ApiDeps,
@@ -124,12 +127,14 @@ export async function includeSource(
   principal: Principal,
   workbookId: string,
   input: z.infer<typeof ConfirmBody>,
+  fileId?: string,
 ) {
   const { layout, snapshot } = input;
   if (layout.sheet !== snapshot.sheet) {
     throw new ApiError(400, 'invalid_request', undefined, 'layout.sheet differs from the snapshot');
   }
   if (!isDocKind(layout.kind)) throw new ApiError(422, 'layout_kind_unsupported');
+  if (!fileId) await notAFile(deps, tenant.id, workbookId, snapshot.sheet);
   const kind: DocKind = layout.kind;
   const signature = headerSignature(snapshot, layout.headerRow);
   const now = deps.now();
@@ -198,6 +203,7 @@ export async function includeSource(
       .insert(sources)
       .values({
         tenantId: tenant.id,
+        ...(fileId && { type: 'file' as const, fileId }),
         workbookId,
         sheet: snapshot.sheet,
         profileId,
@@ -225,7 +231,19 @@ export async function includeSource(
     return row;
   });
   // A document's version holds its kind: another kind rewrites every one of them.
-  return readSource(deps, tenant, source, snapshot);
+  return readSource(deps, tenant.id, source, snapshot);
+}
+
+/**
+ * A picked file's sheet is read by the API from the file (src/connectors.ts): a snapshot sent for it
+ * from a pane is refused, whatever workbook id it claims.
+ */
+async function notAFile(deps: ApiDeps, tenantId: string, workbookId: string, sheet: string) {
+  const [file] = await deps.db
+    .select({ id: sources.id })
+    .from(sources)
+    .where(and(sourceIs(tenantId, workbookId, sheet), eq(sources.type, 'file')));
+  if (file) throw new ApiError(404, 'source_not_found');
 }
 
 /** « Retirer »: the sheet leaves the check; its documents leave the registry with it. */
@@ -279,15 +297,17 @@ export async function syncSource(
   const [source] = await deps.db
     .select()
     .from(sources)
-    .where(sourceIs(tenant.id, workbookId, sheet));
+    .where(and(sourceIs(tenant.id, workbookId, sheet), eq(sources.type, 'sheet')));
   if (!source) throw new ApiError(404, 'source_not_found');
-  return readSource(deps, tenant, source, snapshot);
+  return readSource(deps, tenant.id, source, snapshot);
 }
 
 export function sourceView(row: SourceRow) {
   return {
     id: row.id,
+    type: row.type,
     workbookId: row.workbookId,
+    fileId: row.fileId,
     sheet: row.sheet,
     kind: row.kind,
     layout: row.layout,
@@ -322,13 +342,14 @@ const docVersion = (kind: DocKind, doc: LayoutDoc) => sha256(JSON.stringify([kin
 /**
  * Reads a snapshot of an included sheet into the registry. The same snapshot as last time: nothing
  * is written at all. Else only the documents whose content changed are written again, and those no
- * longer in the sheet are removed.
+ * longer in the sheet are removed. `actor`: who read it, the pane (`user`) or a connector's check.
  */
-async function readSource(
-  deps: ApiDeps,
-  tenant: TenantRow,
+export async function readSource(
+  deps: Pick<ApiDeps, 'db' | 'jobs' | 'now'>,
+  tenantId: string,
   source: SourceRow,
   snapshot: SheetSnapshot,
+  actor = 'user',
 ) {
   const etag = sha256(JSON.stringify(snapshot.rows));
   const view = (row: SourceRow, written: number, removed: number) => ({
@@ -363,7 +384,7 @@ async function readSource(
 
   const row = await deps.db.transaction(async (tx) => {
     if (gone.length) await tx.delete(docs).where(inArray(docs.id, gone));
-    if (changed.length) await writeDocs(tx, tenant.id, source, changed, now);
+    if (changed.length) await writeDocs(tx, tenantId, source, changed, now);
     const [updated] = await tx
       .update(sources)
       .set({ etag, readAt: now, stats, ...(touched && { changedAt: now }), updatedAt: now })
@@ -373,8 +394,8 @@ async function readSource(
     // Only a read that changed the registry is an event worth keeping.
     if (touched) {
       await audit(tx, {
-        tenantId: tenant.id,
-        actor: 'user',
+        tenantId,
+        actor,
         action: 'source.read',
         objectType: 'source',
         objectId: source.id,
@@ -384,7 +405,7 @@ async function readSource(
     return updated;
   });
   // After the commit: the registry job checks the documents again (src/checks.ts).
-  if (touched) await deps.jobs.enqueueRegistry(tenant.id);
+  if (touched) await deps.jobs.enqueueRegistry(tenantId);
   return view(row, changed.length, gone.length);
 }
 
@@ -527,6 +548,18 @@ export async function registryView(deps: ApiDeps, tenant: TenantRow) {
     .orderBy(desc(docs.updatedAt), desc(docs.id))
     .limit(20);
   const sheetOf = new Map(included.map((s) => [s.id, s.sheet]));
+  // A picked file's sheet (R4): the pane names the file and selects no cell in the open workbook.
+  const fileIds = included.flatMap((s) => (s.fileId ? [s.fileId] : []));
+  const files = fileIds.length
+    ? await deps.db
+        .select({ id: connectedFiles.id, name: connectedFiles.name })
+        .from(connectedFiles)
+        .where(inArray(connectedFiles.id, fileIds))
+    : [];
+  const fileNameOf = new Map(files.map((f) => [f.id, f.name]));
+  const fileOf = new Map(
+    included.map((s) => [s.id, s.fileId ? (fileNameOf.get(s.fileId) ?? null) : null]),
+  );
   // Where each document starts in its sheet: a click on it in the pane selects that cell.
   const firstCells = recent.length
     ? await deps.db
@@ -544,7 +577,10 @@ export async function registryView(deps: ApiDeps, tenant: TenantRow) {
     : [];
   const cellOf = new Map(firstCells.map((l) => [l.docId, l.cell]));
   return {
-    sources: included.map(sourceView),
+    sources: included.map((s) => ({
+      ...sourceView(s),
+      file: s.fileId ? (fileNameOf.get(s.fileId) ?? null) : null,
+    })),
     invoices: {
       sent: invoiceCounts.find((c) => c.direction === 'out')?.n ?? 0,
       received: invoiceCounts.find((c) => c.direction === 'in')?.n ?? 0,
@@ -554,6 +590,7 @@ export async function registryView(deps: ApiDeps, tenant: TenantRow) {
     recent: recent.map(({ sourceId, updatedAt, ...d }) => ({
       ...d,
       sheet: sourceId ? (sheetOf.get(sourceId) ?? null) : null,
+      file: sourceId ? (fileOf.get(sourceId) ?? null) : null,
       cell: cellOf.get(d.id) ?? null,
       updatedAt: updatedAt.toISOString(),
     })),

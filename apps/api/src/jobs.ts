@@ -17,6 +17,8 @@ export const QUEUES = {
   reportPayment: 'invoice.report_payment',
   /** A company's registry brought up to date. `stately` per company: one running + one queued. */
   registry: 'registry.refresh',
+  /** A connected account's picked files checked (src/connectors.ts). `stately` per connection. */
+  connector: 'connector.check',
 } as const;
 
 export function createBoss(database: Database): PgBoss {
@@ -67,6 +69,14 @@ export async function ensureQueues(boss: PgBoss): Promise<void> {
     retryBackoff: true,
     expireInSeconds: 600,
   });
+  // Twenty files of 10 MB at worst; Microsoft asking to wait is handled inside, not retried here.
+  await boss.createQueue(QUEUES.connector, {
+    policy: 'stately',
+    retryLimit: 3,
+    retryDelay: 30,
+    retryBackoff: true,
+    expireInSeconds: 600,
+  });
 }
 
 export const syncKey = (target: SyncTarget) =>
@@ -88,6 +98,9 @@ export function bossJobs(boss: PgBoss): Jobs {
     },
     async enqueueRegistry(tenantId) {
       await boss.send(QUEUES.registry, { tenantId }, { singletonKey: tenantId });
+    },
+    async enqueueConnector(connectionId) {
+      await boss.send(QUEUES.connector, { connectionId }, { singletonKey: connectionId });
     },
   };
 }

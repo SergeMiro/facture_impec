@@ -1,5 +1,6 @@
 // Assembles the API process: database (migrated), pg-boss, PDP adapters, HTTP server, workers.
 // server.ts runs it from .env; the scenario stack runs it in-process on a free port.
+import { resolveMx } from 'node:dns/promises';
 import { includedAi } from '@fi/agents';
 import { bundledFonts } from '@fi/core/fonts';
 import { type Database, openDatabase } from '@fi/db';
@@ -17,10 +18,12 @@ import type { PgBoss } from 'pg-boss';
 import { createAiDeps } from './ai';
 import { createApp } from './app';
 import { type Billing, billingFromEnv } from './billing';
+import type { MicrosoftConnector } from './connectors';
 import type { AiDeps, ApiDeps, Mailer, OwnPlatform, PdpRegistry, TestPlatform } from './deps';
 import { bossJobs, createBoss, ensureQueues } from './jobs';
 import { type Listening, listen } from './listen';
 import { OutboxMailer, SmtpMailer } from './mail';
+import { createMicrosoftClient, MICROSOFT_HOSTS } from './microsoft';
 import { type Directory, RechercheEntreprises } from './sirene';
 import { startWorkers } from './workers';
 
@@ -43,6 +46,8 @@ export interface ApiOptions {
   directory?: Directory | null;
   /** Default: ownPdpFromEnv (PDP_KEY_SEALING_KEY). */
   ownPdp?: OwnPlatform | null;
+  /** Default: microsoftFromEnv (MICROSOFT_*). */
+  microsoft?: MicrosoftConnector | null;
   pollingIntervalSeconds?: number;
   /** Chasing timer (real seconds); default COLLECT_EVERY_SECONDS. */
   collectEverySeconds?: number;
@@ -142,6 +147,77 @@ export function testPlatformFromEnv(env: ServerEnv, pdp: PdpRegistry): TestPlatf
   return { provider: 'mock', scenarios: createMockScenarioPort({ baseUrl: env.MOCK_PDP_URL }) };
 }
 
+/**
+ * The OneDrive connector (docs/MICROSOFT365.md): only with the owner's app registration. Outside local
+ * it talks to Microsoft's hosts only, and change notifications need an https address Graph can reach;
+ * without one, files are polled.
+ */
+export function microsoftFromEnv(
+  env: ServerEnv,
+  fetcher?: typeof fetch,
+): MicrosoftConnector | null {
+  const clientId = env.MICROSOFT_CLIENT_ID;
+  const clientSecret = env.MICROSOFT_CLIENT_SECRET;
+  const sealingKey = env.CONNECTOR_SEALING_KEY;
+  if (!clientId || !clientSecret || !sealingKey) return null;
+  const loginUrl = env.MICROSOFT_LOGIN_URL ?? MICROSOFT_HOSTS.login;
+  const graphUrl = env.MICROSOFT_GRAPH_URL ?? MICROSOFT_HOSTS.graph;
+  if (env.FI_ENV !== 'local') {
+    for (const [name, url, host] of [
+      ['MICROSOFT_LOGIN_URL', loginUrl, MICROSOFT_HOSTS.login],
+      ['MICROSOFT_GRAPH_URL', graphUrl, MICROSOFT_HOSTS.graph],
+    ] as const) {
+      if (new URL(url).origin !== new URL(host).origin) {
+        throw new Error(`${name}: only local may use a stand-in (${new URL(url).origin})`);
+      }
+    }
+  }
+  const reachable = env.FI_ENV === 'local' || env.API_PUBLIC_URL.startsWith('https://');
+  return {
+    client: createMicrosoftClient({
+      clientId,
+      clientSecret,
+      loginUrl,
+      graphUrl,
+      ...(fetcher && { fetcher }),
+    }),
+    clientId,
+    sealingKey,
+    notificationUrl: reachable
+      ? new URL('/webhooks/microsoft', env.API_PUBLIC_URL).toString()
+      : null,
+    mailExchanges: mailExchangesFromDns(),
+  };
+}
+
+/**
+ * MX hosts of a mail domain for the Scout (connectors.ts servedByMicrosoft): asked at most once a day
+ * per domain, given up after 2 s. A failed lookup is an empty answer, kept like any other.
+ */
+export function mailExchangesFromDns(
+  resolve: (domain: string) => Promise<{ exchange: string }[]> = resolveMx,
+  now: () => number = Date.now,
+): (domain: string) => Promise<string[]> {
+  const DAY_MS = 24 * 3_600_000;
+  const cache = new Map<string, { at: number; hosts: Promise<string[]> }>();
+  return (domain) => {
+    const hit = cache.get(domain);
+    if (hit && now() - hit.at < DAY_MS) return hit.hosts;
+    if (cache.size >= 1_000) cache.clear();
+    let timer: NodeJS.Timeout | undefined;
+    const hosts = Promise.race([
+      resolve(domain).then((records) => records.map((r) => r.exchange)),
+      new Promise<string[]>((done) => {
+        timer = setTimeout(() => done([]), 2_000);
+      }),
+    ])
+      .catch(() => [])
+      .finally(() => clearTimeout(timer));
+    cache.set(domain, { at: now(), hosts });
+    return hosts;
+  };
+}
+
 /** The outbox in local; elsewhere the SMTP provider, or no mail at all without one. */
 export function mailerFromEnv(
   env: ServerEnv,
@@ -191,6 +267,7 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
         ? new RechercheEntreprises(env.SIRENE_URL)
         : options.directory,
     ownPdp: options.ownPdp === undefined ? ownPdpFromEnv(env, pdp) : options.ownPdp,
+    microsoft: options.microsoft === undefined ? microsoftFromEnv(env) : options.microsoft,
     fonts: bundledFonts(),
     now,
   };

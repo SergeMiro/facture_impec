@@ -19,9 +19,12 @@ import { runSend, runSync, type WorkerDeps } from './workers';
 // The task pane's chat tests (R8) script the model.
 export { handleFor, mockModel, textResult, toolCallResult } from '@fi/agents/testing';
 // The SIRENs the directory stand-in plays a case with.
-export { SIRENE_CASES } from '@fi/mock-pdp';
+// The task pane's OneDrive tests (R4): Microsoft's stand-in, and the check its worker runs.
+export { MICROSOFT_STAND_IN_APP, MicrosoftStandIn, SIRENE_CASES } from '@fi/mock-pdp';
 // The task pane's tests move invoices as the workers would.
 export { runCollect } from './collect';
+export { checkConnection, type MicrosoftConnector } from './connectors';
+export { createMicrosoftClient } from './microsoft';
 // The sync load test (scripts/load/sync.ts) times the registry.
 export { refreshRegistry } from './registry';
 export { runSend, runSync, type WorkerDeps };
@@ -76,6 +79,8 @@ export interface RecordedJobs extends Jobs {
   payments: string[];
   /** Companies whose registry refresh was queued. */
   registry: string[];
+  /** Connections whose check was queued. */
+  connectors: string[];
 }
 
 export function recordedJobs(): RecordedJobs {
@@ -84,12 +89,14 @@ export function recordedJobs(): RecordedJobs {
   const monitors: string[] = [];
   const payments: string[] = [];
   const registry: string[] = [];
+  const connectors: string[] = [];
   return {
     sends,
     syncs,
     monitors,
     payments,
     registry,
+    connectors,
     async enqueueSend(id) {
       sends.push(id);
     },
@@ -104,6 +111,9 @@ export function recordedJobs(): RecordedJobs {
     },
     async enqueueRegistry(tenantId) {
       registry.push(tenantId);
+    },
+    async enqueueConnector(connectionId) {
+      connectors.push(connectionId);
     },
   };
 }

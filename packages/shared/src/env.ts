@@ -115,6 +115,21 @@ export const ServerEnvSchema = z
         .refine((v) => Buffer.from(v, 'base64').length === 32, '32 bytes in base64')
         .optional(),
     ),
+    // OneDrive / SharePoint connector (docs/MICROSOFT365.md): the owner's app registration. Empty id:
+    // no connector. The secret signs the on-behalf-of exchange; never commit it.
+    MICROSOFT_CLIENT_ID: z.preprocess(blank, z.uuid().optional()),
+    MICROSOFT_CLIENT_SECRET: optionalText(),
+    // Empty: Microsoft's hosts. Local and tests: the stand-in (apps/mock-pdp /microsoft).
+    MICROSOFT_LOGIN_URL: z.preprocess(blank, z.url().optional()),
+    MICROSOFT_GRAPH_URL: z.preprocess(blank, z.url().optional()),
+    // Seals the connected accounts' refresh tokens; required with MICROSOFT_CLIENT_ID.
+    CONNECTOR_SEALING_KEY: z.preprocess(
+      blank,
+      z
+        .string()
+        .refine((v) => Buffer.from(v, 'base64').length === 32, '32 bytes in base64')
+        .optional(),
+    ),
     AI_RUN_TOKENS: z.coerce.number().int().positive().default(30_000),
     AI_DAILY_TOKENS: z.coerce.number().int().positive().default(300_000),
   })
@@ -153,6 +168,17 @@ export const ServerEnvSchema = z
               ? 'prod takes a live key (sk_live_… or rk_live_…)'
               : `${env.FI_ENV} takes a test key (sk_test_… or rk_test_…)`,
         });
+      }
+    }
+    if (env.MICROSOFT_CLIENT_ID) {
+      for (const key of ['MICROSOFT_CLIENT_SECRET', 'CONNECTOR_SEALING_KEY'] as const) {
+        if (!env[key]) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: 'required with MICROSOFT_CLIENT_ID',
+          });
+        }
       }
     }
     if (env.FI_ENV === 'local') return;

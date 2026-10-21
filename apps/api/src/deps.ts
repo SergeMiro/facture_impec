@@ -4,6 +4,7 @@ import type { Db, PdpProvider } from '@fi/db';
 import type { PdpAdapter, ScenarioPort } from '@fi/pdp-adapter';
 import type { ServerEnv } from '@fi/shared/env';
 import type { Billing } from './billing';
+import type { MicrosoftConnector } from './connectors';
 import type { RequestWindows } from './limits';
 import type { Directory } from './sirene';
 
@@ -41,6 +42,8 @@ export interface Jobs {
   enqueueReportPayment(invoiceId: string): Promise<void>;
   /** Bring a company's registry up to date (src/registry.ts). */
   enqueueRegistry(tenantId: string): Promise<void>;
+  /** Check a connected account's picked files (src/connectors.ts). */
+  enqueueConnector(connectionId: string): Promise<void>;
 }
 
 export interface AiDeps {
@@ -107,6 +110,8 @@ export interface ApiDeps {
   directory?: Directory | null;
   /** Company platform keys (PDP_KEY_SEALING_KEY); absent or null: every company uses ours. */
   ownPdp?: OwnPlatform | null;
+  /** OneDrive files read without Excel (src/connectors.ts); absent or null: not offered. */
+  microsoft?: MicrosoftConnector | null;
   /** Request counters (src/limits.ts); default: fresh ones per app. */
   limits?: RequestWindows;
   now: () => Date;

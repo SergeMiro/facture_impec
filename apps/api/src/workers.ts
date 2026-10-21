@@ -35,6 +35,7 @@ import { runAutopilot } from './autopilot';
 import { type Billing, recordUsage, runUsageReport } from './billing';
 import { checkNow, checksBehind } from './checks';
 import { runCollect } from './collect';
+import { checkConnection, connectorsBehind, type MicrosoftConnector } from './connectors';
 import type {
   AiDeps,
   Jobs,
@@ -69,12 +70,15 @@ export interface WorkerDeps {
   billing?: Billing | null;
   /** For the archived PDF (src/archive.ts); absent: the bundled fonts. */
   fonts?: FacturXOptions['fonts'];
+  /** OneDrive files (src/connectors.ts); absent: no connection is checked. */
+  microsoft?: MicrosoftConnector | null;
   now: () => Date;
 }
 
 const SendJob = z.object({ invoiceId: z.uuid() });
 const InvoiceJob = SendJob;
 const RegistryJob = z.object({ tenantId: z.uuid() });
+const ConnectorJob = z.object({ connectionId: z.uuid() });
 const SyncJob = z.object({
   provider: z.enum(PDP_PROVIDERS),
   account: z.string().min(1),
@@ -278,7 +282,8 @@ export async function runSync(deps: WorkerDeps, target: SyncTarget): Promise<voi
 
 /**
  * Refreshes every invoice the platform still has news about, re-queues unfinished sends, and queues
- * the advice, payment reports and registry refreshes (with their checks) whose job was lost.
+ * the advice, payment reports and registry refreshes (with their checks) whose job was lost, and the
+ * checks of connected files that are due.
  */
 export async function runSweep(deps: WorkerDeps): Promise<{
   synced: number;
@@ -286,6 +291,7 @@ export async function runSweep(deps: WorkerDeps): Promise<{
   advice: number;
   payments: number;
   registry: number;
+  connectors: number;
 }> {
   const inFlight = await deps.db
     .select({
@@ -320,12 +326,15 @@ export async function runSweep(deps: WorkerDeps): Promise<{
     ...new Set([...(await registryBehind(deps.db)), ...(await checksBehind(deps.db, deps.now()))]),
   ];
   for (const tenantId of behind) await deps.jobs.enqueueRegistry(tenantId);
+  const due = deps.microsoft ? await connectorsBehind(deps.db, deps.now()) : [];
+  for (const id of due) await deps.jobs.enqueueConnector(id);
   return {
     synced: inFlight.length,
     sends: unfinished.length,
     advice: advice.length,
     payments: payments.length,
     registry: behind.length,
+    connectors: due.length,
   };
 }
 
@@ -470,6 +479,11 @@ export async function startWorkers(
   });
   await boss.work(QUEUES.registry, polling, async ([job]) => {
     if (job) await checkNow(deps.db, RegistryJob.parse(job.data).tenantId, deps.now());
+  });
+  await boss.work(QUEUES.connector, polling, async ([job]) => {
+    if (job) {
+      await checkConnection(deps, ConnectorJob.parse(job.data).connectionId, options.log);
+    }
   });
   const tick = () =>
     boss

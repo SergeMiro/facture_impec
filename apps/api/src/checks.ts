@@ -20,6 +20,7 @@ import {
   asc,
   audit,
   checkState,
+  connectedFiles,
   type Db,
   type DbOrTx,
   docLines,
@@ -410,6 +411,8 @@ export interface Place {
   workbookId: string | null;
   /** A received invoice: « Voir la facture du fournisseur » opens it in « Réception ». */
   inboundId: string | null;
+  /** The OneDrive file it was read from (R4): the pane names it instead of selecting a cell. */
+  file: string | null;
 }
 
 /** Where each document is: its number, and the sheet and workbook it was read from. */
@@ -423,9 +426,11 @@ export async function placesOf(db: DbOrTx, ids: readonly string[]): Promise<Map<
       workbookId: sources.workbookId,
       inboundId: docs.inboundId,
       binding: invoices.excelBinding,
+      file: connectedFiles.name,
     })
     .from(docs)
     .leftJoin(sources, eq(sources.id, docs.sourceId))
+    .leftJoin(connectedFiles, eq(connectedFiles.id, sources.fileId))
     .leftJoin(invoices, eq(invoices.id, docs.invoiceId))
     .where(inArray(docs.id, [...new Set(ids)]));
   return new Map(
@@ -436,6 +441,7 @@ export async function placesOf(db: DbOrTx, ids: readonly string[]): Promise<Map<
         sheet: d.sheet ?? d.binding?.sheet ?? null,
         workbookId: d.workbookId ?? d.binding?.workbookId ?? null,
         inboundId: d.inboundId,
+        file: d.file,
       },
     ]),
   );
@@ -472,6 +478,7 @@ export function findingView(
       sheet: p?.sheet ?? null,
       workbookId: p?.workbookId ?? null,
       inboundId: p?.inboundId ?? null,
+      file: p?.file ?? null,
     };
   };
   return {
