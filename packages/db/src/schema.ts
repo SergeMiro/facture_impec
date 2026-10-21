@@ -712,10 +712,14 @@ export const sources = pgTable(
     tenantId: uuid('tenant_id')
       .notNull()
       .references(() => tenants.id),
-    type: text('type', { enum: ['sheet'] })
+    /** A sheet of the open workbook (R1), or of a file the API reads itself (R4). */
+    type: text('type', { enum: ['sheet', 'file'] })
       .notNull()
       .default('sheet'),
+    /** The open workbook's id; for a file, its `connected_files` id. */
     workbookId: text('workbook_id').notNull(),
+    /** A sheet of a picked file: it goes with the file. */
+    fileId: uuid('file_id').references(() => connectedFiles.id, { onDelete: 'cascade' }),
     sheet: text('sheet').notNull(),
     profileId: uuid('profile_id').references(() => layoutProfiles.id),
     kind: text('kind', { enum: DOC_KINDS }).notNull(),
@@ -1001,6 +1005,96 @@ export const chats = pgTable(
   (t) => [index('chats_tenant').on(t.tenantId)],
 );
 
+export const CONNECTION_PROVIDERS = ['microsoft'] as const;
+export const FILE_PROBLEMS = [
+  'missing',
+  'forbidden',
+  'too_large',
+  'unreadable',
+  'unsupported',
+] as const;
+export type FileProblem = (typeof FILE_PROBLEMS)[number];
+
+/**
+ * An account the company connected to read files the API checks without Excel (R4): Microsoft's, one
+ * per company. The refresh token is sealed; the pane never sees it.
+ */
+export const connections = pgTable(
+  'connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    provider: text('provider', { enum: CONNECTION_PROVIDERS }).notNull(),
+    /** The account's id at the provider (Graph `/me` id): connecting it again updates this row. */
+    accountId: text('account_id').notNull(),
+    /** What the pane shows: the account's address. */
+    label: text('label').notNull(),
+    /** A personal Microsoft account or a work one: Graph subscribes only the former with Files.Read. */
+    accountKind: text('account_kind', { enum: ['personal', 'work'] }).notNull(),
+    /** The directory the account signed in from (`tid`): its token endpoint. */
+    directory: text('directory').notNull(),
+    /** The drive's address (Graph `webUrl`): a work account's file picker lives on its host. */
+    driveUrl: text('drive_url'),
+    /** AES-256-GCM under CONNECTOR_SEALING_KEY. */
+    refreshToken: text('refresh_token').notNull(),
+    /** `reconnect`: Microsoft refused the token; nothing is read until the person signs in again. */
+    status: text('status', { enum: ['active', 'reconnect'] })
+      .notNull()
+      .default('active'),
+    /** Change notifications on the drive's root (personal OneDrive). */
+    subscriptionId: text('subscription_id'),
+    subscriptionExpiresAt: timestamp('subscription_expires_at', { withTimezone: true }),
+    /** SHA-256 of the secret Graph sends back with each notification. */
+    clientStateHash: text('client_state_hash'),
+    connectedBy: text('connected_by').notNull(),
+    connectedAt: timestamp('connected_at', { withTimezone: true }).notNull(),
+    /** The last time its files were checked. */
+    checkedAt: timestamp('checked_at', { withTimezone: true }),
+    /** Microsoft asked to wait (429, Retry-After): no call before. */
+    waitUntil: timestamp('wait_until', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('connections_provider').on(t.tenantId, t.provider),
+    index('connections_subscription').on(t.subscriptionId),
+  ],
+);
+
+/** A file the company picked in a connection: the only files the API reads (R4). */
+export const connectedFiles = pgTable(
+  'connected_files',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'cascade' }),
+    driveId: text('drive_id').notNull(),
+    itemId: text('item_id').notNull(),
+    name: text('name').notNull(),
+    /** Graph's content tag (cTag, else eTag) at the last read: the same one, nothing is downloaded. */
+    contentTag: text('content_tag'),
+    size: integer('size'),
+    /** Its sheets at the last read, in the workbook's order. */
+    sheets: jsonb('sheets_json').$type<string[]>().notNull().default([]),
+    /** Why the last check could not read it; null when it could. */
+    problem: text('problem', { enum: FILE_PROBLEMS }),
+    pickedBy: text('picked_by').notNull(),
+    pickedAt: timestamp('picked_at', { withTimezone: true }).notNull(),
+    checkedAt: timestamp('checked_at', { withTimezone: true }),
+    /** The last download whose content was new. */
+    changedAt: timestamp('changed_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('connected_files_item').on(t.tenantId, t.driveId, t.itemId)],
+);
+
 /** Stripe events already applied: an endpoint may receive the same event twice (docs/BILLING.md). */
 export const stripeEvents = pgTable('stripe_events', {
   id: text('id').primaryKey(),
@@ -1030,3 +1124,5 @@ export type LinkRow = typeof links.$inferSelect;
 export type FindingRow = typeof findings.$inferSelect;
 export type EditRow = typeof edits.$inferSelect;
 export type ChatRow = typeof chats.$inferSelect;
+export type ConnectionRow = typeof connections.$inferSelect;
+export type ConnectedFileRow = typeof connectedFiles.$inferSelect;

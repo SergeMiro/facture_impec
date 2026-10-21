@@ -59,6 +59,8 @@ describe('migrations', () => {
       'chase_plans',
       'chats',
       'check_state',
+      'connected_files',
+      'connections',
       'doc_lines',
       'docs',
       'edits',
