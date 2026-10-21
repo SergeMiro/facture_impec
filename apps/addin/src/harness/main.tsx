@@ -4,6 +4,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Controller } from '../controller';
 import { FakeWorkbook } from '../excel/fake';
+import { standInMicrosoftPort } from '../microsoft/stand-in';
 import { tokenStore } from '../storage';
 import { App } from '../ui/App';
 import {
@@ -21,8 +22,17 @@ const workbook = new FakeWorkbook({
   [DEMO_ORDERS]: demoOrders(),
   [DEMO_PURCHASES]: demoPurchases(),
 });
+const query = new URLSearchParams(window.location.search);
 const controller = new Controller({
   port: workbook,
+  // Microsoft's stand-in in apps/mock-pdp, behind the dev server's proxy; `?microsoft=work` signs in
+  // the work account instead of the personal one.
+  microsoft: standInMicrosoftPort({
+    base: '/microsoft',
+    account: query.get('microsoft') === 'work' ? 'aad-camille' : 'msa-camille',
+  }),
+  // `?document=<address>` plays a workbook opened from there (the Scout's suggestion).
+  documentUrl: () => query.get('document'),
   tokens: tokenStore(),
   apiBase: __API_URL__,
   objectUrl: {

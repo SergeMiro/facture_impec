@@ -15,6 +15,7 @@
     "appsource": "tsx scripts/appsource.ts"
   },
   "dependencies": {
+    "@azure/msal-browser": "5.25.0",
     "@fi/core": "workspace:*",
     "@fi/shared": "workspace:*",
     "@fluentui/react-components": "^9.74.9",

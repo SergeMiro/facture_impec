@@ -1,6 +1,7 @@
 // Registre (R1): the workbook's other sheets — orders, delivery notes, purchases, price lists. The
 // company says what a sheet holds once (« Inclure cette feuille »); then every change to it is read
-// into the registry next to the invoices, and « Retirer » takes it out again.
+// into the registry next to the invoices, and « Retirer » takes it out again. « Fichiers OneDrive »
+// (R4): sheets of files the API reads itself, without the file being open.
 import {
   fieldAllowed,
   frDate,
@@ -31,7 +32,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { useEffect, useState } from 'react';
-import type { Source } from '../api';
+import type { ConnectedFile, Source } from '../api';
 import type { Header, Inclusion } from '../controller';
 import { parisDateTime, parisTime, useFi } from './context';
 
@@ -86,6 +87,19 @@ const FIELD: Record<LayoutField, MessageKey> = {
 /** Below it the pane asks the company to look at the kind (as for a doubtful column). */
 const SURE = 0.8;
 
+const ACCOUNT: Record<'personal' | 'work', MessageKey> = {
+  personal: 'addin.connector.kind.personal',
+  work: 'addin.connector.kind.work',
+};
+
+const PROBLEM: Record<string, MessageKey> = {
+  missing: 'addin.connector.problem.missing',
+  forbidden: 'addin.connector.problem.forbidden',
+  too_large: 'addin.connector.problem.too_large',
+  unreadable: 'addin.connector.problem.unreadable',
+  unsupported: 'addin.connector.problem.unsupported',
+};
+
 const columnLabel = (h: Header) =>
   h.text ? t('addin.detect.column', { col: h.col, header: h.text }) : h.col;
 
@@ -101,7 +115,9 @@ export function RegistryView() {
       </Subtitle2>
       <Text>{t('addin.registry.intro')}</Text>
 
-      {inclusion && <Confirm key={inclusion.sheet} inclusion={inclusion} />}
+      {inclusion && (
+        <Confirm key={`${inclusion.file?.id ?? ''}:${inclusion.sheet}`} inclusion={inclusion} />
+      )}
 
       <Text weight="semibold">{t('addin.registry.sources')}</Text>
       {state.sheet && state.mapping && <InvoiceCard sheet={state.sheet} />}
@@ -138,6 +154,8 @@ export function RegistryView() {
         </>
       )}
 
+      <ConnectorSection />
+
       <Text weight="semibold">{t('addin.registry.totals')}</Text>
       {!registry ? (
         state.busy.includes('registry') && (
@@ -169,10 +187,12 @@ export function RegistryView() {
                   </Caption1>
                   {d.sheet && (
                     <Caption1 className={styles.muted}>
-                      {t('addin.registry.fromSheet', { sheet: d.sheet })}
+                      {d.file
+                        ? t('addin.connector.fromFile', { file: d.file, sheet: d.sheet })
+                        : t('addin.registry.fromSheet', { sheet: d.sheet })}
                     </Caption1>
                   )}
-                  {d.cell && (
+                  {d.cell && !d.file && (
                     <Link onClick={() => d.cell && void fi.fixInSheet(d.cell)}>
                       {t('addin.registry.showDoc')}
                     </Link>
@@ -295,6 +315,214 @@ function SourceCard({ source: s }: { source: Source }) {
   );
 }
 
+/** « Fichiers OneDrive »: the account, the files picked in OneDrive's picker and their sheets. */
+function ConnectorSection() {
+  const styles = useStyles();
+  const [state, fi] = useFi();
+  const [confirming, setConfirming] = useState(false);
+  const view = state.connector;
+  if (!view) return null;
+  const conn = view.connection;
+  const busy = state.busy.includes('connector');
+  const picking = state.busy.includes('connector:pick');
+  return (
+    <section className={styles.section} aria-labelledby="connector-title" data-testid="connector">
+      <Text weight="semibold" id="connector-title">
+        {t('addin.connector.title')}
+      </Text>
+      {!view.microsoft ? (
+        <Caption1 className={styles.muted}>{t('addin.connector.unavailable')}</Caption1>
+      ) : !conn ? (
+        <>
+          <Caption1>{t('addin.connector.intro')}</Caption1>
+          <span className={styles.line}>
+            <Button size="small" onClick={() => void fi.connectMicrosoft()} disabled={busy}>
+              {t('addin.connector.connect')}
+            </Button>
+            {busy && <Spinner size="tiny" />}
+          </span>
+        </>
+      ) : (
+        <>
+          <Caption1>
+            {t('addin.connector.account', { account: conn.label })} · {t(ACCOUNT[conn.accountKind])}
+          </Caption1>
+          {conn.status === 'reconnect' ? (
+            <MessageBar intent="warning" layout="multiline">
+              <MessageBarBody>{t('addin.connector.reconnectNeeded')}</MessageBarBody>
+            </MessageBar>
+          ) : (
+            <Caption1 className={styles.muted}>
+              {t(conn.notified ? 'addin.connector.notified' : 'addin.connector.polled')}
+            </Caption1>
+          )}
+          {conn.checkedAt && (
+            <Caption1 className={styles.muted}>
+              {t('addin.connector.checkedAt', { time: parisDateTime(conn.checkedAt) })}
+            </Caption1>
+          )}
+          <span className={styles.line}>
+            {conn.status === 'reconnect' ? (
+              <Button
+                size="small"
+                appearance="primary"
+                onClick={() => void fi.connectMicrosoft()}
+                disabled={busy}
+              >
+                {t('addin.connector.reconnect')}
+              </Button>
+            ) : (
+              conn.picker && (
+                <Button size="small" onClick={() => void fi.pickFiles()} disabled={picking}>
+                  {t('addin.connector.pick')}
+                </Button>
+              )
+            )}
+            {(busy || picking) && <Spinner size="tiny" />}
+          </span>
+          {conn.status === 'active' && !conn.picker && (
+            <Caption1 className={styles.muted}>{t('addin.connector.noPicker')}</Caption1>
+          )}
+          {conn.files.length === 0 ? (
+            <Caption1 className={styles.muted}>{t('addin.connector.noFiles')}</Caption1>
+          ) : (
+            <ul className={styles.list}>
+              {conn.files.map((f) => (
+                <li key={f.id}>
+                  <FileCard file={f} />
+                </li>
+              ))}
+            </ul>
+          )}
+          {confirming ? (
+            <>
+              <MessageBar intent="warning" layout="multiline">
+                <MessageBarBody>{t('addin.connector.disconnectConfirm')}</MessageBarBody>
+              </MessageBar>
+              <span className={styles.line}>
+                <Button
+                  size="small"
+                  appearance="primary"
+                  onClick={() => {
+                    setConfirming(false);
+                    void fi.disconnectMicrosoft();
+                  }}
+                >
+                  {t('addin.connector.disconnectYes')}
+                </Button>
+                <Button size="small" appearance="subtle" onClick={() => setConfirming(false)}>
+                  {t('addin.connector.cancel')}
+                </Button>
+              </span>
+            </>
+          ) : (
+            <span className={styles.line}>
+              <Button
+                size="small"
+                appearance="subtle"
+                onClick={() => setConfirming(true)}
+                disabled={busy}
+              >
+                {t('addin.connector.disconnect')}
+              </Button>
+            </span>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+/** A picked file: why it is not read (if so), and each sheet with « Inclure » or what it gave. */
+function FileCard({ file }: { file: ConnectedFile }) {
+  const styles = useStyles();
+  const [state, fi] = useFi();
+  const busy = state.busy.includes(`file:${file.id}`);
+  return (
+    <Card className={styles.card} data-testid={`file-${file.name}`}>
+      <span className={styles.line}>
+        <Text weight="semibold">{file.name}</Text>
+        {busy && <Spinner size="tiny" />}
+      </span>
+      {file.problem && (
+        <MessageBar intent="warning" layout="multiline">
+          <MessageBarBody>
+            {t(PROBLEM[file.problem] ?? 'addin.connector.problem.unreadable')}
+          </MessageBarBody>
+        </MessageBar>
+      )}
+      {file.changedAt && (
+        <Caption1 className={styles.muted}>
+          {t('addin.connector.changedAt', { time: parisDateTime(file.changedAt) })}
+        </Caption1>
+      )}
+      <ul className={styles.list}>
+        {file.sheets.map((s) => {
+          const key = `file:${file.id}:${s.sheet}`;
+          const stats = s.source?.stats;
+          return (
+            <li key={s.sheet} className={styles.card} data-testid={`file-sheet-${s.sheet}`}>
+              <span className={styles.line}>
+                <Text>{s.sheet}</Text>
+                {s.source && (
+                  <Badge appearance="tint" color="brand">
+                    {t(KIND[s.source.kind])}
+                  </Badge>
+                )}
+                {state.busy.includes(key) && <Spinner size="tiny" />}
+              </span>
+              {stats && (
+                <Caption1>
+                  {t('addin.registry.stats', {
+                    rows: stats.rows,
+                    docs: stats.docs,
+                    lines: stats.lines,
+                  })}
+                </Caption1>
+              )}
+              {!s.present && (
+                <Caption1 className={styles.muted}>{t('addin.connector.sheetGone')}</Caption1>
+              )}
+              <span className={styles.line}>
+                {s.present && (
+                  <Button
+                    size="small"
+                    appearance={s.source ? 'subtle' : 'secondary'}
+                    onClick={() => void fi.includeFileSheet(file.id, s.sheet)}
+                    disabled={state.busy.includes(key)}
+                  >
+                    {t(s.source ? 'addin.registry.review' : 'addin.registry.include')}
+                  </Button>
+                )}
+                {s.source && (
+                  <Button
+                    size="small"
+                    appearance="subtle"
+                    onClick={() => void fi.removeFileSheet(file.id, s.sheet)}
+                    disabled={state.busy.includes(key)}
+                  >
+                    {t('addin.registry.remove')}
+                  </Button>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <span className={styles.line}>
+        <Button
+          size="small"
+          appearance="subtle"
+          onClick={() => void fi.removeFile(file.id)}
+          disabled={busy}
+        >
+          {t('addin.connector.removeFile')}
+        </Button>
+      </span>
+    </Card>
+  );
+}
+
 /** What the sheet holds, as proposed: the company checks the kind and the columns, then says yes. */
 function Confirm({ inclusion }: { inclusion: Inclusion }) {
   const styles = useStyles();
@@ -337,7 +565,11 @@ function Confirm({ inclusion }: { inclusion: Inclusion }) {
 
   return (
     <Card className={styles.card} data-testid="inclusion">
-      <Text weight="semibold">{t('addin.registry.confirmTitle', { sheet: inclusion.sheet })}</Text>
+      <Text weight="semibold">
+        {inclusion.file
+          ? t('addin.connector.confirmTitle', { sheet: inclusion.sheet, file: inclusion.file.name })
+          : t('addin.registry.confirmTitle', { sheet: inclusion.sheet })}
+      </Text>
       <Caption1>{t('addin.registry.confirmIntro')}</Caption1>
       {proposal.profile && (
         <MessageBar intent="success" layout="multiline">

@@ -9,11 +9,13 @@
 // under it blocks, a margin under the one of « Réglages » warns. Since R8 « Corriger pour moi » writes
 // the order's price into the cell on « Appliquer » and puts it back on « Annuler la correction », and the
 // assistant proposes the same card in the chat; its two answers are played by the page (no model in the
-// E2E stack), everything else is the real API.
+// E2E stack), everything else is the real API. Since R4 an order in a OneDrive file, picked through
+// Microsoft's stand-in, gives a finding once it changes there, the file never opened.
 // browser: local (Chrome of this server; Browserbase cannot reach localhost).
 
 import { readFile } from 'node:fs/promises';
 import { frMoney } from '@fi/core';
+import { xlsxOf } from '@fi/core/testing/xlsx';
 import { t } from '@fi/shared';
 import { expect, test } from '@playwright/test';
 import { DEMO_ORDERS, DEMO_OWNER, DEMO_PURCHASES, DEMO_SHEET } from '../src/harness/demo';
@@ -29,7 +31,10 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
   context,
 }, info) => {
   await seedDemo({ api, adminToken: E2E.adminToken, account: `e2e-${Date.now()}` });
-  await page.goto('/harness.html');
+  // The workbook plays one opened from OneDrive: the Scout suggests « Fichiers OneDrive » once.
+  await page.goto(
+    `/harness.html?document=${encodeURIComponent('https://d.docs.live.net/4f1c0a2b9d/Documents/Factures.xlsx')}`,
+  );
   const pane = page.getByTestId('pane');
   const started = Date.now();
 
@@ -391,5 +396,92 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
     await page.screenshot({ path: info.outputPath('chat.png') });
     expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
     await page.unrouteAll();
+  });
+
+  await test.step('OneDrive: C-77 changes in a file nobody opened; Contrôles finds the 300 €', async () => {
+    const FILE = 'Commandes OneDrive.xlsx';
+    // Camille's personal OneDrive in the stand-in: C-77 orders F2026-103's three days at 300 €.
+    const putOrders = async (price: number) => {
+      const bytes = xlsxOf({
+        Commandes: [
+          ['N° commande', 'Date', 'Client', 'Désignation', 'Qté', 'PU HT'],
+          ['C-77', { date: 46296 }, 'Fleurs & Co', 'Formation Excel', 3, price],
+        ],
+      });
+      const res = await fetch(
+        `http://localhost:${E2E.mock}/microsoft/control/files/msa-camille/cmd-e2e?name=${encodeURIComponent(FILE)}`,
+        { method: 'PUT', body: bytes },
+      );
+      expect(res.status).toBe(204);
+    };
+    await putOrders(300);
+
+    await pane.getByRole('tab', { name: t('addin.nav.dashboard') }).click();
+    const hint = pane.getByTestId('onedrive-hint');
+    await expect(hint).toContainText(t('addin.connector.scout.document'));
+    await page.screenshot({ path: info.outputPath('onedrive-hint.png') });
+    await hint.getByRole('button', { name: t('addin.connector.scout.open') }).click();
+    const section = pane.getByTestId('connector');
+    await section.getByRole('button', { name: t('addin.connector.connect') }).click();
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.connector.connected', { account: 'camille.martin@outlook.fr' }),
+    );
+    await expect(section).toContainText(t('addin.connector.notified'));
+    await section.getByRole('button', { name: t('addin.connector.pick') }).click();
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.connector.picked', { count: 1 }),
+    );
+    await pane
+      .getByTestId(`file-${FILE}`)
+      .getByTestId('file-sheet-Commandes')
+      .getByRole('button', { name: t('addin.registry.include') })
+      .click();
+    const inclusion = pane.getByTestId('inclusion');
+    await expect(inclusion).toContainText(
+      t('addin.connector.confirmTitle', { sheet: 'Commandes', file: FILE }),
+    );
+    await expect(inclusion.getByLabel(t('layout.field.unitPrice'))).toHaveValue('F');
+    await inclusion.getByRole('button', { name: t('addin.registry.confirm') }).click();
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.connector.included', { sheet: 'Commandes', file: FILE, docs: 1 }),
+    );
+    await expect(pane.locator('[data-testid^="doc-"]').filter({ hasText: 'C-77' })).toContainText(
+      t('addin.connector.fromFile', { file: FILE, sheet: 'Commandes' }),
+    );
+    await section.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('onedrive.png') });
+    expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+
+    // Someone raises the day to 400 € in OneDrive. Graph notifies the API, whose worker reads it.
+    await putOrders(400);
+    // The real invoice's; Mode test is on, so TEST-F2026-103 has the same finding.
+    const finding = pane
+      .getByTestId('finding')
+      .filter({ hasText: 'C-77' })
+      .filter({ hasText: 'La facture F2026-103' });
+    await expect(async () => {
+      await pane.getByRole('tab', { name: t('addin.nav.registry') }).click();
+      await pane.getByRole('tab', { name: t('addin.nav.checks') }).click();
+      await expect(finding).toHaveCount(1, { timeout: 2_000 });
+    }).toPass({ timeout: 60_000 });
+    await expect(finding).toContainText(
+      t('addin.checks.amount', { amount: frMoney(30_000, 'EUR') }),
+    );
+    await finding.getByRole('button', { name: t('addin.checks.see.order') }).click();
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.connector.inFile', { file: FILE, sheet: 'Commandes' }),
+    );
+    await finding.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('onedrive-checks.png') });
+
+    // « Déconnecter OneDrive »: the file's documents and their findings leave.
+    await pane.getByRole('tab', { name: t('addin.nav.registry') }).click();
+    await section.getByRole('button', { name: t('addin.connector.disconnect') }).click();
+    await section.getByRole('button', { name: t('addin.connector.disconnectYes') }).click();
+    await expect(pane.getByTestId('notice')).toContainText(t('addin.connector.disconnected'));
+    await expect(section.getByRole('button', { name: t('addin.connector.connect') })).toBeVisible();
+    await pane.getByRole('tab', { name: t('addin.nav.checks') }).click();
+    await expect(pane.getByTestId('finding').first()).toBeVisible();
+    await expect(finding).toHaveCount(0);
   });
 });

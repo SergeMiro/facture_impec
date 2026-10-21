@@ -1,9 +1,16 @@
 // The task pane's flows against the real API in memory (PGlite): every answer goes through the
 // add-in's Zod schemas, so a change on either side that breaks the other fails here.
+
 import {
+  checkConnection,
+  createMicrosoftClient,
   fakeAdapter,
   handleFor,
+  inProcess,
   linkToken,
+  MICROSOFT_STAND_IN_APP,
+  type MicrosoftConnector,
+  MicrosoftStandIn,
   mockModel,
   newTenant,
   runCollect,
@@ -20,6 +27,7 @@ import {
   type WorkerDeps,
 } from '@fi/api/testing';
 import { addDays, frMoney, parisToday } from '@fi/core';
+import { type XlsxCell, xlsxOf } from '@fi/core/testing/xlsx';
 import { type MessageKey, TERMS_VERSION, TRIAL_REAL_SENDS, t } from '@fi/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -41,6 +49,8 @@ import {
   demoOrders,
   demoSheet,
 } from './harness/demo';
+import { type MicrosoftPort, MicrosoftPortError } from './microsoft/port';
+import { standInMicrosoftPort } from './microsoft/stand-in';
 import type { Timers } from './offline';
 import { memoryStore } from './storage';
 
@@ -1143,6 +1153,252 @@ describe('corrections and the assistant (R8)', () => {
     expect(told).toContain('"resolved":true');
     expect(state().chat?.messages.map((m) => m.role)).toEqual(['assistant', 'user', 'assistant']);
     await until(() => b1() === undefined, 'B1 closed');
+  });
+});
+
+describe('OneDrive files read without Excel (R4)', () => {
+  const SIREN = '999000409';
+  const FILE = 'Commandes 2026.xlsx';
+  const day = (value: number): XlsxCell => ({ date: value });
+  // C-41 orders what F2026-101 bills; its price is the one Camille changes in OneDrive.
+  const ordersFile = (price: number) =>
+    xlsxOf({
+      Commandes: [
+        ['N° commande', 'Date', 'Client', 'Désignation', 'Qté', 'PU HT'],
+        ['C-41', day(46296), 'Boulangerie Martin SAS', 'Journée de conseil', 2, price],
+        ['C-42', day(46301), 'Garage des Lilas', 'Étagère murale', 2, 140],
+      ],
+      Notes: [['Relancer le garage en novembre']],
+    });
+  let stand: MicrosoftStandIn;
+  let microsoft: MicrosoftConnector;
+  let r4: ReturnType<typeof TestApi>;
+  const r4Fetch: typeof fetch = async (input, init) => r4.app.request(String(input), init);
+  const port = standInMicrosoftPort({
+    base: 'http://microsoft.test',
+    account: 'msa-camille',
+    fetch: (input, init) => inProcess(stand.app)(input, init),
+  });
+  // Only the invoice sheet is in the workbook: the orders live in OneDrive.
+  const book = new FakeWorkbook({ [DEMO_SHEET]: demoSheet() });
+  const { controller, state, tokens } = pane(book, memoryStore(), {
+    fetch: r4Fetch,
+    microsoft: port,
+  });
+  const b1 = () => state().checks?.findings.find((f) => f.rule === 'B1');
+  const file = () => state().connector?.connection?.files.find((f) => f.name === FILE);
+
+  beforeAll(async () => {
+    stand = new MicrosoftStandIn({
+      ...MICROSOFT_STAND_IN_APP,
+      publicUrl: 'http://microsoft.test',
+      fetcher: inProcess({ request: (path, init) => r4.app.request(path, init) }),
+    });
+    microsoft = {
+      client: createMicrosoftClient({
+        ...MICROSOFT_STAND_IN_APP,
+        loginUrl: 'http://microsoft.test',
+        graphUrl: 'http://microsoft.test/graph/v1.0',
+        fetcher: inProcess(stand.app),
+      }),
+      clientId: MICROSOFT_STAND_IN_APP.clientId,
+      sealingKey: Buffer.alloc(32, 9).toString('base64'),
+      notificationUrl: 'http://api.test/webhooks/microsoft',
+    };
+    r4 = testApi(database, { mock: adapter }, undefined, { microsoft });
+    const vatId = `FR${String((12 + 3 * (Number(SIREN) % 97)) % 97).padStart(2, '0')}${SIREN}`;
+    const key = (
+      await newTenant(r4.request, {
+        ...SELLER,
+        siren: SIREN,
+        vatId,
+        ownerEmail: 'onedrive@entreprise-demo.test',
+      })
+    ).apiKey;
+    const res = await r4.request('/settings', {
+      method: 'PATCH',
+      token: key,
+      body: { invoiceDefaults: { ...DEFAULTS, siret: `${SIREN}00015` } },
+    });
+    expect(res.status).toBe(200);
+    await controller.start();
+    await controller.signInWithKey(key);
+    await until(() => state().detection !== null, 'the invoice columns');
+    const columns = state().detection?.mapping;
+    if (!columns) throw new Error('no invoice columns');
+    await controller.confirmMapping(columns);
+  });
+
+  it('says calmly when this Office cannot sign in, or when the person closes Microsoft’s window', async () => {
+    controller.navigate({ name: 'registry' });
+    await until(() => state().connector !== null, 'the OneDrive section');
+    expect(state().connector).toMatchObject({
+      microsoft: { clientId: MICROSOFT_STAND_IN_APP.clientId },
+      connection: null,
+    });
+    for (const reason of ['unsupported', 'cancelled'] as const) {
+      const refusing: MicrosoftPort = {
+        signIn: async () => {
+          throw new MicrosoftPortError(reason);
+        },
+        pick: async () => [],
+      };
+      const other = pane(book, tokens, { fetch: r4Fetch, microsoft: refusing });
+      await other.controller.start();
+      other.controller.navigate({ name: 'registry' });
+      await until(() => other.state().connector !== null, 'the OneDrive section');
+      await other.controller.connectMicrosoft();
+      expect(other.state().notice?.text).toBe(t(`addin.connector.port.${reason}`));
+      expect(other.state().connector?.connection).toBeNull();
+    }
+  });
+
+  it('suggests OneDrive once, from the workbook’s address or the mail, and never connects by itself', async () => {
+    const session = (await tokens.get('token')) ?? '';
+    const ONEDRIVE = 'https://d.docs.live.net/4f1c0a2b9d/Documents/Factures%202026.xlsx';
+    // The API's answer for a person whose mail domain is served by Microsoft (connectors.test.ts).
+    const mailFetch: typeof fetch = async (input, init) => {
+      const res = await r4Fetch(input, init);
+      if (!String(input).endsWith('/connectors/microsoft') || (init?.method ?? 'GET') !== 'GET') {
+        return res;
+      }
+      return Response.json({ ...(await res.json()), mailOnMicrosoft: true });
+    };
+    const open = async (url: string | null, store = memoryStore(), fetch = r4Fetch) => {
+      await store.set('token', session);
+      const p = pane(book, store, { fetch, microsoft: port, documentUrl: () => url });
+      await p.controller.start();
+      return p;
+    };
+
+    for (const url of [
+      null,
+      'C:\\Users\\camille\\Factures.xlsx',
+      'https://d.docs.live.net.evil.test/x.xlsx',
+    ]) {
+      const here = await open(url);
+      await until(() => here.state().connector !== null, 'the OneDrive section');
+      expect(here.state().onedriveHint).toBeNull();
+    }
+
+    const store = memoryStore();
+    const there = await open(ONEDRIVE, store);
+    await until(() => there.state().onedriveHint !== null, 'the suggestion');
+    expect(there.state().onedriveHint).toBe('document');
+    expect(there.state().connector?.connection).toBeNull();
+    await there.controller.answerOnedriveHint(false);
+    expect(there.state().onedriveHint).toBeNull();
+    // Answered: not again on this device, even with the workbook still on OneDrive.
+    const later = await open(ONEDRIVE, store);
+    await until(() => later.state().screen.name === 'dashboard', 'the dashboard');
+    await later.controller.loadRegistry();
+    expect(later.state().onedriveHint).toBeNull();
+    expect(await store.get('scout.onedrive')).toBe('declined');
+
+    const mail = await open(null, memoryStore(), mailFetch);
+    await until(() => mail.state().onedriveHint !== null, 'the suggestion');
+    expect(mail.state().onedriveHint).toBe('mail');
+    await mail.controller.answerOnedriveHint(true);
+    expect(mail.state().screen).toEqual({ name: 'registry' });
+    expect(mail.state().onedriveHint).toBeNull();
+    expect(mail.state().connector?.connection).toBeNull();
+
+    // A pane without Microsoft's port suggests nothing.
+    const bare = memoryStore();
+    await bare.set('token', session);
+    const none = pane(book, bare, { fetch: mailFetch, documentUrl: () => ONEDRIVE });
+    await none.controller.start();
+    await none.controller.loadRegistry();
+    expect(none.state().onedriveHint).toBeNull();
+  });
+
+  it('finds the 300 € an order changed in OneDrive puts at stake, with the file named', async () => {
+    await stand.putFile('msa-camille', 'cmd-r4', FILE, ordersFile(450));
+    await controller.connectMicrosoft();
+    expect(state().notice?.text).toBe(
+      t('addin.connector.connected', { account: 'camille.martin@outlook.fr' }),
+    );
+    expect(state().connector?.connection).toMatchObject({
+      accountKind: 'personal',
+      status: 'active',
+      notified: true,
+      files: [],
+    });
+
+    // Only the file picked in OneDrive's picker is read.
+    await controller.pickFiles();
+    expect(state().notice?.text).toBe(t('addin.connector.picked', { count: 1 }));
+    expect(file()?.sheets.map((s) => [s.sheet, s.source])).toEqual([
+      ['Commandes', null],
+      ['Notes', null],
+    ]);
+    const fileId = file()?.id ?? '';
+
+    // « Inclure »: the proposal and the column pickers come from the API's own read of the file.
+    await controller.includeFileSheet(fileId, 'Commandes');
+    const inclusion = state().inclusion;
+    if (!inclusion) throw new Error('no proposal');
+    expect(inclusion.file).toEqual({ id: fileId, name: FILE });
+    expect(inclusion.detection.layout.kind).toBe('order');
+    expect(inclusion.headers.map((h) => h.text)).toEqual([
+      'N° commande',
+      'Date',
+      'Client',
+      'Désignation',
+      'Qté',
+      'PU HT',
+    ]);
+    expect(controller.inclusionHeaders(2)[0]).toEqual({ col: 'A', text: 'C-41' });
+    await controller.confirmLayout({ ...inclusion.detection.layout, source: 'user' });
+    expect(state().notice?.text).toBe(
+      t('addin.connector.included', { sheet: 'Commandes', file: FILE, docs: 2 }),
+    );
+    expect(state().inclusion).toBeNull();
+    expect(file()?.sheets[0]?.source).toMatchObject({ type: 'file', fileId, kind: 'order' });
+    expect(state().registry?.recent).toContainEqual(
+      expect.objectContaining({ number: 'C-41', file: FILE, sheet: 'Commandes' }),
+    );
+
+    // The order and the invoice agree.
+    await controller.loadChecks();
+    expect(b1()).toBeUndefined();
+
+    // Camille raises the day to 600 € in OneDrive; Graph tells the API, whose worker reads the file.
+    const queued = r4.jobs.connectors.length;
+    await stand.putFile('msa-camille', 'cmd-r4', FILE, ordersFile(600));
+    const [connection] = r4.jobs.connectors.slice(queued);
+    if (!connection) throw new Error('no notification');
+    expect(await checkConnection({ ...r4.deps, microsoft }, connection)).toEqual({ read: 1 });
+
+    await controller.loadChecks();
+    expect(b1()).toMatchObject({ severity: 'blocking', amount: 30_000 });
+    const order = b1()?.evidence.find((e) => e.role === 'order');
+    expect(order).toMatchObject({ number: 'C-41', file: FILE, sheet: 'Commandes' });
+    // « Voir la commande »: a file's line is named, not looked for in the open workbook.
+    if (!order) throw new Error('no order');
+    const active = book.active;
+    await controller.showEvidence(order);
+    expect(state().notice?.text).toBe(
+      t('addin.connector.inFile', { file: FILE, sheet: 'Commandes' }),
+    );
+    expect(book.active).toEqual(active);
+  });
+
+  it('takes a sheet out, then disconnects: what the files gave leaves, the invoices stay', async () => {
+    controller.navigate({ name: 'registry' });
+    await until(() => file() !== undefined, 'the picked file');
+    const fileId = file()?.id ?? '';
+    await controller.removeFileSheet(fileId, 'Commandes');
+    expect(file()?.sheets[0]).toMatchObject({ sheet: 'Commandes', source: null });
+    expect(state().registry?.recent.filter((d) => d.file !== null)).toEqual([]);
+
+    await controller.disconnectMicrosoft();
+    expect(state().notice?.text).toBe(t('addin.connector.disconnected'));
+    expect(state().connector?.connection).toBeNull();
+    await controller.loadChecks();
+    expect(b1()).toBeUndefined();
+    // The three invoices of the sheet stay in the registry.
+    expect(state().registry?.invoices.sent).toBe(3);
   });
 });
 

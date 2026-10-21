@@ -18,6 +18,7 @@ import {
   type BillingView,
   type ChatMessage,
   type Checks,
+  type ConnectorView,
   type Degraded,
   type DirectoryCompany,
   type Edit,
@@ -53,7 +54,7 @@ import {
   type WeeklyReport,
 } from './api';
 import { type CardCall, type ChatStatus, PaneChat, waitingCards } from './chat';
-import type { CellContent, ExcelPort, StatusPlan } from './excel/port';
+import type { CellContent, ExcelPort, SheetSnapshot, StatusPlan } from './excel/port';
 import {
   detectionSample,
   headersOf,
@@ -64,6 +65,7 @@ import {
 } from './excel/reader';
 import { isPermanent } from './excel/retry';
 import { StatusWriter, type WriterClock } from './excel/writer';
+import { type MicrosoftPort, MicrosoftPortError, onMicrosoftCloud } from './microsoft/port';
 import { OfflineQueue, systemTimers, type Timers } from './offline';
 import type { KeyValueStore } from './storage';
 
@@ -130,6 +132,8 @@ export interface Inclusion {
   sheet: string;
   detection: LayoutDetection;
   headers: Header[];
+  /** A sheet of a OneDrive file (R4): the API reads it itself. */
+  file?: { id: string; name: string };
 }
 
 /** R8: the conversation about one finding, as `ai`'s Chat holds it. */
@@ -191,6 +195,13 @@ export interface FiState {
   corrected: Edit | null;
   /** The sheets of this workbook included in the check: each one is read again when it changes. */
   sources: Source[];
+  /** « Fichiers OneDrive » (R4): the connected account and its files; null until loaded. */
+  connector: ConnectorView | null;
+  /**
+   * Scout (R4): why the dashboard suggests « Fichiers OneDrive » once: the workbook itself is there,
+   * or the company's mail is with Microsoft. Null once the person answered, or with nothing to say.
+   */
+  onedriveHint: 'document' | 'mail' | null;
   /** The visible sheets of the workbook. */
   sheets: string[];
   /** Sheets proposed for « Inclure cette feuille »: neither included nor an invoice sheet. */
@@ -225,6 +236,8 @@ export const SHEET_POLL_MS = 30_000;
 export const SHEET_POLL_MAX_MS = 300_000;
 
 const TOKEN_KEY = 'token';
+/** Set once the person answered the Scout's suggestion: it is never shown again on this device. */
+const SCOUT_KEY = 'scout.onedrive';
 
 /** « 29.5 » as the person reads it: « 29,5 ». */
 export const decimalFr = (value: string) => value.replace('.', ',');
@@ -272,6 +285,10 @@ export interface ControllerDeps {
   openUrl?: (url: string) => Promise<boolean>;
   /** Office.context.commerceAllowed; default true. */
   commerceAllowed?: boolean;
+  /** Microsoft's sign-in and OneDrive's picker (R4); absent: « Fichiers OneDrive » offers nothing. */
+  microsoft?: MicrosoftPort;
+  /** Office.context.document.url: where the open workbook lives (Scout, R4); null when unknown. */
+  documentUrl?: () => string | null;
 }
 
 const INITIAL: FiState = {
@@ -296,6 +313,8 @@ const INITIAL: FiState = {
   card: null,
   corrected: null,
   sources: [],
+  connector: null,
+  onedriveHint: null,
   sheets: [],
   otherSheets: [],
   inclusion: null,
@@ -314,8 +333,10 @@ const INITIAL: FiState = {
 export class Controller {
   #state: FiState = INITIAL;
   readonly #listeners = new Set<() => void>();
-  readonly #deps: Required<Omit<ControllerDeps, 'fetch' | 'objectUrl' | 'commerceAllowed'>> &
-    Pick<ControllerDeps, 'objectUrl'>;
+  readonly #deps: Required<
+    Omit<ControllerDeps, 'fetch' | 'objectUrl' | 'commerceAllowed' | 'microsoft'>
+  > &
+    Pick<ControllerDeps, 'objectUrl' | 'microsoft'>;
   readonly api: ApiClient;
   readonly #writer: StatusWriter;
   readonly #queue: OfflineQueue;
@@ -331,7 +352,8 @@ export class Controller {
   #poll: { timer: unknown; left: number } | null = null;
   #sheetPoll: { timer: unknown; delay: number } | null = null;
   readonly #sourceWatch = new Map<string, SourceWatch>();
-  #inclusionReading: SheetReading | null = null;
+  /** The rows « Inclure » names columns from: the sheet's, or the sample a OneDrive file came with. */
+  #inclusionRows: SheetSnapshot | null = null;
   #chat: PaneChat | null = null;
 
   constructor(deps: ControllerDeps) {
@@ -342,6 +364,7 @@ export class Controller {
       newId: () => crypto.randomUUID(),
       showTaskpane: async () => {},
       openUrl: async () => false,
+      documentUrl: () => null,
       ...deps,
     };
     this.#state = { ...INITIAL, commerce: deps.commerceAllowed !== false };
@@ -494,6 +517,7 @@ export class Controller {
     await this.#loadSources();
     await this.#openSheet(this.#state.sheet ?? (await this.#deps.port.activeSheet()));
     void this.#followSources();
+    void this.#scout();
   }
 
   /** Opens this sheet with its mapping: from the workbook first, else the server's copy. */
@@ -724,7 +748,7 @@ export class Controller {
     await this.#stopListening?.();
     this.#stopListening = null;
     await Promise.all([...this.#sourceWatch.keys()].map((sheet) => this.#unwatchSource(sheet)));
-    this.#inclusionReading = null;
+    this.#inclusionRows = null;
     this.#set({
       me: null,
       screen: { name: 'login' },
@@ -741,6 +765,8 @@ export class Controller {
       card: null,
       corrected: null,
       sources: [],
+      connector: null,
+      onedriveHint: null,
       sheets: [],
       otherSheets: [],
       inclusion: null,
@@ -1530,13 +1556,14 @@ export class Controller {
       });
     });
     await this.#followSources();
+    await this.#refreshConnector();
   };
 
   /** « Inclure cette feuille » / « Revoir les colonnes »: what the sheet holds. Nothing is saved. */
   includeSheet = async (sheet: string): Promise<void> => {
     const { workbookId } = this.#state;
     if (!workbookId) return;
-    this.#inclusionReading = null;
+    this.#inclusionRows = null;
     this.#set({ inclusion: null });
     await this.#act(`include:${sheet}`, async () => {
       const reading = readUsedRange(sheet, await this.#deps.port.usedRange(sheet));
@@ -1545,7 +1572,7 @@ export class Controller {
         return;
       }
       const detection = await this.api.detectSource(workbookId, detectionSample(reading.snapshot));
-      this.#inclusionReading = reading;
+      this.#inclusionRows = reading.snapshot;
       const headers = headersOf(reading.snapshot, detection.layout.headerRow);
       this.#set({ inclusion: { sheet, detection, headers }, notice: null });
     });
@@ -1553,15 +1580,20 @@ export class Controller {
 
   /** The column headers of another row, when the company moves the header row. */
   inclusionHeaders = (row: number): Header[] =>
-    this.#inclusionReading ? headersOf(this.#inclusionReading.snapshot, row) : [];
+    this.#inclusionRows ? headersOf(this.#inclusionRows, row) : [];
 
   cancelInclusion = (): void => {
-    this.#inclusionReading = null;
+    this.#inclusionRows = null;
     this.#set({ inclusion: null });
   };
 
   /** The company confirmed what the sheet holds: the whole sheet is read once, then followed. */
   confirmLayout = async (layout: LayoutMapping): Promise<void> => {
+    const file = this.#state.inclusion?.file;
+    if (file) {
+      await this.#confirmFileLayout(file, layout);
+      return;
+    }
     const { workbookId } = this.#state;
     if (!workbookId) return;
     const { sheet } = layout;
@@ -1570,7 +1602,7 @@ export class Controller {
       return this.api.includeSource(workbookId, layout, snapshot);
     });
     if (!read) return;
-    this.#inclusionReading = null;
+    this.#inclusionRows = null;
     this.#putSource(read.source);
     this.#set({ inclusion: null, otherSheets: this.#state.otherSheets.filter((s) => s !== sheet) });
     this.notify(
@@ -1596,6 +1628,180 @@ export class Controller {
   showSheet = async (sheet: string): Promise<void> => {
     const row = this.#state.sources.find((s) => s.sheet === sheet)?.layout.headerRow ?? 1;
     await this.#act('select', () => this.#deps.port.select(sheet, `A${row}`));
+  };
+
+  // ── Fichiers OneDrive (R4) ────────────────────────────────────────────────────────────────────
+  async #refreshConnector(): Promise<void> {
+    try {
+      this.#set({ connector: await this.api.connector() });
+    } catch {
+      // Not worth a notice: the section keeps what it showed, the next read asks again.
+    }
+  }
+
+  /**
+   * Scout (plan §R4): suggests « Fichiers OneDrive » once, when the workbook is itself on OneDrive or
+   * SharePoint, or the API found the company's mail with Microsoft. It never connects by itself.
+   */
+  async #scout(): Promise<void> {
+    if (!this.#deps.microsoft || (await this.#deps.tokens.get(SCOUT_KEY))) return;
+    await this.#refreshConnector();
+    const view = this.#state.connector;
+    if (!view?.microsoft || view.connection) return;
+    const hint = onMicrosoftCloud(this.#deps.documentUrl())
+      ? 'document'
+      : view.mailOnMicrosoft
+        ? 'mail'
+        : null;
+    this.#set({ onedriveHint: hint });
+  }
+
+  /** « Voir les fichiers OneDrive » or « Non merci »: either way, the suggestion is not made again. */
+  answerOnedriveHint = async (open: boolean): Promise<void> => {
+    this.#set({ onedriveHint: null });
+    await this.#deps.tokens.set(SCOUT_KEY, open ? 'opened' : 'declined');
+    if (open) this.navigate({ name: 'registry' });
+  };
+
+  /** Why Microsoft's side said no, in the pane's words. */
+  #signInFailed(e: unknown): boolean {
+    if (!(e instanceof MicrosoftPortError)) return false;
+    this.notify(
+      e.reason === 'cancelled' ? 'info' : 'warning',
+      t(`addin.connector.port.${e.reason}`),
+    );
+    return true;
+  }
+
+  /**
+   * « Connecter OneDrive » / « Reconnecter OneDrive »: Microsoft signs the person in (consent the
+   * first time), and the API exchanges that token for its own access to the files they pick.
+   */
+  connectMicrosoft = async (): Promise<void> => {
+    const app = this.#state.connector?.microsoft;
+    const port = this.#deps.microsoft;
+    if (!app || !port) {
+      this.notify('info', t('addin.connector.port.unsupported'));
+      return;
+    }
+    const again = this.#state.connector?.connection !== null;
+    const view = await this.#act('connector', async () => {
+      let token: string;
+      try {
+        token = await port.signIn(app);
+      } catch (e) {
+        if (this.#signInFailed(e)) return null;
+        throw e;
+      }
+      return this.api.connect(token);
+    });
+    if (!view?.connection) return;
+    this.#set({ connector: view, onedriveHint: null });
+    this.notify(
+      'success',
+      t(again ? 'addin.connector.reconnected' : 'addin.connector.connected', {
+        account: view.connection.label,
+      }),
+    );
+  };
+
+  /** « Choisir des fichiers »: OneDrive's own picker; only the files picked there are ever read. */
+  pickFiles = async (): Promise<void> => {
+    const view = this.#state.connector;
+    const port = this.#deps.microsoft;
+    const picker = view?.connection?.picker;
+    if (!view?.microsoft || !port || !picker) {
+      this.notify('info', t('addin.connector.port.unsupported'));
+      return;
+    }
+    const app = view.microsoft;
+    const next = await this.#act('connector:pick', async () => {
+      let files: Awaited<ReturnType<MicrosoftPort['pick']>>;
+      try {
+        files = await port.pick({
+          clientId: app.clientId,
+          picker,
+          labels: { title: t('addin.connector.pickerTitle'), close: t('addin.connector.close') },
+        });
+      } catch (e) {
+        if (this.#signInFailed(e)) return null;
+        throw e;
+      }
+      if (files.length === 0) return null;
+      return { view: await this.api.pickFiles(files), count: files.length };
+    });
+    if (!next) return;
+    this.#set({ connector: next.view });
+    this.notify('success', t('addin.connector.picked', { count: next.count }));
+  };
+
+  /** « Inclure » on a sheet of a picked file: what it holds, from the API's own read of the file. */
+  includeFileSheet = async (fileId: string, sheet: string): Promise<void> => {
+    const file = this.#state.connector?.connection?.files.find((f) => f.id === fileId);
+    if (!file) return;
+    this.#inclusionRows = null;
+    this.#set({ inclusion: null });
+    await this.#act(`file:${fileId}:${sheet}`, async () => {
+      const { sample, ...detection } = await this.api.detectFileSheet(fileId, sheet);
+      if (sample.rows.length === 0) {
+        this.notify('info', t('addin.detect.empty', { sheet }));
+        return;
+      }
+      this.#inclusionRows = sample;
+      const headers = headersOf(sample, detection.layout.headerRow);
+      this.#set({
+        inclusion: { sheet, detection, headers, file: { id: file.id, name: file.name } },
+        notice: null,
+      });
+    });
+  };
+
+  async #confirmFileLayout(file: { id: string; name: string }, layout: LayoutMapping) {
+    const read = await this.#act('include', () => this.api.includeFileSheet(file.id, layout));
+    if (!read) return;
+    this.#inclusionRows = null;
+    this.#set({ inclusion: null });
+    this.notify(
+      'success',
+      t('addin.connector.included', {
+        sheet: layout.sheet,
+        file: file.name,
+        docs: read.source.stats?.docs ?? 0,
+      }),
+    );
+    await Promise.all([this.#refreshConnector(), this.#refreshRegistry()]);
+  }
+
+  /** « Retirer » on a sheet of a file: its documents leave the Registre; the file stays picked. */
+  removeFileSheet = async (fileId: string, sheet: string): Promise<void> => {
+    const done = await this.#act(`file:${fileId}:${sheet}`, () =>
+      this.api.removeFileSheet(fileId, sheet),
+    );
+    if (!done) return;
+    this.notify('success', t('addin.registry.removed', { sheet }));
+    await Promise.all([this.#refreshConnector(), this.#refreshRegistry()]);
+  };
+
+  /** « Retirer le fichier »: it is no longer read; what its sheets gave leaves the Registre. */
+  removeFile = async (fileId: string): Promise<void> => {
+    const name = this.#state.connector?.connection?.files.find((f) => f.id === fileId)?.name;
+    const view = await this.#act(`file:${fileId}`, () => this.api.removeFile(fileId));
+    if (!view) return;
+    this.#set({ connector: view });
+    this.notify('success', t('addin.connector.fileRemoved', { file: name ?? '' }));
+    await this.#refreshRegistry();
+  };
+
+  /**
+   * « Déconnecter OneDrive », once confirmed: the token, the files and what they gave are deleted
+   * here. Microsoft keeps the consent until the person withdraws it there (docs/MICROSOFT365.md).
+   */
+  disconnectMicrosoft = async (): Promise<void> => {
+    const view = await this.#act('connector', () => this.api.disconnect());
+    if (!view) return;
+    this.#set({ connector: view });
+    this.notify('success', t('addin.connector.disconnected'));
+    await this.#refreshRegistry();
   };
 
   // ── Contrôles (R2) ────────────────────────────────────────────────────────────────────────────
@@ -1641,6 +1847,13 @@ export class Controller {
     }
     const target = evidence.cell ? parseAddress(evidence.cell) : null;
     if (!target) return;
+    if (evidence.file) {
+      this.notify(
+        'info',
+        t('addin.connector.inFile', { file: evidence.file, sheet: target.sheet }),
+      );
+      return;
+    }
     if (evidence.workbookId && evidence.workbookId !== this.#state.workbookId) {
       this.notify('info', t('addin.checks.otherWorkbook', { sheet: target.sheet }));
       return;

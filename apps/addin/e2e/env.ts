@@ -11,6 +11,13 @@ export const E2E = {
   /** B2Brouter's stand-in in apps/mock-pdp takes any sandbox-shaped key. */
   standInKey: 'test_e2e_stand_in',
   b2brouterWebhookSecret: 'e2e-b2brouter-webhook-secret-0001',
+  /** Microsoft's stand-in in apps/mock-pdp knows this app (apps/mock-pdp/src/app.ts). */
+  microsoft: {
+    clientId: '00000000-0000-4000-8000-00000000f1f1',
+    clientSecret: 'local-microsoft-client-secret',
+  },
+  /** Seals the E2E company's Microsoft tokens; 32 bytes, nothing secret. */
+  sealingKey: Buffer.alloc(32, 5).toString('base64'),
 };
 
 /** Playwright loads the config in every worker: the first load picks the folder, workers inherit it. */

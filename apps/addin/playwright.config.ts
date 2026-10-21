@@ -32,6 +32,8 @@ export default defineConfig({
       url: `http://localhost:${E2E.mock}/health`,
       env: {
         MOCK_PDP_PORT: String(E2E.mock),
+        // Where the API fetches what the stand-ins link to (Microsoft's downloads).
+        MOCK_PDP_URL: `http://localhost:${E2E.mock}`,
         MOCK_PDP_WEBHOOK_URL: `${api}/webhooks/pdp/mock`,
         // One business second per second: a sent test invoice stays « Déposée » for the scenarios.
         MOCK_PDP_SPEED: '1',
@@ -57,6 +59,12 @@ export default defineConfig({
         B2BROUTER_BASE_URL: LIVE ? '' : `http://localhost:${E2E.mock}/b2brouter`,
         B2BROUTER_WEBHOOK_SECRET: LIVE ? '' : E2E.b2brouterWebhookSecret,
         PDP_SYNC_INTERVAL_SECONDS: '10',
+        // OneDrive through Microsoft's stand-in (R4): its sign-in, Graph and change notifications.
+        MICROSOFT_CLIENT_ID: E2E.microsoft.clientId,
+        MICROSOFT_CLIENT_SECRET: E2E.microsoft.clientSecret,
+        MICROSOFT_LOGIN_URL: `http://localhost:${E2E.mock}/microsoft`,
+        MICROSOFT_GRAPH_URL: `http://localhost:${E2E.mock}/microsoft/graph/v1.0`,
+        CONNECTOR_SEALING_KEY: E2E.sealingKey,
         // No AI: the agents' deterministic answers, the same on every run.
         AI_PROVIDER: '',
       },
@@ -67,7 +75,11 @@ export default defineConfig({
       command: 'pnpm exec vite',
       url: `https://localhost:${E2E.addin}/harness.html`,
       ignoreHTTPSErrors: true,
-      env: { ADDIN_PORT: String(E2E.addin), API_PORT: String(E2E.api) },
+      env: {
+        ADDIN_PORT: String(E2E.addin),
+        API_PORT: String(E2E.api),
+        MOCK_PDP_PORT: String(E2E.mock),
+      },
       reuseExistingServer: false,
     },
   ],

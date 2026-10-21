@@ -6,10 +6,11 @@ import {
   DOC_KINDS,
   LayoutMapping,
   SheetMapping,
-  type SheetSnapshot,
+  SheetSnapshot,
 } from '@fi/core';
 import type { UIDataTypes, UIMessage } from 'ai';
 import { z } from 'zod';
+import type { PickedFile } from './microsoft/port';
 
 export class ApiFailure extends Error {
   constructor(
@@ -171,6 +172,9 @@ const SourceStats = z.object({
 /** A sheet of the workbook the company included in the check (« Inclure cette feuille »). */
 export const Source = z.object({
   id: z.string(),
+  /** `file`: a sheet of a OneDrive file the API reads itself (R4), not of an open workbook. */
+  type: z.enum(['sheet', 'file']).default('sheet'),
+  fileId: z.string().nullable().default(null),
   workbookId: z.string(),
   sheet: z.string(),
   kind: z.enum(DOC_KINDS),
@@ -194,9 +198,57 @@ export type LayoutDetection = z.infer<typeof LayoutDetection>;
 const SourceRead = z.object({ source: Source, written: z.number(), removed: z.number() });
 export type SourceRead = z.infer<typeof SourceRead>;
 
+/** A sheet of a OneDrive file: the proposal, and the first rows its column pickers name. */
+export const FileDetection = LayoutDetection.extend({ sample: SheetSnapshot });
+export type FileDetection = z.infer<typeof FileDetection>;
+
+/** The « Fichiers OneDrive » section (R4). */
+export const ConnectorView = z.object({
+  /** Null: the owner registered no Microsoft app; the section says so and offers nothing. */
+  microsoft: z.object({ clientId: z.string(), scope: z.string() }).nullable(),
+  /** Scout: the signed-in person's mail domain is served by Microsoft (its MX record). */
+  mailOnMicrosoft: z.boolean().default(false),
+  connection: z
+    .object({
+      label: z.string(),
+      accountKind: z.enum(['personal', 'work']),
+      /** `reconnect`: Microsoft refused the token; nothing is read until « Reconnecter ». */
+      status: z.enum(['active', 'reconnect']),
+      /** Where « Choisir des fichiers » opens and the token it wants; null: no picker. */
+      picker: z.object({ baseUrl: z.string(), scope: z.string() }).nullable(),
+      /** True: a change shows within minutes; false: at the next hourly check. */
+      notified: z.boolean(),
+      connectedAt: z.string(),
+      checkedAt: z.string().nullable(),
+      files: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          /** Why the file is not read now: gone, out of reach, too large, unreadable. */
+          problem: z.string().nullable(),
+          pickedAt: z.string(),
+          checkedAt: z.string().nullable(),
+          changedAt: z.string().nullable(),
+          sheets: z.array(
+            z.object({
+              sheet: z.string(),
+              /** False: renamed or deleted in the file; what it gave stays as it was. */
+              present: z.boolean(),
+              source: Source.nullable(),
+            }),
+          ),
+        }),
+      ),
+    })
+    .nullable(),
+});
+export type ConnectorView = z.infer<typeof ConnectorView>;
+export type ConnectedFile = NonNullable<ConnectorView['connection']>['files'][number];
+
 /** The « Registre » screen. */
 export const Registry = z.object({
-  sources: z.array(Source),
+  /** `file`: the OneDrive file a sheet comes from (R4). */
+  sources: z.array(Source.extend({ file: z.string().nullable().default(null) })),
   invoices: z.object({ sent: z.number(), received: z.number() }),
   /** Suppliers known from the invoices they sent (R3). */
   suppliers: z.number().default(0),
@@ -211,6 +263,8 @@ export const Registry = z.object({
       /** Cents; null when a line of the document has no amount. */
       netTotal: z.number().nullable(),
       sheet: z.string().nullable(),
+      /** The OneDrive file it was read from: no cell of the open workbook to select. */
+      file: z.string().nullable().default(null),
       /** Where the document starts in its sheet, e.g. `Commandes!E2`. */
       cell: z.string().nullable(),
       updatedAt: z.string(),
@@ -242,6 +296,8 @@ export const Finding = z.object({
       workbookId: z.string().nullable(),
       /** A supplier invoice received through the platform: « Réception » shows it. */
       inboundId: z.string().nullable().default(null),
+      /** The OneDrive file it was read from (R4): no cell of the open workbook to select. */
+      file: z.string().nullable().default(null),
     }),
   ),
   /** B2: the purchase's link to the invoice, for « Ce n'est pas le même article ». */
@@ -680,6 +736,9 @@ export type LinkPoll = z.infer<typeof LinkPoll>;
 export const SCENARIOS = ['pdp_reject', 'customer_refuse', 'pay_late', 'siren_unknown'] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
+const filePath = (fileId: string, sheet?: string) =>
+  `/connectors/microsoft/files/${encodeURIComponent(fileId)}${sheet === undefined ? '' : `/sheets/${encodeURIComponent(sheet)}`}`;
+
 const sourcesPath = (workbookId: string, sheet?: string) =>
   `/workbooks/${encodeURIComponent(workbookId)}/sources${sheet === undefined ? '' : `/${encodeURIComponent(sheet)}`}`;
 
@@ -831,6 +890,25 @@ export class ApiClient {
       body: { snapshot },
     });
   registry = () => this.#json(Registry, '/registry');
+
+  /** « Fichiers OneDrive » (R4): the connected account and the files the API reads itself. */
+  connector = () => this.#json(ConnectorView, '/connectors/microsoft');
+  /** The pane's token for our API, which the API exchanges on the person's behalf. */
+  connect = (token: string) =>
+    this.#json(ConnectorView, '/connectors/microsoft', { method: 'POST', body: { token } });
+  disconnect = () => this.#json(ConnectorView, '/connectors/microsoft', { method: 'DELETE' });
+  pickFiles = (files: PickedFile[]) =>
+    this.#json(ConnectorView, '/connectors/microsoft/files', { method: 'POST', body: { files } });
+  removeFile = (fileId: string) =>
+    this.#json(ConnectorView, filePath(fileId), { method: 'DELETE' });
+  detectFileSheet = (fileId: string, sheet: string) =>
+    this.#json(FileDetection, `${filePath(fileId, sheet)}/detect`, { method: 'POST' });
+  includeFileSheet = (fileId: string, layout: LayoutMapping) =>
+    this.#json(SourceRead, filePath(fileId, layout.sheet), { method: 'PUT', body: { layout } });
+  removeFileSheet = (fileId: string, sheet: string) =>
+    this.#json(z.object({ removed: z.boolean(), sheet: z.string() }), filePath(fileId, sheet), {
+      method: 'DELETE',
+    });
   /** « Contrôles » (R2): the open findings, the money at stake, the links to confirm. */
   checks = () => this.#json(Checks, '/checks');
   decideLink = (id: string, status: 'confirmed' | 'rejected') =>

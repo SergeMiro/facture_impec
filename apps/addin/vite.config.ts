@@ -30,6 +30,7 @@ export default defineConfig(async ({ command, mode }) => {
   const env = loadEnv(mode, repoRoot, '');
   const https = command === 'serve' && !process.env.VITEST ? await devCertificate() : undefined;
   const apiPort = env.API_PORT || '4000';
+  const mockPort = env.MOCK_PDP_PORT || '4010';
   const port = Number(env.ADDIN_PORT || 3000);
   return {
     plugins: [react()],
@@ -44,6 +45,9 @@ export default defineConfig(async ({ command, mode }) => {
           target: `http://localhost:${apiPort}`,
           rewrite: (path: string) => path.replace(/^\/api/, ''),
         },
+        // The harness's Microsoft sign-in and OneDrive (src/microsoft/stand-in.ts): the stand-in in
+        // apps/mock-pdp. Excel's pane never calls it.
+        '/microsoft': { target: `http://localhost:${mockPort}` },
       },
     },
     preview: { port, strictPort: true, https },

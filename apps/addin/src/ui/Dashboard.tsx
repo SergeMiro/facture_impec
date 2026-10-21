@@ -116,6 +116,24 @@ export function Dashboard() {
         </MessageBar>
       )}
 
+      {state.onedriveHint && (
+        <MessageBar intent="info" layout="multiline" data-testid="onedrive-hint">
+          <MessageBarBody>{t(`addin.connector.scout.${state.onedriveHint}`)}</MessageBarBody>
+          <MessageBarActions>
+            <Button size="small" onClick={() => void fi.answerOnedriveHint(true)}>
+              {t('addin.connector.scout.open')}
+            </Button>
+            <Button
+              size="small"
+              appearance="subtle"
+              onClick={() => void fi.answerOnedriveHint(false)}
+            >
+              {t('addin.connector.scout.later')}
+            </Button>
+          </MessageBarActions>
+        </MessageBar>
+      )}
+
       {state.report ? (
         <Week report={state.report} />
       ) : (
