@@ -13,5 +13,6 @@ export {
   SYNONYMS,
 } from './detect';
 export * from './fields';
+export * from './file';
 export * from './grid';
 export * from './values';

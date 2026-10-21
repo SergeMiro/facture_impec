@@ -8,6 +8,7 @@
     "./pdf": "./src/pdf/index.ts",
     "./fonts": "./fonts/index.ts",
     "./testing": "./test/fixtures.ts",
+    "./testing/xlsx": "./test/xlsx.ts",
     "./export-check": "./test/export-check.ts"
   },
   "scripts": {
