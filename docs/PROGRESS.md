@@ -754,3 +754,66 @@ all in the pane. Criteria, written here before the work:
 | Audit and RGPD | `edits.test.ts` › RGPD › exports the corrections with the account, and erases them with it; `chat.test.ts` › exports the conversation with the account, and erases it with it. `docs/RGPD.md`: Corrections (R8), Conversations with the assistant (R8), AI assistance, export, erasure. |
 | Docs | `docs/ARCHITECTURE.md` › What R8 added: the chat and the corrections, and its decisions; `docs/DEFERRED.md` (avoir draft, several cells and A4, closed workbooks, a model-written first message, `candidates`, Mastra, one answer at a time, a token cap per answer, a correction written offline, two cards in one answer, Mode test); `docs/AI_PROVIDERS.md` (ChatAgent); `docs/DEPENDENCIES.md` (`ai` in the add-in); `docs/OFFICE.md` §5 (writing and reading one cell, two TODO(verify)). |
 | Gate | `pnpm verify` green on 2026-10-21 (tests with `--concurrency=1`, memory being short): api 230, core 632 (branches 94.12 %) + oracle 276, agents 120 (branches 91.84 %), add-in 72, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local). |
+
+## R4 — Microsoft 365 (2026-10-21)
+
+R1 reads the other sheets of the open workbook, and only while it is open. R4 reads files the company
+keeps in OneDrive or SharePoint, on the server, when Excel is closed. Nothing changes for a company that
+does not connect: the connector asks for a sign-in, a file chosen by name, and « Inclure cette feuille »
+for each sheet. Criteria, written here before the work:
+
+- **Sign-in from the pane**: « Connecter OneDrive » signs in with the Microsoft account of the person
+  (nested app authentication of MSAL.js where Office has it, else the Office dialog), personal or work.
+  Only `Files.Read` and `User.Read` are asked, which need no administrator. The pane hands our API a
+  token for our API only; the API exchanges it on behalf of the person and keeps the refresh token
+  sealed (AES-256-GCM), never in clear, never sent back to the pane. Sources and dates of every
+  Microsoft behaviour in `docs/MICROSOFT365.md`; what only a real account can settle is a TODO(verify).
+- **Files chosen, not the drive**: the person picks files in Microsoft's own File Picker (OneDrive or
+  SharePoint, .xlsx, .xlsm or .csv). The API reads only those: never a folder, a search or the rest of
+  the drive. Each sheet of a picked file is proposed like a sheet of the open workbook (R1: a profile
+  already confirmed, else LayoutAgent, else the dictionary) and read only after « Inclure cette
+  feuille ».
+- **Read without Excel**: the API downloads the file and reads it itself (.xlsx parts, .csv in UTF-8 or
+  Windows-1252); sizes are capped before anything is inflated. The same snapshot twice writes nothing,
+  as for a sheet of the open workbook.
+- **Changes noticed**: the API checks each picked file's content tag every few minutes; on a personal
+  OneDrive a Graph subscription tells it sooner (the notification has no content: it only starts the
+  check). A changed file is read again, its documents are checked again (R2–R3), and the findings show
+  in the pane — the file was never opened. A subscription is renewed before it expires, removed when the
+  connection is.
+- **Calm when it breaks**: a file deleted, moved out of reach, too large or unreadable says so on its
+  row in « Registre »; a connection Microsoft no longer honours asks the person to connect again; the
+  documents already read stay until then. Microsoft's limits (429, Retry-After) are respected.
+- **Disconnecting deletes**: « Déconnecter OneDrive » (and « Retirer » on one file) removes the tokens,
+  the subscription, the files, their sheets and every document read from them; the findings that
+  rested on them are resolved by the next check.
+- **Scout**: when the open workbook itself is in OneDrive or SharePoint (its address), or the company's
+  mail domain is served by Microsoft 365 (its MX record), the pane proposes the connector once; it never
+  connects by itself.
+- **Acceptance** (architecture document, R4): a file in a test OneDrive (personal and work) changed →
+  a finding in the pane, the file never opened; disconnecting deletes the data. Against the Microsoft
+  stand-in (`apps/mock-pdp`, `/microsoft`) in `pnpm verify` and in the E2E; on real accounts once the
+  owner registers the application (`docs/RUNBOOK.md`).
+- **Audit and RGPD**: connecting, picking, including, every read that changed the registry, renewing,
+  disconnecting write an audit event; the account's address, the files and their documents are in the
+  company's export and its erasure; `docs/RGPD.md`, `docs/DEFERRED.md`, `docs/ARCHITECTURE.md` updated.
+
+### Evidence (2026-10-21)
+
+Everything below runs against the Microsoft stand-in (`apps/mock-pdp`, `/microsoft`). Real accounts
+wait for the owner's app registration (`docs/RUNBOOK.md` § OneDrive connector); what only they can
+settle is the TODO(verify) list of `docs/MICROSOFT365.md`.
+
+| Criterion | Evidence |
+|---|---|
+| Sign-in from the pane | `apps/addin/src/microsoft/office.ts`: MSAL 5.25.0 nested app authentication (`acquireTokenSilent` → `acquireTokenPopup`, NestedAppAuth 1.1), loaded only on the click. `apps/api/src/microsoft.test.ts` › the on-behalf-of exchange › asks the account's own directory, `consumers` for a personal account, › turns a refused grant into « reconnect »…. `apps/api/src/connectors.test.ts` › a personal OneDrive › finds 100 € missing… (refresh token stored sealed, never in the view), › when something breaks › refuses another account, a sign-in Microsoft rejects…. Scopes `Files.Read`, `User.Read`, `offline_access` (`GRAPH_SCOPES`). Controller › says calmly when this Office cannot sign in, or when the person closes Microsoft's window. **Not done:** the Office dialog where NAA is missing — the pane says so calmly instead (`docs/DEFERRED.md`). |
+| Files chosen, not the drive | The File Picker v8 in a frame over the pane (`office.ts` › `pick`; `pickerFor`: OneDrive's own for personal, the SharePoint host's for work); the API reads only `{driveId, itemId}` it was given (`PickBody`, at most 20 files). `connectors.test.ts` › refuses … files it does not read (a .docx); each sheet proposed with R1's detection and read only after « Inclure cette feuille » (› finds 100 € missing…: the `Notes` sheet stays proposed, not read). |
+| Read without Excel | `packages/core/src/sheet/file.test.ts` › a workbook file read like the pane reads a sheet (R4) (5 tests: values, texts, formats, formulas, a stored part, 5 000 rows, refused before inflating past 60 MB) and › a CSV file (R4) (Windows-1252 with `;`, UTF-8 BOM, `,` or tab). `microsoft.test.ts` › Graph › downloads through the pre-authenticated link, and stops past the size cap. The same snapshot twice writes nothing (› finds 100 € missing…: a check with an unchanged cTag downloads nothing). |
+| Changes noticed | `connectors.test.ts` › a personal OneDrive › finds 100 € missing against an order changed in a file nobody opened (the order’s price 30 → 40 € in OneDrive; notification → `connector.check` → read → registry → B1, 100 € at stake), › is checked hourly by the sweep in case a notification is lost; others every 2 minutes, › renews the subscription a day before it ends, and subscribes again when Graph lost it; › a work OneDrive › is polled…; › answers Graph's handshake, and ignores a notification without our secret. |
+| Calm when it breaks | `connectors.test.ts` › when something breaks › says a file is gone or out of reach, keeps what it gave, and reads it again when back, › waits when Microsoft asks to, and stops until the person reconnects when it refuses the token; `microsoft.test.ts` › maps 401, 403, 404 and 503 to what the connector does next. Each problem has its line in « Registre » (`addin.connector.problem.*`) and each error code its `api.error.*` wording. |
+| Disconnecting deletes | `connectors.test.ts` › « Déconnecter OneDrive » › deletes the token, the files, their sheets, their documents and findings; invoices stay, › removes one file with what it gave, and leaves the others. Controller › takes a sheet out, then disconnects: what the files gave leaves, the invoices stay. |
+| Scout | `connectors.test.ts` › Scout › suggests OneDrive to a person whose mail is with Microsoft, never to a key, › knows Exchange Online's two MX forms and Outlook.com's, and nothing else (sources: `docs/MICROSOFT365.md`); `runtime.test.ts` › mailExchangesFromDns (once a day per domain, 2 s at most). Controller › suggests OneDrive once, from the workbook's address or the mail, and never connects by itself. E2E › OneDrive: the suggestion on the Tableau de bord ([suggestion](evidence/r4-onedrive-hint.png)), « Voir les fichiers OneDrive » leads to the connector. The address templates are a TODO(verify); formula links and sheet names: `docs/DEFERRED.md`. |
+| Acceptance | Personal: › finds 100 € missing against an order changed in a file nobody opened; work: › is polled… (the same B1 finding, from a polled check). Controller › finds the 300 € an order changed in OneDrive puts at stake, with the file named. E2E (`apps/addin/e2e/harness.spec.ts`, local Chrome, browser: local) › OneDrive: C-77 changes in a file nobody opened; Contrôles finds the 300 € — connect, pick, include ([fichier inclus](evidence/r4-onedrive.png)), the price changed in the stand-in's OneDrive, the finding appears with the file named ([Contrôles](evidence/r4-onedrive-checks.png)), « Déconnecter » confirmed → the finding goes. |
+| Audit and RGPD | Audit: `connection.connect` / `reconnect` / `disconnect` / `refused`, `connection.watch` / `renew` (› renews the subscription…: the four events in order), `connected_file.pick` / `remove` / `problem`, `source.include` / `remove` / `read` with actor `connector:microsoft`. `connectors.test.ts` › RGPD › exports the account without its token and the files, and erases them with the account. `docs/RGPD.md` (OneDrive connection, files read from OneDrive, export, erasure, the DNS lookup). |
+| Docs | `docs/MICROSOFT365.md` (new: sources read 2026-10-21, the Scout, six TODO(verify)); `docs/ARCHITECTURE.md` › What R4 added, and its decisions; `docs/DEFERRED.md` (delta queries, `Files.Read.All` and work notifications, several accounts, tariff gating, the Scout's other signals, the Office dialog, Google Drive, lifecycle notifications, revoking at Microsoft, the picker in a dialog, writing into a file); `docs/RUNBOOK.md` › OneDrive connector (stand-in, the owner's Entra registration); `docs/OFFICE.md` §10; `docs/DEPENDENCIES.md` (`@azure/msal-browser`). |
+| Gate | `pnpm verify` green on 2026-10-21: api 252, core 639 (branches 93.14 %) + oracle 276, agents 120 (branches 91.84 %), add-in 76, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local): harness 28 s, B2Brouter stand-in 38 s. |

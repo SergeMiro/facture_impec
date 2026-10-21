@@ -307,6 +307,43 @@ goes to the real sandbox and the M3 spec skips itself (§ B2Brouter sandbox).
   `pnpm --filter @fi/addin exec playwright codegen --save-storage=e2e/.auth/microsoft.json https://www.office.com`
   (the `.auth` folder is git-ignored; never commit it).
 
+### OneDrive connector (R4)
+
+Local, against the stand-in (`apps/mock-pdp`, `/microsoft`): in `.env` set the stand-in values of
+`.env.example` (`MICROSOFT_CLIENT_ID=00000000-0000-4000-8000-00000000f1f1`,
+`MICROSOFT_CLIENT_SECRET=local-microsoft-client-secret`, the two `http://localhost:4010/microsoft…`
+URLs, `CONNECTOR_SEALING_KEY=$(openssl rand -base64 32)`), then `pnpm dev` and the harness page. In
+« Registre », « Connecter OneDrive » signs in Camille's personal account (`?microsoft=work`: her work
+one) and « Choisir des fichiers » picks every file of that OneDrive. Put or change a file:
+
+```bash
+curl -X PUT --data-binary @Commandes.xlsx \
+  "http://localhost:4010/microsoft/control/files/msa-camille/cmd-1?name=Commandes%202026.xlsx"
+```
+
+`?document=https://d.docs.live.net/x/Factures.xlsx` on the harness page plays a workbook opened from
+OneDrive (the Scout's suggestion on the Tableau de bord). The E2E's last step does all of it.
+
+Real accounts need the owner's app registration in Microsoft Entra (`docs/MICROSOFT365.md`; nothing
+of it is in the repo):
+
+1. Entra admin center → App registrations → New registration: « Facture Impec », supported accounts
+   « Accounts in any organizational directory and personal Microsoft accounts ».
+2. Authentication → Single-page application, redirect URI `brk-multihub://<add-in domain>` (the domain
+   the pane is served from, e.g. `addin.facture-impec.fr`), for nested app authentication.
+3. Expose an API: Application ID URI `api://<client id>`, scope `access_as_user` (admins and users).
+4. API permissions → Microsoft Graph, delegated: `Files.Read`, `User.Read`, `offline_access`. No
+   administrator consent is needed.
+5. Certificates & secrets → a client secret; put it with the client id in the API's environment
+   (`MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`), with a new `CONNECTOR_SEALING_KEY`; leave the two
+   URLs empty. `API_PUBLIC_URL` in https lets a personal OneDrive notify `/webhooks/microsoft`;
+   otherwise its files are polled like a work one.
+6. Run the TODO(verify) list of `docs/MICROSOFT365.md` on a personal and a work account, and note the
+   results there.
+
+Changing `CONNECTOR_SEALING_KEY` makes every stored token unreadable: the connections then ask to
+« Reconnecter ». Rotating the client secret needs nothing else.
+
 ## Deployment
 
 The API image, the compose file and the settings of a hosted sandbox or prod: `docs/DEPLOY.md`. The

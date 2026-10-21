@@ -408,6 +408,23 @@ which means it calls a Microsoft online service and needs network access.
 
 ---
 
+## 10. Microsoft sign-in and OneDrive's picker in the pane (R4)
+
+| Fact | Source (checked 2026-10-21) |
+|---|---|
+| Nested app authentication: `createNestablePublicClientApplication` of MSAL.js signs in with the account Office already has; `acquireTokenSilent`, then `acquireTokenPopup` when consent or a fresh sign-in is needed. Available where requirement set **NestedAppAuth 1.1** is supported. The app registration needs the SPA redirect URI `brk-multihub://<add-in domain>`. | https://learn.microsoft.com/en-us/office/dev/add-ins/develop/enable-nested-app-authentication-in-your-add-in · https://learn.microsoft.com/en-us/javascript/api/requirement-sets/common/nested-app-auth-requirement-sets |
+| OneDrive's File Picker v8 runs in a frame of the page that opens it: a form POST of the token, then a MessageChannel. | https://learn.microsoft.com/en-us/onedrive/developer/controls/file-pickers/ |
+| `Office.context.document.url`: "Gets the URL of the document that the Office application currently has open. Returns null if the URL is unavailable." No requirement set given; the shape of the address for OneDrive or SharePoint is **not documented**. | https://learn.microsoft.com/en-us/javascript/api/office/office.document |
+
+**Implemented (R4):** `apps/addin/src/microsoft/office.ts` loads `@azure/msal-browser` 5.25.0 only when
+the person clicks « Connecter OneDrive » (its own 270 kB chunk; the pane's script does not carry it) and
+opens the picker in a frame over the pane with its own « Fermer ». Where NestedAppAuth 1.1 is missing
+the pane says so calmly; the Office dialog fallback is deferred (`docs/DEFERRED.md`). The Scout reads
+`Office.context.document.url` and remembers the person's answer in the same store as the session
+token (§4), not in the workbook's settings. TODO(verify) list: `docs/MICROSOFT365.md`.
+
+---
+
 ## Not documented (consolidated)
 
 1. Whether unified-manifest support for Excel is GA or preview (the table only says "Yes").
@@ -421,3 +438,4 @@ which means it calls a Microsoft online service and needs network access.
 9. Per-platform acceptance of self-signed certificates, beyond "trusted" via dev-certs and "bypass" in the browser.
 10. Playwright or other UI-automation guidance for add-ins.
 11. Which Office.js URL Marketplace validation enforces today: the CDN page and policy 1120.1 disagree.
+12. The address `Office.context.document.url` gives for a workbook on OneDrive or SharePoint (R4 Scout).

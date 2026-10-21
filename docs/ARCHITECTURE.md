@@ -623,6 +623,57 @@ Corrections, Assistant.
 | An undo over a changed cell | A conflict, then « Remettre quand même » (writes) or « Laisser » (keeps the correction undoable); a conflict may follow a conflict | Taking a correction back must never erase what the person typed since without a second click. |
 | Mode test | A finding of a real invoice is not corrected from the sheet while Mode test is on (and the other way round): the pane says why | In Mode test the row feeds the test copy; the real invoice would not be read again and its finding would stay. |
 
+## What R4 added: OneDrive files read without Excel
+
+R4 reads the orders, delivery notes, purchases or price lists a company keeps in OneDrive or SharePoint,
+on the server, while Excel is closed. The person connects one Microsoft account from the pane, picks the
+files in Microsoft's own picker and includes their sheets as R1 includes the open workbook's; from then
+on a change in a file shows as a finding in « Contrôles » without anybody opening it. Microsoft's side,
+sources and what is left to verify: `docs/MICROSOFT365.md`. Criteria in `docs/PROGRESS.md` R4.
+
+```
+pane  « Connecter OneDrive » ─► MicrosoftPort.signIn (NAA) ─► POST /connectors/microsoft {token}
+      API: on-behalf-of ─► Graph + refresh token (sealed) ─► connections row ─► subscribe (personal only)
+      « Choisir des fichiers » ─► MicrosoftPort.pick (File Picker v8) ─► POST …/files ─► each read once
+      « Inclure cette feuille » ─► …/sheets/:sheet/detect (R1 detection on the file's rows) ─► PUT ─► sources (type file)
+check connector.check job (webhook, sweep every 2 min / hourly when notified, reconnect)
+      ─► refresh token ─► each file: metadata ─► cTag unchanged? done : download ─► readSheetFile
+      ─► readSource (actor connector:microsoft) ─► documents ─► registry job ─► checks ─► findings
+« Déconnecter » ─► unsubscribe ─► delete connection, files, their sources and documents ─► checks again
+```
+
+| Path | What it does |
+|---|---|
+| `packages/core/src/sheet/file.ts` | `readSheetFile`: an .xlsx/.xlsm (its zip parts: shared strings, styles, sheets, formulas) or a .csv (UTF-8 or Windows-1252, `;` `,` or tab) into the same `SheetSnapshot` the pane sends; 10 MB, 60 MB inflated and 5 000 rows at most, checked before inflating. |
+| `apps/api/src/microsoft.ts` | The identity platform and Graph: `exchange` (on-behalf-of), `refresh`, `me`, `drive`, `item`, `content` (302 followed, size cap), `subscribe`, `renew`, `unsubscribe`. Every answer through Zod; every failure a `MicrosoftError` whose kind says what to do (reconnect, wait, file missing or forbidden, too large, try later). |
+| `apps/api/src/connectors.ts` | The connector: `connect`, `pickFiles` (all read first; one fails, none kept), `detectFileSheet`, `includeFileSheet`, `removeFile`, `disconnect` (a sheet is taken out by `removeSource`, as in R1); `checkConnection` (the background check), `watch` (subscription kept and audited), `notified` (webhook → job), `connectorsBehind` (the sweep), the view for the pane with the picker's address and the Scout's `mailOnMicrosoft`. |
+| `apps/api/src/app.ts`, `jobs.ts`, `workers.ts`, `runtime.ts` | Routes `/connectors/microsoft…` and `/webhooks/microsoft` (handshake, `clientState`); queue `connector.check` (stately per connection); the sweep enqueues due connections; `microsoftFromEnv` (only Microsoft's hosts outside local) and the cached MX lookup. |
+| `apps/api/src/sources.ts`, `checks.ts`, `rgpd.ts` | A source of `type: file` is read only by the API (a pane's snapshot for it is refused); findings name the file of their document; the export and the erasure include connections (without their token) and files. |
+| `apps/mock-pdp/src/microsoft.ts` | The stand-in: token endpoint (OBO, refresh), Graph (me, drive, items, content with a 302, subscriptions with the handshake and notifications), two accounts (personal `msa-camille`, work `aad-camille`) and `/microsoft/control` to put a file, change it, delete it, throttle or refuse a token. |
+| `apps/addin/src/microsoft/` | `MicrosoftPort`: `office.ts` (MSAL loaded only on « Connecter », NAA, the picker in a frame over the pane), `stand-in.ts` (harness and E2E), `onMicrosoftCloud` (the Scout's address check). |
+| `apps/addin/src/controller.ts` (R4 section), `ui/RegistryView.tsx`, `ui/Dashboard.tsx` | « Fichiers OneDrive » in « Registre » (account, files, sheets, problems, « Déconnecter » confirmed); the confirm screen of a file's sheet; « Contrôles » naming the file; the Scout's suggestion on the Tableau de bord. |
+
+Tables: migration `0014_connectors.sql` (`connections`, `connected_files`, `sources.file_id`).
+
+Tests: `packages/core/src/sheet/file.test.ts`, `apps/api/src/microsoft.test.ts`,
+`apps/api/src/connectors.test.ts`, `apps/api/src/runtime.test.ts` › microsoftFromEnv,
+mailExchangesFromDns, `apps/addin/src/controller.test.ts` › OneDrive files read without Excel (R4),
+`apps/addin/e2e/harness.spec.ts` › OneDrive.
+
+### Decisions taken in R4
+
+| Topic | Decision | Why |
+|---|---|---|
+| What we may read | `Files.Read` (the person's own files) and the File Picker: only picked files, never a folder or a search; not `Files.Read.All` | Owner's choice from the architecture document: the smallest permission that needs no administrator, and a promise the person can see. |
+| Where the token lives | The API exchanges the pane's token on behalf of the person and keeps only the refresh token, sealed with `CONNECTOR_SEALING_KEY`; the pane never holds a Graph token beyond the picker | The background check needs a token while Excel is closed; a key outside the database makes a dump useless. |
+| Personal vs work | Personal OneDrive: a subscription tells us within minutes, an hourly check catches a lost notification. Work: polled every 2 minutes | Learn: on OneDrive for Business a subscription needs `Files.Read.All`, which we do not ask. |
+| What triggers a read | The cTag (content tag), not the eTag; the same snapshot twice writes nothing (R1) | A rename or a share changes the eTag, not the content. |
+| One account per company | A second account waits for « Déconnecter » (`connector_other_account`) | Enough for the pilot; several accounts: `docs/DEFERRED.md`. |
+| A file that breaks | Its row says why (missing, forbidden, too large, unreadable); what it gave stays until it reads again or is removed | The person keeps their findings while they fix the file; nothing vanishes silently. |
+| Sign-in where NAA is missing | A calm message (`addin.connector.port.unsupported`), no Office dialog fallback | The dialog flow needs its own redirect page and a second token path; NAA covers current Excel. `docs/DEFERRED.md`. |
+| The Scout | Two signals (the workbook's address, the mail's MX), shown once on the Tableau de bord, answered once per device | The plan's smallest useful version; formula links and sheet names wait (`docs/DEFERRED.md`). |
+| Tariff | Every plan gets the connector for now | Gating it is a money decision for the owner (`docs/DEFERRED.md`). |
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than
