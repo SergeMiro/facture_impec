@@ -109,6 +109,7 @@ import {
   searchParties,
   updateParty,
 } from './parties';
+import { acceptFinding, decideSynonym, NormalBody, removeException, SynonymBody } from './patterns';
 import { PaymentBody, recordPayment } from './payments';
 import { awaitsGoLive } from './platform';
 import { reportFor } from './report';
@@ -312,6 +313,8 @@ export function createApp(deps: ApiDeps) {
     '/checks',
     '/links/*',
     '/findings/*',
+    '/exceptions/*',
+    '/synonyms/*',
     '/edits/*',
     '/chat',
     '/invoices',
@@ -529,6 +532,24 @@ export function createApp(deps: ApiDeps) {
     const { status } = await body(c, LinkDecisionBody);
     const by = who(c.get('principal'));
     return c.json(await decideLink(deps, c.get('tenant'), by, uuid(c.req.param('id')), status));
+  });
+
+  // ── Patterns and learning (R7) ────────────────────────────────────────────────────────────────
+  api.post('/findings/:id/normal', async (c) => {
+    const input = await body(c, NormalBody);
+    const by = who(c.get('principal'));
+    return c.json(await acceptFinding(deps, c.get('tenant'), by, uuid(c.req.param('id')), input));
+  });
+
+  api.delete('/exceptions/:id', async (c) => {
+    const by = who(c.get('principal'));
+    return c.json(await removeException(deps, c.get('tenant'), by, uuid(c.req.param('id'))));
+  });
+
+  api.post('/synonyms/:id', async (c) => {
+    const { status } = await body(c, SynonymBody);
+    const by = who(c.get('principal'));
+    return c.json(await decideSynonym(deps, c.get('tenant'), by, uuid(c.req.param('id')), status));
   });
 
   // ── Chat and corrections (R8) ──────────────────────────────────────────────────────────────────

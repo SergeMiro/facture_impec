@@ -32,6 +32,7 @@ import {
   type InvoiceDetail,
   type LayoutDetection,
   type Me,
+  type NormalChoice,
   type Offer,
   Offline,
   type Party,
@@ -1835,6 +1836,37 @@ export class Controller {
     if (!checks) return;
     this.#set({ checks });
     this.notify('success', t('addin.checks.decided.notSameItem'));
+  };
+
+  /** « C'est normal » (R7): the finding's rule stays quiet on its article; the checks run again. */
+  acceptFinding = async (id: string, choice: NormalChoice): Promise<void> => {
+    const checks = await this.#act(`normal:${id}`, () => this.api.acceptFinding(id, choice));
+    if (!checks) return;
+    this.#set({ checks });
+    this.notify('success', t('addin.checks.decided.normal'));
+  };
+
+  /** « Retirer » on an exception: the rule speaks again. */
+  removeException = async (id: string): Promise<void> => {
+    const checks = await this.#act(`exception:${id}`, () => this.api.removeException(id));
+    if (!checks) return;
+    this.#set({ checks });
+    this.notify('success', t('addin.checks.decided.removed'));
+  };
+
+  /** « Oui » / « Non » on « Est-ce le même article ? ». */
+  decideSynonym = async (id: string, status: 'confirmed' | 'rejected'): Promise<void> => {
+    const checks = await this.#act(`synonym:${id}`, () => this.api.decideSynonym(id, status));
+    if (!checks) return;
+    this.#set({ checks });
+    this.notify(
+      'success',
+      t(
+        status === 'confirmed'
+          ? 'addin.checks.decided.synonymConfirmed'
+          : 'addin.checks.decided.synonymRejected',
+      ),
+    );
   };
 
   /**

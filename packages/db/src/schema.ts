@@ -5,6 +5,7 @@ import type {
   ChaseStep,
   CheckFix,
   Evidence,
+  FindingScope,
   InboundTriage,
   Invoice,
   InvoiceDefaultsInput,
@@ -15,6 +16,7 @@ import type {
   SheetMapping,
 } from '@fi/core';
 import {
+  ACCEPTABLE_RULES,
   CHECK_MESSAGES,
   CHECK_RULES,
   DOC_KINDS,
@@ -913,6 +915,10 @@ export const findings = pgTable(
     evidence: jsonb('evidence_json').$type<Evidence[]>().notNull(),
     /** The price cell the code knows how to correct, and to what (R8). */
     fix: jsonb('fix_json').$type<CheckFix>(),
+    /** The customer and article, when a person may call it normal (R7). */
+    scope: jsonb('scope_json').$type<FindingScope>(),
+    /** The invoice bills less than it should: the weekly report's money not invoiced (R7). */
+    short: boolean('short').notNull().default(false),
     status: text('status', { enum: ['open', 'resolved'] })
       .notNull()
       .default('open'),
@@ -925,6 +931,67 @@ export const findings = pgTable(
     uniqueIndex('findings_key').on(t.tenantId, t.key),
     index('findings_open').on(t.tenantId, t.status),
     index('findings_invoice').on(t.invoiceId),
+  ],
+);
+
+// ── Patterns and learning (R7) ─────────────────────────────────────────────────────────────────
+// What a person taught the checks: a finding that is normal for a customer and an article, and two
+// articles that are one. Written by apps/api/src/patterns.ts; every check reads them.
+
+/** « C'est normal »: the rule stays quiet on the article, for the customer or any (party null), until `until`. */
+export const ruleExceptions = pgTable(
+  'rule_exceptions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    rule: text('rule', { enum: ACCEPTABLE_RULES }).notNull(),
+    /** core `partyOf`: `siren:…` or `name:…`; null: every customer. */
+    party: text('party'),
+    /** As the finding named them, for the list in « Contrôles ». */
+    partyName: text('party_name'),
+    itemId: uuid('item_id')
+      .notNull()
+      .references(() => items.id, { onDelete: 'cascade' }),
+    itemName: text('item_name').notNull(),
+    /** Europe/Paris, its last day; null: no end. */
+    until: date('until', { mode: 'string' }),
+    /** The finding the person answered. */
+    findingKey: text('finding_key').notNull(),
+    createdBy: text('created_by').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('rule_exceptions_tenant').on(t.tenantId)],
+);
+
+/** Two articles that are one: `alias` is read as `item`. Proposed by the checks, answered by a person. */
+export const itemSynonyms = pgTable(
+  'item_synonyms',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    /** The article sold. */
+    itemId: uuid('item_id')
+      .notNull()
+      .references(() => items.id, { onDelete: 'cascade' }),
+    /** The article bought (or another name of it). */
+    aliasId: uuid('alias_id')
+      .notNull()
+      .references(() => items.id, { onDelete: 'cascade' }),
+    status: text('status', { enum: ['proposed', 'confirmed', 'rejected'] }).notNull(),
+    /** 0–100, how much the names share. */
+    score: integer('score').notNull(),
+    decidedBy: text('decided_by'),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('item_synonyms_pair').on(t.itemId, t.aliasId),
+    index('item_synonyms_tenant').on(t.tenantId, t.status),
   ],
 );
 
@@ -1126,3 +1193,5 @@ export type EditRow = typeof edits.$inferSelect;
 export type ChatRow = typeof chats.$inferSelect;
 export type ConnectionRow = typeof connections.$inferSelect;
 export type ConnectedFileRow = typeof connectedFiles.$inferSelect;
+export type RuleExceptionRow = typeof ruleExceptions.$inferSelect;
+export type ItemSynonymRow = typeof itemSynonyms.$inferSelect;

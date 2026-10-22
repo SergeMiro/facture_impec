@@ -316,6 +316,8 @@ export const Finding = z.object({
     })
     .nullable()
     .default(null),
+  /** R7: « C'est normal » may be answered; `customer` null: the document names none. */
+  normal: z.object({ customer: z.string().nullable() }).nullable().default(null),
   firstSeenAt: z.string(),
 });
 export type Finding = z.infer<typeof Finding>;
@@ -349,9 +351,32 @@ export const Checks = z.object({
       to: DocBrief.nullable(),
     }),
   ),
+  /** R7: « Est-ce le même article ? ». */
+  synonyms: z
+    .array(z.object({ id: z.string(), sold: z.string(), bought: z.string(), score: z.number() }))
+    .default([]),
+  /** R7: the « C'est normal » answers still running. */
+  exceptions: z
+    .array(
+      z.object({
+        id: z.string(),
+        rule: z.enum(['A5', 'B1', 'B2', 'B4', 'B7']),
+        customer: z.string().nullable(),
+        oneCustomer: z.boolean(),
+        item: z.string(),
+        until: z.string().nullable(),
+      }),
+    )
+    .default([]),
 });
 export type Checks = z.infer<typeof Checks>;
 export type ProposedLink = Checks['links'][number];
+export type RuleException = Checks['exceptions'][number];
+/** « C'est normal »: for the finding's customer or every one, for 3 or 12 months or with no end. */
+export interface NormalChoice {
+  everyCustomer: boolean;
+  months: 3 | 12 | null;
+}
 
 /** A correction of one cell (R8), « Avant → Après »: proposed, then applied or not, then maybe undone. */
 export const Edit = z.object({
@@ -915,6 +940,12 @@ export class ApiClient {
   checks = () => this.#json(Checks, '/checks');
   decideLink = (id: string, status: 'confirmed' | 'rejected') =>
     this.#json(Checks, `/links/${id}`, { method: 'POST', body: { status } });
+  /** R7: « C'est normal », « Retirer », and « Oui » / « Non » on two articles. */
+  acceptFinding = (id: string, choice: NormalChoice) =>
+    this.#json(Checks, `/findings/${id}/normal`, { method: 'POST', body: choice });
+  removeException = (id: string) => this.#json(Checks, `/exceptions/${id}`, { method: 'DELETE' });
+  decideSynonym = (id: string, status: 'confirmed' | 'rejected') =>
+    this.#json(Checks, `/synonyms/${id}`, { method: 'POST', body: { status } });
 
   /** « Corriger pour moi » (R8): the card; asked again right before writing, the same card. */
   fix = (findingId: string, body: { by: 'agent' | 'person'; toolCallId?: string }) =>

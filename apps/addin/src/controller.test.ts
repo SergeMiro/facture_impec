@@ -910,6 +910,23 @@ describe('purchases and margin (R3)', () => {
     expect(b2()).toMatchObject({ severity: 'warning', amount: 10_000 });
     expect(b2()?.message).toContain('votre marge est de 11,1 %, sous les 20 %');
   });
+
+  it('keeps the margin quiet on « C’est normal », and brings it back on « Retirer » (R7)', async () => {
+    const finding = b2();
+    if (!finding?.normal) throw new Error('not offered');
+    expect(finding.normal.customer).toEqual(expect.any(String));
+    await controller.acceptFinding(finding.id, { everyCustomer: false, months: 3 });
+    expect(state().notice?.text).toBe(t('addin.checks.decided.normal'));
+    expect(b2()).toBeUndefined();
+    const exception = state().checks?.exceptions[0];
+    expect(exception).toMatchObject({ rule: 'B2', oneCustomer: true, until: expect.any(String) });
+    if (!exception) throw new Error('no exception');
+
+    await controller.removeException(exception.id);
+    expect(state().notice?.text).toBe(t('addin.checks.decided.removed'));
+    expect(state().checks?.exceptions).toEqual([]);
+    expect(b2()).toMatchObject({ severity: 'warning', amount: 10_000 });
+  });
 });
 
 describe('corrections and the assistant (R8)', () => {

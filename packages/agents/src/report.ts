@@ -1,5 +1,6 @@
-// ReportAgent (plan §6 phase 9): the weekly summary, at most ten lines: four numbers, then up to three
-// things to do, the most pressing first. Deterministic: the API counts, this file only words it.
+// ReportAgent (plan §6 phase 9): the weekly summary, at most ten lines: four numbers (five when the
+// checks found money not invoiced, R7), then up to three things to do, the most pressing first.
+// Deterministic: the API counts, this file only words it.
 import { type Cents, frDate, frMoney } from '@fi/core';
 import { t } from '@fi/shared';
 
@@ -21,6 +22,8 @@ export interface WeekFacts {
   overdue: Tally;
   /** Delivered or accepted, due within the next 7 days. */
   atRisk: Tally;
+  /** R7: what the checks found billed short during the window, still open. */
+  notInvoiced?: Tally;
   /** Formal notices drafted and waiting for the user. */
   formalNotices: { number: string; payable: Cents }[];
   /** Invoices the customer refused, not yet handled. */
@@ -68,7 +71,7 @@ function actionsFor(f: WeekFacts): string[] {
 /** `sender`: our name, or the accounting firm's under its full white label. */
 export function weeklyReport(f: WeekFacts, sender = t('app.title')): WeeklyReport {
   const range = { from: frDate(f.from), to: frDate(f.to) };
-  const tally = (key: 'sent' | 'paid' | 'overdue' | 'atRisk', v: Tally) =>
+  const tally = (key: 'sent' | 'paid' | 'overdue' | 'atRisk' | 'notInvoiced', v: Tally) =>
     t(`report.${key}`, { count: v.count, amount: frMoney(v.amount, f.currency) });
   const title = t('report.title', range);
   const numbers = [
@@ -76,6 +79,7 @@ export function weeklyReport(f: WeekFacts, sender = t('app.title')): WeeklyRepor
     tally('paid', f.paid),
     tally('overdue', f.overdue),
     tally('atRisk', f.atRisk),
+    ...(f.notInvoiced?.count ? [tally('notInvoiced', f.notInvoiced)] : []),
   ];
   const actions = actionsFor(f);
   const tail = actions.length

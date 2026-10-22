@@ -513,6 +513,84 @@ export const CHECK_CORPUS: CheckScenario[] = [
     expected: [],
   },
   {
+    name: 'b7-hours-for-days',
+    about: 'Consulting billed by the day at 400 €, this time 2 days at 50 €: an hour’s price.',
+    fires: ['B7'],
+    quiet: ['A4'],
+    docs: [
+      invoice('H-1', [{ item: 'Conseil', q: '3', price: '400', unit: 'DAY' }], {
+        issueDate: '2026-06-01',
+      }),
+      invoice('H-2', [{ item: 'Conseil', q: '1', price: '400', unit: 'DAY' }], {
+        issueDate: '2026-07-01',
+      }),
+      invoice('H-3', [{ item: 'Conseil', q: '2', price: '420', unit: 'DAY' }], {
+        issueDate: '2026-08-01',
+      }),
+      invoice('F-30', [{ item: 'Conseil', q: '2', price: '50', unit: 'DAY' }]),
+    ],
+    expected: [{ message: 'B7.under', doc: 'F-30', amount: 70_000 }],
+  },
+  {
+    name: 'b7-price-above-habit',
+    about: 'Boxes always at 12 €, this time 10 at 18 €.',
+    fires: ['B7'],
+    quiet: [],
+    docs: [
+      invoice('H-1', [{ item: 'Carton', q: '10', price: '12' }], { issueDate: '2026-06-01' }),
+      invoice('H-2', [{ item: 'Carton', q: '10', price: '12' }], { issueDate: '2026-07-01' }),
+      invoice('H-3', [{ item: 'Carton', q: '10', price: '12' }], { issueDate: '2026-08-01' }),
+      invoice('F-31', [{ item: 'Carton', q: '10', price: '18' }]),
+    ],
+    expected: [{ message: 'B7.over', doc: 'F-31', amount: 6_000 }],
+  },
+  {
+    name: 'b7-quiet',
+    about:
+      'Two earlier prices, a price within 20 %, another customer, prices that always vary, an hour at an hour’s price, and an article « Tarifs » prices.',
+    fires: [],
+    quiet: ['B7'],
+    docs: [
+      // Two earlier invoices are not a habit yet.
+      invoice('H-1', [{ item: 'Vis', q: '100', price: '1' }], { issueDate: '2026-06-01' }),
+      invoice('H-2', [{ item: 'Vis', q: '100', price: '1' }], { issueDate: '2026-07-01' }),
+      invoice('F-32', [{ item: 'Vis', q: '100', price: '3' }]),
+      // 10 % under its usual price.
+      invoice('H-3', [{ item: 'Colle', q: '10', price: '10' }], { issueDate: '2026-06-01' }),
+      invoice('H-4', [{ item: 'Colle', q: '10', price: '10' }], { issueDate: '2026-07-01' }),
+      invoice('H-5', [{ item: 'Colle', q: '10', price: '10' }], { issueDate: '2026-08-01' }),
+      invoice('F-33', [{ item: 'Colle', q: '10', price: '9' }]),
+      // Another customer's habit is not this one's.
+      invoice('F-34', [{ item: 'Colle', q: '10', price: '5' }], {
+        partySiren: '987654321',
+        partyName: 'Leroy SAS',
+      }),
+      // Prices that always vary a lot.
+      invoice('H-6', [{ item: 'Bois', q: '1', price: '100' }], { issueDate: '2026-06-01' }),
+      invoice('H-7', [{ item: 'Bois', q: '1', price: '200' }], { issueDate: '2026-07-01' }),
+      invoice('H-8', [{ item: 'Bois', q: '1', price: '300' }], { issueDate: '2026-08-01' }),
+      invoice('F-35', [{ item: 'Bois', q: '1', price: '400' }]),
+      // Another unit is another price: hours next to days.
+      invoice('H-9', [{ item: 'Conseil', q: '1', price: '400', unit: 'DAY' }], {
+        issueDate: '2026-06-01',
+      }),
+      invoice('H-10', [{ item: 'Conseil', q: '1', price: '400', unit: 'DAY' }], {
+        issueDate: '2026-07-01',
+      }),
+      invoice('H-11', [{ item: 'Conseil', q: '1', price: '400', unit: 'DAY' }], {
+        issueDate: '2026-08-01',
+      }),
+      invoice('F-36', [{ item: 'Conseil', q: '4', price: '50', unit: 'HUR' }]),
+      // « Tarifs » prices it: A5's business.
+      prices('T-1', [{ item: 'Pot', price: '15' }]),
+      invoice('H-12', [{ item: 'Pot', q: '1', price: '15' }], { issueDate: '2026-06-01' }),
+      invoice('H-13', [{ item: 'Pot', q: '1', price: '15' }], { issueDate: '2026-07-01' }),
+      invoice('H-14', [{ item: 'Pot', q: '1', price: '15' }], { issueDate: '2026-08-01' }),
+      invoice('F-37', [{ item: 'Pot', q: '1', price: '15' }]),
+    ],
+    expected: [],
+  },
+  {
     name: 'b3-unbilled',
     about: '5 pallets delivered on 1 August, nothing invoiced on 20 October.',
     fires: ['B3'],

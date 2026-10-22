@@ -27,6 +27,7 @@ import {
   invoiceEvents,
   invoices,
   isNull,
+  itemSynonyms,
   items,
   layoutProfiles,
   links,
@@ -36,6 +37,7 @@ import {
   parties,
   paymentReports,
   pdpSubmissions,
+  ruleExceptions,
   sessions,
   sheetMappings,
   signupRequests,
@@ -100,6 +102,8 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     conversations,
     accounts,
     picked,
+    exceptions,
+    synonyms,
   ] = await Promise.all([
     db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
     db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
@@ -179,6 +183,16 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       .from(connectedFiles)
       .where(eq(connectedFiles.tenantId, tenant.id))
       .orderBy(asc(connectedFiles.name)),
+    db
+      .select()
+      .from(ruleExceptions)
+      .where(eq(ruleExceptions.tenantId, tenant.id))
+      .orderBy(asc(ruleExceptions.createdAt)),
+    db
+      .select()
+      .from(itemSynonyms)
+      .where(eq(itemSynonyms.tenantId, tenant.id))
+      .orderBy(asc(itemSynonyms.createdAt)),
   ]);
   const sheetOf = new Map(sheets.map((s) => [s.id, s.sheet]));
   const itemKeys = new Map(articles.map((a) => [a.id, a.key]));
@@ -388,6 +402,26 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
         messages: c.messages,
         updatedAt: c.updatedAt.toISOString(),
       })),
+      /** R7: « C'est normal », what a person said a rule may leave quiet, and until when. */
+      exceptions: exceptions.map((e) => ({
+        rule: e.rule,
+        party: e.party,
+        partyName: e.partyName,
+        item: itemKeys.get(e.itemId) ?? null,
+        itemName: e.itemName,
+        until: e.until,
+        finding: e.findingKey,
+        createdBy: e.createdBy,
+        createdAt: e.createdAt.toISOString(),
+      })),
+      /** R7: articles proposed as one, and a person's « Oui » or « Non ». */
+      synonyms: synonyms.map((s) => ({
+        item: itemKeys.get(s.itemId) ?? null,
+        alias: itemKeys.get(s.aliasId) ?? null,
+        status: s.status,
+        score: s.score,
+        decidedAt: s.decidedAt?.toISOString() ?? null,
+      })),
     },
     agentRuns: runs.map((r) => ({
       agent: r.agent,
@@ -447,7 +481,9 @@ export async function deleteTenant(
     const ids = gone.map((r) => r.id);
     // The registry is rebuilt from the invoices at any time; nothing reads it once the account is gone.
     // Its links and findings go with it, a person's « Oui » and « Non » too, and the chats and
-    // corrections made on them.
+    // corrections made on them, and what the person taught the checks (R7).
+    await tx.delete(ruleExceptions).where(eq(ruleExceptions.tenantId, tenant.id));
+    await tx.delete(itemSynonyms).where(eq(itemSynonyms.tenantId, tenant.id));
     await tx.delete(chats).where(eq(chats.tenantId, tenant.id));
     await tx.delete(edits).where(eq(edits.tenantId, tenant.id));
     await tx.delete(findings).where(eq(findings.tenantId, tenant.id));

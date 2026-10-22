@@ -1,13 +1,15 @@
 // Checker (R2): rules on the registry's documents together, once the Linker said which order each
 // invoice bills. Each finding is a rule in this file, with the cents at stake and the cells that prove
-// it; the wording's values are written in French here, the sentences live in fr.json.
+// it; the wording's values are written in French here, the sentences live in fr.json. R7 adds the
+// company's habits (B7), the findings a person called normal, and the articles they said are one.
 import { daysBetween } from '../dates';
 import { isDecimal, normalizeDecimal } from '../money';
 import { partyKey } from '../party';
 import { frDate, frDecimal, frMoney, frPrice } from '../pdf/format';
 import { near, positiveRate, sheetNet, unitCents, unitNet } from './amounts';
-import { type Cost, findCosts } from './cost';
+import { type Cost, findCosts, unitOf } from './cost';
 import { isInvoice, itemQuantities, linkDocs, linkId, quantityOf } from './link';
+import { applySynonyms, proposeSynonyms } from './synonym';
 import {
   type CheckDoc,
   type CheckFinding,
@@ -18,8 +20,10 @@ import {
   type CheckOutput,
   type Evidence,
   type Link,
+  type RuleException,
   ruleOf,
   SEVERITY,
+  type SynonymProposal,
 } from './types';
 
 /** Cents: under 1 €, a rounding, not money worth a person's look. */
@@ -29,6 +33,24 @@ export const UNBILLED_DAYS = 30;
 /** A rate is an article's usual one from this many earlier lines, nearly all at that rate (A4). */
 const USUAL_LINES = 3;
 const USUAL_SHARE = 0.8;
+/** B7 reads the customer's last lines of the article, at least this many of them… */
+export const PRICE_HISTORY = 3;
+const PRICE_WINDOW = 12;
+/** …and finds a price this far from their median: in its share, and in their usual spread. */
+export const PRICE_SHARE = 0.2;
+const PRICE_SPREADS = 4;
+
+/** The invoice bills less than it should (R7): money the weekly report counts as not invoiced. */
+const SHORT = new Set<CheckMessage>([
+  'A3.twice',
+  'A3.percent',
+  'A3.reference',
+  'B1.under',
+  'B1.several',
+  'B2.loss',
+  'B3.unbilled',
+  'B7.under',
+]);
 
 const money = (cents: number) => frMoney(cents);
 const text = (s: string | null | undefined) => s ?? '';
@@ -57,7 +79,25 @@ function finding(
     params,
     evidence,
     ...(fix && { fix }),
+    ...(SHORT.has(message) && { short: true as const }),
   };
+}
+
+/** Who the customer is, for « C'est normal » (R7): its SIREN, else its name as names are compared. */
+export function partyOf(doc: Pick<CheckDoc, 'partySiren' | 'partyName'>): string | null {
+  if (doc.partySiren) return `siren:${doc.partySiren}`;
+  const name = doc.partyName ? partyKey(doc.partyName) : '';
+  return name ? `name:${name}` : null;
+}
+
+/** A finding about one article of one customer: a person may call it normal. */
+const scoped = (f: CheckFinding, doc: CheckDoc, itemId: string | null | undefined): CheckFinding =>
+  itemId ? { ...f, scope: { party: partyOf(doc), itemId } } : f;
+
+function median(values: readonly number[]): number {
+  const s = [...values].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? (s[m] ?? 0) : ((s[m - 1] ?? 0) + (s[m] ?? 0)) / 2;
 }
 
 /** A unit price in cents as a cell takes it, in euros, when four decimals say it exactly. */
@@ -194,6 +234,7 @@ class World {
     this.priceList();
     this.margins();
     this.usualRate();
+    this.usualPrice();
     this.deliveries();
     this.parties();
     return this.findings;
@@ -288,14 +329,18 @@ class World {
       const report = (message: CheckMessage, amount: number, fixable = false) => {
         found = true;
         this.findings.push(
-          finding(
-            message,
+          scoped(
+            finding(
+              message,
+              subject,
+              `${source.id}:${item}`,
+              amount,
+              { ...params, amount: money(amount) },
+              evidence,
+              fixable && alone && single ? priceFix(part.line, reference) : null,
+            ),
             subject,
-            `${source.id}:${item}`,
-            amount,
-            { ...params, amount: money(amount) },
-            evidence,
-            fixable && alone && single ? priceFix(part.line, reference) : null,
+            item,
           ),
         );
       };
@@ -404,8 +449,14 @@ class World {
           continue;
         }
         const fix = message === 'A3.reference' ? null : priceFix(line, list.unit);
-        this.findings.push(
+        const found = scoped(
           finding(message, inv, key, amount, { ...params, amount: money(amount) }, evidence, fix),
+          inv,
+          line.itemId,
+        );
+        // A price under the list's is money not invoiced, unless the person calls it normal.
+        this.findings.push(
+          message === 'A5.price' && price < list.unit ? { ...found, short: true } : found,
         );
       }
     }
@@ -436,7 +487,11 @@ class World {
         const loss = Math.round((cost.unit - price) * quantity);
         if (loss >= NOISE) {
           this.findings.push(
-            finding('B2.loss', inv, key, loss, { ...params, amount: money(loss) }, evidence),
+            scoped(
+              finding('B2.loss', inv, key, loss, { ...params, amount: money(loss) }, evidence),
+              inv,
+              line.itemId,
+            ),
           );
           continue;
         }
@@ -447,18 +502,22 @@ class World {
         if (missing < NOISE) continue;
         const margin = Math.round(((price - cost.unit) / price) * 1_000) / 10;
         this.findings.push(
-          finding(
-            'B2.margin',
+          scoped(
+            finding(
+              'B2.margin',
+              inv,
+              key,
+              missing,
+              {
+                ...params,
+                margin: frDecimal(String(margin)),
+                minimum: frDecimal(String(minimum)),
+                amount: money(missing),
+              },
+              evidence,
+            ),
             inv,
-            key,
-            missing,
-            {
-              ...params,
-              margin: frDecimal(String(margin)),
-              minimum: frDecimal(String(minimum)),
-              amount: money(missing),
-            },
-            evidence,
+            line.itemId,
           ),
         );
       }
@@ -535,6 +594,75 @@ class World {
           ),
         );
       }
+    }
+  }
+
+  /**
+   * B7: a price far from what this customer usually pays for this article — the median of its last
+   * lines, same unit (R7). An hour billed at a day's price stands out. A line an order or « Tarifs »
+   * prices is left to B1, B4 and A5.
+   */
+  usualPrice() {
+    const listed = new Set(
+      this.docs
+        .filter((d) => d.kind === 'price_list')
+        .flatMap((d) => d.lines.flatMap((l) => (l.itemId ? [l.itemId] : []))),
+    );
+    const invoices = this.docs
+      .filter((d) => isInvoice(d) && d.typeCode !== '381' && d.typeCode !== '386')
+      .sort(byDate);
+    const seen = new Map<string, { doc: CheckDoc; line: CheckLine; unit: number }[]>();
+    for (const doc of invoices) {
+      const party = partyOf(doc);
+      if (!party) continue;
+      const own: [string, { doc: CheckDoc; line: CheckLine; unit: number }][] = [];
+      for (const line of doc.lines) {
+        const unit = unitNet(doc, line);
+        const quantity = quantityOf(line.quantity);
+        if (!line.itemId || unit === null || unit <= 0 || quantity === null || quantity <= 0) {
+          continue;
+        }
+        const k = `${party}|${line.itemId}|${unitOf(line.unitCode) ?? ''}`;
+        own.push([k, { doc, line, unit }]);
+        const before = (seen.get(k) ?? []).slice(-PRICE_WINDOW);
+        const last = before.at(-1);
+        if (!last || before.length < PRICE_HISTORY) continue;
+        if (listed.has(line.itemId) || this.ordered.has(`${doc.id}:${line.itemId}`)) continue;
+        const usual = median(before.map((b) => b.unit));
+        const spread = median(before.map((b) => Math.abs(b.unit - usual)));
+        const gap = unit - usual;
+        if (Math.abs(gap) <= Math.max(usual * PRICE_SHARE, spread * PRICE_SPREADS)) continue;
+        const amount = Math.round(Math.abs(gap) * quantity);
+        if (amount < NOISE) continue;
+        this.findings.push(
+          scoped(
+            finding(
+              gap < 0 ? 'B7.under' : 'B7.over',
+              doc,
+              `${doc.id}:${line.position}`,
+              amount,
+              {
+                invoice: text(doc.number),
+                item: text(line.name),
+                customer: text(doc.partyName),
+                quantity: quantityText(quantity),
+                price: unitText(unit),
+                usual: unitText(usual),
+                count: String(before.length),
+                amount: money(amount),
+              },
+              [
+                evidenceOf('invoice', doc, line, 'priceCell'),
+                evidenceOf('history', last.doc, last.line, 'priceCell'),
+              ],
+            ),
+            doc,
+            line.itemId,
+          ),
+        );
+      }
+      // An invoice's lines are history for the invoices after it, not for its own other lines.
+      for (const [k, b] of own) seen.set(k, [...(seen.get(k) ?? []), b]);
     }
   }
 
@@ -644,33 +772,51 @@ const bySize = (a: CheckFinding, b: CheckFinding) =>
   (a.severity === b.severity ? 0 : a.severity === 'blocking' ? -1 : 1) ||
   a.key.localeCompare(b.key);
 
+/** A person called it normal for this customer and article, and the exception has not ended (R7). */
+export function excused(
+  f: Pick<CheckFinding, 'rule' | 'scope'>,
+  exceptions: readonly RuleException[],
+  today: string,
+): boolean {
+  const scope = f.scope;
+  if (!scope) return false;
+  return exceptions.some(
+    (e) =>
+      e.rule === f.rule &&
+      e.itemId === scope.itemId &&
+      (e.party === null || e.party === scope.party) &&
+      (e.until === null || e.until >= today),
+  );
+}
+
 /**
  * Links and findings of a company. Test invoices are checked against the sheets like real ones, in
- * their own pass: a test invoice never bills an order alongside the real ones.
+ * their own pass: a test invoice never bills an order alongside the real ones. Articles a person tied
+ * are read as one; a finding a person called normal is not found (R7).
  */
 export function checkRegistry(input: CheckInput): CheckOutput {
   const links = new Map<string, Link>();
   const findings: CheckFinding[] = [];
+  let synonyms: SynonymProposal[] = [];
+  const decided = input.synonyms ?? [];
+  const all = applySynonyms(input.docs, decided);
   for (const isTest of [false, true]) {
-    const docs = input.docs.filter((d) => d.kind !== 'invoice' || d.isTest === isTest);
+    const docs = all.filter((d) => d.kind !== 'invoice' || d.isTest === isTest);
     if (isTest && !docs.some((d) => d.kind === 'invoice')) continue;
     const found = linkDocs(docs, input.decisions);
     const bought = findCosts(docs, input.decisions);
     for (const l of [...found, ...bought.links]) links.set(linkId(l), l);
-    const world = new World(
-      docs,
-      found,
-      input.today,
-      bought.costs,
-      input.minMarginPercent ?? null,
-    ).run();
+    const world = new World(docs, found, input.today, bought.costs, input.minMarginPercent ?? null)
+      .run()
+      .filter((f) => !excused(f, input.exceptions ?? [], input.today));
     if (!isTest) {
       findings.push(...world);
+      synonyms = proposeSynonyms(docs, bought.costs, decided);
       continue;
     }
     // The sheets' own findings belong to the real pass; a test invoice's keep a key of their own.
     const tests = new Set(docs.filter((d) => d.isTest).map((d) => d.id));
     for (const f of world) if (tests.has(f.docId)) findings.push({ ...f, key: `test:${f.key}` });
   }
-  return { links: [...links.values()], findings: findings.sort(bySize) };
+  return { links: [...links.values()], findings: findings.sort(bySize), synonyms };
 }

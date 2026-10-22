@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { bought, delivery, invoice, order, prices, purchase } from '../../test/checks-corpus';
-import { checkRegistry, NOISE, priceValue } from './check';
+import { checkRegistry, excused, NOISE, partyOf, priceValue } from './check';
 import { findCosts, normalizeName } from './cost';
 import { itemQuantities, linkDocs, sameParty, similarity } from './link';
-import { ruleOf, SEVERITY } from './types';
+import { applySynonyms, nameScore, proposeSynonyms } from './synonym';
+import { type RuleException, ruleOf, SEVERITY } from './types';
 
 const TODAY = '2026-10-20';
 const chairs = (q: string, price = '40') => [{ item: 'Chaise', q, price }];
@@ -451,5 +452,161 @@ describe('the correction the code builds (R8)', () => {
     expect(priceValue(4_000)).toBe('40');
     expect(priceValue(1_250.5)).toBe('12.505');
     expect(priceValue(10_000 / 3)).toBeNull();
+  });
+});
+
+describe('patterns and learning (R7)', () => {
+  const C = order('C-118', chairs('10'));
+  const under = invoice('F-1', chairs('10', '30'), { orderRef: 'C-118' });
+  const history = (item: string, price: string) =>
+    ['2026-06-01', '2026-07-01', '2026-08-01'].map((issueDate, i) =>
+      invoice(`H-${item}-${i}`, [{ item, q: '1', price }], { issueDate }),
+    );
+
+  it('says who a finding is about, and marks money not invoiced', () => {
+    const [b1] = run([C, under]).findings;
+    expect(b1?.scope).toEqual({ party: 'siren:123456789', itemId: 'item-chaise' });
+    expect(b1?.short).toBe(true);
+    const [b4] = run([C, invoice('F-1', chairs('10', '50'), { orderRef: 'C-118' })]).findings;
+    expect(b4?.message).toBe('B4.price');
+    expect(b4?.short).toBeUndefined();
+    // A price under « Tarifs » bills short; above it, no.
+    const list = prices('T-1', [{ item: 'Pot', price: '15' }]);
+    const a5 = (price: string) =>
+      run([list, invoice('F-2', [{ item: 'Pot', q: '10', price }])]).findings[0];
+    expect(a5('10')?.short).toBe(true);
+    expect(a5('20')?.short).toBeUndefined();
+    // A sum or a VAT rate is never « normal »: no scope.
+    const [a4] = run([
+      ...history('Livre', '30').map((d) => ({
+        ...d,
+        lines: d.lines.map((l) => ({ ...l, vatRate: '5.5' })),
+      })),
+      invoice('F-3', [{ item: 'Livre', q: '1', price: '30' }]),
+    ]).findings;
+    expect(a4?.message).toBe('A4.rate');
+    expect(a4?.scope).toBeUndefined();
+  });
+
+  it('names a customer by SIREN, else by name, else not at all', () => {
+    expect(partyOf({ partySiren: '123456789', partyName: 'Durand' })).toBe('siren:123456789');
+    expect(partyOf({ partySiren: null, partyName: ' Durand  S.A.R.L ' })).toBe(
+      'name:durand s a r l',
+    );
+    expect(partyOf({ partySiren: null, partyName: null })).toBeNull();
+  });
+
+  it('keeps quiet a finding a person called normal, for its customer and article, until its end', () => {
+    const exception: RuleException = {
+      rule: 'B1',
+      party: 'siren:123456789',
+      itemId: 'item-chaise',
+      until: '2026-12-31',
+    };
+    const check = (exceptions: RuleException[], today = TODAY) =>
+      checkRegistry({ docs: [C, under], decisions: [], today, exceptions }).findings.map(
+        (f) => f.message,
+      );
+    expect(check([])).toEqual(['B1.under']);
+    expect(check([exception])).toEqual([]);
+    // Every customer, no end.
+    expect(check([{ ...exception, party: null, until: null }])).toEqual([]);
+    // Another customer, another article, another rule, or ended.
+    expect(check([{ ...exception, party: 'siren:999999999' }])).toEqual(['B1.under']);
+    expect(check([{ ...exception, itemId: 'item-table' }])).toEqual(['B1.under']);
+    expect(check([{ ...exception, rule: 'B7' as never }])).toEqual(['B1.under']);
+    expect(check([exception], '2027-01-01')).toEqual(['B1.under']);
+    // Its last day still counts.
+    expect(check([exception], '2026-12-31')).toEqual([]);
+    expect(excused({ rule: 'B1' }, [exception], TODAY)).toBe(false);
+  });
+
+  it('reads the articles a person tied as one, and follows a chain of them', () => {
+    const docs = applySynonyms(
+      [bought('A-1', [{ item: 'GM chaise chene', key: 'gm' }]), invoice('F-1', chairs('1'))],
+      [
+        { itemId: 'mid', aliasId: 'gm', status: 'confirmed' },
+        { itemId: 'item-chaise', aliasId: 'mid', status: 'confirmed' },
+        { itemId: 'item-table', aliasId: 'item-chaise', status: 'rejected' },
+      ],
+    );
+    expect(docs.flatMap((d) => d.lines.map((l) => l.itemId))).toEqual([
+      'item-chaise',
+      'item-chaise',
+    ]);
+    // A loop of answers ends.
+    const loop = applySynonyms(
+      [invoice('F-1', [{ item: 'A' }])],
+      [
+        { itemId: 'item-b', aliasId: 'item-a', status: 'confirmed' },
+        { itemId: 'item-a', aliasId: 'item-b', status: 'confirmed' },
+      ],
+    );
+    expect(loop[0]?.lines[0]?.itemId).toBe('item-b');
+  });
+
+  it('compares names by their words', () => {
+    expect(nameScore('Chaise chêne', 'GM - Chaises CHENE massif')).toBe(100);
+    // One word in common is not enough when both names have two.
+    expect(nameScore('Chaise chêne', 'Table chêne')).toBe(0);
+    expect(nameScore('Chaise chêne pliante', 'Chaise chêne')).toBe(100);
+    expect(nameScore('Chaise chêne pliante', 'Chaise chêne massive')).toBe(67);
+    expect(nameScore('Chaise', 'Chaises')).toBe(100);
+    expect(nameScore('Chaise', '')).toBe(0);
+  });
+
+  it('proposes a bought article for a sold one with no cost, then B2 finds its cost once tied', () => {
+    const sale = invoice('F-1', [{ item: 'Chaise chêne', q: '10', price: '30' }]);
+    const supplier = bought('A-1', [
+      { item: 'GM chaise chene massif', key: 'gm-ch', q: '10', price: '35' },
+      { item: 'Table chêne', key: 'gm-ta', q: '1', price: '200' },
+    ]);
+    const docs = [sale, supplier];
+    const first = checkRegistry({ docs, decisions: [], today: TODAY });
+    expect(first.findings).toEqual([]);
+    expect(first.synonyms).toEqual([
+      {
+        itemId: 'item-chaise chêne',
+        aliasId: 'gm-ch',
+        itemName: 'Chaise chêne',
+        aliasName: 'GM chaise chene massif',
+        score: 100,
+      },
+    ]);
+    const yes = checkRegistry({
+      docs,
+      decisions: [],
+      today: TODAY,
+      synonyms: [{ itemId: 'item-chaise chêne', aliasId: 'gm-ch', status: 'confirmed' }],
+    });
+    expect(yes.findings.map((f) => [f.message, f.amount])).toEqual([['B2.loss', 5_000]]);
+    expect(yes.synonyms).toEqual([]);
+    // « Non »: the pair is not asked again; the next closest name is not close enough.
+    const no = checkRegistry({
+      docs,
+      decisions: [],
+      today: TODAY,
+      synonyms: [{ itemId: 'item-chaise chêne', aliasId: 'gm-ch', status: 'rejected' }],
+    });
+    expect(no.synonyms).toEqual([]);
+  });
+
+  it('proposes nothing for an article that has its cost, another unit, or no purchase', () => {
+    const costed = [
+      invoice('F-1', [{ item: 'Chaise', q: '1', price: '40' }]),
+      invoice('F-2', [{ item: 'Chaise', q: '1', price: '40', key: 'item-chaise' }]),
+      bought('A-1', [
+        { item: 'Chaise', q: '1', price: '30' },
+        { item: 'Chaise pliante', key: 'gm', q: '1', price: '20' },
+      ]),
+    ];
+    const { costs } = findCosts(costed, []);
+    expect(proposeSynonyms(costed, costs, [])).toEqual([]);
+    const boxes = [
+      invoice('F-1', [{ item: 'Vis inox', q: '100', price: '1', unit: 'H87' }]),
+      bought('A-1', [{ item: 'Vis inox 4x40', key: 'gm', q: '1', price: '20', unit: 'XBX' }]),
+    ];
+    expect(proposeSynonyms(boxes, new Map(), [])).toEqual([]);
+    expect(proposeSynonyms([invoice('F-1', chairs('1'))], new Map(), [])).toEqual([]);
   });
 });

@@ -10,4 +10,12 @@ export {
   sameParty,
   similarity,
 } from './link';
+export {
+  applySynonyms,
+  MAX_SYNONYMS,
+  nameScore,
+  proposeSynonyms,
+  SYNONYM_SCORE,
+  synonymId,
+} from './synonym';
 export * from './types';

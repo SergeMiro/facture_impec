@@ -38,7 +38,7 @@ export interface Cost {
 
 /** « One », « piece », « each » (UN/ECE rec. 20): a sheet's invoice says C62 where a supplier says H87. */
 const ONE = new Set(['C62', 'H87', 'EA']);
-const unitOf = (code: string | null | undefined) => (code && ONE.has(code) ? 'C62' : code);
+export const unitOf = (code: string | null | undefined) => (code && ONE.has(code) ? 'C62' : code);
 
 interface Bought {
   doc: CheckDoc;

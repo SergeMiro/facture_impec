@@ -1,7 +1,7 @@
 // The weekly report (plan §6 ReportAgent, phase 9): the facts of the last 7 days counted here, worded
 // by @fi/agents weeklyReport. The task pane shows it on demand (GET /report); every ISO week, from
 // Monday 8:00 Paris, it is mailed once to the company's owners where the deployment can send mail.
-// Test invoices never count.
+// Test invoices never count. R7: the money the checks found billed short in the week, still open.
 import { type WeekFacts, type WeeklyReport, weeklyReport } from '@fi/agents';
 import {
   addDays,
@@ -19,6 +19,7 @@ import {
   chasePlans,
   count,
   eq,
+  findings,
   gte,
   inArray,
   invoiceEvents,
@@ -99,6 +100,18 @@ export async function weekFacts(deps: Deps, tenant: TenantRow, now: Date): Promi
         inArray(invoices.status, ['delivered', 'accepted', 'overdue', 'chasing']),
       ),
     );
+  const [short] = await deps.db
+    .select({ count: count(), amount: sql<string>`coalesce(sum(${findings.amount}), 0)` })
+    .from(findings)
+    .where(
+      and(
+        eq(findings.tenantId, tenant.id),
+        eq(findings.status, 'open'),
+        eq(findings.short, true),
+        eq(findings.isTest, false),
+        gte(findings.firstSeenAt, since),
+      ),
+    );
   const drafted = (s: ChaseStep) => s.status === 'drafted';
   return {
     from: parisToday(since),
@@ -107,6 +120,7 @@ export async function weekFacts(deps: Deps, tenant: TenantRow, now: Date): Promi
     sent: await reached(deps, tenant.id, 'deposited', since),
     paid: await reached(deps, tenant.id, 'paid', since),
     overdue: await tally(deps, tenant.id, inArray(invoices.status, ['overdue', 'chasing'])),
+    notInvoiced: { count: short?.count ?? 0, amount: Number(short?.amount ?? 0) },
     atRisk: await tally(
       deps,
       tenant.id,

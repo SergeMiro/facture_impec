@@ -16,6 +16,7 @@ export const CHECK_RULES = [
   'B4',
   'B5',
   'B6',
+  'B7',
 ] as const;
 export type CheckRule = (typeof CHECK_RULES)[number];
 
@@ -48,6 +49,8 @@ export const CHECK_MESSAGES = [
   'B5.total',
   'B6.siren',
   'B6.name',
+  'B7.under',
+  'B7.over',
 ] as const;
 export type CheckMessage = (typeof CHECK_MESSAGES)[number];
 
@@ -82,7 +85,38 @@ export const SEVERITY: Readonly<Record<CheckMessage, FindingSeverity>> = {
   'B5.total': 'blocking',
   'B6.siren': 'warning',
   'B6.name': 'warning',
+  // A price this customer does not usually pay: a mistake, or a price agreed since (R7).
+  'B7.under': 'warning',
+  'B7.over': 'warning',
 };
+
+/**
+ * The rules a person may call normal for a customer and an article (« C'est normal », R7): a price
+ * agreed with the customer, a thin margin chosen. Never a sum, a VAT rate or a delivery left unbilled.
+ */
+export const ACCEPTABLE_RULES = [
+  'A5',
+  'B1',
+  'B2',
+  'B4',
+  'B7',
+] as const satisfies readonly CheckRule[];
+export type AcceptableRule = (typeof ACCEPTABLE_RULES)[number];
+
+/** Who a finding is about, for « C'est normal »: the customer (`siren:…` or `name:…`) and the article. */
+export interface FindingScope {
+  party: string | null;
+  itemId: string;
+}
+
+/** « C'est normal »: this rule stays quiet on this article, for this customer or any (party null). */
+export interface RuleException {
+  rule: AcceptableRule;
+  party: string | null;
+  itemId: string;
+  /** Europe/Paris ISO date of its last day; null: no end. */
+  until: string | null;
+}
 
 /**
  * billed_by: an order (or a delivery note) → the invoice that bills it; fulfils: a delivery note → its
@@ -207,6 +241,29 @@ export interface CheckFinding {
   evidence: Evidence[];
   /** Present when one price cell corrects it (R8). */
   fix?: CheckFix;
+  /** Present when the person may call it normal (R7). */
+  scope?: FindingScope;
+  /** The invoice bills less than it should: money not invoiced, for the weekly report (R7). */
+  short?: true;
+}
+
+/** Two articles that are one (R7): `aliasId` is read as `itemId`. */
+export interface SynonymDecision {
+  itemId: string;
+  aliasId: string;
+  status: 'confirmed' | 'rejected';
+}
+
+/** « Est-ce le même article ? »: a sold article with no cost, and a bought one whose name looks like it. */
+export interface SynonymProposal {
+  /** The article sold. */
+  itemId: string;
+  /** The article bought. */
+  aliasId: string;
+  itemName: string;
+  aliasName: string;
+  /** 0–100. */
+  score: number;
 }
 
 export interface CheckInput {
@@ -216,10 +273,16 @@ export interface CheckInput {
   today: string;
   /** The margin the company wants on what it resells, in % of the sale price (Réglages); null: none. */
   minMarginPercent?: number | null;
+  /** « C'est normal » answers still running (R7). */
+  exceptions?: readonly RuleException[];
+  /** A person's yes or no on two articles being one (R7). */
+  synonyms?: readonly SynonymDecision[];
 }
 
 export interface CheckOutput {
   links: Link[];
   /** Largest amount first. */
   findings: CheckFinding[];
+  /** Pairs of articles to ask about, best first. */
+  synonyms: SynonymProposal[];
 }

@@ -63,4 +63,19 @@ describe('ReportAgent', () => {
       'Envoyez 4 facture(s) prête(s).',
     ]);
   });
+
+  it('adds the money the checks found not invoiced this week, and stays within ten lines', () => {
+    expect(weeklyReport({ ...quiet, notInvoiced: none }).numbers).toHaveLength(4);
+    const r = weeklyReport({
+      ...quiet,
+      notInvoiced: { count: 2, amount: 80_000 },
+      formalNotices: [{ number: 'F-1', payable: 10_000 }],
+      refusals: ['F-7'],
+      toFix: 1,
+    });
+    expect(r.numbers[4]).toBe(
+      `Manque à facturer repéré : 2 écart(s), 800,00${NBSP}€ (onglet « Contrôles »)`,
+    );
+    expect(r.text.split('\n').length).toBe(10);
+  });
 });

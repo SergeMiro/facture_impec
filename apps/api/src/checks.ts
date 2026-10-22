@@ -3,7 +3,9 @@
 // before « Envoyer » and before the autopilot sends. Links a person confirmed or rejected stay; the
 // others are found again each time. A finding keeps its row from one run to the next by its key: open
 // while it is found, resolved when it is not, open again when it comes back. A blocking finding on an
-// invoice holds it: « Envoyer » asks « Envoyer quand même », the autopilot does not send it.
+// invoice holds it: « Envoyer » asks « Envoyer quand même », the autopilot does not send it. What a
+// person taught the checks (R7, src/patterns.ts) is read here: the findings they called normal, and
+// the articles they said are one; the pairs of articles to ask about are kept like proposed links.
 import {
   type CheckDoc,
   type CheckFix,
@@ -14,6 +16,9 @@ import {
   linkId,
   parisToday,
   parseAddress,
+  type RuleException,
+  type SynonymDecision,
+  synonymId,
 } from '@fi/core';
 import {
   and,
@@ -23,6 +28,7 @@ import {
   connectedFiles,
   type Db,
   type DbOrTx,
+  desc,
   docLines,
   docs,
   eq,
@@ -33,8 +39,11 @@ import {
   inArray,
   invoiceEvents,
   invoices,
+  itemSynonyms,
+  items,
   links,
   rows,
+  ruleExceptions,
   type SQL,
   sources,
   sql,
@@ -177,12 +186,57 @@ export async function runChecks(db: Db, tenantId: string, now: Date): Promise<Ch
         : [],
     );
     const checkDocs = await loadDocs(tx, tenantId);
+    const exceptions: RuleException[] = await tx
+      .select({
+        rule: ruleExceptions.rule,
+        party: ruleExceptions.party,
+        itemId: ruleExceptions.itemId,
+        until: ruleExceptions.until,
+      })
+      .from(ruleExceptions)
+      .where(eq(ruleExceptions.tenantId, tenantId));
+    const pairs = await tx.select().from(itemSynonyms).where(eq(itemSynonyms.tenantId, tenantId));
+    const synonyms: SynonymDecision[] = pairs.flatMap((p) =>
+      p.status === 'proposed' ? [] : [{ itemId: p.itemId, aliasId: p.aliasId, status: p.status }],
+    );
     const out = checkRegistry({
       docs: checkDocs,
       decisions,
       today: parisToday(now),
       minMarginPercent: tenant.minMarginPercent,
+      exceptions,
+      synonyms,
     });
+
+    // Articles to ask about: answered pairs stay; the proposals are the ones found now.
+    const proposedNow = new Set(out.synonyms.map(synonymId));
+    const pairById = new Map(pairs.map((p) => [synonymId(p), p]));
+    for (const p of out.synonyms) {
+      const before = pairById.get(synonymId(p));
+      if (before && (before.status !== 'proposed' || before.score === p.score)) continue;
+      await tx
+        .insert(itemSynonyms)
+        .values({
+          tenantId,
+          itemId: p.itemId,
+          aliasId: p.aliasId,
+          status: 'proposed',
+          score: p.score,
+        })
+        .onConflictDoUpdate({
+          target: [itemSynonyms.itemId, itemSynonyms.aliasId],
+          set: { score: p.score, updatedAt: now },
+        });
+    }
+    const stale = pairs.filter((p) => p.status === 'proposed' && !proposedNow.has(synonymId(p)));
+    if (stale.length) {
+      await tx.delete(itemSynonyms).where(
+        inArray(
+          itemSynonyms.id,
+          stale.map((p) => p.id),
+        ),
+      );
+    }
 
     // Links: what a person decided stays; the rest is what was found now.
     const storedById = new Map(stored.map((l) => [linkId(l), l]));
@@ -247,7 +301,9 @@ export async function runChecks(db: Db, tenantId: string, now: Date): Promise<Ch
       if (
         before?.status === 'open' &&
         before.fingerprint === fingerprint &&
-        hashOf(before.fix ?? null) === hashOf(f.fix ?? null)
+        hashOf(before.fix ?? null) === hashOf(f.fix ?? null) &&
+        hashOf(before.scope ?? null) === hashOf(f.scope ?? null) &&
+        before.short === (f.short ?? false)
       ) {
         continue;
       }
@@ -262,6 +318,8 @@ export async function runChecks(db: Db, tenantId: string, now: Date): Promise<Ch
         params: f.params,
         evidence: f.evidence,
         fix: f.fix ?? null,
+        scope: f.scope ?? null,
+        short: f.short ?? false,
         status: 'open' as const,
         isTest: doc?.isTest ?? false,
         resolvedAt: null,
@@ -413,6 +471,8 @@ export interface Place {
   inboundId: string | null;
   /** The OneDrive file it was read from (R4): the pane names it instead of selecting a cell. */
   file: string | null;
+  /** The customer or supplier it names, for « C'est normal » (R7). */
+  partyName: string | null;
 }
 
 /** Where each document is: its number, and the sheet and workbook it was read from. */
@@ -427,6 +487,7 @@ export async function placesOf(db: DbOrTx, ids: readonly string[]): Promise<Map<
       inboundId: docs.inboundId,
       binding: invoices.excelBinding,
       file: connectedFiles.name,
+      partyName: docs.partyName,
     })
     .from(docs)
     .leftJoin(sources, eq(sources.id, docs.sourceId))
@@ -442,6 +503,7 @@ export async function placesOf(db: DbOrTx, ids: readonly string[]): Promise<Map<
         workbookId: d.workbookId ?? d.binding?.workbookId ?? null,
         inboundId: d.inboundId,
         file: d.file,
+        partyName: d.partyName,
       },
     ]),
   );
@@ -503,6 +565,13 @@ export function findingView(
       ) ?? null,
     /** R8: « Corriger pour moi » writes this cell; null when no single cell corrects it. */
     fix: row.fix ? fixTarget(row.fix, places.get(row.docId)) : null,
+    /**
+     * R7: « C'est normal » may be answered; `customer` names the customer it may be kept to, null
+     * when the document names none (the exception is then for every customer).
+     */
+    normal: row.scope
+      ? { customer: row.scope.party ? (places.get(row.docId)?.partyName ?? null) : null }
+      : null,
     firstSeenAt: row.firstSeenAt.toISOString(),
   };
 }
@@ -567,6 +636,7 @@ export async function checksView(deps: Pick<ApiDeps, 'db' | 'now' | 'ai'>, tenan
     : [];
   const docView = new Map(about.map((d) => [d.id, d]));
   const [state] = await deps.db.select().from(checkState).where(eq(checkState.tenantId, tenant.id));
+  const { exceptions, synonyms } = await taught(deps.db, tenant.id, parisToday(deps.now()));
   const real = open.filter((f) => !f.isTest);
   return {
     checkedAt: state?.checkedAt.toISOString() ?? null,
@@ -590,6 +660,54 @@ export async function checksView(deps: Pick<ApiDeps, 'db' | 'now' | 'ai'>, tenan
           (a.to?.number ?? '').localeCompare(b.to?.number ?? '') ||
           (a.from?.number ?? '').localeCompare(b.from?.number ?? ''),
       ),
+    /** R7: « Est-ce le même article ? », best first. */
+    synonyms,
+    /** R7: the « C'est normal » answers still running, latest first. */
+    exceptions,
+  };
+}
+
+/** What the person taught the checks (R7): the exceptions not ended, and the pairs to ask about. */
+async function taught(db: DbOrTx, tenantId: string, today: string) {
+  const kept = await db
+    .select()
+    .from(ruleExceptions)
+    .where(eq(ruleExceptions.tenantId, tenantId))
+    .orderBy(desc(ruleExceptions.createdAt));
+  const asked = await db
+    .select({
+      id: itemSynonyms.id,
+      itemId: itemSynonyms.itemId,
+      aliasId: itemSynonyms.aliasId,
+      score: itemSynonyms.score,
+    })
+    .from(itemSynonyms)
+    .where(and(eq(itemSynonyms.tenantId, tenantId), eq(itemSynonyms.status, 'proposed')))
+    .orderBy(desc(itemSynonyms.score));
+  const ids = asked.flatMap((a) => [a.itemId, a.aliasId]);
+  const named = ids.length
+    ? await db.select({ id: items.id, name: items.name }).from(items).where(inArray(items.id, ids))
+    : [];
+  const name = new Map(named.map((i) => [i.id, i.name]));
+  return {
+    exceptions: kept
+      .filter((e) => e.until === null || e.until >= today)
+      .map((e) => ({
+        id: e.id,
+        rule: e.rule,
+        customer: e.partyName,
+        /** False: every customer. */
+        oneCustomer: e.party !== null,
+        item: e.itemName,
+        until: e.until,
+        createdAt: e.createdAt.toISOString(),
+      })),
+    synonyms: asked.map((a) => ({
+      id: a.id,
+      sold: name.get(a.itemId) ?? '',
+      bought: name.get(a.aliasId) ?? '',
+      score: a.score,
+    })),
   };
 }
 
