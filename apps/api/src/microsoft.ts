@@ -145,12 +145,16 @@ export function createMicrosoftClient(config: MicrosoftConfig) {
     }
     const failure = TokenFailure.safeParse(json);
     const code = failure.success ? failure.data.error : `http_${res.status}`;
+    // The AADSTS number says which consent or sign-in is missing; the rest of the text may name the
+    // person, so it is dropped.
+    const aadsts = failure.success ? failure.data.error_description?.match(/AADSTS\d+/)?.[0] : null;
+    const detail = aadsts ? `${code} ${aadsts}` : code;
     // Learn (error codes): the grant is no good, or the person must act (consent, MFA).
     if (['invalid_grant', 'interaction_required', 'consent_required'].includes(code)) {
-      throw new MicrosoftError('reconnect', code);
+      throw new MicrosoftError('reconnect', detail);
     }
     // invalid_client: our app registration is wrong; nothing the person can do.
-    throw new MicrosoftError('unavailable', `token endpoint: ${code}`);
+    throw new MicrosoftError('unavailable', `token endpoint: ${detail}`);
   }
 
   async function call(

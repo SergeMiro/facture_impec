@@ -2,12 +2,28 @@
 // signs the person in with the account Office already has; OneDrive's own picker (v8) runs in a frame
 // over the pane and talks through a MessageChannel. MSAL loads only when the person connects: the pane
 // does not carry its 290 KB otherwise.
-import type { IPublicClientApplication } from '@azure/msal-browser';
+import type { AuthenticationResult, IPublicClientApplication } from '@azure/msal-browser';
 import { z } from 'zod';
 import { type MicrosoftPort, MicrosoftPortError, type PickedFile } from './port';
 
 /** Learn (NAA): `common` serves personal and work accounts alike. */
-const AUTHORITY = 'https://login.microsoftonline.com/common';
+export const AUTHORITY = 'https://login.microsoftonline.com/common';
+
+/**
+ * Learn (NAA, read 2026-10-22): « Word, Excel, and PowerPoint on the web » sign in with the browser's
+ * standard flow, which needs an SPA redirect URI on the add-in's own page and a login hint. In MSAL 5
+ * that page relays the answer (`auth.html`, src/auth.ts). Office's nested sign-in ignores both.
+ */
+const AUTH_PAGE = 'auth.html';
+
+/** Learn (NAA): the account Excel on the web is signed in with, so Microsoft does not ask which. */
+async function loginHint(): Promise<string | undefined> {
+  try {
+    return (await Office.auth.getAuthContext()).userPrincipalName || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /** Learn (NAA): Office answers with requirement set NestedAppAuth 1.1 where it works. */
 function supported(): boolean {
@@ -19,10 +35,13 @@ function supported(): boolean {
 
 /** The picker's first message on the window, with the port of its channel. */
 const Initialize = z.object({ type: z.literal('initialize'), channelId: z.string() });
-/** Then every request on that port: acknowledged, then answered with a `result`. */
+/**
+ * Then every request on that port: acknowledged, then answered with a `result`. Its id is a number
+ * on a personal OneDrive (2026-10-22), a string in Learn's samples: either is sent back as it came.
+ */
 const Command = z.object({
   type: z.literal('command'),
-  id: z.string(),
+  id: z.union([z.string(), z.number()]),
   data: z.object({ command: z.string() }).loose(),
 });
 const Authenticate = z.object({ resource: z.string().optional() }).loose();
@@ -41,8 +60,11 @@ export function officeMicrosoftPort(): MicrosoftPort {
   function client(clientId: string): Promise<IPublicClientApplication> {
     if (!app || appFor !== clientId) {
       appFor = clientId;
+      const page = new URL(AUTH_PAGE, window.location.href).toString();
       const created = import('@azure/msal-browser').then((msal) =>
-        msal.createNestablePublicClientApplication({ auth: { clientId, authority: AUTHORITY } }),
+        msal.createNestablePublicClientApplication({
+          auth: { clientId, authority: AUTHORITY, redirectUri: page, popupRelayUri: page },
+        }),
       );
       // A failed load is tried again at the next click.
       created.catch(() => {
@@ -54,7 +76,7 @@ export function officeMicrosoftPort(): MicrosoftPort {
   }
 
   /** Learn (NAA): silently when Office already holds consent, else Microsoft's own window. */
-  async function token(clientId: string, scope: string): Promise<string> {
+  async function token(clientId: string, scope: string, authority?: string): Promise<string> {
     if (!supported()) throw new MicrosoftPortError('unsupported');
     let pca: IPublicClientApplication;
     try {
@@ -62,14 +84,30 @@ export function officeMicrosoftPort(): MicrosoftPort {
     } catch (e) {
       throw new MicrosoftPortError('failed', String(e));
     }
-    const request = { scopes: [scope] };
+    const request = {
+      scopes: [scope],
+      loginHint: await loginHint(),
+      ...(authority && { authority }),
+    };
+    const signedIn = (result: AuthenticationResult) => {
+      // On the web, the next scope (the picker's) is then asked for that same account, silently.
+      if (result.account) pca.setActiveAccount(result.account);
+      return result.accessToken;
+    };
     try {
-      return (await pca.acquireTokenSilent(request)).accessToken;
+      return signedIn(await pca.acquireTokenSilent(request));
     } catch {
-      // Consent or a fresh sign-in is needed: the window below asks the person.
+      // Consent or a fresh sign-in is needed, or (on the web) no account yet.
+    }
+    if (request.loginHint) {
+      try {
+        return signedIn(await pca.ssoSilent(request));
+      } catch {
+        // Not signed in to Microsoft in this browser, or consent is needed: the window below asks.
+      }
     }
     try {
-      return (await pca.acquireTokenPopup(request)).accessToken;
+      return signedIn(await pca.acquireTokenPopup(request));
     } catch (e) {
       const code = e instanceof Error && 'errorCode' in e ? String(e.errorCode) : '';
       throw new MicrosoftPortError(code === 'user_cancelled' ? 'cancelled' : 'failed', String(e));
@@ -85,7 +123,7 @@ export function officeMicrosoftPort(): MicrosoftPort {
      * TODO(verify): with the owner's app registration, personal and work (docs/MICROSOFT365.md).
      */
     async pick({ clientId, picker, labels }) {
-      const first = await token(clientId, picker.scope);
+      const first = await token(clientId, picker.scope, picker.authority);
       const channelId = crypto.randomUUID();
       const options = {
         sdk: '8.0',
@@ -124,7 +162,7 @@ export function officeMicrosoftPort(): MicrosoftPort {
           overlay.remove();
           resolve(files);
         };
-        const reply = (id: string, data: unknown) =>
+        const reply = (id: string | number, data: unknown) =>
           port?.postMessage({ type: 'result', id, data });
         const onPort = async (event: MessageEvent) => {
           const message = Command.safeParse(event.data);
@@ -134,12 +172,17 @@ export function officeMicrosoftPort(): MicrosoftPort {
           switch (data.command) {
             case 'authenticate': {
               const { resource } = Authenticate.parse(data);
-              // A work account's picker may ask for another SharePoint host than the drive's.
-              const scope = resource?.startsWith('https://')
-                ? `${new URL(resource).origin}/.default`
-                : picker.scope;
+              // A work account's picker may ask for another SharePoint host than the drive's. A
+              // personal one names `https://api.onedrive.com` and takes the token it opened with
+              // (Learn: « OneDrive Consumer Configuration »; seen 2026-10-22).
+              const host =
+                !picker.authority && resource?.startsWith('https://')
+                  ? new URL(resource).origin
+                  : null;
+              const scope = host ? `${host}/.default` : picker.scope;
+              const authority = host ? undefined : picker.authority;
               try {
-                reply(id, { result: 'token', token: await token(clientId, scope) });
+                reply(id, { result: 'token', token: await token(clientId, scope, authority) });
               } catch (e) {
                 reply(id, {
                   result: 'error',

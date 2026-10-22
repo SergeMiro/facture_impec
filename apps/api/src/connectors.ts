@@ -64,8 +64,13 @@ export const WATCHED_POLL_EVERY_MS = 60 * 60_000;
 const SUBSCRIPTION_MS = 3 * 24 * 3_600_000;
 const RENEW_BEFORE_MS = 24 * 3_600_000;
 
-/** The scope the pane's token is for: the Application ID URI the owner sets (docs/RUNBOOK.md). */
-export const apiScope = (clientId: string) => `api://${clientId}/access_as_user`;
+/**
+ * The scope the pane asks for: our API, under the Application ID URI the owner sets (docs/RUNBOOK.md).
+ * Learn (OBO, « .default and combined consent »): `.default` makes Microsoft's consent cover the Graph
+ * permissions the registration lists too, which our side cannot ask for later (AADSTS70000 without it,
+ * 2026-10-22). The token's scope is still `access_as_user`.
+ */
+export const apiScope = (clientId: string) => `api://${clientId}/.default`;
 
 export const ConnectBody = z.object({ token: z.string().min(20).max(16_384) });
 export const PickBody = z.object({
@@ -88,8 +93,9 @@ function calm(e: unknown, during: 'connect' | 'file'): never {
   if (!(e instanceof MicrosoftError)) throw e;
   switch (e.kind) {
     case 'reconnect':
+      // Not 401: the pane reads that as its own session ending and signs the person out.
       throw during === 'connect'
-        ? new ApiError(401, 'connector_sign_in', undefined, e.message)
+        ? new ApiError(409, 'connector_sign_in', undefined, e.message)
         : new ApiError(409, 'connector_reconnect', undefined, e.message);
     case 'throttled':
       throw new ApiError(503, 'connector_busy', undefined, e.message);
@@ -128,12 +134,17 @@ async function accessFor(deps: ConnectorDeps, conn: ConnectionRow) {
 
 /**
  * Where the pane's file picker opens and the token it wants (Learn: File Picker v8, read 2026-10-21):
- * OneDrive's own for a personal account, the SharePoint host's for a work one. Null: no https host to
- * open it on. TODO(verify): both with the owner's app registration (docs/MICROSOFT365.md).
+ * OneDrive's own for a personal account, from the `consumers` authority (its token is refused from
+ * `common`, AADSTS70011, 2026-10-22), the SharePoint host's for a work one. Null: no https host to
+ * open it on. TODO(verify): a work account (docs/MICROSOFT365.md).
  */
 export function pickerFor(accountKind: 'personal' | 'work', driveUrl: string | null) {
   if (accountKind === 'personal') {
-    return { baseUrl: 'https://onedrive.live.com/picker', scope: 'OneDrive.ReadOnly' };
+    return {
+      baseUrl: 'https://onedrive.live.com/picker',
+      scope: 'OneDrive.ReadOnly',
+      authority: 'https://login.microsoftonline.com/consumers',
+    };
   }
   let origin: string;
   try {

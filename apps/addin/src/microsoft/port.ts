@@ -12,6 +12,8 @@ export interface PickedFile {
 export interface PickerTarget {
   baseUrl: string;
   scope: string;
+  /** Where that token comes from, when not the sign-in's own (a personal OneDrive: `consumers`). */
+  authority?: string;
 }
 
 /**
@@ -31,7 +33,7 @@ export class MicrosoftPortError extends Error {
 }
 
 export interface MicrosoftPort {
-  /** A token for our API (`api://<client id>/access_as_user`); Microsoft asks consent the first time. */
+  /** A token for our API (`api://<client id>/.default`); Microsoft asks consent the first time. */
   signIn(input: { clientId: string; scope: string }): Promise<string>;
   /** OneDrive's picker over the pane; [] when the person closes it without picking. */
   pick(input: {
@@ -46,7 +48,8 @@ export interface MicrosoftPort {
  * Scout (plan §R4): the open workbook's address (`Office.context.document.url`) is on OneDrive or
  * SharePoint. Learn does not describe these addresses; the hosts below are those Excel shows for a
  * personal OneDrive (d.docs.live.net, onedrive.live.com) and a work one or a SharePoint site
- * (*.sharepoint.com). TODO(verify): on a personal, a work and a SharePoint account (docs/MICROSOFT365.md).
+ * (*.sharepoint.com). A personal workbook on the web is on d.docs.live.net (2026-10-22).
+ * TODO(verify): on a work and a SharePoint account (docs/MICROSOFT365.md).
  */
 export function onMicrosoftCloud(url: string | null): boolean {
   let host: string;

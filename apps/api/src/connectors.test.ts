@@ -140,7 +140,7 @@ describe('a personal OneDrive', () => {
     expect(await c.call('/connectors/microsoft')).toEqual({
       microsoft: {
         clientId: MICROSOFT_STAND_IN_APP.clientId,
-        scope: `api://${MICROSOFT_STAND_IN_APP.clientId}/access_as_user`,
+        scope: `api://${MICROSOFT_STAND_IN_APP.clientId}/.default`,
       },
       mailOnMicrosoft: false,
       connection: null,
@@ -154,7 +154,11 @@ describe('a personal OneDrive', () => {
       accountKind: 'personal',
       status: 'active',
       notified: true,
-      picker: { baseUrl: 'https://onedrive.live.com/picker', scope: 'OneDrive.ReadOnly' },
+      picker: {
+        baseUrl: 'https://onedrive.live.com/picker',
+        scope: 'OneDrive.ReadOnly',
+        authority: 'https://login.microsoftonline.com/consumers',
+      },
       files: [],
     });
     // Graph checked our address with its handshake before it took the subscription.
@@ -410,7 +414,11 @@ describe('when something breaks', () => {
     const forged = await call('/connectors/microsoft', 'POST', {
       token: 'x.eyJ0aWQiOiJ4In0.y-forged',
     });
-    expect(forged.status).toBe(401);
+    // 409, not 401: the person stays signed in to Facture Impec and is told to try again.
+    expect(forged.status).toBe(409);
+    expect(await forged.json()).toMatchObject({
+      error: { code: 'connector_sign_in', details: 'invalid_grant AADSTS50173' },
+    });
 
     await stand.putFile(PERSONAL.account, 'doc-07', 'Notes.docx', new Uint8Array([1, 2, 3]));
     await stand.putFile(PERSONAL.account, 'bad-07', 'Abîmé.xlsx', new Uint8Array([1, 2, 3]));

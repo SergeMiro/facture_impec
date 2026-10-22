@@ -1666,6 +1666,8 @@ export class Controller {
   /** Why Microsoft's side said no, in the pane's words. */
   #signInFailed(e: unknown): boolean {
     if (!(e instanceof MicrosoftPortError)) return false;
+    // The person reads a calm line; Microsoft's own reason stays in the console for support.
+    if (e.reason === 'failed') console.warn(e);
     this.notify(
       e.reason === 'cancelled' ? 'info' : 'warning',
       t(`addin.connector.port.${e.reason}`),

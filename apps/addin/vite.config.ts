@@ -52,9 +52,10 @@ export default defineConfig(async ({ command, mode }) => {
     },
     preview: { port, strictPort: true, https },
     build: {
-      // harness.html is a dev page: the task pane and the dialog's first page ship (src/pages.ts).
+      // harness.html is a dev page: the task pane, the dialog's first page (src/pages.ts) and the page
+      // of Microsoft's sign-in on the web (src/auth.ts) ship.
       rolldownOptions: {
-        input: ['./taskpane.html', './redirect.html'].map((page) =>
+        input: ['./taskpane.html', './redirect.html', './auth.html'].map((page) =>
           fileURLToPath(new URL(page, import.meta.url)),
         ),
       },

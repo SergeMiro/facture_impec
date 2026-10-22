@@ -215,7 +215,9 @@ export const ConnectorView = z.object({
       /** `reconnect`: Microsoft refused the token; nothing is read until « Reconnecter ». */
       status: z.enum(['active', 'reconnect']),
       /** Where « Choisir des fichiers » opens and the token it wants; null: no picker. */
-      picker: z.object({ baseUrl: z.string(), scope: z.string() }).nullable(),
+      picker: z
+        .object({ baseUrl: z.string(), scope: z.string(), authority: z.string().optional() })
+        .nullable(),
       /** True: a change shows within minutes; false: at the next hourly check. */
       notified: z.boolean(),
       connectedAt: z.string(),
