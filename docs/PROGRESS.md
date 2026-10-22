@@ -832,3 +832,40 @@ times: `docs/MICROSOFT365.md` § What a real account showed.
 | Changes noticed | One cell changed in Excel at 12:40:52 UTC → Graph's notification at `/webhooks/microsoft` 12:41:26 → the order at 1 200 € HT in « Registre ». The subscription's handshake reached the API through the tunnel. |
 | Disconnecting deletes | Withdrawing the consent on Microsoft's side: `https://account.live.com/consent/Manage` for a personal account. « Déconnecter » itself: the stand-in evidence above. |
 | Not tried | A work account (needs a Microsoft 365 tenant and its administrator's consent: the app's publisher is unverified, `docs/DEFERRED.md`), Excel for Windows and Mac. |
+
+## R7 — Patterns and learning (started 2026-10-22)
+
+R2–R3 compare a document with the one that should agree with it; R7 compares an invoice with the
+company's own habits, and learns from what the person answers. Criteria, written here before the work:
+
+- **B7, an unusual price**: an invoice line's unit price far from what this customer usually pays for
+  this article — the median of its earlier lines (the last 12, at least 3, same unit), more than 20 %
+  away and more than four times their usual spread — is a warning with the usual price, how many
+  invoices say it and the money at stake (at least 1 €). An hour billed at a day's price, or a day at an
+  hour's, is caught. A line an order or « Tarifs » prices stays with B1, B4 and A5.
+- **« C'est normal »**: on a finding about a price (A5, B1, B2, B4, B7) the person says it is normal,
+  for this customer and this article or for this article whatever the customer, for 3 months, 12 months
+  or with no end. The exception is kept (`rule_exceptions`: the rule, the customer, the article, the end,
+  who and when) and audited; the finding resolves and the same rule on the same customer and article is
+  not found again until the end — the invoice it held is no longer held. « Contrôles » lists the
+  exceptions; « Retirer » brings the finding back.
+- **Article synonyms**: an article sold with no purchase to give it a cost, and an article bought whose
+  name looks like it (same unit), are proposed « Est-ce le même article ? » in « Contrôles ». « Oui »
+  ties them (`item_synonyms`) and every rule reads them as one article from then on (B2 finds the cost);
+  « Non » never proposes the pair again. Both audited.
+- **Money not invoiced in the weekly report**: the report says what the checks found billed short in
+  the week — findings first seen in the last 7 days on real documents (B1, B3, A3, a loss under B2, a
+  price under A5 or B7) and still open — with the amount; no line when there is none.
+- **Audit and RGPD**: exceptions and synonyms in the company's export and erasure; `docs/RGPD.md`,
+  `docs/DEFERRED.md`, `docs/ARCHITECTURE.md` updated; corpus scenarios for B7 firing and quiet.
+
+### Evidence (2026-10-22)
+
+| Criterion | Evidence |
+|---|---|
+| B7, an unusual price | `packages/core/src/checks/check.ts` › `usualPrice`. Corpus (`packages/core/test/checks-corpus.ts`): `b7-hours-for-days` (two days billed at an hour's price: `B7.under`, 700 € at stake), `b7-price-above-habit` (`B7.over`, 60 €), `b7-quiet` (a price inside the usual spread, a line « Tarifs » prices, fewer than three earlier lines, another unit). `apps/api/src/patterns.test.ts` › B7, a price unusual for the customer › finds two days billed at an hour's price, and counts it as money not invoiced (the wording with the usual price and three invoices, the cells K5/K4 to look at). |
+| « C'est normal » | `packages/core/src/checks/checks.test.ts` › patterns and learning (R7) › says who a finding is about, and marks money not invoiced; › names a customer by SIREN, else by name…; › keeps quiet a finding a person called normal, for its customer and article, until its end (another customer, another article, another rule, the last day, the day after). `patterns.test.ts` › « C'est normal » › keeps the finding quiet for its customer and article until its end; « Retirer » brings it back (3 months → last day 2027-01-19 still quiet, 2027-01-20 found again; the invoice's own findings cleared; every customer with no end; « Retirer » audited; 404, 409 on a resolved finding, 400 on 6 months), › is not offered on a sum, a VAT rate or a delivery left unbilled. Controller › purchases and margin (R3) › keeps the margin quiet on « C'est normal », and brings it back on « Retirer » (R7). |
+| Article synonyms | `checks.test.ts` › reads the articles a person tied as one, and follows a chain of them; › compares names by their words; › proposes a bought article for a sold one with no cost, then B2 finds its cost once tied (a « Non » is never asked again); › proposes nothing for an article that has its cost, another unit, or no purchase. `patterns.test.ts` › « Est-ce le même article ? » › ties a bought article to a sold one: B2 finds the cost; « Non » never asks again (« GM chaise pliante pin » in « Achats » ↔ « Chaise pliante » sold: a 50 € loss once « Oui »). |
+| Money not invoiced in the weekly report | `packages/agents/src/report.test.ts` › the line « Manque à facturer repéré : 2 écart(s), 800,00 € (onglet « Contrôles ») », absent when there is none, the report still 10 lines at most. `patterns.test.ts` › B7… (`weekFacts.notInvoiced` 700 €, the line in the report; a week later nothing). |
+| Audit and RGPD | Audit: `finding.normal`, `exception.remove`, `synonym.confirm` / `synonym.reject` (asserted in `patterns.test.ts`). `patterns.test.ts` › RGPD › exports the exceptions and the article pairs, and erases them with the account. `docs/RGPD.md` (Patterns taught by a person, export, erasure), `docs/DEFERRED.md` (R7 rows closed; reason text, other rules, margin per family, synonyms by code, an action from the report), `docs/ARCHITECTURE.md` › What R7 added, and its decisions. Migration `0015_patterns.sql`. |
+| Gate | `pnpm verify` green on 2026-10-22 (tests with `--concurrency=1`, the machine being loaded): api 257, core 649 (branches 93.1 %) + oracle 276, agents 121 (branches 91.86 %), add-in 77, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local): harness 29 s, B2Brouter stand-in 39 s. |

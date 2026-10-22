@@ -677,6 +677,55 @@ mailExchangesFromDns, `apps/addin/src/controller.test.ts` › OneDrive files rea
 | The Scout | Two signals (the workbook's address, the mail's MX), shown once on the Tableau de bord, answered once per device | The plan's smallest useful version; formula links and sheet names wait (`docs/DEFERRED.md`). |
 | Tariff | Every plan gets the connector for now | Gating it is a money decision for the owner (`docs/DEFERRED.md`). |
 
+## What R7 added: patterns and learning
+
+R2–R3 compare an invoice with the document that should agree with it; R7 compares it with the
+company's own habits and learns from what a person answers. Rule B7 flags a price far from what this
+customer usually pays for the article; « C'est normal » keeps a price rule quiet where the person says
+the gap is on purpose; « Est-ce le même article ? » ties an article bought to the one sold under another
+name; the weekly report adds what the checks found billed short. Criteria in `docs/PROGRESS.md` R7.
+Like R2–R3, every step is a rule in code; nothing asks a model.
+
+```
+checkRegistry(docs, exceptions, synonyms)
+  ─► applySynonyms: confirmed alias → item on every line (chains followed, loops stopped)
+  ─► rules … World.usualPrice (B7): median of the customer's last 12 lines of the article (≥ 3, same unit)
+  ─► each finding: scope {party, itemId} (price rules), short (money not invoiced)
+  ─► excused(finding, exceptions, today) ─► dropped: the stored finding resolves as when documents agree
+  ─► proposeSynonyms: sold item with no cost × bought item with a close name ─► item_synonyms (proposed)
+« C'est normal » ─► POST /findings/:id/normal {everyCustomer, months} ─► rule_exceptions + audit ─► checks again
+« Retirer » ─► DELETE /exceptions/:id ─► audit ─► checks again
+« Oui » / « Non » ─► POST /synonyms/:id ─► confirmed | rejected + audit ─► checks again
+weekly report ─► weekFacts.notInvoiced: open short findings first seen this week ─► « Manque à facturer repéré »
+```
+
+| Path | What it does |
+|---|---|
+| `packages/core/src/checks/check.ts` › `usualPrice`, `partyOf`, `excused` | B7: lines no order or « Tarifs » prices, compared with the median of the same customer's earlier lines of the article (by date, the invoice's own lines excluded), same unit; a gap over 20 % of the median and over four times the median absolute deviation, and at least 1 €, is a warning (`B7.under` / `B7.over`) with the usual price and how many invoices say it. `partyOf`: a customer by SIREN, else by its normalised name. `excused`: an exception of the same rule and article, for this customer or every one, not past its last day. |
+| `packages/core/src/checks/synonym.ts` | `applySynonyms`; `nameScore` (shared words over the shorter name's words, two at least when both have two, plurals folded); `proposeSynonyms` (a sold article no line gives a cost, the bought article with the best score ≥ 60 and a unit that agrees; 20 pairs at most, never one a person answered). |
+| `packages/core/src/checks/types.ts` | `ACCEPTABLE_RULES` (A5, B1, B2, B4, B7), `FindingScope`, `RuleException`, `SynonymDecision`, `SynonymProposal`; `short` on findings (A3, B1, B2 loss, B3, B7 under, A5 under the list price). |
+| `apps/api/src/patterns.ts` | `acceptFinding` (409 `finding_not_acceptable` on a finding that is not open, has no scope or a rule outside the list; the last day is the same date 3 or 12 months on, minus a day), `removeException`, `decideSynonym`; each audited (`finding.normal`, `exception.remove`, `synonym.confirm` / `reject`), then `runChecks`. |
+| `apps/api/src/checks.ts` | `runChecks` reads the exceptions and the answered pairs, writes the proposed pairs (stale ones deleted); findings store their scope and `short`; the view offers « C'est normal » (with the customer's name) and lists the pairs to answer and the exceptions still running. |
+| `apps/api/src/report.ts`, `packages/agents/src/report.ts` | `notInvoiced`: open, short, non-test findings first seen in the last 7 days; one more numbers line only when there is one. |
+| `apps/addin/src/ui/ChecksView.tsx`, `controller.ts` | « C'est normal » on a card opens « Ne plus signaler cet écart : » (this customer or every one; 3 months, 12 months, no end); « Articles à rapprocher » with « Oui » / « Non »; « Écarts que vous avez jugés normaux » with « Retirer ». |
+
+Tables: migration `0015_patterns.sql` (`rule_exceptions`, `item_synonyms`; `findings.scope_json`, `findings.short`).
+
+Tests: `packages/core/src/checks/checks.test.ts` › patterns and learning (R7), the B7 scenarios of
+`packages/core/test/checks-corpus.ts`, `apps/api/src/patterns.test.ts`, `packages/agents/src/report.test.ts`,
+`apps/addin/src/controller.test.ts` › purchases and margin (R3) › keeps the margin quiet on « C'est normal ».
+
+### Decisions taken in R7
+
+| Topic | Decision | Why |
+|---|---|---|
+| What « usual » means | The median of the customer's last 12 lines of the article, 3 at least, same unit; a gap over max(20 %, 4 × MAD) | A median ignores the one-off; the spread lets an article whose price moves a lot move without noise; 3 lines are the least that make a habit. |
+| Which findings can be « normal » | Price findings only (A5, B1, B2, B4, B7) | A wrong sum, a VAT rate or an unbilled delivery is a mistake, not a habit; accepting it would hide money (`docs/DEFERRED.md`). |
+| Scope of an exception | Rule + article + this customer or every one, 3 months, 12 months or no end; no reason text | The architecture document's « правило + область (клиент, товар) + срок действия »; who and when are in the audit. |
+| How an exception acts | In `checkRegistry`, before findings are stored: an excused finding is not produced, so the stored one resolves through the same path as when documents agree (the invoice unheld, the autopilot replanned) | One path for a finding going away; nothing special to undo on « Retirer ». |
+| Synonyms | Proposed only between an article sold with no cost and one bought, by name; « Oui » remaps the alias on every line before every rule | The useful case for margins (R3) at the lowest risk; codes and sale-to-sale pairs wait (`docs/DEFERRED.md`). |
+| Money not invoiced | Findings marked `short` when the company bills less than it should; the report counts those first seen this week and still open | « Потерянные деньги » the person can still recover, not every gap ever found. |
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than
