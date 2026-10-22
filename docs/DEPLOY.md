@@ -11,7 +11,7 @@ the domain and every key are the owner's (§6).
 |---|---|---|
 | API | `apps/api/src/server.ts` through `tsx` (internal packages are TypeScript source, no build step); migrates the database on start; runs the pg-boss workers (send, sync, sweep), chasing, weekly reports and the daily purge in the same process (`API_WORKERS=true`) | `api` service of `deploy/compose.yaml`, published on `127.0.0.1:4000` only |
 | Database | Postgres 17 (`postgres:17.11-alpine`), volume `pgdata` | `postgres` service, not published |
-| Task pane | `apps/addin/dist/` (`taskpane.html`, `redirect.html`, `assets/`): static files, any https host | the same proxy, or a static host |
+| Task pane | `apps/addin/dist/` (`taskpane.html`, `redirect.html`, `auth.html`, `assets/`): static files, any https host | the same proxy, or a static host |
 | TLS proxy | Terminates https for the API and the pane (Office, Stripe's and B2Brouter's webhooks all need https) | the owner's choice (Caddy, nginx, Cloudflare Tunnel) |
 
 Two deployments are possible, same image: **sandbox** (`FI_ENV=sandbox`, B2Brouter sandbox key, Stripe
@@ -39,6 +39,7 @@ on a wrong combination (a live key outside prod, a test key in prod, a missing s
 | `TERMS_URL` | the published CGU | without it « Créer un compte » is not offered |
 | `STRIPE_SECRET_KEY` (restricted `rk_live_…` advised), `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICES_*`, `STRIPE_METER_EVENT`, `STRIPE_AUTOMATIC_TAX` | `docs/BILLING.md` §11 | without a key nobody is billed |
 | `AI_PROVIDER`, `AI_MODEL_AGENT`, `AI_API_KEY`, `AI_KEY_SEALING_KEY` (and for OpenRouter `AI_BASE_URL`, `AI_STRUCTURED_OUTPUTS`, `AI_REQUEST_BODY`) | `docs/AI_PROVIDERS.md` § Default for "included": prod Mistral, preprod a free OpenRouter model | without them the agents answer deterministically |
+| `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `CONNECTOR_SEALING_KEY` | the owner's app registration (`docs/RUNBOOK.md` § OneDrive connector), whose SPA redirect URIs must include `brk-multihub://app.<domain>` and `https://app.<domain>/auth.html`; the sealing key random 32 bytes, kept outside the server | the OneDrive connector; without them it is not offered. `API_PUBLIC_URL` in https lets a personal OneDrive notify `/webhooks/microsoft` |
 | `PDP_KEY_SEALING_KEY` | random 32 bytes, `openssl rand -base64 32`; keep a copy outside the server | seals the B2Brouter keys companies connect in Réglages (`docs/B2BROUTER.md` §12); without it the form is not shown. Changing it later makes the saved keys unreadable and stops those companies' real sends until they paste their key again |
 
 `DATABASE_URL`, `API_HOST` and `API_PORT` are set by compose and the image; the `MOCK_*` variables are

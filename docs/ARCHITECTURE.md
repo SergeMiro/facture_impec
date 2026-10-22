@@ -651,6 +651,7 @@ check connector.check job (webhook, sweep every 2 min / hourly when notified, re
 | `apps/api/src/sources.ts`, `checks.ts`, `rgpd.ts` | A source of `type: file` is read only by the API (a pane's snapshot for it is refused); findings name the file of their document; the export and the erasure include connections (without their token) and files. |
 | `apps/mock-pdp/src/microsoft.ts` | The stand-in: token endpoint (OBO, refresh), Graph (me, drive, items, content with a 302, subscriptions with the handshake and notifications), two accounts (personal `msa-camille`, work `aad-camille`) and `/microsoft/control` to put a file, change it, delete it, throttle or refuse a token. |
 | `apps/addin/src/microsoft/` | `MicrosoftPort`: `office.ts` (MSAL loaded only on « Connecter », NAA, the picker in a frame over the pane), `stand-in.ts` (harness and E2E), `onMicrosoftCloud` (the Scout's address check). |
+| `apps/addin/auth.html`, `src/auth.ts` | Excel on the web's sign-in: MSAL's popup relay and the page Microsoft answers to, which hands the answer on to the pane (a frame of Office's page cannot receive it). Built with the pane; never opened by Office's own sign-in. |
 | `apps/addin/src/controller.ts` (R4 section), `ui/RegistryView.tsx`, `ui/Dashboard.tsx` | « Fichiers OneDrive » in « Registre » (account, files, sheets, problems, « Déconnecter » confirmed); the confirm screen of a file's sheet; « Contrôles » naming the file; the Scout's suggestion on the Tableau de bord. |
 
 Tables: migration `0014_connectors.sql` (`connections`, `connected_files`, `sources.file_id`).
@@ -670,6 +671,8 @@ mailExchangesFromDns, `apps/addin/src/controller.test.ts` › OneDrive files rea
 | What triggers a read | The cTag (content tag), not the eTag; the same snapshot twice writes nothing (R1) | A rename or a share changes the eTag, not the content. |
 | One account per company | A second account waits for « Déconnecter » (`connector_other_account`) | Enough for the pilot; several accounts: `docs/DEFERRED.md`. |
 | A file that breaks | Its row says why (missing, forbidden, too large, unreadable); what it gave stays until it reads again or is removed | The person keeps their findings while they fix the file; nothing vanishes silently. |
+| What the pane asks Microsoft for | `api://<client id>/.default`, not `…/access_as_user` | Learn's combined consent: the person consents to the Graph permissions in the same screen; the on-behalf-of exchange cannot ask for them later (seen on a real account 2026-10-22). |
+| A connection Microsoft refuses | 409 `connector_sign_in` (on connect, like `connector_reconnect` later) with the AADSTS number, never 401 | 401 means « your Facture Impec session ended » to the pane, which signed the person out over a Microsoft problem. |
 | Sign-in where NAA is missing | A calm message (`addin.connector.port.unsupported`), no Office dialog fallback | The dialog flow needs its own redirect page and a second token path; NAA covers current Excel. `docs/DEFERRED.md`. |
 | The Scout | Two signals (the workbook's address, the mail's MX), shown once on the Tableau de bord, answered once per device | The plan's smallest useful version; formula links and sheet names wait (`docs/DEFERRED.md`). |
 | Tariff | Every plan gets the connector for now | Gating it is a money decision for the owner (`docs/DEFERRED.md`). |

@@ -817,3 +817,18 @@ settle is the TODO(verify) list of `docs/MICROSOFT365.md`.
 | Audit and RGPD | Audit: `connection.connect` / `reconnect` / `disconnect` / `refused`, `connection.watch` / `renew` (› renews the subscription…: the four events in order), `connected_file.pick` / `remove` / `problem`, `source.include` / `remove` / `read` with actor `connector:microsoft`. `connectors.test.ts` › RGPD › exports the account without its token and the files, and erases them with the account. `docs/RGPD.md` (OneDrive connection, files read from OneDrive, export, erasure, the DNS lookup). |
 | Docs | `docs/MICROSOFT365.md` (new: sources read 2026-10-21, the Scout, six TODO(verify)); `docs/ARCHITECTURE.md` › What R4 added, and its decisions; `docs/DEFERRED.md` (delta queries, `Files.Read.All` and work notifications, several accounts, tariff gating, the Scout's other signals, the Office dialog, Google Drive, lifecycle notifications, revoking at Microsoft, the picker in a dialog, writing into a file); `docs/RUNBOOK.md` › OneDrive connector (stand-in, the owner's Entra registration); `docs/OFFICE.md` §10; `docs/DEPENDENCIES.md` (`@azure/msal-browser`). |
 | Gate | `pnpm verify` green on 2026-10-21: api 252, core 639 (branches 93.14 %) + oracle 276, agents 120 (branches 91.84 %), add-in 76, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local): harness 28 s, B2Brouter stand-in 38 s. |
+
+### Evidence on a real account (2026-10-22)
+
+The owner registered the app in Microsoft Entra (`docs/MICROSOFT365.md` § The owner's app registration)
+and the TODO(verify) list was run on the owner's personal account in Excel on the web (browser: local,
+BrowserOS on the VPS; the pane from `pnpm dev`, the API through a temporary public tunnel). Details and
+times: `docs/MICROSOFT365.md` § What a real account showed.
+
+| Criterion | Evidence |
+|---|---|
+| Sign-in from the pane | Excel on the web answers NestedAppAuth 1.1 and signs in through the browser's flow: `auth.html` relays Microsoft's window to the pane (new: `apps/addin/auth.html`, `src/auth.ts`). Consent once, then « OneDrive personnel » and the account in « Registre ». The on-behalf-of exchange works for a personal account once the pane asks `api://<client id>/.default` (`connectors.test.ts` › a personal OneDrive › finds 100 € missing…: the scope in the view). A refused exchange no longer signs the person out: 409 `connector_sign_in` with the AADSTS number (› refuses another account, a sign-in Microsoft rejects…). |
+| Files chosen, not the drive | OneDrive's picker opened over the pane, French, filtered; one workbook picked (`office.ts`: the `consumers` authority, numeric command ids, `https://api.onedrive.com` answered with the picker's token; › finds 100 € missing…: the picker's authority in the view). The API read it, proposed its sheet with the columns recognised, and read it after « Confirmer et inclure »: one order, 900 € HT. |
+| Changes noticed | One cell changed in Excel at 12:40:52 UTC → Graph's notification at `/webhooks/microsoft` 12:41:26 → the order at 1 200 € HT in « Registre ». The subscription's handshake reached the API through the tunnel. |
+| Disconnecting deletes | Withdrawing the consent on Microsoft's side: `https://account.live.com/consent/Manage` for a personal account. « Déconnecter » itself: the stand-in evidence above. |
+| Not tried | A work account (needs a Microsoft 365 tenant and its administrator's consent: the app's publisher is unverified, `docs/DEFERRED.md`), Excel for Windows and Mac. |

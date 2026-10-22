@@ -272,7 +272,7 @@ validated in `docs/OFFICE.md` §2). `pnpm dev` must be running on the same machi
 
 | Excel | How | Remove |
 |---|---|---|
-| On the web | `scripts/sideload.sh web` prints the steps: Home > Add-ins > More Settings > Upload My Add-in > the manifest. The manifest lives in that browser's storage. | Clear the browser's cache. |
+| On the web | `scripts/sideload.sh web` prints the steps: Home > Add-ins > More Settings > Upload My Add-in > the manifest. The manifest lives in that browser's storage. Chrome asks whether the workbook's page may reach the local network (the pane on localhost): allow it, or the pane stays blank. | Clear the browser's cache. |
 | Windows | `scripts\sideload.ps1` (registers the manifest with `office-addin-debugging` and opens Excel). Without the tool: a shared-folder catalog (`docs/OFFICE.md` §6). | `scripts\sideload.ps1 -Stop`, always. |
 | Mac | `scripts/sideload.sh mac` copies the manifest into `~/Library/Containers/com.microsoft.Excel/Data/Documents/wef`; restart Excel. | `scripts/sideload.sh remove`. |
 
@@ -329,17 +329,24 @@ of it is in the repo):
 
 1. Entra admin center → App registrations → New registration: « Facture Impec », supported accounts
    « Accounts in any organizational directory and personal Microsoft accounts ».
-2. Authentication → Single-page application, redirect URI `brk-multihub://<add-in domain>` (the domain
-   the pane is served from, e.g. `addin.facture-impec.fr`), for nested app authentication.
+2. Authentication → Single-page application, redirect URIs `brk-multihub://<add-in domain>` (the domain
+   the pane is served from, e.g. `addin.facture-impec.fr`), for nested app authentication in Excel for
+   Windows and Mac, and `https://<add-in domain>/auth.html`, for Excel on the web (its browser flow:
+   `docs/MICROSOFT365.md`). For `pnpm dev`: `brk-multihub://localhost:3000` and
+   `https://localhost:3000/auth.html`. A new URI took Microsoft a few minutes to accept.
 3. Expose an API: Application ID URI `api://<client id>`, scope `access_as_user` (admins and users).
-4. API permissions → Microsoft Graph, delegated: `Files.Read`, `User.Read`, `offline_access`. No
-   administrator consent is needed.
+4. API permissions → Microsoft Graph, delegated: `Files.Read`, `User.Read`, `offline_access`; and
+   « My APIs » → this app → `access_as_user` (the pane asks `.default`, which needs it listed:
+   `docs/MICROSOFT365.md`). No administrator consent is needed. A change applied after a few minutes.
 5. Certificates & secrets → a client secret; put it with the client id in the API's environment
    (`MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`), with a new `CONNECTOR_SEALING_KEY`; leave the two
    URLs empty. `API_PUBLIC_URL` in https lets a personal OneDrive notify `/webhooks/microsoft`;
    otherwise its files are polled like a work one.
 6. Run the TODO(verify) list of `docs/MICROSOFT365.md` on a personal and a work account, and note the
-   results there.
+   results there. A personal OneDrive's notifications need the API on a public https address: for a
+   try, a temporary tunnel to `:4000` as `API_PUBLIC_URL`.
+7. Branding & properties: the CGU and privacy URLs, once published (Microsoft shows them on the consent
+   screen).
 
 Changing `CONNECTOR_SEALING_KEY` makes every stored token unreadable: the connections then ask to
 « Reconnecter ». Rotating the client secret needs nothing else.
