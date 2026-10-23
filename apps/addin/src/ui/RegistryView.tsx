@@ -1,7 +1,8 @@
 // Registre (R1): the workbook's other sheets — orders, delivery notes, purchases, price lists. The
 // company says what a sheet holds once (« Inclure cette feuille »); then every change to it is read
 // into the registry next to the invoices, and « Retirer » takes it out again. « Fichiers OneDrive »
-// (R4): sheets of files the API reads itself, without the file being open.
+// (R4) and « Fichiers Google Drive » (R5): sheets of files the API reads itself, without the file
+// being open.
 import {
   fieldAllowed,
   frDate,
@@ -32,7 +33,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { useEffect, useState } from 'react';
-import type { ConnectedFile, Source } from '../api';
+import type { ConnectedFile, DriveProvider, Source } from '../api';
 import type { Header, Inclusion } from '../controller';
 import { parisDateTime, parisTime, useFi } from './context';
 
@@ -91,6 +92,17 @@ const ACCOUNT: Record<'personal' | 'work', MessageKey> = {
   personal: 'addin.connector.kind.personal',
   work: 'addin.connector.kind.work',
 };
+
+const GOOGLE_ACCOUNT: Record<'personal' | 'work', MessageKey> = {
+  personal: 'addin.google.kind.personal',
+  work: 'addin.google.kind.work',
+};
+
+/** How the file's messages name its provider. */
+const NAMES = {
+  microsoft: { drive: 'OneDrive', company: 'Microsoft' },
+  google: { drive: 'Google Drive', company: 'Google' },
+} as const;
 
 const PROBLEM: Record<string, MessageKey> = {
   missing: 'addin.connector.problem.missing',
@@ -155,6 +167,7 @@ export function RegistryView() {
       )}
 
       <ConnectorSection />
+      <GoogleSection />
 
       <Text weight="semibold">{t('addin.registry.totals')}</Text>
       {!registry ? (
@@ -389,7 +402,7 @@ function ConnectorSection() {
             <ul className={styles.list}>
               {conn.files.map((f) => (
                 <li key={f.id}>
-                  <FileCard file={f} />
+                  <FileCard file={f} provider="microsoft" />
                 </li>
               ))}
             </ul>
@@ -433,8 +446,120 @@ function ConnectorSection() {
   );
 }
 
+/** « Fichiers Google Drive »: the account, the files picked in Google's window and their sheets. */
+function GoogleSection() {
+  const styles = useStyles();
+  const [state, fi] = useFi();
+  const [confirming, setConfirming] = useState(false);
+  const view = state.google;
+  if (!view) return null;
+  const conn = view.connection;
+  const busy = state.busy.includes('google');
+  const open = (label: MessageKey, primary = false) => (
+    <span className={styles.line}>
+      <Button
+        size="small"
+        appearance={primary ? 'primary' : 'secondary'}
+        onClick={() => void fi.openGoogle()}
+        disabled={busy}
+      >
+        {t(label)}
+      </Button>
+      {busy && <Spinner size="tiny" />}
+    </span>
+  );
+  return (
+    <section className={styles.section} aria-labelledby="google-title" data-testid="google">
+      <Text weight="semibold" id="google-title">
+        {t('addin.google.title')}
+      </Text>
+      {!view.available ? (
+        <Caption1 className={styles.muted}>{t('addin.google.unavailable')}</Caption1>
+      ) : !conn ? (
+        <>
+          <Caption1>{t('addin.google.intro')}</Caption1>
+          {open('addin.google.connect')}
+        </>
+      ) : (
+        <>
+          <Caption1>
+            {t('addin.connector.account', { account: conn.label })} ·{' '}
+            {t(GOOGLE_ACCOUNT[conn.accountKind])}
+          </Caption1>
+          {conn.status === 'reconnect' ? (
+            <MessageBar intent="warning" layout="multiline">
+              <MessageBarBody>{t('addin.google.reconnectNeeded')}</MessageBarBody>
+            </MessageBar>
+          ) : (
+            <Caption1 className={styles.muted}>
+              {t(conn.notified ? 'addin.connector.notified' : 'addin.connector.polled')}
+            </Caption1>
+          )}
+          {conn.checkedAt && (
+            <Caption1 className={styles.muted}>
+              {t('addin.connector.checkedAt', { time: parisDateTime(conn.checkedAt) })}
+            </Caption1>
+          )}
+          {conn.status === 'reconnect'
+            ? open('addin.google.reconnect', true)
+            : open('addin.google.pick')}
+          {conn.files.length === 0 ? (
+            <Caption1 className={styles.muted}>{t('addin.connector.noFiles')}</Caption1>
+          ) : (
+            <ul className={styles.list}>
+              {conn.files.map((f) => (
+                <li key={f.id}>
+                  <FileCard file={f} provider="google" />
+                </li>
+              ))}
+            </ul>
+          )}
+          {confirming ? (
+            <>
+              <MessageBar intent="warning" layout="multiline">
+                <MessageBarBody>{t('addin.google.disconnectConfirm')}</MessageBarBody>
+              </MessageBar>
+              <span className={styles.line}>
+                <Button
+                  size="small"
+                  appearance="primary"
+                  onClick={() => {
+                    setConfirming(false);
+                    void fi.disconnectGoogle();
+                  }}
+                >
+                  {t('addin.connector.disconnectYes')}
+                </Button>
+                <Button size="small" appearance="subtle" onClick={() => setConfirming(false)}>
+                  {t('addin.connector.cancel')}
+                </Button>
+              </span>
+            </>
+          ) : (
+            <span className={styles.line}>
+              <Button
+                size="small"
+                appearance="subtle"
+                onClick={() => setConfirming(true)}
+                disabled={busy}
+              >
+                {t('addin.google.disconnect')}
+              </Button>
+            </span>
+          )}
+        </>
+      )}
+      {state.googleLink && (
+        <Link href={state.googleLink} target="_blank" rel="noopener noreferrer">
+          {t('addin.google.link')}
+        </Link>
+      )}
+    </section>
+  );
+}
+
 /** A picked file: why it is not read (if so), and each sheet with « Inclure » or what it gave. */
-function FileCard({ file }: { file: ConnectedFile }) {
+function FileCard({ file, provider }: { file: ConnectedFile; provider: DriveProvider }) {
   const styles = useStyles();
   const [state, fi] = useFi();
   const busy = state.busy.includes(`file:${file.id}`);
@@ -447,7 +572,7 @@ function FileCard({ file }: { file: ConnectedFile }) {
       {file.problem && (
         <MessageBar intent="warning" layout="multiline">
           <MessageBarBody>
-            {t(PROBLEM[file.problem] ?? 'addin.connector.problem.unreadable')}
+            {t(PROBLEM[file.problem] ?? 'addin.connector.problem.unreadable', NAMES[provider])}
           </MessageBarBody>
         </MessageBar>
       )}

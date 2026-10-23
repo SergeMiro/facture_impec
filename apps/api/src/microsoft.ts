@@ -5,6 +5,7 @@
 // MicrosoftError whose kind says what the connector does next.
 
 import { z } from 'zod';
+import { DriveError, type DriveErrorKind, readCapped, retryAfterOf } from './drive';
 
 /** The `tid` of every personal Microsoft account (Learn: ID token claims reference). */
 export const MSA_TENANT = '9188040d-6c67-4c5b-b112-36a304b66dad';
@@ -30,27 +31,10 @@ export interface MicrosoftConfig {
   fetcher?: typeof fetch;
 }
 
-/**
- * - `reconnect`: Microsoft no longer honours the token (revoked, expired, consent withdrawn); only the
- *   person signing in again helps.
- * - `throttled`: wait `retryAfter` seconds.
- * - `missing` / `forbidden`: the file was deleted, moved or its sharing changed.
- * - `too_large`: over the connector's cap.
- * - `unavailable`: anything else (network, 5xx, an answer we do not read); the next check tries again.
- */
-export class MicrosoftError extends Error {
-  constructor(
-    readonly kind:
-      | 'reconnect'
-      | 'throttled'
-      | 'missing'
-      | 'forbidden'
-      | 'too_large'
-      | 'unavailable',
-    detail: string,
-    readonly retryAfter?: number,
-  ) {
-    super(detail);
+/** A failure at Microsoft, of a kind the connector acts on (src/drive.ts). */
+export class MicrosoftError extends DriveError {
+  constructor(kind: DriveErrorKind, detail: string, retryAfter?: number) {
+    super(kind, detail, retryAfter);
     this.name = 'MicrosoftError';
   }
 }
@@ -106,11 +90,6 @@ export function claimsOf(token: string): { tid?: string; oid?: string } {
  * TODO(verify): on-behalf-of for a personal account with a real app registration (docs/MICROSOFT365.md).
  */
 export const tokenTenant = (tid: string) => (tid === MSA_TENANT ? 'consumers' : tid);
-
-function retryAfterOf(res: Response): number {
-  const value = Number(res.headers.get('retry-after'));
-  return Number.isFinite(value) && value > 0 ? Math.min(value, 3600) : 30;
-}
 
 export function createMicrosoftClient(config: MicrosoftConfig) {
   const fetcher = config.fetcher ?? fetch;
@@ -270,32 +249,7 @@ export function createMicrosoftClient(config: MicrosoftConfig) {
         if (res.status === 404) throw new MicrosoftError('missing', 'download');
         if (!res.ok) throw new MicrosoftError('unavailable', `download: ${res.status}`);
       }
-      const declared = Number(res.headers.get('content-length'));
-      if (Number.isFinite(declared) && declared > maxBytes) {
-        await res.body?.cancel();
-        throw new MicrosoftError('too_large', `${declared} bytes`);
-      }
-      const reader = res.body?.getReader();
-      if (!reader) return new Uint8Array();
-      const chunks: Uint8Array[] = [];
-      let size = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        size += value.byteLength;
-        if (size > maxBytes) {
-          await reader.cancel();
-          throw new MicrosoftError('too_large', `over ${maxBytes} bytes`);
-        }
-        chunks.push(value);
-      }
-      const bytes = new Uint8Array(size);
-      let at = 0;
-      for (const c of chunks) {
-        bytes.set(c, at);
-        at += c.byteLength;
-      }
-      return bytes;
+      return readCapped(res, maxBytes, (detail) => new MicrosoftError('too_large', detail));
     },
 
     /** Learn (subscription): `updated` on the drive's root; the address is checked by a handshake. */

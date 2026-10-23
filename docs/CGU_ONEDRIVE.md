@@ -66,6 +66,41 @@ interrogé dans le DNS public. Le complément ne se connecte jamais de lui-même
 
 ---
 
+## Article [Y] — Lecture de vos fichiers Google Drive (R5, draft of 2026-10-23)
+
+Same promise as Article [X], written from `docs/GOOGLE.md` and `docs/RGPD.md` › Google Drive
+connection. Where it says nothing, Article [X] applies with « Google » for « Microsoft ».
+
+**[Y].1 Un service facultatif.** Facture Impec peut aussi lire des fichiers que vous gardez dans
+Google Drive. Ce service n'est activé que si vous choisissez « Connecter Google Drive » dans l'onglet
+« Registre », vous connectez dans la fenêtre de Google et y choisissez vos fichiers. Il est disponible
+[dans toutes les formules / à partir de la formule Croissance].
+
+**[Y].2 Ce que nous lisons.** Uniquement les fichiers que vous choisissez dans la fenêtre de Google
+(feuilles Google Sheets, classeurs .xlsx et .xlsm, fichiers .csv ; vingt fichiers au plus, dix
+mégaoctets chacun), et dans chacun uniquement les feuilles que vous confirmez. L'autorisation demandée
+à Google (« drive.file ») ne donne accès qu'à ces fichiers : nous ne pouvons ni parcourir votre Drive
+ni y chercher. Une feuille Google Sheets est lue au format Excel. Nous n'écrivons, ne déplaçons, ne
+partageons et ne supprimons jamais un fichier.
+
+**[Y].3 Quand nous lisons.** Un fichier n'est relu que si sa version a changé. Google nous signale
+un changement en quelques minutes (ce signal ne contient aucune donnée de vos fichiers) et nous
+vérifions en outre chaque heure.
+
+**[Y].4 Arrêter.** « Retirer le fichier » cesse la lecture d'un fichier et supprime les documents
+qu'il a donnés. « Déconnecter Google Drive » met fin au service : nous arrêtons les signaux de Google,
+retirons chez Google l'autorisation donnée à Facture Impec et supprimons le jeton d'accès, la liste
+des fichiers et les documents qui en ont été lus. Vous n'avez rien à retirer
+vous-même dans votre compte Google. La suppression de votre compte Facture Impec entraîne les mêmes
+suppressions.
+
+**[Y].5 Google.** Vos fichiers restent chez Google, sous le contrat qui vous lie à Google. Si Google
+refuse ou retire l'accès, la lecture s'arrête, les documents déjà lus restent et le complément vous
+propose de vous reconnecter. Un administrateur Google Workspace peut interdire l'application à ses
+utilisateurs.
+
+---
+
 Also needed elsewhere in the CGU, from `docs/RGPD.md` (owner decisions): the person who accepts the CGU
-declares they may engage the company (decision 6); the subprocessors, Microsoft included for the
-companies that connect it.
+declares they may engage the company (decision 6); the subprocessors, Microsoft and Google included
+for the companies that connect them.

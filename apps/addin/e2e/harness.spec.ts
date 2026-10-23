@@ -10,7 +10,8 @@
 // the order's price into the cell on « Appliquer » and puts it back on « Annuler la correction », and the
 // assistant proposes the same card in the chat; its two answers are played by the page (no model in the
 // E2E stack), everything else is the real API. Since R4 an order in a OneDrive file, picked through
-// Microsoft's stand-in, gives a finding once it changes there, the file never opened.
+// Microsoft's stand-in, gives a finding once it changes there, the file never opened; since R5 the same
+// from Google Drive, picked in Google's window (its stand-in).
 // browser: local (Chrome of this server; Browserbase cannot reach localhost).
 
 import { readFile } from 'node:fs/promises';
@@ -480,6 +481,95 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
     await section.getByRole('button', { name: t('addin.connector.disconnectYes') }).click();
     await expect(pane.getByTestId('notice')).toContainText(t('addin.connector.disconnected'));
     await expect(section.getByRole('button', { name: t('addin.connector.connect') })).toBeVisible();
+    await pane.getByRole('tab', { name: t('addin.nav.checks') }).click();
+    await expect(pane.getByTestId('finding').first()).toBeVisible();
+    await expect(finding).toHaveCount(0);
+  });
+
+  await test.step('Google Drive: the same order in a Google Sheets file, changed there', async () => {
+    const FILE = 'Commandes Google.xlsx';
+    const google = `http://localhost:${E2E.mock}/google/control`;
+    // Camille's Gmail Drive in the stand-in; `sheet=1` stores it as a Google Sheets spreadsheet,
+    // which the API exports as .xlsx.
+    const putOrders = async (price: number) => {
+      const bytes = xlsxOf({
+        Commandes: [
+          ['N° commande', 'Date', 'Client', 'Désignation', 'Qté', 'PU HT'],
+          ['C-77', { date: 46296 }, 'Fleurs & Co', 'Formation Excel', 3, price],
+        ],
+      });
+      const res = await fetch(
+        `${google}/files/g-camille/gsheet-e2e?sheet=1&name=${encodeURIComponent(FILE)}`,
+        { method: 'PUT', body: bytes },
+      );
+      expect(res.status).toBe(204);
+    };
+    await putOrders(300);
+    // What the person does in Google's window: signs in as Camille and picks that file.
+    const chose = await fetch(`${google}/choose`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ account: 'g-camille', pick: ['gsheet-e2e'] }),
+    });
+    expect(chose.status).toBe(204);
+
+    await pane.getByRole('tab', { name: t('addin.nav.registry') }).click();
+    const section = pane.getByTestId('google');
+    await section.scrollIntoViewIfNeeded();
+    await section.getByRole('button', { name: t('addin.google.connect') }).click();
+    // The harness has no Office browser window: the pane offers the link, as when Office blocks it.
+    await expect(pane.getByTestId('notice')).toContainText(t('addin.google.openLink'));
+    const [popup] = await Promise.all([
+      context.waitForEvent('page'),
+      section.getByRole('link', { name: t('addin.google.link') }).click(),
+    ]);
+    await expect(popup.locator('body')).toContainText(
+      t('google.page.done', { count: 1, account: 'camille.martin@gmail.com' }),
+    );
+    await popup.screenshot({ path: info.outputPath('google-window.png') });
+    await popup.close();
+    // The pane polls while the window is open and sees the file arrive.
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.google.updated', { account: 'camille.martin@gmail.com' }),
+      { timeout: 15_000 },
+    );
+    await section
+      .getByTestId(`file-${FILE}`)
+      .getByTestId('file-sheet-Commandes')
+      .getByRole('button', { name: t('addin.registry.include') })
+      .click();
+    const inclusion = pane.getByTestId('inclusion');
+    await expect(inclusion.getByLabel(t('layout.field.unitPrice'))).toHaveValue('F');
+    await inclusion.getByRole('button', { name: t('addin.registry.confirm') }).click();
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.connector.included', { sheet: 'Commandes', file: FILE, docs: 1 }),
+    );
+    await section.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('google.png') });
+    expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+
+    // Someone raises the day to 400 € in Google Sheets. Drive notifies the API, whose worker reads it.
+    await putOrders(400);
+    const finding = pane
+      .getByTestId('finding')
+      .filter({ hasText: 'C-77' })
+      .filter({ hasText: 'La facture F2026-103' });
+    await expect(async () => {
+      await pane.getByRole('tab', { name: t('addin.nav.registry') }).click();
+      await pane.getByRole('tab', { name: t('addin.nav.checks') }).click();
+      await expect(finding).toHaveCount(1, { timeout: 2_000 });
+    }).toPass({ timeout: 60_000 });
+    await expect(finding).toContainText(
+      t('addin.checks.amount', { amount: frMoney(30_000, 'EUR') }),
+    );
+    await page.screenshot({ path: info.outputPath('google-checks.png') });
+
+    // « Déconnecter Google Drive »: access revoked at Google, the file's documents and findings gone.
+    await pane.getByRole('tab', { name: t('addin.nav.registry') }).click();
+    await section.getByRole('button', { name: t('addin.google.disconnect') }).click();
+    await section.getByRole('button', { name: t('addin.connector.disconnectYes') }).click();
+    await expect(pane.getByTestId('notice')).toContainText(t('addin.google.disconnected'));
+    await expect(section.getByRole('button', { name: t('addin.google.connect') })).toBeVisible();
     await pane.getByRole('tab', { name: t('addin.nav.checks') }).click();
     await expect(pane.getByTestId('finding').first()).toBeVisible();
     await expect(finding).toHaveCount(0);

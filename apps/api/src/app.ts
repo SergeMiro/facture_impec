@@ -13,6 +13,7 @@ import {
 import {
   and,
   audit,
+  CONNECTION_PROVIDERS,
   desc,
   eq,
   inArray,
@@ -22,7 +23,9 @@ import {
   tenants,
 } from '@fi/db';
 import { PdpRequestError } from '@fi/pdp-adapter';
+import { t } from '@fi/shared';
 import { Hono } from 'hono';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { z } from 'zod';
@@ -41,9 +44,17 @@ import {
   connectorView,
   detectFileSheet,
   disconnect,
+  GOOGLE_COOKIE,
+  type GoogleOutcome,
+  googleBegin,
+  googleCallback,
+  googleNotified,
+  googleStart,
+  googleView,
   includeFileSheet,
   MicrosoftNotifications,
   notified,
+  ownFile,
   PickBody,
   pickFiles,
   removeFile,
@@ -99,6 +110,7 @@ import {
 } from './limits';
 import { loginRoutes } from './login';
 import { onboardingRoutes } from './onboarding';
+import { page } from './page';
 import {
   confirmCustomer,
   deleteParty,
@@ -221,6 +233,9 @@ export function createApp(deps: ApiDeps) {
   app.use('*', (c, next) => {
     const path = c.req.path;
     if (path.startsWith('/admin/')) return byAddress.admin(c, next);
+    if (path === '/connectors/google/begin' || path === '/connectors/google/callback') {
+      return byAddress.public(c, next);
+    }
     if (path.startsWith('/auth/') || path.startsWith('/onboarding/')) {
       return (path.endsWith('/poll') ? byAddress.poll : byAddress.public)(c, next);
     }
@@ -295,6 +310,60 @@ export function createApp(deps: ApiDeps) {
     }
     const notifications = parse(MicrosoftNotifications, raw);
     return c.json({ received: await notified(deps, notifications) }, 202);
+  });
+
+  // Google Drive (R5, docs/GOOGLE.md): the browser window the pane opens, and the notifications of a
+  // channel. Registered before the tenant API, whose authentication covers `/connectors/*`: the window
+  // carries no token, the ticket in its cookie says which company it is for.
+  const googlePage = (outcome: GoogleOutcome) => {
+    const title = t('google.page.title');
+    if (outcome.done) {
+      return page(
+        title,
+        outcome.picked
+          ? t('google.page.done', { account: outcome.account, count: outcome.picked })
+          : t('google.page.connected', { account: outcome.account }),
+      );
+    }
+    return page(
+      title,
+      outcome.message ?? t(`google.page.${outcome.reason}`, { account: outcome.account ?? '' }),
+    );
+  };
+  const googleLog = (message: string) => console.warn(message);
+  app.get('/connectors/google/begin', (c) => {
+    if (!deps.google) throw new ApiError(404, 'route_not_found');
+    const begun = googleBegin(deps, c.req.query('ticket'));
+    if (!begun) return c.html(googlePage({ done: false, reason: 'expired' }), 400);
+    setCookie(c, GOOGLE_COOKIE, begun.cookie, {
+      httpOnly: true,
+      secure: begun.secure,
+      sameSite: 'Lax',
+      path: '/connectors/google',
+      maxAge: 15 * 60,
+    });
+    return c.redirect(begun.location, 302);
+  });
+  app.get('/connectors/google/callback', async (c) => {
+    if (!deps.google) throw new ApiError(404, 'route_not_found');
+    const outcome = await googleCallback(
+      deps,
+      getCookie(c, GOOGLE_COOKIE),
+      c.req.query(),
+      googleLog,
+    );
+    deleteCookie(c, GOOGLE_COOKIE, { path: '/connectors/google' });
+    return c.html(googlePage(outcome));
+  });
+  // A notification carries headers only; answered at once, it only queues the check.
+  app.post('/webhooks/google', async (c) => {
+    if (!deps.google) throw new ApiError(404, 'route_not_found');
+    const received = await googleNotified(deps, {
+      channelId: c.req.header('x-goog-channel-id'),
+      token: c.req.header('x-goog-channel-token'),
+      state: c.req.header('x-goog-resource-state'),
+    });
+    return c.json({ received }, 200);
   });
 
   // ── Tenant API ────────────────────────────────────────────────────────────────────────────────
@@ -493,11 +562,31 @@ export function createApp(deps: ApiDeps) {
     return c.json(await pickFiles(deps, c.get('tenant'), c.get('principal'), files));
   });
 
-  api.delete('/connectors/microsoft/files/:id', async (c) =>
-    c.json(await removeFile(deps, c.get('tenant'), uuid(c.req.param('id')))),
+  api.get('/connectors/google', async (c) => c.json(await googleView(deps, c.get('tenant'))));
+
+  api.post('/connectors/google/start', (c) =>
+    c.json(googleStart(deps, c.get('tenant'), c.get('principal'))),
   );
 
-  api.post('/connectors/microsoft/files/:id/sheets/:sheet/detect', async (c) =>
+  api.delete('/connectors/google', async (c) =>
+    c.json(await disconnect(deps, c.get('tenant'), log, 'google')),
+  );
+
+  // A picked file's routes, whichever provider it comes from.
+  const providerOf = (value: string) => parse(z.enum(CONNECTION_PROVIDERS), value);
+
+  api.delete('/connectors/:provider/files/:id', async (c) =>
+    c.json(
+      await removeFile(
+        deps,
+        c.get('tenant'),
+        uuid(c.req.param('id')),
+        providerOf(c.req.param('provider')),
+      ),
+    ),
+  );
+
+  api.post('/connectors/:provider/files/:id/sheets/:sheet/detect', async (c) =>
     c.json(
       await detectFileSheet(
         deps,
@@ -505,25 +594,34 @@ export function createApp(deps: ApiDeps) {
         uuid(c.req.param('id')),
         c.req.param('sheet'),
         c.req.raw.signal,
+        providerOf(c.req.param('provider')),
       ),
     ),
   );
 
-  api.put('/connectors/microsoft/files/:id/sheets/:sheet', async (c) => {
+  api.put('/connectors/:provider/files/:id/sheets/:sheet', async (c) => {
     const { layout } = await body(c, z.object({ layout: LayoutMapping }));
     if (layout.sheet !== c.req.param('sheet')) {
       throw new ApiError(400, 'invalid_request', undefined, 'layout.sheet differs from the path');
     }
     const tenant = c.get('tenant');
     const fileId = uuid(c.req.param('id'));
-    return c.json(await includeFileSheet(deps, tenant, c.get('principal'), fileId, layout));
+    const provider = providerOf(c.req.param('provider'));
+    return c.json(
+      await includeFileSheet(deps, tenant, c.get('principal'), fileId, layout, provider),
+    );
   });
 
-  api.delete('/connectors/microsoft/files/:id/sheets/:sheet', async (c) =>
-    c.json(
-      await removeSource(deps, c.get('tenant'), uuid(c.req.param('id')), c.req.param('sheet')),
-    ),
-  );
+  api.delete('/connectors/:provider/files/:id/sheets/:sheet', async (c) => {
+    const tenant = c.get('tenant');
+    const fileId = await ownFile(
+      deps,
+      tenant,
+      uuid(c.req.param('id')),
+      providerOf(c.req.param('provider')),
+    );
+    return c.json(await removeSource(deps, tenant, fileId, c.req.param('sheet')));
+  });
 
   // ── Checks across documents (R2) ──────────────────────────────────────────────────────────────
   api.get('/checks', async (c) => c.json(await checksView(deps, c.get('tenant'))));

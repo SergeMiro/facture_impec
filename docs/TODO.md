@@ -24,11 +24,27 @@ What a real personal account showed and what is still open: `docs/MICROSOFT365.m
 - [ ] The test workbook « Qté.xlsx » in the owner's OneDrive (cell E2 changed 3 → 4 during the test)
       can be deleted.
 
+## Google Drive connector (R5), built against the stand-in on 2026-10-23
+
+- [ ] **The owner registers the Google Cloud project** (`docs/RUNBOOK.md` § Google Drive connector,
+      `docs/GOOGLE.md` §7): Drive API, consent screen External with `drive.file` only, an OAuth client
+      « Web application » with the redirect `<API_PUBLIC_URL>/connectors/google/callback`; the client id
+      and secret into `~/.config/facture-impec/google.env` (600), never the repo.
+- [ ] Publish the consent screen « In production » before the first real company (in Testing, refresh
+      tokens die after 7 days); Google's basic verification for a non-sensitive scope.
+- [ ] On a real Gmail account, then a Workspace one: TODO(verify) 1–6 of `docs/GOOGLE.md` §6 (`state`
+      back on the redirect, the Web-application client, `mimetypes=`, `trashed`, notifications under
+      `drive.file`, the refresh token surviving), with the API behind a public https tunnel.
+- [ ] In real Excel (Windows, Mac, the web): Office opens Google's window (`openBrowserWindow`, or the
+      dialog through `redirect.html` on the web). Only the pane's link fallback is proven, in the
+      harness E2E.
+
 ## Owner decisions
 
 - [ ] **Which plans get the connector.** Now every plan (`docs/DEFERRED.md` › The connector gated by
       plan). The architecture document proposed external connectors from « Croissance »; the review of
       2026-10-22 proposed every plan until the pilot shows how it is used (Graph costs nothing per call,
       20 files per connection). Gating it is a small change plus a test.
-- [ ] **The CGU.** A draft of the connector's article: `docs/CGU_ONEDRIVE.md` (French). A lawyer
-      reviews it with the rest of the CGU; then `TERMS_URL` and a new `TERMS_VERSION`.
+- [ ] **The CGU.** A draft of the connectors' articles (OneDrive; Google Drive since R5):
+      `docs/CGU_ONEDRIVE.md` (French). A lawyer reviews it with the rest of the CGU; then `TERMS_URL`
+      and a new `TERMS_VERSION`.

@@ -18,8 +18,9 @@ import type { PgBoss } from 'pg-boss';
 import { createAiDeps } from './ai';
 import { createApp } from './app';
 import { type Billing, billingFromEnv } from './billing';
-import type { MicrosoftConnector } from './connectors';
+import type { GoogleConnector, MicrosoftConnector } from './connectors';
 import type { AiDeps, ApiDeps, Mailer, OwnPlatform, PdpRegistry, TestPlatform } from './deps';
+import { createGoogleClient, GOOGLE_HOSTS } from './google';
 import { bossJobs, createBoss, ensureQueues } from './jobs';
 import { type Listening, listen } from './listen';
 import { OutboxMailer, SmtpMailer } from './mail';
@@ -48,6 +49,8 @@ export interface ApiOptions {
   ownPdp?: OwnPlatform | null;
   /** Default: microsoftFromEnv (MICROSOFT_*). */
   microsoft?: MicrosoftConnector | null;
+  /** Default: googleFromEnv (GOOGLE_*). */
+  google?: GoogleConnector | null;
   pollingIntervalSeconds?: number;
   /** Chasing timer (real seconds); default COLLECT_EVERY_SECONDS. */
   collectEverySeconds?: number;
@@ -191,6 +194,52 @@ export function microsoftFromEnv(
 }
 
 /**
+ * The Google Drive connector (docs/GOOGLE.md): only with the owner's OAuth client. Outside local it
+ * talks to Google's hosts only, Google comes back to an https address (§7), and a channel needs one
+ * Google can reach; without it, files are polled.
+ */
+export function googleFromEnv(env: ServerEnv, fetcher?: typeof fetch): GoogleConnector | null {
+  const clientId = env.GOOGLE_CLIENT_ID;
+  const clientSecret = env.GOOGLE_CLIENT_SECRET;
+  const sealingKey = env.CONNECTOR_SEALING_KEY;
+  if (!clientId || !clientSecret || !sealingKey) return null;
+  const accountsUrl = env.GOOGLE_ACCOUNTS_URL ?? GOOGLE_HOSTS.accounts;
+  const oauthUrl = env.GOOGLE_OAUTH_URL ?? GOOGLE_HOSTS.oauth;
+  const apiUrl = env.GOOGLE_API_URL ?? GOOGLE_HOSTS.api;
+  const local = env.FI_ENV === 'local';
+  if (!local) {
+    for (const [name, url, host] of [
+      ['GOOGLE_ACCOUNTS_URL', accountsUrl, GOOGLE_HOSTS.accounts],
+      ['GOOGLE_OAUTH_URL', oauthUrl, GOOGLE_HOSTS.oauth],
+      ['GOOGLE_API_URL', apiUrl, GOOGLE_HOSTS.api],
+    ] as const) {
+      if (new URL(url).origin !== new URL(host).origin) {
+        throw new Error(`${name}: only local may use a stand-in (${new URL(url).origin})`);
+      }
+    }
+    if (!env.API_PUBLIC_URL.startsWith('https://')) {
+      throw new Error('GOOGLE_CLIENT_ID: Google comes back to API_PUBLIC_URL, which must be https');
+    }
+  }
+  return {
+    client: createGoogleClient({
+      clientId,
+      clientSecret,
+      accountsUrl,
+      oauthUrl,
+      apiUrl,
+      ...(fetcher && { fetcher }),
+    }),
+    sealingKey,
+    redirectUrl: new URL('/connectors/google/callback', env.API_PUBLIC_URL).toString(),
+    notificationUrl:
+      local || env.API_PUBLIC_URL.startsWith('https://')
+        ? new URL('/webhooks/google', env.API_PUBLIC_URL).toString()
+        : null,
+  };
+}
+
+/**
  * MX hosts of a mail domain for the Scout (connectors.ts servedByMicrosoft): asked at most once a day
  * per domain, given up after 2 s. A failed lookup is an empty answer, kept like any other.
  */
@@ -268,6 +317,7 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
         : options.directory,
     ownPdp: options.ownPdp === undefined ? ownPdpFromEnv(env, pdp) : options.ownPdp,
     microsoft: options.microsoft === undefined ? microsoftFromEnv(env) : options.microsoft,
+    google: options.google === undefined ? googleFromEnv(env) : options.google,
     fonts: bundledFonts(),
     now,
   };

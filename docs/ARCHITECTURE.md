@@ -726,6 +726,57 @@ Tests: `packages/core/src/checks/checks.test.ts` › patterns and learning (R7),
 | Synonyms | Proposed only between an article sold with no cost and one bought, by name; « Oui » remaps the alias on every line before every rule | The useful case for margins (R3) at the lowest risk; codes and sale-to-sale pairs wait (`docs/DEFERRED.md`). |
 | Money not invoiced | Findings marked `short` when the company bills less than it should; the report counts those first seen this week and still open | « Потерянные деньги » the person can still recover, not every gap ever found. |
 
+## What R5 added: Google Drive files read without Excel
+
+R5 does for Google Drive what R4 does for OneDrive: a company on Gmail or Google Workspace picks its
+order, delivery, purchase or price-list files (Google Sheets, .xlsx, .xlsm, .csv) in Google's own
+window, and a change there shows as a finding in « Contrôles » without anybody opening the file.
+Google's side, sources and what is left to verify: `docs/GOOGLE.md`. Criteria in `docs/PROGRESS.md` R5.
+
+```
+pane « Connecter Google Drive » ─► POST /connectors/google/start ─► a signed ticket (15 min)
+     Office opens <API>/connectors/google/begin?ticket=… (or the pane shows the link)
+begin ─► cookie fi_google (the window's nonce) ─► 302 Google: sign-in, consent drive.file, picker
+callback ?code&state&picked_file_ids ─► cookie = state ─► code → refresh token (sealed) ─► about
+     ─► connections row ─► changes.watch ─► each picked file read once (all or none) ─► a page « fermez »
+pane polls GET /connectors/google every 3 s while the window may be open ─► « Google Drive est à jour »
+« Inclure cette feuille » ─► /connectors/google/files/:id/sheets/:sheet[/detect] (R4's path)
+check connector.check job (POST /webhooks/google, sweep) ─► each file: files.get version moved?
+     ─► download (a Google Sheets file exported as .xlsx) ─► readSheetFile ─► R4's reading path
+« Déconnecter » ─► channels.stop + revoke at Google ─► delete connection, files, sources, documents
+```
+
+| Path | What it does |
+|---|---|
+| `apps/api/src/google.ts` | OAuth and Drive: `authorizeUrl` (`trigger_onepick`), `exchange`, `refresh`, `revoke`, `about`, `file`, `content` (`alt=media`, or `export` to .xlsx for Google Sheets), `startPageToken`, `watch`, `stop`. Every answer through Zod; every failure a `GoogleError` of R4's kinds. |
+| `apps/api/src/drive.ts` | What both clouds share: `DriveError` and its kinds, `Retry-After`, a capped download. |
+| `apps/api/src/connectors.ts` | One connector for both providers: a `Remote` per provider (token, a file's metadata, its bytes, its notifications) behind the same `checkFile`, `recordPicked`, `fileOf`, `includeFileSheet`, `removeFile`, `disconnect`. Google's window: `googleStart` (signed ticket), `googleBegin` (cookie, Google's address), `googleCallback` (cookie = `state`, the same account or none, files all or nothing); `watchGoogle` (a channel of 6 days, replaced a day before it ends), `googleNotified`; `unwatch` stops the channel and revokes the token. |
+| `apps/api/src/app.ts`, `runtime.ts`, `workers.ts` | Public `GET /connectors/google/begin` and `…/callback` (rate-limited by address, before the company's authentication), `POST /webhooks/google`; the company's `GET`/`DELETE /connectors/google` and the files' routes shared with OneDrive (`/connectors/:provider/files/…`); `googleFromEnv` (Google's hosts only and an https `API_PUBLIC_URL` outside local); the sweep covers both providers. |
+| `apps/mock-pdp/src/google.ts` | The stand-in: the window (a chosen answer, or a small page to pick by hand), token, revoke, Drive (`about`, files, export, changes, channels with notifications), `drive.file` enforced (a file not picked answers 404); two accounts (Gmail `g-camille`, Workspace `g-atelier`); `/google/control`. |
+| `apps/addin/src/controller.ts`, `ui/RegistryView.tsx`, `pages.ts` | « Fichiers Google Drive » in « Registre »: connect, add files, reconnect, the link when no window opens, files and sheets as R4's, « Déconnecter » confirmed; `allowedPage` lets Office open only our API's `begin` address. |
+
+Table: migration `0016_google.sql` (`connections.subscription_resource`, the channel's resource id that `channels.stop` needs; `provider` takes `google`).
+
+Tests: `apps/api/src/google.test.ts`, `apps/addin/src/controller.test.ts` › Google Drive files read
+without Excel (R5), `apps/addin/src/pages.test.ts` › Google's window (R5),
+`apps/addin/e2e/harness.spec.ts` › Google Drive.
+
+### Decisions taken in R5
+
+| Topic | Decision | Why |
+|---|---|---|
+| Permission | `drive.file` only: the files the person picked in Google's picker, never a folder or a search | Non-sensitive (no security assessment), the same promise as R4's, and the architecture document's choice. |
+| Where the picker runs | Google's one-window flow (`trigger_onepick`): sign-in, consent and picker in Google's pages, opened in the browser by Office; every token stays on the server | The JavaScript picker needs an access token and an API key in the pane, and a pop-up that Office's webviews block. |
+| Binding the window to the company | The pane gets a ticket signed with `CONNECTOR_SEALING_KEY` (15 min); `begin` turns it into an HttpOnly cookie on the API's path and sends its nonce as `state`; the callback needs both | The callback arrives in a browser that has no Facture Impec session; neither a leaked link nor a forged redirect can attach an account to a company. |
+| How the pane learns the result | It polls the connection every 3 s for 15 min after opening the window | Google's page cannot talk to the pane (another browser); polling is two lines and stops by itself. |
+| Google Sheets | Exported as .xlsx and read by R4's `readSheetFile` | One reader for every file; the Sheets API would be a second parser for the same rows (`docs/DEFERRED.md`). |
+| What triggers a read | The file's `version`; the same snapshot twice writes nothing (R1) | It moves on any change, including a rename; R1's idempotence absorbs the extra read. |
+| Notifications | `changes.watch` on the account (6 days, replaced a day early), each notification queues the connection's check; the hourly sweep catches a lost one; no https address → polled every 2 minutes | Notifications carry no file; a check reads each file's version, 20 files at most. |
+| A whole folder | Closed: files only. The picker shows spreadsheets and CSV (`mimetypes=`), not folders; a new file in a folder is added with « Choisir des fichiers » | The architecture document's open question. What `drive.file` grants on a picked folder is not documented clearly enough to promise it; a folder would also need a listing and a cap (`docs/DEFERRED.md`). |
+| One account per company | A second Google account is refused on Google's page until « Déconnecter », as R4 | Enough for the pilot (`docs/DEFERRED.md`). |
+| Disconnecting | Stops the channel and revokes the refresh token at Google, then deletes as R4 | Unlike Microsoft, Google revokes the app's access with one call: the person is left with nothing to clean up. |
+| Error messages | R4's codes, with the provider's name as a parameter | One set of messages; the pane names « OneDrive » or « Google Drive ». |
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

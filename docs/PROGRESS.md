@@ -869,3 +869,51 @@ company's own habits, and learns from what the person answers. Criteria, written
 | Money not invoiced in the weekly report | `packages/agents/src/report.test.ts` › the line « Manque à facturer repéré : 2 écart(s), 800,00 € (onglet « Contrôles ») », absent when there is none, the report still 10 lines at most. `patterns.test.ts` › B7… (`weekFacts.notInvoiced` 700 €, the line in the report; a week later nothing). |
 | Audit and RGPD | Audit: `finding.normal`, `exception.remove`, `synonym.confirm` / `synonym.reject` (asserted in `patterns.test.ts`). `patterns.test.ts` › RGPD › exports the exceptions and the article pairs, and erases them with the account. `docs/RGPD.md` (Patterns taught by a person, export, erasure), `docs/DEFERRED.md` (R7 rows closed; reason text, other rules, margin per family, synonyms by code, an action from the report), `docs/ARCHITECTURE.md` › What R7 added, and its decisions. Migration `0015_patterns.sql`. |
 | Gate | `pnpm verify` green on 2026-10-22 (tests with `--concurrency=1`, the machine being loaded): api 257, core 649 (branches 93.1 %) + oracle 276, agents 121 (branches 91.86 %), add-in 77, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local): harness 29 s, B2Brouter stand-in 39 s. |
+
+## R5 — Google Drive (started 2026-10-22)
+
+R4 reads the files a company keeps in OneDrive; R5 does the same for Google Drive, so a company on
+Google Workspace or Gmail gets its orders, delivery notes, purchases and price lists checked while
+Excel is closed. Architecture document: `drive.file` + Picker, `files.watch` / `changes.watch`,
+Google Sheets read; done when it works « как в R4, на тестовом аккаунте ». Criteria, written here
+before the work:
+
+- **Sign-in and choice in one Google window**: « Ajouter des fichiers Google Drive » opens Google's
+  own sign-in with its picker (`drive.file` only, `trigger_onepick`): the person signs in, consents
+  and picks the files in Google's pages; Google sends the code and the picked ids to the API, which
+  keeps a sealed refresh token. Only picked files can ever be read (`drive.file`); the same window
+  again adds files. Nothing is asked of an administrator.
+- **Read without Excel**: a picked Google Sheets spreadsheet, .xlsx, .xlsm or .csv is read on the
+  server and its sheets proposed and included exactly as R4's (the same detection, the same « Inclure
+  cette feuille »).
+- **Changes noticed**: a change to a picked file shows as a finding without anybody opening it: Google's
+  change notifications (`changes.watch`, renewed before they end) trigger a check, an hourly sweep
+  catches a lost one, a connection without notifications is polled every 2 minutes; a file is
+  downloaded again only when its version moved, and the same content twice writes nothing.
+- **Calm when it breaks**: a file deleted, trashed or no longer shared, too large or unreadable says so
+  on its line and keeps what it gave; Google asking to wait waits; a refused token stops the checks
+  until the person reconnects.
+- **Disconnecting deletes**: « Déconnecter Google Drive » stops the notifications, revokes the token
+  at Google, and deletes the token, the files and everything read from them; invoices stay.
+- **Acceptance** (architecture document, R5 = R4's): a file in a test Google Drive changed → a finding
+  in the pane, the file never opened; disconnecting deletes the data. Against a Google stand-in
+  (`apps/mock-pdp`, `/google`) in `pnpm verify` and in the E2E; on a real account once the owner
+  registers the Google Cloud project (`docs/GOOGLE.md`).
+- **Audit and RGPD**: connecting, picking, every read that changed the registry, watching, revoking and
+  disconnecting write an audit event; the account, the files and their documents are in the export and
+  the erasure; `docs/RGPD.md`, `docs/DEFERRED.md`, `docs/ARCHITECTURE.md` updated.
+- **Folder question** (architecture document: « вопрос с выбором папки закрыт »): closed, files only
+  (`docs/ARCHITECTURE.md` › Decisions taken in R5).
+
+### Evidence (2026-10-23)
+
+| Criterion | Evidence |
+|---|---|
+| Sign-in and choice in one Google window | `apps/api/src/google.test.ts` › the one Google window › connects, reads the picked Google Sheets file… (the ticket in an HttpOnly cookie on `/connectors/google`, Google's address with `drive.file`, `trigger_onepick`, `access_type=offline`, `state` = the ticket's nonce; the page « 1 fichier(s) de Google Drive ajouté(s) »; the cookie served once; the refresh token sealed), › reads an .xlsx stored in Drive as it is, and adds files to the same connection, › refuses a window that is not ours, says a cancel changed nothing, and refuses another account. `apps/addin/src/pages.test.ts` › Google's window (R5). `apps/addin/src/controller.test.ts` › Google Drive files read without Excel (R5) › shows a link when the window cannot open by itself. |
+| Read without Excel | `google.test.ts` › connects… (a Google Sheets file exported as .xlsx, detected `order`, included `type: file`), › reads an .xlsx stored in Drive as it is. The stand-in answers 404 for a file not picked (`drive.file`). |
+| Changes noticed | `google.test.ts` › connects… (the channel's `change` queues the connection's check; B1 100 € found; the same version reads nothing, no export), › ignores a notification without our secret, and `sync`, › replaces the channel a day before it ends, and stops the old one, › is swept only where Google is offered. Controller › finds the 300 € an order changed in Google Sheets puts at stake. |
+| Calm when it breaks | `google.test.ts` › keeps nothing when a picked file cannot be read, › says a file in the bin is gone, and reads it again once restored, › waits when Google asks to, and stops until the person reconnects when it refuses the token (the exact message naming Google Drive). |
+| Disconnecting deletes | `google.test.ts` › stops the channel, revokes our token at Google, and deletes the files and what they gave; › removes one file, and a file of one provider is not reached through the other (404; an unknown provider 400). Controller › removes the file, then disconnects: our token is revoked at Google. |
+| Acceptance | `apps/addin/e2e/harness.spec.ts` › Google Drive: the same order in a Google Sheets file, changed there (the link opens Google's window, « 1 fichier(s) de Google Drive ajouté(s) », the sheet included, the price changed to 400 in Google Sheets → B1 300 € in « Contrôles », disconnecting removes it), green in local Chrome on 2026-10-23 (browser: local). Also `google.test.ts` › connects… and the controller test › finds the 300 €… |
+| Audit and RGPD | Audit: `connection.connect`, `connected_file.pick` (actor `user`), `source.read` (actor `connector:google`), `connection.watch`, `connection.disconnect` (asserted in `google.test.ts`). `google.test.ts` › exports the account without its token, and revokes it when the company is deleted (RGPD). `docs/RGPD.md` (Google Drive connection, files), `docs/DEFERRED.md` (Sheets API, the JS picker, a folder, several accounts, `changes.list`, Testing mode), `docs/ARCHITECTURE.md` › What R5 added and its decisions, `docs/GOOGLE.md`, `docs/RUNBOOK.md` › Google Drive connector, `docs/CGU_ONEDRIVE.md` › Article [Y]. Migration `0016_google.sql`. Left with the owner: `docs/TODO.md` › Google Drive connector (R5). |
+| Gate | `pnpm verify` green on 2026-10-23 (tests with `--concurrency=1`): api 270, core 649 (branches 93.1 %) + oracle 276, agents 121 (branches 91.86 %), add-in 81, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local): harness 35 s, B2Brouter stand-in 39 s. |

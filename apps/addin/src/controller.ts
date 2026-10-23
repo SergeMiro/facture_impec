@@ -21,12 +21,14 @@ import {
   type ConnectorView,
   type Degraded,
   type DirectoryCompany,
+  type DriveProvider,
   type Edit,
   type EditDecided,
   type Evidence,
   type Explained,
   type ExportFile,
   type FixOutcome,
+  type GoogleView,
   type Inbound,
   type InboundExport,
   type InvoiceDetail,
@@ -133,8 +135,8 @@ export interface Inclusion {
   sheet: string;
   detection: LayoutDetection;
   headers: Header[];
-  /** A sheet of a OneDrive file (R4): the API reads it itself. */
-  file?: { id: string; name: string };
+  /** A sheet of a OneDrive (R4) or Google Drive (R5) file: the API reads it itself. */
+  file?: { id: string; name: string; provider: DriveProvider };
 }
 
 /** R8: the conversation about one finding, as `ai`'s Chat holds it. */
@@ -198,6 +200,10 @@ export interface FiState {
   sources: Source[];
   /** « Fichiers OneDrive » (R4): the connected account and its files; null until loaded. */
   connector: ConnectorView | null;
+  /** « Fichiers Google Drive » (R5): the connected account and its files; null until loaded. */
+  google: GoogleView | null;
+  /** The address of Google's window when the pane could not open it: shown as a link. */
+  googleLink: string | null;
   /**
    * Scout (R4): why the dashboard suggests « Fichiers OneDrive » once: the workbook itself is there,
    * or the company's mail is with Microsoft. Null once the person answered, or with nothing to say.
@@ -231,6 +237,14 @@ const MOVING = new Set(['ready_to_send', 'sending', 'deposited', 'delivered']);
 export const POLL_MS = 3_000;
 export const POLL_TIMES = 20;
 export const LINK_POLL_MS = 2_000;
+/** While Google's window is open, the section asks every 3 s, for 15 minutes at most. */
+export const GOOGLE_POLL_MS = 3_000;
+const GOOGLE_POLLS = 300;
+/** What Google's window changes: the account, its status, the files picked. */
+const googleKey = (view: GoogleView | null) => {
+  const conn = view?.connection;
+  return JSON.stringify(conn ? [conn.label, conn.status, conn.files.map((f) => f.id)] : null);
+};
 export const AUTO_SYNC_MS = 1_500;
 /** While invoices on the sheet are on their way: first status check, then twice as late each time. */
 export const SHEET_POLL_MS = 30_000;
@@ -315,6 +329,8 @@ const INITIAL: FiState = {
   corrected: null,
   sources: [],
   connector: null,
+  google: null,
+  googleLink: null,
   onedriveHint: null,
   sheets: [],
   otherSheets: [],
@@ -349,6 +365,7 @@ export class Controller {
   #syncing: Promise<void> | null = null;
   #syncAgain = false;
   #linkTimer: unknown = null;
+  #googleTimer: unknown = null;
   #linkRequest: { id: string; kind: 'login' | 'signup' } | null = null;
   #poll: { timer: unknown; left: number } | null = null;
   #sheetPoll: { timer: unknown; delay: number } | null = null;
@@ -746,6 +763,7 @@ export class Controller {
     this.#closeInvoice();
     this.#closeChat();
     this.#stopFollowing();
+    this.#stopGoogle();
     await this.#stopListening?.();
     this.#stopListening = null;
     await Promise.all([...this.#sourceWatch.keys()].map((sheet) => this.#unwatchSource(sheet)));
@@ -767,6 +785,8 @@ export class Controller {
       corrected: null,
       sources: [],
       connector: null,
+      google: null,
+      googleLink: null,
       onedriveHint: null,
       sheets: [],
       otherSheets: [],
@@ -1557,7 +1577,7 @@ export class Controller {
       });
     });
     await this.#followSources();
-    await this.#refreshConnector();
+    await Promise.all([this.#refreshConnector(), this.#refreshGoogle()]);
   };
 
   /** « Inclure cette feuille » / « Revoir les colonnes »: what the sheet holds. Nothing is saved. */
@@ -1740,12 +1760,13 @@ export class Controller {
 
   /** « Inclure » on a sheet of a picked file: what it holds, from the API's own read of the file. */
   includeFileSheet = async (fileId: string, sheet: string): Promise<void> => {
-    const file = this.#state.connector?.connection?.files.find((f) => f.id === fileId);
-    if (!file) return;
+    const found = this.#pickedFile(fileId);
+    if (!found) return;
+    const { file, provider } = found;
     this.#inclusionRows = null;
     this.#set({ inclusion: null });
     await this.#act(`file:${fileId}:${sheet}`, async () => {
-      const { sample, ...detection } = await this.api.detectFileSheet(fileId, sheet);
+      const { sample, ...detection } = await this.api.detectFileSheet(fileId, sheet, provider);
       if (sample.rows.length === 0) {
         this.notify('info', t('addin.detect.empty', { sheet }));
         return;
@@ -1753,14 +1774,34 @@ export class Controller {
       this.#inclusionRows = sample;
       const headers = headersOf(sample, detection.layout.headerRow);
       this.#set({
-        inclusion: { sheet, detection, headers, file: { id: file.id, name: file.name } },
+        inclusion: { sheet, detection, headers, file: { id: file.id, name: file.name, provider } },
         notice: null,
       });
     });
   };
 
-  async #confirmFileLayout(file: { id: string; name: string }, layout: LayoutMapping) {
-    const read = await this.#act('include', () => this.api.includeFileSheet(file.id, layout));
+  /** A picked file, whichever section shows it. */
+  #pickedFile(fileId: string) {
+    const fromMicrosoft = this.#state.connector?.connection?.files.find((f) => f.id === fileId);
+    if (fromMicrosoft) return { file: fromMicrosoft, provider: 'microsoft' as const };
+    const fromGoogle = this.#state.google?.connection?.files.find((f) => f.id === fileId);
+    return fromGoogle ? { file: fromGoogle, provider: 'google' as const } : null;
+  }
+
+  async #refreshFiles(provider: DriveProvider) {
+    await Promise.all([
+      provider === 'google' ? this.#refreshGoogle() : this.#refreshConnector(),
+      this.#refreshRegistry(),
+    ]);
+  }
+
+  async #confirmFileLayout(
+    file: { id: string; name: string; provider: DriveProvider },
+    layout: LayoutMapping,
+  ) {
+    const read = await this.#act('include', () =>
+      this.api.includeFileSheet(file.id, layout, file.provider),
+    );
     if (!read) return;
     this.#inclusionRows = null;
     this.#set({ inclusion: null });
@@ -1772,22 +1813,32 @@ export class Controller {
         docs: read.source.stats?.docs ?? 0,
       }),
     );
-    await Promise.all([this.#refreshConnector(), this.#refreshRegistry()]);
+    await this.#refreshFiles(file.provider);
   }
 
   /** « Retirer » on a sheet of a file: its documents leave the Registre; the file stays picked. */
   removeFileSheet = async (fileId: string, sheet: string): Promise<void> => {
+    const provider = this.#pickedFile(fileId)?.provider ?? 'microsoft';
     const done = await this.#act(`file:${fileId}:${sheet}`, () =>
-      this.api.removeFileSheet(fileId, sheet),
+      this.api.removeFileSheet(fileId, sheet, provider),
     );
     if (!done) return;
     this.notify('success', t('addin.registry.removed', { sheet }));
-    await Promise.all([this.#refreshConnector(), this.#refreshRegistry()]);
+    await this.#refreshFiles(provider);
   };
 
   /** « Retirer le fichier »: it is no longer read; what its sheets gave leaves the Registre. */
   removeFile = async (fileId: string): Promise<void> => {
-    const name = this.#state.connector?.connection?.files.find((f) => f.id === fileId)?.name;
+    const found = this.#pickedFile(fileId);
+    const name = found?.file.name;
+    if (found?.provider === 'google') {
+      const view = await this.#act(`file:${fileId}`, () => this.api.removeGoogleFile(fileId));
+      if (!view) return;
+      this.#set({ google: view });
+      this.notify('success', t('addin.connector.fileRemoved', { file: name ?? '' }));
+      await this.#refreshRegistry();
+      return;
+    }
     const view = await this.#act(`file:${fileId}`, () => this.api.removeFile(fileId));
     if (!view) return;
     this.#set({ connector: view });
@@ -1804,6 +1855,65 @@ export class Controller {
     if (!view) return;
     this.#set({ connector: view });
     this.notify('success', t('addin.connector.disconnected'));
+    await this.#refreshRegistry();
+  };
+
+  // ── Fichiers Google Drive (R5) ──────────────────────────────────────────────────────────────
+  async #refreshGoogle(): Promise<GoogleView | null> {
+    try {
+      const google = await this.api.google();
+      this.#set({ google });
+      return google;
+    } catch {
+      // Not worth a notice: the section keeps what it showed, the next read asks again.
+      return null;
+    }
+  }
+
+  /**
+   * « Connecter Google Drive », « Choisir des fichiers », « Reconnecter Google Drive »: Google's own
+   * window, in a browser, signs the person in and shows its picker; the API hears back from Google
+   * directly. The pane asks the API meanwhile and says so when the files arrive.
+   */
+  openGoogle = async (): Promise<void> => {
+    const page = await this.#act('google', () => this.api.googleStart());
+    if (!page) return;
+    const opened = await this.#deps.openUrl(page.url).catch(() => false);
+    this.#set({ googleLink: opened ? null : page.url });
+    this.notify('info', t(opened ? 'addin.google.opened' : 'addin.google.openLink'));
+    this.#stopGoogle();
+    this.#pollGoogle(googleKey(this.#state.google), GOOGLE_POLLS);
+  };
+
+  #stopGoogle(): void {
+    if (this.#googleTimer !== null) this.#deps.timers.clearTimeout(this.#googleTimer);
+    this.#googleTimer = null;
+  }
+
+  #pollGoogle(before: string, left: number): void {
+    if (left <= 0) return;
+    this.#googleTimer = this.#deps.timers.setTimeout(async () => {
+      this.#googleTimer = null;
+      const view = await this.#refreshGoogle();
+      if (!view || googleKey(view) === before) {
+        this.#pollGoogle(before, left - 1);
+        return;
+      }
+      this.#set({ googleLink: null });
+      const conn = view.connection;
+      if (conn) {
+        this.notify('success', t('addin.google.updated', { account: conn.label }));
+      }
+    }, GOOGLE_POLL_MS);
+  }
+
+  /** « Déconnecter Google Drive », once confirmed: our token is revoked at Google, files go. */
+  disconnectGoogle = async (): Promise<void> => {
+    this.#stopGoogle();
+    const view = await this.#act('google', () => this.api.disconnectGoogle());
+    if (!view) return;
+    this.#set({ google: view, googleLink: null });
+    this.notify('success', t('addin.google.disconnected'));
     await this.#refreshRegistry();
   };
 

@@ -64,6 +64,12 @@ export default defineConfig({
         MICROSOFT_CLIENT_SECRET: E2E.microsoft.clientSecret,
         MICROSOFT_LOGIN_URL: `http://localhost:${E2E.mock}/microsoft`,
         MICROSOFT_GRAPH_URL: `http://localhost:${E2E.mock}/microsoft/graph/v1.0`,
+        // Google Drive through Google's stand-in (R5): its window, Drive and change notifications.
+        GOOGLE_CLIENT_ID: E2E.google.clientId,
+        GOOGLE_CLIENT_SECRET: E2E.google.clientSecret,
+        GOOGLE_ACCOUNTS_URL: `http://localhost:${E2E.mock}/google/accounts`,
+        GOOGLE_OAUTH_URL: `http://localhost:${E2E.mock}/google/oauth`,
+        GOOGLE_API_URL: `http://localhost:${E2E.mock}/google/api`,
         CONNECTOR_SEALING_KEY: E2E.sealingKey,
         // No AI: the agents' deterministic answers, the same on every run.
         AI_PROVIDER: '',

@@ -19,11 +19,20 @@ import { runSend, runSync, type WorkerDeps } from './workers';
 // The task pane's chat tests (R8) script the model.
 export { handleFor, mockModel, textResult, toolCallResult } from '@fi/agents/testing';
 // The SIRENs the directory stand-in plays a case with.
-// The task pane's OneDrive tests (R4): Microsoft's stand-in, and the check its worker runs.
-export { MICROSOFT_STAND_IN_APP, MicrosoftStandIn, SIRENE_CASES } from '@fi/mock-pdp';
+// The task pane's OneDrive and Google Drive tests (R4, R5): the stand-ins, and the check their worker
+// runs.
+export {
+  GOOGLE_SHEET_TYPE,
+  GOOGLE_STAND_IN_APP,
+  GoogleStandIn,
+  MICROSOFT_STAND_IN_APP,
+  MicrosoftStandIn,
+  SIRENE_CASES,
+} from '@fi/mock-pdp';
 // The task pane's tests move invoices as the workers would.
 export { runCollect } from './collect';
-export { checkConnection, type MicrosoftConnector } from './connectors';
+export { checkConnection, type GoogleConnector, type MicrosoftConnector } from './connectors';
+export { createGoogleClient } from './google';
 export { createMicrosoftClient } from './microsoft';
 // The sync load test (scripts/load/sync.ts) times the registry.
 export { refreshRegistry } from './registry';

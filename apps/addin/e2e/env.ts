@@ -16,7 +16,12 @@ export const E2E = {
     clientId: '00000000-0000-4000-8000-00000000f1f1',
     clientSecret: 'local-microsoft-client-secret',
   },
-  /** Seals the E2E company's Microsoft tokens; 32 bytes, nothing secret. */
+  /** Google's stand-in knows this app (apps/mock-pdp/src/app.ts). */
+  google: {
+    clientId: 'local-google-client.apps.googleusercontent.com',
+    clientSecret: 'local-google-client-secret',
+  },
+  /** Seals the E2E company's Microsoft and Google tokens; 32 bytes, nothing secret. */
   sealingKey: Buffer.alloc(32, 5).toString('base64'),
 };
 

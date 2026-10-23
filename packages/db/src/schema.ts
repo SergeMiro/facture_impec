@@ -1072,7 +1072,8 @@ export const chats = pgTable(
   (t) => [index('chats_tenant').on(t.tenantId)],
 );
 
-export const CONNECTION_PROVIDERS = ['microsoft'] as const;
+export const CONNECTION_PROVIDERS = ['microsoft', 'google'] as const;
+export type ConnectionProvider = (typeof CONNECTION_PROVIDERS)[number];
 export const FILE_PROBLEMS = [
   'missing',
   'forbidden',
@@ -1094,24 +1095,29 @@ export const connections = pgTable(
       .notNull()
       .references(() => tenants.id),
     provider: text('provider', { enum: CONNECTION_PROVIDERS }).notNull(),
-    /** The account's id at the provider (Graph `/me` id): connecting it again updates this row. */
+    /** The account's id (Graph `/me` id, Google's `permissionId`): connecting it again updates the row. */
     accountId: text('account_id').notNull(),
     /** What the pane shows: the account's address. */
     label: text('label').notNull(),
-    /** A personal Microsoft account or a work one: Graph subscribes only the former with Files.Read. */
+    /**
+     * A personal account or a work one: Graph subscribes only the former with Files.Read. Google: Gmail
+     * or Workspace, shown only.
+     */
     accountKind: text('account_kind', { enum: ['personal', 'work'] }).notNull(),
-    /** The directory the account signed in from (`tid`): its token endpoint. */
+    /** The directory the account signed in from (`tid`): its token endpoint. Google: `google`. */
     directory: text('directory').notNull(),
     /** The drive's address (Graph `webUrl`): a work account's file picker lives on its host. */
     driveUrl: text('drive_url'),
     /** AES-256-GCM under CONNECTOR_SEALING_KEY. */
     refreshToken: text('refresh_token').notNull(),
-    /** `reconnect`: Microsoft refused the token; nothing is read until the person signs in again. */
+    /** `reconnect`: the provider refused the token; nothing is read until the person signs in again. */
     status: text('status', { enum: ['active', 'reconnect'] })
       .notNull()
       .default('active'),
-    /** Change notifications on the drive's root (personal OneDrive). */
+    /** Change notifications: Graph's subscription on a personal OneDrive's root, Google's channel. */
     subscriptionId: text('subscription_id'),
+    /** Google's `resourceId` of the channel, needed to stop it (docs/GOOGLE.md §4); null for Microsoft. */
+    subscriptionResource: text('subscription_resource'),
     subscriptionExpiresAt: timestamp('subscription_expires_at', { withTimezone: true }),
     /** SHA-256 of the secret Graph sends back with each notification. */
     clientStateHash: text('client_state_hash'),

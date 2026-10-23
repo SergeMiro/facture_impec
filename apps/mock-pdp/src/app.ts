@@ -12,6 +12,7 @@ import {
   MockUnavailable,
   MockUnreadable,
 } from './engine';
+import { GoogleStandIn, type GoogleStandInOptions } from './google';
 import { MicrosoftStandIn, type MicrosoftStandInOptions } from './microsoft';
 import { sireneStandIn } from './sirene';
 import { StripeStandIn, type StripeStandInOptions } from './stripe';
@@ -112,6 +113,8 @@ export interface MockPdpOptions extends EngineOptions {
   stripe?: Partial<StripeStandInOptions>;
   /** Microsoft's sign-in and Graph for the OneDrive connector, at /microsoft (./microsoft.ts). */
   microsoft?: Partial<MicrosoftStandInOptions>;
+  /** Google's window, OAuth and Drive for the Google Drive connector, at /google (./google.ts). */
+  google?: Partial<GoogleStandInOptions>;
 }
 
 /** The app the stand-in knows, as MICROSOFT_CLIENT_ID / _SECRET say in local (.env.example). */
@@ -120,11 +123,18 @@ export const MICROSOFT_STAND_IN_APP = {
   clientSecret: 'local-microsoft-client-secret',
 };
 
+/** The OAuth client the stand-in knows, as GOOGLE_CLIENT_ID / _SECRET say in local (.env.example). */
+export const GOOGLE_STAND_IN_APP = {
+  clientId: 'local-google-client.apps.googleusercontent.com',
+  clientSecret: 'local-google-client-secret',
+};
+
 export function createMockPdp(options: MockPdpOptions) {
   const {
     b2brouter: standIn,
     stripe: stripeOptions,
     microsoft: microsoftOptions,
+    google: googleOptions,
     ...engineOptions
   } = options;
   const engine = new MockPdpEngine(engineOptions);
@@ -147,5 +157,11 @@ export function createMockPdp(options: MockPdpOptions) {
     ...microsoftOptions,
   });
   app.route('/microsoft', microsoft.app);
-  return { engine, app, b2brouter, stripe, microsoft };
+  const google = new GoogleStandIn({
+    ...GOOGLE_STAND_IN_APP,
+    ...(options.log && { log: options.log }),
+    ...googleOptions,
+  });
+  app.route('/google', google.app);
+  return { engine, app, b2brouter, stripe, microsoft, google };
 }

@@ -3,8 +3,13 @@
 
 import {
   checkConnection,
+  createGoogleClient,
   createMicrosoftClient,
   fakeAdapter,
+  GOOGLE_SHEET_TYPE,
+  GOOGLE_STAND_IN_APP,
+  type GoogleConnector,
+  GoogleStandIn,
   handleFor,
   inProcess,
   linkToken,
@@ -1355,7 +1360,7 @@ describe('OneDrive files read without Excel (R4)', () => {
     await controller.includeFileSheet(fileId, 'Commandes');
     const inclusion = state().inclusion;
     if (!inclusion) throw new Error('no proposal');
-    expect(inclusion.file).toEqual({ id: fileId, name: FILE });
+    expect(inclusion.file).toEqual({ id: fileId, name: FILE, provider: 'microsoft' });
     expect(inclusion.detection.layout.kind).toBe('order');
     expect(inclusion.headers.map((h) => h.text)).toEqual([
       'N° commande',
@@ -1416,6 +1421,156 @@ describe('OneDrive files read without Excel (R4)', () => {
     expect(b1()).toBeUndefined();
     // The three invoices of the sheet stay in the registry.
     expect(state().registry?.invoices.sent).toBe(3);
+  });
+});
+
+describe('Google Drive files read without Excel (R5)', () => {
+  const SIREN = '999000417';
+  const FILE = 'Commandes 2026';
+  const day = (value: number): XlsxCell => ({ date: value });
+  const ordersFile = (price: number) =>
+    xlsxOf({
+      Commandes: [
+        ['N° commande', 'Date', 'Client', 'Désignation', 'Qté', 'PU HT'],
+        ['C-41', day(46296), 'Boulangerie Martin SAS', 'Journée de conseil', 2, price],
+        ['C-42', day(46301), 'Garage des Lilas', 'Étagère murale', 2, 140],
+      ],
+    });
+  let stand: GoogleStandIn;
+  let google: GoogleConnector;
+  let r5: ReturnType<typeof TestApi>;
+  const r5Fetch: typeof fetch = async (input, init) => r5.app.request(String(input), init);
+  const path = (url: string) => {
+    const u = new URL(url);
+    return `${u.pathname}${u.search}`;
+  };
+  /** The person in the browser: our page sets the ticket, Google's window answers, back to the API. */
+  const browser = async (url: string) => {
+    const begin = await r5.app.request(path(url));
+    const cookie = (begin.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    const atGoogle = await stand.app.request(path(begin.headers.get('location') ?? ''));
+    const back = await r5.app.request(path(atGoogle.headers.get('location') ?? ''), {
+      headers: { cookie },
+    });
+    expect(back.status).toBe(200);
+    return true;
+  };
+  const book = new FakeWorkbook({ [DEMO_SHEET]: demoSheet() });
+  const { controller, state, tokens } = pane(book, memoryStore(), {
+    fetch: r5Fetch,
+    openUrl: browser,
+  });
+  const b1 = () => state().checks?.findings.find((f) => f.rule === 'B1');
+  const file = () => state().google?.connection?.files.find((f) => f.name === FILE);
+
+  beforeAll(async () => {
+    stand = new GoogleStandIn({
+      ...GOOGLE_STAND_IN_APP,
+      fetcher: inProcess({ request: (p, init) => r5.app.request(p, init) }),
+    });
+    google = {
+      client: createGoogleClient({
+        ...GOOGLE_STAND_IN_APP,
+        accountsUrl: 'http://google.test/accounts',
+        oauthUrl: 'http://google.test/oauth',
+        apiUrl: 'http://google.test/api',
+        fetcher: inProcess(stand.app),
+      }),
+      sealingKey: Buffer.alloc(32, 9).toString('base64'),
+      redirectUrl: 'http://api.test/connectors/google/callback',
+      notificationUrl: 'http://api.test/webhooks/google',
+    };
+    r5 = testApi(database, { mock: adapter }, undefined, { google });
+    const vatId = `FR${String((12 + 3 * (Number(SIREN) % 97)) % 97).padStart(2, '0')}${SIREN}`;
+    const key = (
+      await newTenant(r5.request, {
+        ...SELLER,
+        siren: SIREN,
+        vatId,
+        ownerEmail: 'google@entreprise-demo.test',
+      })
+    ).apiKey;
+    const res = await r5.request('/settings', {
+      method: 'PATCH',
+      token: key,
+      body: { invoiceDefaults: { ...DEFAULTS, siret: `${SIREN}00015` } },
+    });
+    expect(res.status).toBe(200);
+    await controller.start();
+    await controller.signInWithKey(key);
+    await until(() => state().detection !== null, 'the invoice columns');
+    const columns = state().detection?.mapping;
+    if (!columns) throw new Error('no invoice columns');
+    await controller.confirmMapping(columns);
+  });
+
+  it('shows a link when the window cannot open by itself', async () => {
+    const session = (await tokens.get('token')) ?? '';
+    const store = memoryStore();
+    await store.set('token', session);
+    const blocked = pane(book, store, { fetch: r5Fetch, openUrl: async () => false });
+    await blocked.controller.start();
+    blocked.controller.navigate({ name: 'registry' });
+    await until(() => blocked.state().google !== null, 'the Google Drive section');
+    expect(blocked.state().google).toEqual({ available: true, connection: null });
+    await blocked.controller.openGoogle();
+    expect(blocked.state().notice?.text).toBe(t('addin.google.openLink'));
+    expect(blocked.state().googleLink).toMatch(
+      /^http:\/\/api\.test\/connectors\/google\/begin\?ticket=/,
+    );
+    await blocked.controller.signOut();
+  });
+
+  it('finds the 300 € an order changed in Google Sheets puts at stake', async () => {
+    controller.navigate({ name: 'registry' });
+    await until(() => state().google !== null, 'the Google Drive section');
+    await stand.putFile('g-camille', 'gs-r5', FILE, ordersFile(450), GOOGLE_SHEET_TYPE);
+    stand.choose({ account: 'g-camille', pick: ['gs-r5'] });
+    await controller.openGoogle();
+    await until(() => file() !== undefined, 'the file picked in Google’s window');
+    await until(
+      () =>
+        state().notice?.text === t('addin.google.updated', { account: 'camille.martin@gmail.com' }),
+      'the pane told',
+    );
+    expect(state().google?.connection).toMatchObject({
+      accountKind: 'personal',
+      status: 'active',
+      notified: true,
+    });
+    const fileId = file()?.id ?? '';
+    await controller.includeFileSheet(fileId, 'Commandes');
+    const inclusion = state().inclusion;
+    if (!inclusion) throw new Error('no proposal');
+    expect(inclusion.file).toEqual({ id: fileId, name: FILE, provider: 'google' });
+    await controller.confirmLayout({ ...inclusion.detection.layout, source: 'user' });
+    expect(state().notice?.text).toBe(
+      t('addin.connector.included', { sheet: 'Commandes', file: FILE, docs: 2 }),
+    );
+    expect(file()?.sheets[0]?.source).toMatchObject({ type: 'file', fileId, kind: 'order' });
+    await controller.loadChecks();
+    expect(b1()).toBeUndefined();
+
+    const queued = r5.jobs.connectors.length;
+    await stand.putFile('g-camille', 'gs-r5', FILE, ordersFile(600), GOOGLE_SHEET_TYPE);
+    const [connection] = r5.jobs.connectors.slice(queued);
+    if (!connection) throw new Error('no notification');
+    expect(await checkConnection({ ...r5.deps, google }, connection)).toEqual({ read: 1 });
+    await controller.loadChecks();
+    expect(b1()).toMatchObject({ severity: 'blocking', amount: 30_000 });
+  });
+
+  it('removes the file, then disconnects: our token is revoked at Google', async () => {
+    const fileId = file()?.id ?? '';
+    await controller.removeFileSheet(fileId, 'Commandes');
+    expect(file()?.sheets[0]).toMatchObject({ sheet: 'Commandes', source: null });
+    await controller.removeFile(fileId);
+    expect(state().notice?.text).toBe(t('addin.connector.fileRemoved', { file: FILE }));
+    expect(state().google?.connection?.files).toEqual([]);
+    await controller.disconnectGoogle();
+    expect(state().notice?.text).toBe(t('addin.google.disconnected'));
+    expect(state().google?.connection).toBeNull();
+    expect(stand.connected('g-camille')).toBe(false);
   });
 });
 

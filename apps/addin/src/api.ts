@@ -247,6 +247,26 @@ export const ConnectorView = z.object({
 export type ConnectorView = z.infer<typeof ConnectorView>;
 export type ConnectedFile = NonNullable<ConnectorView['connection']>['files'][number];
 
+/** The « Fichiers Google Drive » section (R5): files are picked in Google's own window. */
+export const GoogleView = z.object({
+  /** False: the owner registered no Google client; the section says so and offers nothing. */
+  available: z.boolean(),
+  connection: z
+    .object({
+      label: z.string(),
+      accountKind: z.enum(['personal', 'work']),
+      /** `reconnect`: Google refused the token; nothing is read until the window is opened again. */
+      status: z.enum(['active', 'reconnect']),
+      notified: z.boolean(),
+      connectedAt: z.string(),
+      checkedAt: z.string().nullable(),
+      files: ConnectorView.shape.connection.unwrap().shape.files,
+    })
+    .nullable(),
+});
+export type GoogleView = z.infer<typeof GoogleView>;
+export type DriveProvider = 'microsoft' | 'google';
+
 /** The « Registre » screen. */
 export const Registry = z.object({
   /** `file`: the OneDrive file a sheet comes from (R4). */
@@ -763,8 +783,8 @@ export type LinkPoll = z.infer<typeof LinkPoll>;
 export const SCENARIOS = ['pdp_reject', 'customer_refuse', 'pay_late', 'siren_unknown'] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
-const filePath = (fileId: string, sheet?: string) =>
-  `/connectors/microsoft/files/${encodeURIComponent(fileId)}${sheet === undefined ? '' : `/sheets/${encodeURIComponent(sheet)}`}`;
+const filePath = (provider: DriveProvider, fileId: string, sheet?: string) =>
+  `/connectors/${provider}/files/${encodeURIComponent(fileId)}${sheet === undefined ? '' : `/sheets/${encodeURIComponent(sheet)}`}`;
 
 const sourcesPath = (workbookId: string, sheet?: string) =>
   `/workbooks/${encodeURIComponent(workbookId)}/sources${sheet === undefined ? '' : `/${encodeURIComponent(sheet)}`}`;
@@ -927,15 +947,33 @@ export class ApiClient {
   pickFiles = (files: PickedFile[]) =>
     this.#json(ConnectorView, '/connectors/microsoft/files', { method: 'POST', body: { files } });
   removeFile = (fileId: string) =>
-    this.#json(ConnectorView, filePath(fileId), { method: 'DELETE' });
-  detectFileSheet = (fileId: string, sheet: string) =>
-    this.#json(FileDetection, `${filePath(fileId, sheet)}/detect`, { method: 'POST' });
-  includeFileSheet = (fileId: string, layout: LayoutMapping) =>
-    this.#json(SourceRead, filePath(fileId, layout.sheet), { method: 'PUT', body: { layout } });
-  removeFileSheet = (fileId: string, sheet: string) =>
-    this.#json(z.object({ removed: z.boolean(), sheet: z.string() }), filePath(fileId, sheet), {
-      method: 'DELETE',
+    this.#json(ConnectorView, filePath('microsoft', fileId), { method: 'DELETE' });
+  detectFileSheet = (fileId: string, sheet: string, provider: DriveProvider = 'microsoft') =>
+    this.#json(FileDetection, `${filePath(provider, fileId, sheet)}/detect`, { method: 'POST' });
+  includeFileSheet = (
+    fileId: string,
+    layout: LayoutMapping,
+    provider: DriveProvider = 'microsoft',
+  ) =>
+    this.#json(SourceRead, filePath(provider, fileId, layout.sheet), {
+      method: 'PUT',
+      body: { layout },
     });
+  removeFileSheet = (fileId: string, sheet: string, provider: DriveProvider = 'microsoft') =>
+    this.#json(
+      z.object({ removed: z.boolean(), sheet: z.string() }),
+      filePath(provider, fileId, sheet),
+      { method: 'DELETE' },
+    );
+
+  /** « Fichiers Google Drive » (R5): the account and the files picked in Google's window. */
+  google = () => this.#json(GoogleView, '/connectors/google');
+  /** The address of Google's window, for one person and 15 minutes. */
+  googleStart = () =>
+    this.#json(z.object({ url: z.string() }), '/connectors/google/start', { method: 'POST' });
+  disconnectGoogle = () => this.#json(GoogleView, '/connectors/google', { method: 'DELETE' });
+  removeGoogleFile = (fileId: string) =>
+    this.#json(GoogleView, filePath('google', fileId), { method: 'DELETE' });
   /** « Contrôles » (R2): the open findings, the money at stake, the links to confirm. */
   checks = () => this.#json(Checks, '/checks');
   decideLink = (id: string, status: 'confirmed' | 'rejected') =>

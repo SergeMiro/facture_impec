@@ -35,7 +35,12 @@ import { runAutopilot } from './autopilot';
 import { type Billing, recordUsage, runUsageReport } from './billing';
 import { checkNow, checksBehind } from './checks';
 import { runCollect } from './collect';
-import { checkConnection, connectorsBehind, type MicrosoftConnector } from './connectors';
+import {
+  checkConnection,
+  connectorsBehind,
+  type GoogleConnector,
+  type MicrosoftConnector,
+} from './connectors';
 import type {
   AiDeps,
   Jobs,
@@ -72,6 +77,8 @@ export interface WorkerDeps {
   fonts?: FacturXOptions['fonts'];
   /** OneDrive files (src/connectors.ts); absent: no connection is checked. */
   microsoft?: MicrosoftConnector | null;
+  /** Google Drive files (R5); absent: no Google connection is checked. */
+  google?: GoogleConnector | null;
   now: () => Date;
 }
 
@@ -326,7 +333,8 @@ export async function runSweep(deps: WorkerDeps): Promise<{
     ...new Set([...(await registryBehind(deps.db)), ...(await checksBehind(deps.db, deps.now()))]),
   ];
   for (const tenantId of behind) await deps.jobs.enqueueRegistry(tenantId);
-  const due = deps.microsoft ? await connectorsBehind(deps.db, deps.now()) : [];
+  const due =
+    deps.microsoft || deps.google ? await connectorsBehind(deps.db, deps.now(), deps) : [];
   for (const id of due) await deps.jobs.enqueueConnector(id);
   return {
     synced: inFlight.length,

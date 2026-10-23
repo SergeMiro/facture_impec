@@ -248,7 +248,7 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       readAt: s.readAt?.toISOString() ?? null,
       stats: s.stats,
     })),
-    /** The Microsoft account connected to read files (R4), its token excepted, and its files. */
+    /** The Microsoft (R4) and Google (R5) accounts connected to read files, tokens excepted, and their files. */
     connections: accounts.map((c) => ({
       provider: c.provider,
       account: c.label,
@@ -458,7 +458,8 @@ export async function deleteTenant(
   // First, so that nothing is charged to a company that no longer exists; if Stripe cannot be
   // reached, nothing is deleted and the owner tries again.
   await cancelSubscription(deps, tenant);
-  // Best effort: Graph stops notifying us; an unrenewed subscription ends by itself anyway.
+  // Best effort: Graph and Google stop notifying us, Google forgets our token; an unrenewed
+  // subscription or channel ends by itself anyway.
   await unwatch(deps, tenant.id);
   const now = deps.now();
   return deps.db.transaction(async (tx) => {

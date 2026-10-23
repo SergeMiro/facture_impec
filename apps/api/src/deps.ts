@@ -4,7 +4,7 @@ import type { Db, PdpProvider } from '@fi/db';
 import type { PdpAdapter, ScenarioPort } from '@fi/pdp-adapter';
 import type { ServerEnv } from '@fi/shared/env';
 import type { Billing } from './billing';
-import type { MicrosoftConnector } from './connectors';
+import type { GoogleConnector, MicrosoftConnector } from './connectors';
 import type { RequestWindows } from './limits';
 import type { Directory } from './sirene';
 
@@ -112,6 +112,8 @@ export interface ApiDeps {
   ownPdp?: OwnPlatform | null;
   /** OneDrive files read without Excel (src/connectors.ts); absent or null: not offered. */
   microsoft?: MicrosoftConnector | null;
+  /** Google Drive files read without Excel (R5, src/connectors.ts); absent or null: not offered. */
+  google?: GoogleConnector | null;
   /** Request counters (src/limits.ts); default: fresh ones per app. */
   limits?: RequestWindows;
   now: () => Date;

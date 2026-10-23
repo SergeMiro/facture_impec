@@ -122,7 +122,15 @@ export const ServerEnvSchema = z
     // Empty: Microsoft's hosts. Local and tests: the stand-in (apps/mock-pdp /microsoft).
     MICROSOFT_LOGIN_URL: z.preprocess(blank, z.url().optional()),
     MICROSOFT_GRAPH_URL: z.preprocess(blank, z.url().optional()),
-    // Seals the connected accounts' refresh tokens; required with MICROSOFT_CLIENT_ID.
+    // Google Drive connector (docs/GOOGLE.md): the owner's OAuth client (Web application). Empty id: no
+    // connector. The secret signs the code exchange; never commit it.
+    GOOGLE_CLIENT_ID: optionalText(),
+    GOOGLE_CLIENT_SECRET: optionalText(),
+    // Empty: Google's hosts. Local and tests: the stand-in (apps/mock-pdp /google).
+    GOOGLE_ACCOUNTS_URL: z.preprocess(blank, z.url().optional()),
+    GOOGLE_OAUTH_URL: z.preprocess(blank, z.url().optional()),
+    GOOGLE_API_URL: z.preprocess(blank, z.url().optional()),
+    // Seals the connected accounts' refresh tokens; required with either connector's client id.
     CONNECTOR_SEALING_KEY: z.preprocess(
       blank,
       z
@@ -170,14 +178,14 @@ export const ServerEnvSchema = z
         });
       }
     }
-    if (env.MICROSOFT_CLIENT_ID) {
-      for (const key of ['MICROSOFT_CLIENT_SECRET', 'CONNECTOR_SEALING_KEY'] as const) {
+    for (const [id, keys] of [
+      ['MICROSOFT_CLIENT_ID', ['MICROSOFT_CLIENT_SECRET', 'CONNECTOR_SEALING_KEY']],
+      ['GOOGLE_CLIENT_ID', ['GOOGLE_CLIENT_SECRET', 'CONNECTOR_SEALING_KEY']],
+    ] as const) {
+      if (!env[id]) continue;
+      for (const key of keys) {
         if (!env[key]) {
-          ctx.addIssue({
-            code: 'custom',
-            path: [key],
-            message: 'required with MICROSOFT_CLIENT_ID',
-          });
+          ctx.addIssue({ code: 'custom', path: [key], message: `required with ${id}` });
         }
       }
     }

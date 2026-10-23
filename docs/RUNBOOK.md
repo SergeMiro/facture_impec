@@ -351,6 +351,42 @@ of it is in the repo):
 Changing `CONNECTOR_SEALING_KEY` makes every stored token unreadable: the connections then ask to
 « Reconnecter ». Rotating the client secret needs nothing else.
 
+### Google Drive connector (R5)
+
+Local, against the stand-in (`apps/mock-pdp`, `/google`): in `.env` set
+`GOOGLE_CLIENT_ID=local-google-client.apps.googleusercontent.com`,
+`GOOGLE_CLIENT_SECRET=local-google-client-secret`, the three `http://localhost:4010/google/…` URLs of
+`.env.example` and a `CONNECTOR_SEALING_KEY`, then `pnpm dev` and the harness page. In « Registre »,
+« Connecter Google Drive » shows « Ouvrir la fenêtre Google » (the harness has no Office window); the
+stand-in's page there lets you pick Camille's files by hand. Put or change a file (`sheet=1` stores it
+as a Google Sheets spreadsheet), or answer the next window without the page:
+
+```bash
+curl -X PUT --data-binary @Commandes.xlsx \
+  "http://localhost:4010/google/control/files/g-camille/cmd-1?sheet=1&name=Commandes%202026"
+curl -X POST -H 'content-type: application/json' -d '{"account":"g-camille","pick":["cmd-1"]}' \
+  http://localhost:4010/google/control/choose
+```
+
+The E2E's last step does all of it. Real accounts need the owner's Google Cloud project
+(`docs/GOOGLE.md` §7; nothing of it is in the repo):
+
+1. Google Cloud console → a project « Facture Impec » → APIs & Services → enable « Google Drive API ».
+2. OAuth consent screen: External; app name, support e-mail, the CGU and privacy URLs; scope
+   `https://www.googleapis.com/auth/drive.file` only. Publish it (« In production »): in Testing,
+   Google expires refresh tokens after 7 days and only listed test users can sign in.
+3. Credentials → Create OAuth client ID → Web application; authorized redirect URI
+   `<API_PUBLIC_URL>/connectors/google/callback` (https outside local).
+4. Into the API's environment, never the repo: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, with the
+   `CONNECTOR_SEALING_KEY` OneDrive uses; leave the three URLs empty. On this VPS the values live in
+   `~/.config/facture-impec/google.env` (chmod 600).
+5. Run the TODO(verify) list of `docs/GOOGLE.md` §6 on a Gmail account and a Workspace one and note
+   the results there. Notifications need the API on a public https address (a temporary tunnel to
+   `:4000` as `API_PUBLIC_URL` for a try); without it the files are polled every 2 minutes.
+
+« Déconnecter Google Drive » and deleting the account revoke the token at Google. Changing
+`CONNECTOR_SEALING_KEY` asks every Google connection to « Reconnecter », as for OneDrive.
+
 ## Deployment
 
 The API image, the compose file and the settings of a hosted sandbox or prod: `docs/DEPLOY.md`. The
