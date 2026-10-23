@@ -1679,8 +1679,18 @@ describe('files uploaded from the pane (R6)', () => {
 
   it('says calmly what it cannot take, and « Retirer le fichier » takes the cost away', async () => {
     controller.navigate({ name: 'registry' });
-    await controller.uploadFile(new Blob(['%PDF-1.4\n']), 'scan.pdf');
+    const plainPdf = [
+      '%PDF-1.4',
+      '1 0 obj <</Type /Catalog /Pages 2 0 R>> endobj',
+      '2 0 obj <</Type /Pages /Kids [3 0 R] /Count 1>> endobj',
+      '3 0 obj <</Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]>> endobj',
+      'trailer <</Root 1 0 R>>',
+      '%%EOF',
+    ].join('\n');
+    await controller.uploadFile(new Blob([plainPdf]), 'scan.pdf');
     expect(state().notice).toEqual({ tone: 'error', text: t('api.error.upload_plain_pdf') });
+    await controller.uploadFile(new Blob(['%PDF-1.4\n']), 'broken.pdf');
+    expect(state().notice).toEqual({ tone: 'error', text: t('api.error.upload_unreadable') });
     expect(state().uploads?.map((u) => u.name)).toEqual([FILE]);
 
     await controller.removeFile(uploaded(FILE)?.id ?? '');

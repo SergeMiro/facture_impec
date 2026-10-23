@@ -97,37 +97,32 @@ export class FacturXPdfError extends Error {
   }
 }
 
-/**
- * The files attached to a PDF. pdf-lib 2.11 throws a TypeError on a catalog with no /Names (a PDF
- * made by most printers and scanners): that PDF has no attachment.
- */
+/** A plain PDF has no attachment dictionary. Malformed dictionaries must still report an error. */
 function attachmentsOf(doc: PDFDocument) {
-  try {
-    return doc.getAttachments();
-  } catch (e) {
-    if (e instanceof TypeError) return [];
-    throw e;
-  }
+  if (!doc.catalog.has(PDFName.of('Names'))) return [];
+  return doc.getAttachments();
 }
 
 /** Takes the invoice XML back out of a Factur-X PDF. Throws FacturXPdfError otherwise. */
 export async function readFacturXPdf(bytes: Uint8Array): Promise<FacturXContent> {
-  let doc: PDFDocument;
   try {
-    doc = await PDFDocument.load(bytes, { updateMetadata: false });
+    const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+    const file = attachmentsOf(doc).find((a) => XML_FILES.includes(a.name.toLowerCase()));
+    if (!file) throw new FacturXPdfError('no-xml', `no ${FACTUR_X_FILE} attached`);
+
+    const meta = doc.catalog.lookup(PDFName.of('Metadata'));
+    const xmp =
+      meta instanceof PDFRawStream
+        ? new TextDecoder().decode(decodePDFRawStream(meta).decode())
+        : '';
+    const level = /<fx:ConformanceLevel>([^<]*)<\/fx:ConformanceLevel>/.exec(xmp)?.[1];
+    return {
+      xml: new TextDecoder().decode(file.data),
+      relationship: file.afRelationship,
+      conformanceLevel: level,
+    };
   } catch (e) {
+    if (e instanceof FacturXPdfError) throw e;
     throw new FacturXPdfError('unreadable', e instanceof Error ? e.message : String(e));
   }
-  const file = attachmentsOf(doc).find((a) => XML_FILES.includes(a.name.toLowerCase()));
-  if (!file) throw new FacturXPdfError('no-xml', `no ${FACTUR_X_FILE} attached`);
-
-  const meta = doc.catalog.lookup(PDFName.of('Metadata'));
-  const xmp =
-    meta instanceof PDFRawStream ? new TextDecoder().decode(decodePDFRawStream(meta).decode()) : '';
-  const level = /<fx:ConformanceLevel>([^<]*)<\/fx:ConformanceLevel>/.exec(xmp)?.[1];
-  return {
-    xml: new TextDecoder().decode(file.data),
-    relationship: file.afRelationship,
-    conformanceLevel: level,
-  };
 }

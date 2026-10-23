@@ -203,6 +203,9 @@ one more call by hand on an invoice the contract left in the sandbox.
 | `pnpm build` | Production build (add-in and marketing site). |
 | `pnpm --filter @fi/api dev` | Run one package. |
 
+On a loaded VPS, use `pnpm verify --concurrency=1` to run test packages sequentially.
+This runs the same checks without increasing test timeouts.
+
 The first `pnpm verify` on a machine needs the network once: the oracle downloads its files and
 compiles three stylesheets (about 45 s), then works offline from `.oracle-cache/`.
 

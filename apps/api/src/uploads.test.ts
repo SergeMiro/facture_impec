@@ -310,6 +310,30 @@ describe('a file the pane cannot take', () => {
     expect(await c.audits('upload.add')).toEqual([]);
   });
 
+  it('refuses damaged CSV and PDF replacements while preserving the previous file', async () => {
+    const c = await company('wb-upload-damaged');
+    const csv = text('Article;Prix\nChaise;30\n');
+    await c.call('/uploads?name=Tarifs.csv', 'POST', csv);
+    const before = await database.db.select().from(uploads).where(eq(uploads.tenantId, c.id));
+    await refused(
+      c,
+      'Tarifs.csv',
+      text('Article;Prix\nChaise;"30\nTable;40'),
+      422,
+      'upload_unreadable',
+    );
+    await refused(c, 'Tarifs.csv', text('Article;Prix\nChaise;\u0000'), 422, 'upload_unreadable');
+    const brokenPdf = text(
+      new TextDecoder().decode(PLAIN_PDF).replace('/Type /Catalog', '/Type /Catalog /Names 42'),
+    );
+    // Detection uses the content, so even a PDF under this CSV name must preserve the old file.
+    await refused(c, 'Tarifs.csv', brokenPdf, 422, 'upload_unreadable');
+    expect(await database.db.select().from(uploads).where(eq(uploads.tenantId, c.id))).toEqual(
+      before,
+    );
+    expect(await c.audits('upload.replace')).toEqual([]);
+  });
+
   it('is not reached from another company', async () => {
     const a = await company('wb-upload-05');
     const b = await company('wb-upload-06');

@@ -394,6 +394,12 @@ function separatorOf(text: string): string {
 
 function readCsv(bytes: Uint8Array<ArrayBuffer>, name: string, limits: FileLimits): SheetFile {
   const text = decodeCsv(bytes);
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
+      throw new SheetFileError('unreadable', 'binary control character in CSV');
+    }
+  }
   const sep = separatorOf(text);
   const sheet = (
     name
@@ -407,12 +413,14 @@ function readCsv(bytes: Uint8Array<ArrayBuffer>, name: string, limits: FileLimit
   let field = '';
   let col = 1;
   let quoted = false;
+  let closedQuote = false;
   let rowNumber = 1;
   const endField = () => {
     const value = field.trim();
     // Excel's last column is XFD (16 384).
     if (value !== '' && col <= 16_384) cells.push({ col: columnLetters(col), value, text: value });
     field = '';
+    closedQuote = false;
     col++;
   };
   const endRow = () => {
@@ -431,17 +439,27 @@ function readCsv(bytes: Uint8Array<ArrayBuffer>, name: string, limits: FileLimit
       if (ch === '"' && text[i + 1] === '"') {
         field += '"';
         i++;
-      } else if (ch === '"') quoted = false;
-      else field += ch;
-    } else if (ch === '"' && field.trim() === '') {
-      field = '';
-      quoted = true;
+      } else if (ch === '"') {
+        quoted = false;
+        closedQuote = true;
+      } else field += ch;
     } else if (ch === sep) endField();
     else if (ch === '\n' || ch === '\r') {
       if (ch === '\r' && text[i + 1] === '\n') i++;
       endRow();
+    } else if (closedQuote) {
+      if (ch !== ' ' && ch !== '\t') {
+        throw new SheetFileError('unreadable', 'characters after a quoted CSV field');
+      }
+    } else if (ch === '"') {
+      if (field.trim() !== '') {
+        throw new SheetFileError('unreadable', 'quote inside an unquoted CSV field');
+      }
+      field = '';
+      quoted = true;
     } else field += ch;
   }
+  if (quoted) throw new SheetFileError('unreadable', 'unfinished quoted CSV field');
   if (!truncated && (field !== '' || cells.length)) endRow();
   return { format: 'csv', sheets: [{ sheet, rows }], truncated: truncated ? [sheet] : [] };
 }

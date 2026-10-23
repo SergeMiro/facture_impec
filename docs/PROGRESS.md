@@ -988,3 +988,29 @@ Acceptance criteria before implementation:
   tasks, with packages tested sequentially). Core: 653 tests, 93.08% branch coverage. API: 279 tests.
   The initial parallel run exceeded the database setup timeout. The sequential run passed without
   changes to test timeouts.
+
+## R6 — Damaged file handling (started 2026-10-23)
+
+A CSV with an unfinished quoted field merged subsequent rows into that field. Unsupported PDF stream
+encodings escaped as internal errors. Acceptance criteria before implementation:
+
+- Refuse malformed CSV quoting and binary control characters before any registry change.
+- Continue to read escaped quotes, multiline fields and French CSV exports.
+- Convert PDF attachment and metadata errors into `FacturXPdfError('unreadable')`.
+  A plain PDF still returns `no-xml`.
+- The upload API returns `422 upload_unreadable` and preserves any previous file.
+- Add regression tests and pass the full verification gate.
+
+### Evidence (2026-10-23)
+
+- The new core regressions failed before the fix and passed afterward.
+  `file.test.ts` covers unfinished quotes, text after a closing quote, quotes inside unquoted fields,
+  binary controls and valid escaped quotes. Existing multiline and Windows-1252 fixtures still pass.
+- `pdf.test.ts` covers malformed attachment dictionaries and unsupported metadata streams.
+  Existing plain PDF and Factur-X round-trip tests still pass.
+- `uploads.test.ts` → `refuses damaged CSV and PDF replacements while preserving the previous file`.
+  Each refusal returns `422 upload_unreadable`, without replacement or a replacement audit event.
+- `controller.test.ts` now distinguishes a valid plain PDF from an incomplete PDF header.
+  Both errors preserve the uploaded supplier invoice.
+- Gate: `pnpm verify --concurrency=1` passed. API: 280 tests. Core: 656 tests and 93.17% branch coverage.
+  All ten test tasks passed, including the XML oracle and the add-in.

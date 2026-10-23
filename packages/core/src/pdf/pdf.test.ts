@@ -101,6 +101,30 @@ describe('PDF/A-3 and Factur-X structure', () => {
 });
 
 describe('readFacturXPdf', () => {
+  it('reports malformed attachment structures and unsupported metadata streams as unreadable', async () => {
+    const brokenNames = await PDFDocument.create();
+    brokenNames.addPage();
+    brokenNames.catalog.set(PDFName.of('Names'), PDFName.of('NotADictionary'));
+    await expect(readFacturXPdf(await brokenNames.save())).rejects.toMatchObject({
+      name: 'FacturXPdfError',
+      reason: 'unreadable',
+    });
+
+    const brokenMetadata = await PDFDocument.create();
+    brokenMetadata.addPage();
+    await brokenMetadata.attach(new TextEncoder().encode('<x/>'), FACTUR_X_FILE);
+    brokenMetadata.catalog.set(
+      PDFName.of('Metadata'),
+      brokenMetadata.context.register(
+        brokenMetadata.context.stream('broken metadata', { Filter: 'UnsupportedDecode' }),
+      ),
+    );
+    await expect(readFacturXPdf(await brokenMetadata.save())).rejects.toMatchObject({
+      name: 'FacturXPdfError',
+      reason: 'unreadable',
+    });
+  });
+
   it('refuses a file that is not a PDF', async () => {
     const reading = readFacturXPdf(new TextEncoder().encode('facture.xlsx'));
     await expect(reading).rejects.toThrowError(FacturXPdfError);

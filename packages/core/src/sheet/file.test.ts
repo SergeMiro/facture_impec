@@ -164,6 +164,32 @@ describe('a workbook file read like the pane reads a sheet (R4)', () => {
 });
 
 describe('a CSV file (R4)', () => {
+  it('refuses broken quoting and binary controls instead of merging or changing rows', async () => {
+    for (const body of [
+      'a;b\n1;"unfinished\n2;3',
+      'a;b\n1;"2"trailing',
+      'a;b\n1;un"quoted',
+      'a;b\n1;\u0000',
+      'a;b\n1;\u0001',
+    ]) {
+      await expect(
+        readSheetFile(new TextEncoder().encode(body), 'broken.csv'),
+      ).rejects.toMatchObject({ reason: 'unreadable' });
+    }
+  });
+
+  it('allows spaces around quoted fields and a final quoted empty field', async () => {
+    const file = await readSheetFile(
+      new TextEncoder().encode('a;b\n1;  "dit ""oui"""  \n2;""'),
+      'f.csv',
+    );
+    expect(file.sheets[0]?.rows.map((r) => r.cells.map((c) => c.value))).toEqual([
+      ['a', 'b'],
+      ['1', 'dit "oui"'],
+      ['2'],
+    ]);
+  });
+
   it('reads Excel’s French CSV: semicolons, Windows-1252, quotes', async () => {
     // « CSV (séparateur : point-virgule) » from Excel in France: Windows-1252, CRLF.
     const text =
