@@ -39,12 +39,25 @@ What a real personal account showed and what is still open: `docs/MICROSOFT365.m
       dialog through `redirect.html` on the web). Only the pane's link fallback is proven, in the
       harness E2E.
 
+## Files uploaded (R6), built on 2026-10-23
+
+- [ ] In real Excel (Windows, Mac, the web): the hidden file input of « Importer un fichier » opens the
+      system's file chooser inside the task pane (proven in the harness E2E in Chrome only).
+- [ ] A Factur-X from a real supplier (not made by our own `toFacturXPdf`), and a UBL from another
+      platform, uploaded once: read, the right supplier and number, B2 takes the price.
+
 ## Owner decisions
 
 - [ ] **Which plans get the connector.** Now every plan (`docs/DEFERRED.md` › The connector gated by
       plan). The architecture document proposed external connectors from « Croissance »; the review of
       2026-10-22 proposed every plan until the pilot shows how it is used (Graph costs nothing per call,
       20 files per connection). Gating it is a small change plus a test.
-- [ ] **The CGU.** A draft of the connectors' articles (OneDrive; Google Drive since R5):
-      `docs/CGU_ONEDRIVE.md` (French). A lawyer reviews it with the rest of the CGU; then `TERMS_URL`
-      and a new `TERMS_VERSION`.
+- [ ] **Plain PDF invoices (R6).** An uploaded PDF without Factur-X data is refused now
+      (`upload_plain_pdf`: « demandez à votre fournisseur sa facture au format Factur-X, UBL ou CII »).
+      Reading it would need text extraction or OCR plus a model to find the supplier, number and lines:
+      a model reading invoices (pseudonymized? the supplier's names are what it must read), errors to
+      explain, a cost per page. The architecture document left it to the owner: keep refusing, or build
+      it (`docs/DEFERRED.md` › Reading a plain PDF invoice).
+- [ ] **The CGU.** A draft of the connectors' articles (OneDrive; Google Drive since R5; uploaded
+      files since R6): `docs/CGU_ONEDRIVE.md` (French). A lawyer reviews it with the rest of the
+      CGU; then `TERMS_URL` and a new `TERMS_VERSION`. 

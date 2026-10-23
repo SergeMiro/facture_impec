@@ -917,3 +917,45 @@ before the work:
 | Acceptance | `apps/addin/e2e/harness.spec.ts` › Google Drive: the same order in a Google Sheets file, changed there (the link opens Google's window, « 1 fichier(s) de Google Drive ajouté(s) », the sheet included, the price changed to 400 in Google Sheets → B1 300 € in « Contrôles », disconnecting removes it), green in local Chrome on 2026-10-23 (browser: local). Also `google.test.ts` › connects… and the controller test › finds the 300 €… |
 | Audit and RGPD | Audit: `connection.connect`, `connected_file.pick` (actor `user`), `source.read` (actor `connector:google`), `connection.watch`, `connection.disconnect` (asserted in `google.test.ts`). `google.test.ts` › exports the account without its token, and revokes it when the company is deleted (RGPD). `docs/RGPD.md` (Google Drive connection, files), `docs/DEFERRED.md` (Sheets API, the JS picker, a folder, several accounts, `changes.list`, Testing mode), `docs/ARCHITECTURE.md` › What R5 added and its decisions, `docs/GOOGLE.md`, `docs/RUNBOOK.md` › Google Drive connector, `docs/CGU_ONEDRIVE.md` › Article [Y]. Migration `0016_google.sql`. Left with the owner: `docs/TODO.md` › Google Drive connector (R5). |
 | Gate | `pnpm verify` green on 2026-10-23 (tests with `--concurrency=1`): api 270, core 649 (branches 93.1 %) + oracle 276, agents 121 (branches 91.86 %), add-in 81, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local): harness 35 s, B2Brouter stand-in 39 s. |
+
+## R6 — Files uploaded (started 2026-10-23)
+
+R4 and R5 read files a company keeps in a cloud; R6 takes the files it keeps anywhere else: a person
+uploads them from the pane. Architecture document: « xlsx, csv, Factur-X, UBL, CII; обычные PDF — по
+решению владельца »; done when « загруженный Factur-X поставщика даёт себестоимость для B2 ».
+Criteria, written here before the work:
+
+- **Upload from « Registre »**: « Importer un fichier » takes an .xlsx, .xlsm or .csv workbook, a
+  Factur-X PDF, or a UBL or CII invoice (.xml), 10 MB at most. What it is is read from its bytes, not
+  only its name.
+- **Workbooks as R4's files**: an uploaded workbook's sheets are proposed and included exactly as a
+  OneDrive file's (the same detection, the same « Inclure cette feuille »). Uploading a file of the
+  same name again replaces it: its included sheets are read again, and the same content twice writes
+  nothing.
+- **Supplier invoices give their prices**: a Factur-X, UBL or CII invoice addressed to the company is
+  read with the M6 readers into a bought document of the registry (its supplier noted, R3): B2 takes
+  its prices as the cost. An invoice the platform already delivered (same supplier and number) is not
+  counted twice. It does not enter « Réception » nor the accountant's export.
+- **Calm when it cannot**: a plain PDF (no Factur-X data), a file too large, unreadable or of another
+  kind, an invoice for another company or the company's own: the pane says what happened and that
+  nothing was kept. Plain PDFs wait for the owner's decision (`docs/TODO.md`).
+- **Removing deletes**: « Retirer » deletes the file, its sheets and what they gave; the checks run
+  again; invoices stay.
+- **Acceptance** (architecture document): a supplier's Factur-X uploaded → its price is the cost of
+  the article, and a sale under it is found by B2. In `pnpm verify` and in the E2E.
+- **Audit and RGPD**: uploading, replacing and removing write an audit event; the files (name, kind,
+  when, by whom; never their content) are in the export, and the erasure deletes them with what they
+  gave; `docs/RGPD.md`, `docs/DEFERRED.md`, `docs/ARCHITECTURE.md` updated.
+
+### Evidence (2026-10-23)
+
+| Criterion | Evidence |
+|---|---|
+| Upload from « Registre » | `apps/api/src/uploads.test.ts` › an uploaded workbook › has its sheets included like a picked file… (raw bytes on `POST /uploads?name=`, an .xlsx read as a workbook), › reads a CSV file…; › an uploaded supplier invoice › is read from UBL or CII…; › a file the pane cannot take › is refused… (a .png renamed 415, too large 413). `apps/addin/src/ui/RegistryView.tsx` › « Fichiers importés », the input accepts `.xlsx,.xlsm,.csv,.pdf,.xml`. Migration `0017_uploads.sql`. |
+| Workbooks as R4's files | `uploads.test.ts` › has its sheets included like a picked file, and is read again when replaced (the same detection and inclusion as a OneDrive file, the same name replaces and reads the included sheets again, the same bytes write nothing, B1 found from the uploaded order). |
+| Supplier invoices give their prices | `apps/api/src/purchases.test.ts` › a supplier invoice uploaded from the pane (R6) › gives the cost: its Factur-X uploaded, B2 finds the 50 € lost; delivered later, it counts once (the evidence names the file; nothing in `/inbound`; the platform's copy replaces it, the file shows « received »). `uploads.test.ts` › is read from UBL or CII, and is replaced under its own name only (the duplicate message names the first file). |
+| Calm when it cannot | `uploads.test.ts` › a file the pane cannot take › is refused with what happened, and nothing is kept (plain PDF, image, empty, broken zip, HTML, too large, the company's own invoice, another buyer, a blank name; no audit, nothing stored), › is not reached from another company (404). `packages/core/src/pdf/pdf.test.ts` › refuses a printed PDF whose catalog has no names, as one without invoice XML (it crashed pdf-lib before). `apps/addin/src/controller.test.ts` › files uploaded from the pane (R6) › says calmly what it cannot take… Plain PDFs: `docs/TODO.md` › Plain PDF invoices (R6). |
+| Removing deletes | `uploads.test.ts` › reads a CSV file, and « Retirer » deletes the file and what it gave; `purchases.test.ts` (R6) › after « Retirer » B2 is back to its earlier amount. Controller › … « Retirer le fichier » takes the cost away. |
+| Acceptance | `apps/addin/e2e/harness.spec.ts` › Fichiers importés: a supplier Factur-X gives the cost of « Journée de conseil » (the Factur-X PDF of Conseil Partenaires chosen in « Importer un fichier », the notice, « Sur la facture F2026-101, … (la facture CP-2026-77 de Conseil Partenaires) » in « Contrôles », gone after « Retirer le fichier »), green in local Chrome on 2026-10-23 (browser: local). Also `purchases.test.ts` (R6) and controller › takes a supplier invoice: its price is the cost, and B2 finds the loss. |
+| Audit and RGPD | Audit: `upload.add`, `upload.replace`, `upload.remove` (asserted in `uploads.test.ts`), `source.include` for the sheets. `uploads.test.ts` › RGPD › exports the files without their content, and erases them with the account. `docs/RGPD.md` (files uploaded from the pane), `docs/DEFERRED.md` (the invoice in « Réception » and the export, plain PDFs, several files, an object store), `docs/ARCHITECTURE.md` › What R6 added and its decisions, `docs/RUNBOOK.md` › Files uploaded from the pane (R6), `docs/CGU_ONEDRIVE.md` › Article [Z]. Left with the owner: `docs/TODO.md` › Files uploaded (R6). |
+| Gate | `pnpm verify` green on 2026-10-23 (tests with `--concurrency=1`): api 277, core 650 (branches 93.04 %) + oracle 276, agents 121 (branches 91.86 %), add-in 83, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local): harness 36 s, B2Brouter stand-in 38 s. |

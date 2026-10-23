@@ -45,6 +45,7 @@ import {
   sql,
   type TenantRow,
   tenants,
+  uploads,
   users,
   validationResults,
   weeklyReports,
@@ -104,6 +105,7 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     picked,
     exceptions,
     synonyms,
+    uploaded,
   ] = await Promise.all([
     db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
     db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
@@ -193,6 +195,7 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       .from(itemSynonyms)
       .where(eq(itemSynonyms.tenantId, tenant.id))
       .orderBy(asc(itemSynonyms.createdAt)),
+    db.select().from(uploads).where(eq(uploads.tenantId, tenant.id)).orderBy(asc(uploads.name)),
   ]);
   const sheetOf = new Map(sheets.map((s) => [s.id, s.sheet]));
   const itemKeys = new Map(articles.map((a) => [a.id, a.key]));
@@ -241,6 +244,7 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       type: s.type,
       workbookId: s.workbookId,
       fileId: s.fileId,
+      uploadId: s.uploadId,
       sheet: s.sheet,
       kind: s.kind,
       layout: s.layout,
@@ -256,6 +260,19 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       status: c.status,
       connectedAt: c.connectedAt.toISOString(),
       checkedAt: c.checkedAt?.toISOString() ?? null,
+    })),
+    /** R6: the files uploaded from the pane, never their content (what they gave is in `registry`). */
+    uploads: uploaded.map((u) => ({
+      id: u.id,
+      name: u.name,
+      format: u.format,
+      size: u.size,
+      sha256: u.sha256,
+      sheets: u.sheets,
+      supplierKey: u.supplierKey,
+      number: u.number,
+      uploadedBy: u.uploadedBy,
+      uploadedAt: u.uploadedAt.toISOString(),
     })),
     connectedFiles: picked.map((f) => ({
       id: f.id,
@@ -336,6 +353,7 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
         kind: d.kind,
         invoiceId: d.invoiceId,
         inboundId: d.inboundId,
+        uploadId: d.uploadId,
         sheet: d.sourceId ? (sheetOf.get(d.sourceId) ?? null) : null,
         sheetKey: d.sourceKey,
         orderRef: d.orderRef,
@@ -499,6 +517,8 @@ export async function deleteTenant(
     // The connected account's token and its picked files (R4).
     await tx.delete(connectedFiles).where(eq(connectedFiles.tenantId, tenant.id));
     await tx.delete(connections).where(eq(connections.tenantId, tenant.id));
+    // The files uploaded from the pane (R6), their bytes with them.
+    await tx.delete(uploads).where(eq(uploads.tenantId, tenant.id));
     // Chasing drafts quote the customer: no plan outlives the deletion, and the advice notes kept
     // on transmitted invoices lose their drafted reply.
     await tx.delete(chasePlans).where(eq(chasePlans.tenantId, tenant.id));

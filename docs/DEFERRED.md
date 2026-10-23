@@ -5,7 +5,7 @@ Each line says where it came from and what would bring it back.
 
 | Item | Origin | Bring back when |
 |---|---|---|
-| Import of PDF invoices (text extraction + regex field extractor, `/api/import`) | MVP Phase 5 (`crates/facture-backend/src/ocr` on tag `archive/rust-mvp-v1`) | A pilot customer keeps invoices as PDFs instead of Excel rows. |
+| Import of PDF invoices (text extraction + regex field extractor, `/api/import`) | MVP Phase 5 (`crates/facture-backend/src/ocr` on tag `archive/rust-mvp-v1`); R6 takes Factur-X, UBL and CII, and refuses a plain PDF | A pilot customer keeps invoices as PDFs instead of Excel rows; see « Reading a plain PDF invoice » below. |
 | Word documents as input | MVP Phase 6 idea | Never for emission (a .docx is not structured); maybe extraction, on demand. |
 | Turborepo remote cache | M0 scaffold | CI runs on GitHub again and builds get slow. |
 | Golden input as `.xlsx` (plan §2 `fixtures/golden/*.xlsx`) | M1: the golden input is the invoice model as JSON | M3, with the MappingAgent: the spreadsheet → model step is its job. |
@@ -133,6 +133,10 @@ Each line says where it came from and what would bring it back.
 | Several Google accounts per company | R5: one account (`connector_other_account`), 20 files | A company keeps orders in a colleague's Drive. |
 | `changes.list` instead of one version check per file | R5: a notification queues the connection's check, which asks each picked file's version | Companies follow enough files that the checks hit Drive's quotas. |
 | Refresh tokens in Google's « Testing » mode | R5 needs the consent screen « In production »: in Testing, Google expires refresh tokens after 7 days | Never on purpose: the owner publishes the consent screen before the first real company (`docs/TODO.md`). |
+| An uploaded supplier invoice in « Réception » and the accountant's export | R6: it is a bought document of the registry only (B2's cost), never a received invoice with a status | A pilot company receives supplier invoices outside the platform during the transition and wants them in its export: needs a status and a payment to follow, as `inbound_queue`. |
+| Reading a plain (printed or scanned) PDF invoice | R6: refused with `upload_plain_pdf`; the MVP's text extractor is on tag `archive/rust-mvp-v1` | The owner decides it (`docs/TODO.md` › Files uploaded): OCR or a model, its errors and its cost. |
+| Several files in one upload, a zip, drag and drop | R6: one file per « Importer un fichier » | People upload a month of supplier invoices at once. |
+| Uploaded files kept in an object store instead of the database | R6: a workbook's bytes in `uploads.content` (base64, 10 MB at most); an invoice only as read | Uploads weigh on the database's size or its backups. |
 | Lifecycle notifications (`lifecycleNotificationUrl`: subscription removed, reauthorization) | R4: a lost subscription is found at the next check and created again; the hourly check covers the gap | Notifications go missing for long enough that people notice. |
 | Revoking the app's access at Microsoft from « Déconnecter » | R4: « Déconnecter » deletes our tokens and the subscription; the consent stays in the person's Microsoft account until they withdraw it there. For a personal account that is `https://account.live.com/consent/Manage` (seen 2026-10-22, `docs/MICROSOFT365.md` TODO(verify) 6); a work account's is not known yet | The pane links to that page after a disconnect once a work account's page is known too, or a pilot user asks where to withdraw it. |
 | One consent instead of two on a personal account | 2026-10-22: the first « Choisir des fichiers » asks once more (the picker's `OneDrive.ReadOnly`), after the consent of « Connecter OneDrive » | Pilot users stop at the second screen: ask `OneDrive.ReadOnly` with the first sign-in (`extraScopesToConsent`), after checking it on a real account. |

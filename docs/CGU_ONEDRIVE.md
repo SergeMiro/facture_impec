@@ -99,6 +99,25 @@ refuse ou retire l'accès, la lecture s'arrête, les documents déjà lus resten
 propose de vous reconnecter. Un administrateur Google Workspace peut interdire l'application à ses
 utilisateurs.
 
+## Article [Z] — Fichiers que vous importez (R6, draft of 2026-10-23)
+
+Written from `docs/RGPD.md` › Files uploaded from the pane and `docs/ARCHITECTURE.md` › What R6 added.
+
+**[Z].1 Ce que vous pouvez importer.** Depuis l'onglet « Registre », « Importer un fichier » accepte
+un classeur Excel (.xlsx, .xlsm) ou un fichier CSV, et une facture de fournisseur au format Factur-X
+(PDF), UBL ou CII (XML), dix mégaoctets au plus. Une facture seulement imprimée en PDF n'est pas lue
+[à ce jour].
+
+**[Z].2 Ce que nous en faisons.** Un classeur est conservé pour lire les feuilles que vous confirmez,
+comme un fichier OneDrive ou Google Drive. Une facture de fournisseur est lue pour en tirer vos prix
+d'achat, que les contrôles comparent à vos prix de vente ; elle n'est ni payée, ni transmise, ni
+ajoutée à l'export pour votre comptable. Une facture qui vous est aussi parvenue par votre plateforme
+n'est comptée qu'une fois.
+
+**[Z].3 Conservation et suppression.** Un fichier importé est conservé jusqu'à ce que vous le retiriez
+(« Retirer le fichier ») ou supprimiez votre compte ; il est alors supprimé avec les documents qu'il a
+donnés. Importer un fichier du même nom le remplace.
+
 ---
 
 Also needed elsewhere in the CGU, from `docs/RGPD.md` (owner decisions): the person who accepts the CGU

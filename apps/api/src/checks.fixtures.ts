@@ -1,9 +1,17 @@
 // The sheets of the checks tests (R2, R8): an order sheet and an invoice sheet in the 300/400 shape,
 // and a company that reads them into its registry through the API.
-import { detectMapping, type GridCell, grid } from '@fi/core';
+import {
+  computeInvoice,
+  detectMapping,
+  frenchVatKey,
+  type GridCell,
+  grid,
+  InvoiceDraft,
+} from '@fi/core';
 import type { Database } from '@fi/db';
 import { and, auditEvents, eq, invoices } from '@fi/db';
 import { expect } from 'vitest';
+import { SCENARIO_SELLER } from './scenarios/invoice';
 import { newTenant, type testApi } from './test-helpers';
 import type { SyncResult } from './workbooks';
 
@@ -173,3 +181,57 @@ export const companies =
       invoiceId,
     };
   };
+
+export const SUPPLIER = { siren: '600000004', name: 'Grossiste Martin SAS' };
+
+/**
+ * The invoice « Grossiste Martin SAS » sends the company: 10 « Chaise pliante » at 35 € (R3, R6).
+ * `parties`: another seller or buyer, for an invoice the company must not take as a purchase.
+ */
+export function supplierDocument(
+  number: string,
+  price: string,
+  parties: { seller?: string; buyer?: string } = {},
+) {
+  const seller = parties.seller ?? SUPPLIER.siren;
+  const buyer = parties.buyer ?? SCENARIO_SELLER.siren;
+  const vatId = (siren: string) => `FR${frenchVatKey(siren)}${siren}`;
+  const draft = InvoiceDraft.parse({
+    processType: 'M1',
+    number,
+    issueDate: '2026-09-05',
+    typeCode: '380',
+    currency: 'EUR',
+    dueDate: '2026-10-05',
+    paymentTerms: 'Paiement à 30 jours.',
+    notes: [],
+    seller: {
+      name: SUPPLIER.name,
+      legalId: { id: seller, scheme: '0002' },
+      vatId: vatId(seller),
+      electronicAddress: { id: seller, scheme: '0225' },
+      address: { line1: '8 avenue du Port', city: 'Lyon', postCode: '69002', country: 'FR' },
+    },
+    buyer: {
+      name: SCENARIO_SELLER.name,
+      legalId: { id: buyer, scheme: '0002' },
+      vatId: vatId(buyer),
+      electronicAddress: { id: buyer, scheme: '0225' },
+      address: { line1: '12 rue des Lilas', city: 'Dijon', postCode: '21000', country: 'FR' },
+    },
+    delivery: { date: '2026-09-05' },
+    payment: { meansCode: '30', accounts: [{ iban: 'FR7630006000011234567890189' }] },
+    lines: [
+      {
+        id: '1',
+        quantity: '10',
+        unitCode: 'H87',
+        price: { net: price },
+        vat: { category: 'S', rate: '20' },
+        item: { name: 'Chaise pliante', sellerId: 'GM-CH-01' },
+        nature: 'goods',
+      },
+    ],
+  });
+  return computeInvoice(draft);
+}

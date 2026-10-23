@@ -1,23 +1,18 @@
 // Purchases and margin (R3), end to end: a supplier invoice the platform delivers and a row of the
 // « Achats » sheet give a sold line its cost; « produit vendu sous son prix d'achat » blocks the send,
 // a margin under the company's minimum warns, « Ce n'est pas le même article » makes the next purchase
-// count, and the supplier joins the company's parties without becoming a customer.
-import {
-  computeInvoice,
-  detectMapping,
-  frenchVatKey,
-  type GridCell,
-  grid,
-  InvoiceDraft,
-  toCii,
-} from '@fi/core';
+// count, and the supplier joins the company's parties without becoming a customer. R6: a supplier's
+// Factur-X uploaded from the pane gives the cost the same way.
+import { detectMapping, type GridCell, grid, toCii } from '@fi/core';
+import { toFacturXPdf } from '@fi/core/pdf';
 import type { Database } from '@fi/db';
-import { and, auditEvents, eq, links, parties } from '@fi/db';
+import { and, auditEvents, docs, eq, links, parties } from '@fi/db';
 import type { InboundInvoice } from '@fi/pdp-adapter';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { checkNow } from './checks';
-import { SCENARIO_SELLER } from './scenarios/invoice';
+import { supplierDocument } from './checks.fixtures';
 import {
+  FONTS,
   fakeAdapter,
   newTenant,
   type RecordedJobs,
@@ -93,50 +88,7 @@ const invoiceSheet = (number: string, order: string | null, quantity: number, pr
     ],
   ]);
 
-const SUPPLIER = { siren: '600000004', name: 'Grossiste Martin SAS' };
-
-/** The invoice « Grossiste Martin SAS » sends the company: 10 « Chaise pliante » at 35 €. */
-function supplierInvoice(number: string, price: string) {
-  const vatId = (siren: string) => `FR${frenchVatKey(siren)}${siren}`;
-  const draft = InvoiceDraft.parse({
-    processType: 'M1',
-    number,
-    issueDate: '2026-09-05',
-    typeCode: '380',
-    currency: 'EUR',
-    dueDate: '2026-10-05',
-    paymentTerms: 'Paiement à 30 jours.',
-    notes: [],
-    seller: {
-      name: SUPPLIER.name,
-      legalId: { id: SUPPLIER.siren, scheme: '0002' },
-      vatId: vatId(SUPPLIER.siren),
-      electronicAddress: { id: SUPPLIER.siren, scheme: '0225' },
-      address: { line1: '8 avenue du Port', city: 'Lyon', postCode: '69002', country: 'FR' },
-    },
-    buyer: {
-      name: SCENARIO_SELLER.name,
-      legalId: { id: SCENARIO_SELLER.siren, scheme: '0002' },
-      vatId: 'FR88100000009',
-      electronicAddress: { id: SCENARIO_SELLER.siren, scheme: '0225' },
-      address: { line1: '12 rue des Lilas', city: 'Dijon', postCode: '21000', country: 'FR' },
-    },
-    delivery: { date: '2026-09-05' },
-    payment: { meansCode: '30', accounts: [{ iban: 'FR7630006000011234567890189' }] },
-    lines: [
-      {
-        id: '1',
-        quantity: '10',
-        unitCode: 'H87',
-        price: { net: price },
-        vat: { category: 'S', rate: '20' },
-        item: { name: 'Chaise pliante', sellerId: 'GM-CH-01' },
-        nature: 'goods',
-      },
-    ],
-  });
-  return toCii(computeInvoice(draft));
-}
+const supplierInvoice = (number: string, price: string) => toCii(supplierDocument(number, price));
 
 interface Finding {
   rule: string;
@@ -150,6 +102,7 @@ interface Finding {
     sheet: string | null;
     cell: string | null;
     inboundId: string | null;
+    file: string | null;
   }[];
 }
 
@@ -341,5 +294,72 @@ describe('« Mode test » supplier invoices', () => {
     await c.call('/inbound/test', 'POST', { kind: 'normal' }, 201);
     await c.check();
     expect(await c.suppliers()).toEqual([]);
+  });
+});
+
+describe('a supplier invoice uploaded from the pane (R6)', () => {
+  it('gives the cost: its Factur-X uploaded, B2 finds the 50 € lost; delivered later, it counts once', async () => {
+    const c = await company('wb-purchases-r6');
+    const pdf = await toFacturXPdf(supplierDocument('FA-2026-411', '35.00'), {
+      fonts: FONTS,
+      now: clock,
+    });
+    const added = await c.call('/uploads?name=Facture FA-2026-411.pdf', 'POST', pdf);
+    expect(added).toMatchObject({
+      replaced: false,
+      upload: {
+        name: 'Facture FA-2026-411.pdf',
+        format: 'facturx',
+        kind: 'invoice',
+        sheets: [],
+        invoice: {
+          number: 'FA-2026-411',
+          supplier: 'Grossiste Martin SAS',
+          lines: 1,
+          netTotal: 35_000,
+          received: false,
+        },
+      },
+    });
+    await c.syncInvoices(invoiceSheet('F-2026-142', null, 10, 30));
+    await c.check();
+
+    const b2 = (await c.findings()).find((f) => f.rule === 'B2');
+    expect(b2).toMatchObject({ severity: 'blocking', amount: 5_000 });
+    expect(b2?.message).toBe(
+      "Sur la facture F-2026-142, vous vendez 10 « Chaise pliante » à 30,00\u00a0€ l'unité, en dessous de votre prix d'achat de 35,00\u00a0€ (la facture FA-2026-411 de Grossiste Martin SAS) : 50,00\u00a0€ de perte.",
+    );
+    // The pane names the file it came from; nothing opens in « Réception ».
+    expect(b2?.evidence.find((e) => e.role === 'purchase')).toMatchObject({
+      number: 'FA-2026-411',
+      inboundId: null,
+      file: 'Facture FA-2026-411.pdf',
+    });
+    expect(await c.suppliers()).toMatchObject([{ siren: '600000004', source: 'invoice' }]);
+    expect(await c.call('/inbound')).toEqual({ inbound: [] });
+
+    // The platform delivers the same invoice: the registry keeps the received one only.
+    await c.deliver(supplierInvoice('FA-2026-411', '35.00'));
+    await c.check();
+    const bought = await database.db
+      .select()
+      .from(docs)
+      .where(and(eq(docs.tenantId, c.id), eq(docs.direction, 'in')));
+    expect(bought).toHaveLength(1);
+    expect(bought[0]?.inboundId).toEqual(expect.any(String));
+    const [again] = (await c.findings()).filter((f) => f.rule === 'B2');
+    expect(again).toMatchObject({ amount: 5_000 });
+    expect(again?.evidence.find((e) => e.role === 'purchase')?.inboundId).toEqual(
+      expect.any(String),
+    );
+    expect(await c.call('/uploads')).toMatchObject({
+      uploads: [{ name: 'Facture FA-2026-411.pdf', invoice: { received: true } }],
+    });
+
+    // Removing the file leaves the received invoice's cost.
+    const [upload] = ((await c.call('/uploads')) as { uploads: { id: string }[] }).uploads;
+    expect(await c.call(`/uploads/${upload?.id}`, 'DELETE')).toEqual({ uploads: [] });
+    await c.check();
+    expect((await c.findings()).filter((f) => f.rule === 'B2')).toMatchObject([{ amount: 5_000 }]);
   });
 });

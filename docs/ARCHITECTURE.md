@@ -777,6 +777,56 @@ without Excel (R5), `apps/addin/src/pages.test.ts` › Google's window (R5),
 | Disconnecting | Stops the channel and revokes the refresh token at Google, then deletes as R4 | Unlike Microsoft, Google revokes the app's access with one call: the person is left with nothing to clean up. |
 | Error messages | R4's codes, with the provider's name as a parameter | One set of messages; the pane names « OneDrive » or « Google Drive ». |
 
+## What R6 added: files uploaded from the pane
+
+R4 and R5 read files kept in a cloud; R6 takes a file kept anywhere else. From « Registre », « Importer
+un fichier » sends it to the API, which reads it once and keeps it: a workbook (.xlsx, .xlsm, .csv)
+whose sheets are then included like a picked file's, or a supplier invoice (Factur-X PDF, UBL or CII
+XML) read into the registry as bought, where B2 takes its prices as the cost. Criteria in
+`docs/PROGRESS.md` R6.
+
+```
+pane « Importer un fichier » ─► POST /uploads?name=… (the bytes as the body, 10 MB at most)
+     ─► what it is, from its bytes: %PDF → Factur-X XML (none: refused), PK → workbook, < → UBL/CII
+     ─► workbook: readSheetFile ─► uploads row (bytes in base64, its sheets)
+     ─► invoice: parseInvoiceXml ─► not the company's own, not another buyer's, not one in twice
+                 ─► uploads row (the Invoice as read, supplier key, number)
+     ─► registry job ─► refreshRegistry projects the invoice: a doc `in`, supplier noted (R3)
+« Inclure cette feuille » ─► /uploads/:id/sheets/:sheet[/detect] ─► R4's includeSource / readSource
+the same name again ─► replaced: a workbook keeps its row, its included sheets are read again
+the platform delivers the same invoice later ─► the registry keeps the received one only
+« Retirer le fichier » ─► DELETE /uploads/:id ─► the file, its sheets, its documents (cascade)
+```
+
+| Path | What it does |
+|---|---|
+| `apps/api/src/uploads.ts` | `addUpload` (`readUpload` by the bytes, `checkInvoice`), `detectUploadSheet`, `includeUploadSheet`, `ownUpload`, `removeUpload`, `listUploads`; a view in the shape of a picked file, plus the invoice it is. |
+| `apps/api/src/registry.ts` | A third source: uploaded invoices projected as `in` documents (`docs.upload_id`); one the platform delivered too (same supplier key and number) is removed, so it counts once; `registryBehind` covers them. |
+| `apps/api/src/sources.ts`, `checks.ts` | `includeSource` takes an owner (`{ fileId }` or `{ uploadId }`); a pane's snapshot for any sheet the API reads itself is refused; « Registre » and the findings name the uploaded file. |
+| `apps/api/src/app.ts`, `rgpd.ts` | `GET`/`POST /uploads`, `DELETE /uploads/:id`, `/uploads/:id/sheets/:sheet[/detect]`; 16 MB body limit on `/uploads`; the export lists the files without their content, the erasure deletes them. |
+| `packages/core/src/pdf/facturx.ts` | A PDF whose catalog has no `/Names` (most printed PDFs) reads as « no Factur-X data » instead of crashing pdf-lib. |
+| `apps/addin/src/api.ts`, `controller.ts`, `ui/RegistryView.tsx` | « Fichiers importés » in « Registre »: a hidden file input, the same card as a picked file (an invoice shows its number, supplier, lines and amount), « Retirer le fichier ». |
+
+Table: migration `0017_uploads.sql` (`uploads`; `sources.upload_id` and `docs.upload_id`, both
+cascading from the upload; `sources.type` takes `upload`).
+
+Tests: `apps/api/src/uploads.test.ts`, `apps/api/src/purchases.test.ts` › a supplier invoice uploaded
+from the pane (R6), `packages/core/src/pdf/pdf.test.ts` › a printed PDF, `apps/addin/src/controller.test.ts`
+› files uploaded from the pane (R6), `apps/addin/e2e/harness.spec.ts` › Fichiers importés.
+
+### Decisions taken in R6
+
+| Topic | Decision | Why |
+|---|---|---|
+| What a file is | Read from its first bytes, the name only to tell .xlsm from .xlsx and to recognise a CSV | A renamed file is common; the bytes cannot lie about being a PDF, a zip or XML. |
+| How it is sent | The bytes as the request body, the name in `?name=` | No multipart parser for one file; the body limit is the same middleware as the sheets'. |
+| Where the file is kept | A workbook's bytes in the database (base64), to read a sheet when it is included later; an invoice only as read (the `Invoice`) | One table, erased with the account; no file store to run for the pilot. |
+| An uploaded supplier invoice | A bought document of the registry only: not in « Réception », not in the accountant's export | « Réception » is what the platform delivered, with its legal status; an uploaded copy has none (`docs/DEFERRED.md`). |
+| The same invoice twice | Refused under another name (`upload_duplicate`), or when the platform already delivered it (`upload_already_received`); delivered after the upload, the received one wins | B2 must not take a cost twice, and the received invoice is the one with a status. |
+| Not a purchase | The company's own invoice and one addressed to another SIREN are refused | Its own invoices come from its sheet; another buyer's is a wrong file. |
+| The same name again | Replaces the file; a workbook keeps its row so its included sheets are read again | What a person expects from saving a new version; R1's idempotence makes the same content free. |
+| A plain PDF | Refused with a message that says why (`upload_plain_pdf`) | Reading a printed invoice needs OCR and a model, with errors to explain: the owner's decision (`docs/TODO.md`). |
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

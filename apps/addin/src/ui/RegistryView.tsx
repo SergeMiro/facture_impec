@@ -1,8 +1,8 @@
 // Registre (R1): the workbook's other sheets — orders, delivery notes, purchases, price lists. The
 // company says what a sheet holds once (« Inclure cette feuille »); then every change to it is read
 // into the registry next to the invoices, and « Retirer » takes it out again. « Fichiers OneDrive »
-// (R4) and « Fichiers Google Drive » (R5): sheets of files the API reads itself, without the file
-// being open.
+// (R4), « Fichiers Google Drive » (R5) and « Fichiers importés » (R6): sheets of files the API reads
+// itself, without the file being open; an imported supplier invoice gives its prices as the cost.
 import {
   fieldAllowed,
   frDate,
@@ -32,8 +32,8 @@ import {
   Text,
   tokens,
 } from '@fluentui/react-components';
-import { useEffect, useState } from 'react';
-import type { ConnectedFile, DriveProvider, Source } from '../api';
+import { useEffect, useRef, useState } from 'react';
+import type { ConnectedFile, FileOwner, Source, UploadView } from '../api';
 import type { Header, Inclusion } from '../controller';
 import { parisDateTime, parisTime, useFi } from './context';
 
@@ -102,6 +102,7 @@ const GOOGLE_ACCOUNT: Record<'personal' | 'work', MessageKey> = {
 const NAMES = {
   microsoft: { drive: 'OneDrive', company: 'Microsoft' },
   google: { drive: 'Google Drive', company: 'Google' },
+  upload: { drive: '', company: '' },
 } as const;
 
 const PROBLEM: Record<string, MessageKey> = {
@@ -168,6 +169,7 @@ export function RegistryView() {
 
       <ConnectorSection />
       <GoogleSection />
+      <UploadSection />
 
       <Text weight="semibold">{t('addin.registry.totals')}</Text>
       {!registry ? (
@@ -558,11 +560,64 @@ function GoogleSection() {
   );
 }
 
-/** A picked file: why it is not read (if so), and each sheet with « Inclure » or what it gave. */
-function FileCard({ file, provider }: { file: ConnectedFile; provider: DriveProvider }) {
+/** The files the browser lets the person choose (R6); what they are is read from their bytes. */
+const UPLOAD_ACCEPT = '.xlsx,.xlsm,.csv,.pdf,.xml';
+
+/** « Fichiers importés » (R6): files uploaded from the pane, workbooks or supplier invoices. */
+function UploadSection() {
+  const styles = useStyles();
+  const [state, fi] = useFi();
+  const input = useRef<HTMLInputElement>(null);
+  const uploads = state.uploads;
+  if (!uploads) return null;
+  const busy = state.busy.includes('upload');
+  return (
+    <section className={styles.section} aria-labelledby="upload-title" data-testid="upload">
+      <Text weight="semibold" id="upload-title">
+        {t('addin.upload.title')}
+      </Text>
+      <Caption1>{t('addin.upload.intro')}</Caption1>
+      <input
+        ref={input}
+        type="file"
+        accept={UPLOAD_ACCEPT}
+        hidden
+        data-testid="upload-input"
+        onChange={(e) => {
+          const file = e.currentTarget.files?.[0];
+          // The same file chosen twice must fire again.
+          e.currentTarget.value = '';
+          if (file) void fi.uploadFile(file, file.name);
+        }}
+      />
+      <span className={styles.line}>
+        <Button size="small" onClick={() => input.current?.click()} disabled={busy}>
+          {t('addin.upload.choose')}
+        </Button>
+        {busy && <Spinner size="tiny" />}
+      </span>
+      {uploads.length > 0 && (
+        <ul className={styles.list}>
+          {uploads.map((f) => (
+            <li key={f.id}>
+              <FileCard file={f} provider="upload" />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/**
+ * A picked or uploaded file: why it is not read (if so), and each sheet with « Inclure » or what it
+ * gave; an uploaded supplier invoice, what it says.
+ */
+function FileCard({ file, provider }: { file: ConnectedFile | UploadView; provider: FileOwner }) {
   const styles = useStyles();
   const [state, fi] = useFi();
   const busy = state.busy.includes(`file:${file.id}`);
+  const invoice = 'invoice' in file ? file.invoice : null;
   return (
     <Card className={styles.card} data-testid={`file-${file.name}`}>
       <span className={styles.line}>
@@ -580,6 +635,22 @@ function FileCard({ file, provider }: { file: ConnectedFile; provider: DriveProv
         <Caption1 className={styles.muted}>
           {t('addin.connector.changedAt', { time: parisDateTime(file.changedAt) })}
         </Caption1>
+      )}
+      {invoice && (
+        <Caption1>
+          {t('addin.upload.invoice', {
+            number: invoice.number ?? '—',
+            supplier: invoice.supplier ?? '—',
+            lines: invoice.lines,
+            amount:
+              invoice.netTotal === null
+                ? '—'
+                : frMoney(invoice.netTotal, invoice.currency ?? 'EUR'),
+          })}
+        </Caption1>
+      )}
+      {invoice?.received && (
+        <Caption1 className={styles.muted}>{t('addin.upload.received')}</Caption1>
       )}
       <ul className={styles.list}>
         {file.sheets.map((s) => {
@@ -641,7 +712,7 @@ function FileCard({ file, provider }: { file: ConnectedFile; provider: DriveProv
           onClick={() => void fi.removeFile(file.id)}
           disabled={busy}
         >
-          {t('addin.connector.removeFile')}
+          {t(provider === 'upload' ? 'addin.upload.remove' : 'addin.connector.removeFile')}
         </Button>
       </span>
     </Card>

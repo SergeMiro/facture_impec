@@ -731,7 +731,7 @@ export async function includeFileSheet(
   provider: ConnectionProvider = 'microsoft',
 ) {
   const { file, snapshot } = await fileSheet(deps, tenant.id, fileId, layout.sheet, provider);
-  return includeSource(deps, tenant, principal, file.id, { layout, snapshot }, file.id);
+  return includeSource(deps, tenant, principal, file.id, { layout, snapshot }, { fileId: file.id });
 }
 
 /** A sheet of a picked file taken out (src/sources.ts removeSource), once the file is the provider's. */

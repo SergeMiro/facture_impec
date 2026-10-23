@@ -714,14 +714,16 @@ export const sources = pgTable(
     tenantId: uuid('tenant_id')
       .notNull()
       .references(() => tenants.id),
-    /** A sheet of the open workbook (R1), or of a file the API reads itself (R4). */
-    type: text('type', { enum: ['sheet', 'file'] })
+    /** A sheet of the open workbook (R1), of a file the API reads itself (R4), or uploaded (R6). */
+    type: text('type', { enum: ['sheet', 'file', 'upload'] })
       .notNull()
       .default('sheet'),
-    /** The open workbook's id; for a file, its `connected_files` id. */
+    /** The open workbook's id; for a file, its `connected_files` id; for an upload, its `uploads` id. */
     workbookId: text('workbook_id').notNull(),
     /** A sheet of a picked file: it goes with the file. */
     fileId: uuid('file_id').references(() => connectedFiles.id, { onDelete: 'cascade' }),
+    /** A sheet of an uploaded workbook (R6): it goes with the upload. */
+    uploadId: uuid('upload_id').references(() => uploads.id, { onDelete: 'cascade' }),
     sheet: text('sheet').notNull(),
     profileId: uuid('profile_id').references(() => layoutProfiles.id),
     kind: text('kind', { enum: DOC_KINDS }).notNull(),
@@ -792,6 +794,8 @@ export const docs = pgTable(
       .default('invoice'),
     invoiceId: uuid('invoice_id').references(() => invoices.id),
     inboundId: uuid('inbound_id').references(() => inboundQueue.id),
+    /** A supplier invoice uploaded from the pane (R6): it goes with the upload. */
+    uploadId: uuid('upload_id').references(() => uploads.id, { onDelete: 'cascade' }),
     /** A document read from an included sheet: the sheet, and its key there (number, or `row:14`). */
     sourceId: uuid('source_id').references(() => sources.id, { onDelete: 'cascade' }),
     sourceKey: text('source_key'),
@@ -816,6 +820,7 @@ export const docs = pgTable(
   (t) => [
     uniqueIndex('docs_invoice').on(t.invoiceId),
     uniqueIndex('docs_inbound').on(t.inboundId),
+    uniqueIndex('docs_upload').on(t.uploadId),
     uniqueIndex('docs_source').on(t.sourceId, t.sourceKey),
     index('docs_tenant').on(t.tenantId, t.direction, t.issueDate),
   ],
@@ -1168,6 +1173,43 @@ export const connectedFiles = pgTable(
   (t) => [uniqueIndex('connected_files_item').on(t.tenantId, t.driveId, t.itemId)],
 );
 
+export const UPLOAD_FORMATS = ['xlsx', 'xlsm', 'csv', 'facturx', 'ubl', 'cii'] as const;
+export type UploadFormat = (typeof UPLOAD_FORMATS)[number];
+
+/**
+ * A file a person uploaded from the pane (R6): a workbook whose sheets are included like a picked
+ * file's, or a supplier invoice (Factur-X, UBL, CII) read into the registry as bought. One per name: the
+ * same name again replaces it.
+ */
+export const uploads = pgTable(
+  'uploads',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    name: text('name').notNull(),
+    format: text('format', { enum: UPLOAD_FORMATS }).notNull(),
+    size: integer('size').notNull(),
+    /** SHA-256 of the bytes: the same file again changes nothing. */
+    sha256: text('sha256').notNull(),
+    /** A workbook's bytes in base64, to read its sheets when they are included; null for an invoice. */
+    content: text('content'),
+    /** A workbook's sheets, in its order. */
+    sheets: jsonb('sheets_json').$type<string[]>().notNull().default([]),
+    /** An invoice: what it says, as read (the registry is projected from it). */
+    parsed: jsonb('parsed_json').$type<Invoice>(),
+    /** An invoice's supplier (core supplierKey) and number: the same one twice is counted once. */
+    supplierKey: text('supplier_key'),
+    number: text('number'),
+    uploadedBy: text('uploaded_by').notNull(),
+    uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('uploads_name').on(t.tenantId, t.name)],
+);
+
 /** Stripe events already applied: an endpoint may receive the same event twice (docs/BILLING.md). */
 export const stripeEvents = pgTable('stripe_events', {
   id: text('id').primaryKey(),
@@ -1176,6 +1218,7 @@ export const stripeEvents = pgTable('stripe_events', {
 });
 
 export type TenantRow = typeof tenants.$inferSelect;
+export type UploadRow = typeof uploads.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type AgentRunRow = typeof agentRuns.$inferSelect;
 export type SheetMappingRow = typeof sheetMappings.$inferSelect;

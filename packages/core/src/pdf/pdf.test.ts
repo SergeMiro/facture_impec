@@ -113,6 +113,20 @@ describe('readFacturXPdf', () => {
     await expect(readFacturXPdf(await plain.save())).rejects.toMatchObject({ reason: 'no-xml' });
   });
 
+  it('refuses a printed PDF whose catalog has no names, as one without invoice XML', async () => {
+    const printed = [
+      '%PDF-1.4',
+      '1 0 obj <</Type /Catalog /Pages 2 0 R>> endobj',
+      '2 0 obj <</Type /Pages /Kids [3 0 R] /Count 1>> endobj',
+      '3 0 obj <</Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]>> endobj',
+      'trailer <</Root 1 0 R>>',
+      '%%EOF',
+    ].join('\n');
+    await expect(readFacturXPdf(new TextEncoder().encode(printed))).rejects.toMatchObject({
+      reason: 'no-xml',
+    });
+  });
+
   it('reads a ZUGFeRD 2.0 attachment name, even without Factur-X metadata', async () => {
     const zugferd = await PDFDocument.create();
     zugferd.addPage();

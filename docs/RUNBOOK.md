@@ -387,6 +387,22 @@ The E2E's last step does all of it. Real accounts need the owner's Google Cloud 
 « Déconnecter Google Drive » and deleting the account revoke the token at Google. Changing
 `CONNECTOR_SEALING_KEY` asks every Google connection to « Reconnecter », as for OneDrive.
 
+### Files uploaded from the pane (R6)
+
+Nothing to configure: « Registre » → « Fichiers importés » → « Importer un fichier » takes an .xlsx,
+.xlsm or .csv workbook, a Factur-X PDF, or a UBL or CII invoice (.xml), 10 MB at most. The same call
+with curl (an API key of the company; the name in the query, the bytes as the body):
+
+```bash
+curl -X POST -H "authorization: Bearer $FI_KEY" --data-binary @FA-2026-311.pdf \
+  "http://localhost:4000/uploads?name=FA-2026-311.pdf"
+curl -H "authorization: Bearer $FI_KEY" http://localhost:4000/uploads
+```
+
+A supplier invoice counts in B2 once the registry job ran (the worker, a few seconds; `checkNow` in
+tests). A plain PDF is refused until the owner decides (`docs/TODO.md`). The files live in the
+`uploads` table; a workbook's bytes are there in base64, so the table grows with them.
+
 ## Deployment
 
 The API image, the compose file and the settings of a hosted sandbox or prod: `docs/DEPLOY.md`. The

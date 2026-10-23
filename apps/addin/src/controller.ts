@@ -18,15 +18,16 @@ import {
   type BillingView,
   type ChatMessage,
   type Checks,
+  type ConnectedFile,
   type ConnectorView,
   type Degraded,
   type DirectoryCompany,
-  type DriveProvider,
   type Edit,
   type EditDecided,
   type Evidence,
   type Explained,
   type ExportFile,
+  type FileOwner,
   type FixOutcome,
   type GoogleView,
   type Inbound,
@@ -54,6 +55,7 @@ import {
   type SyncResult,
   type TestInboundKind,
   type UndoOutcome,
+  type UploadView,
   type WeeklyReport,
 } from './api';
 import { type CardCall, type ChatStatus, PaneChat, waitingCards } from './chat';
@@ -135,8 +137,8 @@ export interface Inclusion {
   sheet: string;
   detection: LayoutDetection;
   headers: Header[];
-  /** A sheet of a OneDrive (R4) or Google Drive (R5) file: the API reads it itself. */
-  file?: { id: string; name: string; provider: DriveProvider };
+  /** A sheet of a OneDrive (R4), Google Drive (R5) or uploaded (R6) file: the API reads it itself. */
+  file?: { id: string; name: string; provider: FileOwner };
 }
 
 /** R8: the conversation about one finding, as `ai`'s Chat holds it. */
@@ -204,6 +206,8 @@ export interface FiState {
   google: GoogleView | null;
   /** The address of Google's window when the pane could not open it: shown as a link. */
   googleLink: string | null;
+  /** « Fichiers importés » (R6): the files uploaded from the pane; null until loaded. */
+  uploads: UploadView[] | null;
   /**
    * Scout (R4): why the dashboard suggests « Fichiers OneDrive » once: the workbook itself is there,
    * or the company's mail is with Microsoft. Null once the person answered, or with nothing to say.
@@ -331,6 +335,7 @@ const INITIAL: FiState = {
   connector: null,
   google: null,
   googleLink: null,
+  uploads: null,
   onedriveHint: null,
   sheets: [],
   otherSheets: [],
@@ -787,6 +792,7 @@ export class Controller {
       connector: null,
       google: null,
       googleLink: null,
+      uploads: null,
       onedriveHint: null,
       sheets: [],
       otherSheets: [],
@@ -1577,7 +1583,7 @@ export class Controller {
       });
     });
     await this.#followSources();
-    await Promise.all([this.#refreshConnector(), this.#refreshGoogle()]);
+    await Promise.all([this.#refreshConnector(), this.#refreshGoogle(), this.#refreshUploads()]);
   };
 
   /** « Inclure cette feuille » / « Revoir les colonnes »: what the sheet holds. Nothing is saved. */
@@ -1780,23 +1786,27 @@ export class Controller {
     });
   };
 
-  /** A picked file, whichever section shows it. */
-  #pickedFile(fileId: string) {
+  /** A picked or uploaded file, whichever section shows it. */
+  #pickedFile(fileId: string): { file: ConnectedFile; provider: FileOwner } | null {
     const fromMicrosoft = this.#state.connector?.connection?.files.find((f) => f.id === fileId);
-    if (fromMicrosoft) return { file: fromMicrosoft, provider: 'microsoft' as const };
+    if (fromMicrosoft) return { file: fromMicrosoft, provider: 'microsoft' };
     const fromGoogle = this.#state.google?.connection?.files.find((f) => f.id === fileId);
-    return fromGoogle ? { file: fromGoogle, provider: 'google' as const } : null;
+    if (fromGoogle) return { file: fromGoogle, provider: 'google' };
+    const uploaded = this.#state.uploads?.find((f) => f.id === fileId);
+    return uploaded ? { file: uploaded, provider: 'upload' } : null;
   }
 
-  async #refreshFiles(provider: DriveProvider) {
-    await Promise.all([
-      provider === 'google' ? this.#refreshGoogle() : this.#refreshConnector(),
-      this.#refreshRegistry(),
-    ]);
+  async #refreshFiles(provider: FileOwner) {
+    const files = {
+      microsoft: () => this.#refreshConnector(),
+      google: () => this.#refreshGoogle(),
+      upload: () => this.#refreshUploads(),
+    };
+    await Promise.all([files[provider](), this.#refreshRegistry()]);
   }
 
   async #confirmFileLayout(
-    file: { id: string; name: string; provider: DriveProvider },
+    file: { id: string; name: string; provider: FileOwner },
     layout: LayoutMapping,
   ) {
     const read = await this.#act('include', () =>
@@ -1831,6 +1841,14 @@ export class Controller {
   removeFile = async (fileId: string): Promise<void> => {
     const found = this.#pickedFile(fileId);
     const name = found?.file.name;
+    if (found?.provider === 'upload') {
+      const list = await this.#act(`file:${fileId}`, () => this.api.removeUpload(fileId));
+      if (!list) return;
+      this.#set({ uploads: list.uploads });
+      this.notify('success', t('addin.upload.removed', { file: name ?? '' }));
+      await this.#refreshRegistry();
+      return;
+    }
     if (found?.provider === 'google') {
       const view = await this.#act(`file:${fileId}`, () => this.api.removeGoogleFile(fileId));
       if (!view) return;
@@ -1855,6 +1873,49 @@ export class Controller {
     if (!view) return;
     this.#set({ connector: view });
     this.notify('success', t('addin.connector.disconnected'));
+    await this.#refreshRegistry();
+  };
+
+  // ── Fichiers importés (R6) ──────────────────────────────────────────────────────────────────
+  async #refreshUploads(): Promise<void> {
+    try {
+      this.#set({ uploads: (await this.api.uploads()).uploads });
+    } catch {
+      // Not worth a notice: the section keeps what it showed, the next read asks again.
+    }
+  }
+
+  /**
+   * « Importer un fichier »: a workbook joins the section, its sheets to include like a picked
+   * file's; a supplier invoice gives its prices as the cost. The same name again replaces the file.
+   */
+  uploadFile = async (file: Blob, name: string): Promise<void> => {
+    const known = this.#state.uploads?.some((u) => u.name === name) ?? false;
+    const added = await this.#act('upload', () => this.api.upload(name, file));
+    if (!added) return;
+    const { upload, replaced } = added;
+    const others = (this.#state.uploads ?? []).filter((u) => u.id !== upload.id && u.name !== name);
+    this.#set({
+      uploads: [...others, upload].sort((a, b) => a.name.localeCompare(b.name)),
+    });
+    if (known && !replaced) {
+      this.notify('info', t('addin.upload.same', { file: name }));
+      return;
+    }
+    if (upload.invoice) {
+      this.notify(
+        'success',
+        t('addin.upload.invoiceAdded', {
+          number: upload.invoice.number ?? '',
+          supplier: upload.invoice.supplier ?? '',
+        }),
+      );
+    } else {
+      this.notify(
+        'success',
+        t(replaced ? 'addin.upload.replaced' : 'addin.upload.added', { file: name }),
+      );
+    }
     await this.#refreshRegistry();
   };
 

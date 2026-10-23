@@ -2,7 +2,8 @@
 // each line tied to the article it is about. The checks of documents together (an order against its
 // invoice, what was bought against what was sold) read it; R0 fills it. It is derived data, rebuilt
 // from its sources at any time: `invoices` (projected again when the fingerprint changes, removed when
-// cancelled) and `inbound_queue` (once triaged and read). One job per company writes it
+// cancelled), `inbound_queue` (once triaged and read) and the supplier invoices uploaded from the
+// pane (R6; one the platform also delivered counts once, as received). One job per company writes it
 // (registry.refresh, src/jobs.ts), after a sync that changed something and after received invoices;
 // the sweep queues it for a company left behind.
 import { type Invoice, type Line, normalizeName, partySiren } from '@fi/core';
@@ -27,6 +28,7 @@ import {
   sql,
   type Tx,
   tenants,
+  uploads,
 } from '@fi/db';
 
 // The checks match a bought line to a sold one by this name (core src/checks/cost.ts).
@@ -82,6 +84,7 @@ interface Source {
   direction: Direction;
   invoiceId: string | null;
   inboundId: string | null;
+  uploadId: string | null;
   isTest: boolean;
   /** `outVersion`; a received invoice is read once. */
   version: string;
@@ -115,6 +118,7 @@ async function project(tx: Tx, tenantId: string, sources: Source[], now: Date) {
       direction: s.direction,
       invoiceId: s.invoiceId,
       inboundId: s.inboundId,
+      uploadId: s.uploadId,
       isTest: s.isTest,
       typeCode: d.typeCode ?? null,
       number: d.number ?? null,
@@ -129,7 +133,13 @@ async function project(tx: Tx, tenantId: string, sources: Source[], now: Date) {
       updatedAt: now,
     };
   });
-  const direction = sources[0]?.direction;
+  const first = sources[0];
+  // One kind of source per call: an invoice of the company, a received one, or an uploaded one.
+  const target = first?.invoiceId
+    ? docs.invoiceId
+    : first?.uploadId
+      ? docs.uploadId
+      : docs.inboundId;
   const fresh = {
     typeCode: sql`excluded.type_code`,
     number: sql`excluded.number`,
@@ -147,11 +157,16 @@ async function project(tx: Tx, tenantId: string, sources: Source[], now: Date) {
     .insert(docs)
     .values(values)
     .onConflictDoUpdate({
-      target: direction === 'out' ? docs.invoiceId : docs.inboundId,
+      target,
       set: fresh,
     })
-    .returning({ id: docs.id, invoiceId: docs.invoiceId, inboundId: docs.inboundId });
-  const docOf = new Map(written.map((w) => [w.invoiceId ?? w.inboundId, w.id]));
+    .returning({
+      id: docs.id,
+      invoiceId: docs.invoiceId,
+      inboundId: docs.inboundId,
+      uploadId: docs.uploadId,
+    });
+  const docOf = new Map(written.map((w) => [w.invoiceId ?? w.inboundId ?? w.uploadId, w.id]));
   await tx.delete(docLines).where(
     inArray(
       docLines.docId,
@@ -177,7 +192,7 @@ async function project(tx: Tx, tenantId: string, sources: Source[], now: Date) {
   const lineRows = lines.map(({ source, line, position, key }) => {
     const allowances = line.allowances.filter((a) => a.amount !== undefined);
     return {
-      docId: docOf.get(source.invoiceId ?? source.inboundId) ?? '',
+      docId: docOf.get(source.invoiceId ?? source.inboundId ?? source.uploadId) ?? '',
       tenantId,
       position,
       itemId: key ? (itemOf.get(key) ?? null) : null,
@@ -323,6 +338,7 @@ export async function refreshRegistry(
           direction: 'out',
           invoiceId: r.id,
           inboundId: null,
+          uploadId: null,
           isTest: r.isTest,
           version: r.version,
           document: r.document,
@@ -365,6 +381,7 @@ export async function refreshRegistry(
               direction: 'in',
               invoiceId: null,
               inboundId: r.id,
+              uploadId: null,
               isTest: r.isTest,
               version: 'read',
               document: r.parsed,
@@ -380,7 +397,58 @@ export async function refreshRegistry(
     });
     projected += unread.length;
   }
-  return { projected, removed: removed.length };
+
+  // Uploaded supplier invoices (R6). One the platform delivered too is counted as received only.
+  const twice = sql`exists (select 1 from ${inboundQueue} q where q.tenant_id = ${uploads.tenantId}
+    and not q.is_test and q.triaged_at is not null
+    and q.supplier_key = ${uploads.supplierKey} and q.number = ${uploads.number})`;
+  const doubled = await db
+    .delete(docs)
+    .where(
+      and(
+        eq(docs.tenantId, tenantId),
+        sql`${docs.uploadId} in (select ${uploads.id} from ${uploads} where ${uploads.tenantId} = ${tenantId} and ${twice})`,
+      ),
+    )
+    .returning({ id: docs.id });
+  const uploaded = await db
+    .select({ id: uploads.id, parsed: uploads.parsed, supplierKey: uploads.supplierKey })
+    .from(uploads)
+    .leftJoin(docs, eq(docs.uploadId, uploads.id))
+    .where(
+      and(
+        eq(uploads.tenantId, tenantId),
+        isNotNull(uploads.parsed),
+        isNull(docs.id),
+        sql`not ${twice}`,
+      ),
+    )
+    .orderBy(asc(uploads.id));
+  for (let i = 0; i < uploaded.length; i += BATCH) {
+    const batch = uploaded.slice(i, i + BATCH).flatMap((r): Source[] =>
+      r.parsed
+        ? [
+            {
+              direction: 'in',
+              invoiceId: null,
+              inboundId: null,
+              uploadId: r.id,
+              isTest: false,
+              version: 'read',
+              document: r.parsed,
+              cells: {},
+              supplier: r.supplierKey,
+            },
+          ]
+        : [],
+    );
+    await db.transaction(async (tx) => {
+      await project(tx, tenantId, batch, now);
+      await noteSuppliers(tx, tenantId, batch);
+    });
+    projected += batch.length;
+  }
+  return { projected, removed: removed.length + doubled.length };
 }
 
 /** The companies whose registry is behind its invoices: the sweep queues a refresh for each. */
@@ -398,7 +466,15 @@ export async function registryBehind(db: Db): Promise<string[]> {
       select distinct q.tenant_id from ${inboundQueue} q
         join ${tenants} t on t.id = q.tenant_id and t.deleted_at is null
         left join ${docs} d on d.inbound_id = q.id
-       where q.triaged_at is not null and q.parsed_json is not null and d.id is null`,
+       where q.triaged_at is not null and q.parsed_json is not null and d.id is null
+      union
+      select distinct u.tenant_id from ${uploads} u
+        join ${tenants} t on t.id = u.tenant_id and t.deleted_at is null
+        left join ${docs} d on d.upload_id = u.id
+       where u.parsed_json is not null
+         and (d.id is null) = not exists (select 1 from ${inboundQueue} q
+               where q.tenant_id = u.tenant_id and not q.is_test and q.triaged_at is not null
+                 and q.supplier_key = u.supplier_key and q.number = u.number)`,
   );
   return found.map((r) => r.tenant_id);
 }

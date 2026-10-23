@@ -42,6 +42,7 @@ import {
   itemSynonyms,
   items,
   links,
+  or,
   rows,
   ruleExceptions,
   type SQL,
@@ -50,6 +51,7 @@ import {
   type TenantRow,
   type Tx,
   tenants,
+  uploads,
 } from '@fi/db';
 import { t } from '@fi/shared';
 import { tenantAi } from './ai';
@@ -469,7 +471,10 @@ export interface Place {
   workbookId: string | null;
   /** A received invoice: « Voir la facture du fournisseur » opens it in « Réception ». */
   inboundId: string | null;
-  /** The OneDrive file it was read from (R4): the pane names it instead of selecting a cell. */
+  /**
+   * The OneDrive or Google Drive file it was read from (R4, R5), or the file uploaded (R6): the pane
+   * names it instead of selecting a cell.
+   */
   file: string | null;
   /** The customer or supplier it names, for « C'est normal » (R7). */
   partyName: string | null;
@@ -487,11 +492,13 @@ export async function placesOf(db: DbOrTx, ids: readonly string[]): Promise<Map<
       inboundId: docs.inboundId,
       binding: invoices.excelBinding,
       file: connectedFiles.name,
+      uploaded: uploads.name,
       partyName: docs.partyName,
     })
     .from(docs)
     .leftJoin(sources, eq(sources.id, docs.sourceId))
     .leftJoin(connectedFiles, eq(connectedFiles.id, sources.fileId))
+    .leftJoin(uploads, or(eq(uploads.id, sources.uploadId), eq(uploads.id, docs.uploadId)))
     .leftJoin(invoices, eq(invoices.id, docs.invoiceId))
     .where(inArray(docs.id, [...new Set(ids)]));
   return new Map(
@@ -502,7 +509,7 @@ export async function placesOf(db: DbOrTx, ids: readonly string[]): Promise<Map<
         sheet: d.sheet ?? d.binding?.sheet ?? null,
         workbookId: d.workbookId ?? d.binding?.workbookId ?? null,
         inboundId: d.inboundId,
-        file: d.file,
+        file: d.file ?? d.uploaded,
         partyName: d.partyName,
       },
     ]),

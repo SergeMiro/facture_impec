@@ -32,6 +32,7 @@ import {
   inArray,
   isNotNull,
   layoutProfiles,
+  ne,
   parties,
   type SourceRow,
   type SourceStats,
@@ -40,6 +41,7 @@ import {
   sql,
   type TenantRow,
   type Tx,
+  uploads,
 } from '@fi/db';
 import { z } from 'zod';
 import { tenantAi } from './ai';
@@ -118,8 +120,8 @@ const sourceIs = (tenantId: string, workbookId: string, sheet: string) =>
 /**
  * « Inclure cette feuille »: the company confirms what the sheet holds. Keeps the layout as a profile
  * (its version raised when it changed), records the consent, then reads the sheet a first time.
- * `fileId`: a sheet of a picked file (R4), whose snapshot the API read itself; its workbook id is the
- * file's id.
+ * `owner`: a sheet of a picked file (R4) or of an uploaded one (R6), whose snapshot the API read
+ * itself; its workbook id is the file's id.
  */
 export async function includeSource(
   deps: ApiDeps,
@@ -127,14 +129,14 @@ export async function includeSource(
   principal: Principal,
   workbookId: string,
   input: z.infer<typeof ConfirmBody>,
-  fileId?: string,
+  owner?: { fileId: string } | { uploadId: string },
 ) {
   const { layout, snapshot } = input;
   if (layout.sheet !== snapshot.sheet) {
     throw new ApiError(400, 'invalid_request', undefined, 'layout.sheet differs from the snapshot');
   }
   if (!isDocKind(layout.kind)) throw new ApiError(422, 'layout_kind_unsupported');
-  if (!fileId) await notAFile(deps, tenant.id, workbookId, snapshot.sheet);
+  if (!owner) await notAFile(deps, tenant.id, workbookId, snapshot.sheet);
   const kind: DocKind = layout.kind;
   const signature = headerSignature(snapshot, layout.headerRow);
   const now = deps.now();
@@ -203,7 +205,8 @@ export async function includeSource(
       .insert(sources)
       .values({
         tenantId: tenant.id,
-        ...(fileId && { type: 'file' as const, fileId }),
+        ...(owner && 'fileId' in owner && { type: 'file' as const, fileId: owner.fileId }),
+        ...(owner && 'uploadId' in owner && { type: 'upload' as const, uploadId: owner.uploadId }),
         workbookId,
         sheet: snapshot.sheet,
         profileId,
@@ -235,14 +238,14 @@ export async function includeSource(
 }
 
 /**
- * A picked file's sheet is read by the API from the file (src/connectors.ts): a snapshot sent for it
- * from a pane is refused, whatever workbook id it claims.
+ * A picked or uploaded file's sheet is read by the API from the file (src/connectors.ts,
+ * src/uploads.ts): a snapshot sent for it from a pane is refused, whatever workbook id it claims.
  */
 async function notAFile(deps: ApiDeps, tenantId: string, workbookId: string, sheet: string) {
   const [file] = await deps.db
     .select({ id: sources.id })
     .from(sources)
-    .where(and(sourceIs(tenantId, workbookId, sheet), eq(sources.type, 'file')));
+    .where(and(sourceIs(tenantId, workbookId, sheet), ne(sources.type, 'sheet')));
   if (file) throw new ApiError(404, 'source_not_found');
 }
 
@@ -308,6 +311,7 @@ export function sourceView(row: SourceRow) {
     type: row.type,
     workbookId: row.workbookId,
     fileId: row.fileId,
+    uploadId: row.uploadId,
     sheet: row.sheet,
     kind: row.kind,
     layout: row.layout,
@@ -548,18 +552,30 @@ export async function registryView(deps: ApiDeps, tenant: TenantRow) {
     .orderBy(desc(docs.updatedAt), desc(docs.id))
     .limit(20);
   const sheetOf = new Map(included.map((s) => [s.id, s.sheet]));
-  // A picked file's sheet (R4): the pane names the file and selects no cell in the open workbook.
+  // A picked (R4) or uploaded (R6) file's sheet: the pane names the file and selects no cell in the
+  // open workbook.
   const fileIds = included.flatMap((s) => (s.fileId ? [s.fileId] : []));
-  const files = fileIds.length
-    ? await deps.db
-        .select({ id: connectedFiles.id, name: connectedFiles.name })
-        .from(connectedFiles)
-        .where(inArray(connectedFiles.id, fileIds))
-    : [];
+  const uploadIds = included.flatMap((s) => (s.uploadId ? [s.uploadId] : []));
+  const files = [
+    ...(fileIds.length
+      ? await deps.db
+          .select({ id: connectedFiles.id, name: connectedFiles.name })
+          .from(connectedFiles)
+          .where(inArray(connectedFiles.id, fileIds))
+      : []),
+    ...(uploadIds.length
+      ? await deps.db
+          .select({ id: uploads.id, name: uploads.name })
+          .from(uploads)
+          .where(inArray(uploads.id, uploadIds))
+      : []),
+  ];
   const fileNameOf = new Map(files.map((f) => [f.id, f.name]));
-  const fileOf = new Map(
-    included.map((s) => [s.id, s.fileId ? (fileNameOf.get(s.fileId) ?? null) : null]),
-  );
+  const nameOf = (s: SourceRow) => {
+    const id = s.fileId ?? s.uploadId;
+    return id ? (fileNameOf.get(id) ?? null) : null;
+  };
+  const fileOf = new Map(included.map((s) => [s.id, nameOf(s)]));
   // Where each document starts in its sheet: a click on it in the pane selects that cell.
   const firstCells = recent.length
     ? await deps.db
@@ -579,7 +595,7 @@ export async function registryView(deps: ApiDeps, tenant: TenantRow) {
   return {
     sources: included.map((s) => ({
       ...sourceView(s),
-      file: s.fileId ? (fileNameOf.get(s.fileId) ?? null) : null,
+      file: nameOf(s),
     })),
     invoices: {
       sent: invoiceCounts.find((c) => c.direction === 'out')?.n ?? 0,

@@ -31,7 +31,7 @@ import {
   toolCallResult,
   type WorkerDeps,
 } from '@fi/api/testing';
-import { addDays, frMoney, parisToday } from '@fi/core';
+import { addDays, computeInvoice, frMoney, InvoiceDraft, parisToday, toCii } from '@fi/core';
 import { type XlsxCell, xlsxOf } from '@fi/core/testing/xlsx';
 import { type MessageKey, TERMS_VERSION, TRIAL_REAL_SENDS, t } from '@fi/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -1571,6 +1571,123 @@ describe('Google Drive files read without Excel (R5)', () => {
     expect(state().notice?.text).toBe(t('addin.google.disconnected'));
     expect(state().google?.connection).toBeNull();
     expect(stand.connected('g-camille')).toBe(false);
+  });
+});
+
+describe('files uploaded from the pane (R6)', () => {
+  const SIREN = '999000607';
+  const SUPPLIER = '600000004';
+  // « Conseil Partenaires » bills the company 5 days of consulting at 500 €; F2026-101 sells 2 at 450 €.
+  const supplierInvoice = (number: string) => {
+    const vatId = (siren: string) =>
+      `FR${String((12 + 3 * (Number(siren) % 97)) % 97).padStart(2, '0')}${siren}`;
+    const address = { line1: '1 rue Haute', city: 'Dijon', postCode: '21000', country: 'FR' };
+    return toCii(
+      computeInvoice(
+        InvoiceDraft.parse({
+          processType: 'S1',
+          number,
+          issueDate: '2026-10-01',
+          typeCode: '380',
+          currency: 'EUR',
+          dueDate: '2026-10-31',
+          seller: {
+            name: 'Conseil Partenaires',
+            legalId: { id: SUPPLIER, scheme: '0002' },
+            vatId: vatId(SUPPLIER),
+            electronicAddress: { id: SUPPLIER, scheme: '0225' },
+            address,
+          },
+          buyer: {
+            name: SELLER.name,
+            legalId: { id: SIREN, scheme: '0002' },
+            vatId: vatId(SIREN),
+            electronicAddress: { id: SIREN, scheme: '0225' },
+            address,
+          },
+          payment: { meansCode: '30', accounts: [{ iban: 'FR7630006000011234567890189' }] },
+          lines: [
+            {
+              id: '1',
+              quantity: '5',
+              unitCode: 'C62',
+              price: { net: '500.00' },
+              vat: { category: 'S', rate: '20' },
+              item: { name: 'Journée de conseil' },
+              nature: 'services',
+            },
+          ],
+        }),
+      ),
+    );
+  };
+  const book = new FakeWorkbook({ [DEMO_SHEET]: demoSheet() });
+  const { controller, state } = pane(book);
+  const b2 = () => state().checks?.findings.find((f) => f.rule === 'B2');
+  const uploaded = (name: string) => state().uploads?.find((u) => u.name === name);
+  const FILE = 'Facture CP-2026-77.xml';
+
+  beforeAll(async () => {
+    const vatId = `FR${String((12 + 3 * (Number(SIREN) % 97)) % 97).padStart(2, '0')}${SIREN}`;
+    const key = (
+      await newTenant(api.request, {
+        ...SELLER,
+        siren: SIREN,
+        vatId,
+        ownerEmail: 'import@entreprise-demo.test',
+      })
+    ).apiKey;
+    const res = await api.request('/settings', {
+      method: 'PATCH',
+      token: key,
+      body: { invoiceDefaults: { ...DEFAULTS, siret: `${SIREN}00015` } },
+    });
+    expect(res.status).toBe(200);
+    await controller.start();
+    await controller.signInWithKey(key);
+    await until(() => state().detection !== null, 'the invoice columns');
+    const columns = state().detection?.mapping;
+    if (!columns) throw new Error('no invoice columns');
+    await controller.confirmMapping(columns);
+  });
+
+  it('takes a supplier invoice: its price is the cost, and B2 finds the loss', async () => {
+    controller.navigate({ name: 'registry' });
+    await until(() => state().uploads !== null, 'the uploads section');
+    expect(state().uploads).toEqual([]);
+    const xml = new Blob([supplierInvoice('CP-2026-77')], { type: 'application/xml' });
+    await controller.uploadFile(xml, FILE);
+    expect(state().notice?.text).toBe(
+      t('addin.upload.invoiceAdded', { number: 'CP-2026-77', supplier: 'Conseil Partenaires' }),
+    );
+    expect(uploaded(FILE)).toMatchObject({
+      format: 'cii',
+      kind: 'invoice',
+      sheets: [],
+      invoice: { number: 'CP-2026-77', lines: 1, netTotal: 250_000, received: false },
+    });
+    // The same file again: nothing changed.
+    await controller.uploadFile(xml, FILE);
+    expect(state().notice?.text).toBe(t('addin.upload.same', { file: FILE }));
+
+    controller.navigate({ name: 'checks' });
+    await until(() => b2() !== undefined, 'the loss');
+    expect(b2()).toMatchObject({ severity: 'blocking', amount: 10_000 });
+    expect(b2()?.message).toContain('(la facture CP-2026-77 de Conseil Partenaires)');
+    expect(b2()?.evidence.find((e) => e.role === 'purchase')).toMatchObject({ file: FILE });
+  });
+
+  it('says calmly what it cannot take, and « Retirer le fichier » takes the cost away', async () => {
+    controller.navigate({ name: 'registry' });
+    await controller.uploadFile(new Blob(['%PDF-1.4\n']), 'scan.pdf');
+    expect(state().notice).toEqual({ tone: 'error', text: t('api.error.upload_plain_pdf') });
+    expect(state().uploads?.map((u) => u.name)).toEqual([FILE]);
+
+    await controller.removeFile(uploaded(FILE)?.id ?? '');
+    expect(state().notice?.text).toBe(t('addin.upload.removed', { file: FILE }));
+    expect(state().uploads).toEqual([]);
+    controller.navigate({ name: 'checks' });
+    await until(() => b2() === undefined, 'the loss gone');
   });
 });
 

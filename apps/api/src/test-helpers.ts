@@ -200,18 +200,28 @@ export function testApi(
       token?: string;
       headers?: Record<string, string>;
     } = {},
-  ) =>
-    app.request(path, {
+  ) => {
+    // Bytes go as they are (an uploaded file, R6); anything else as JSON.
+    const raw = init.body instanceof Uint8Array;
+    return app.request(path, {
       method: init.method ?? 'GET',
       headers: {
-        ...(init.body !== undefined && { 'content-type': 'application/json' }),
+        ...(init.body !== undefined && {
+          'content-type': raw ? 'application/octet-stream' : 'application/json',
+        }),
         ...(init.token && { authorization: `Bearer ${init.token}` }),
         ...init.headers,
       },
       ...(init.body !== undefined && {
-        body: typeof init.body === 'string' ? init.body : JSON.stringify(init.body),
+        body:
+          init.body instanceof Uint8Array
+            ? new Uint8Array(init.body)
+            : typeof init.body === 'string'
+              ? init.body
+              : JSON.stringify(init.body),
       }),
     });
+  };
   return { app, deps, jobs, mailer, request };
 }
 

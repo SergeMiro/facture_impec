@@ -11,15 +11,24 @@
 // assistant proposes the same card in the chat; its two answers are played by the page (no model in the
 // E2E stack), everything else is the real API. Since R4 an order in a OneDrive file, picked through
 // Microsoft's stand-in, gives a finding once it changes there, the file never opened; since R5 the same
-// from Google Drive, picked in Google's window (its stand-in).
+// from Google Drive, picked in Google's window (its stand-in). R6: a supplier's Factur-X uploaded from
+// the pane gives the cost B2 compares a sale with.
 // browser: local (Chrome of this server; Browserbase cannot reach localhost).
 
 import { readFile } from 'node:fs/promises';
-import { frMoney } from '@fi/core';
+import { computeInvoice, frMoney, InvoiceDraft } from '@fi/core';
+import { bundledFonts } from '@fi/core/fonts';
+import { toFacturXPdf } from '@fi/core/pdf';
 import { xlsxOf } from '@fi/core/testing/xlsx';
 import { t } from '@fi/shared';
 import { expect, test } from '@playwright/test';
-import { DEMO_ORDERS, DEMO_OWNER, DEMO_PURCHASES, DEMO_SHEET } from '../src/harness/demo';
+import {
+  DEMO_ORDERS,
+  DEMO_OWNER,
+  DEMO_PURCHASES,
+  DEMO_SELLER,
+  DEMO_SHEET,
+} from '../src/harness/demo';
 import { seedDemo } from '../src/harness/seed';
 import { E2E, LIVE } from './env';
 import { api, row, signIn, typeInCell, typeInSelectedCell } from './helpers';
@@ -573,5 +582,83 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
     await pane.getByRole('tab', { name: t('addin.nav.checks') }).click();
     await expect(pane.getByTestId('finding').first()).toBeVisible();
     await expect(finding).toHaveCount(0);
+  });
+
+  await test.step('Fichiers importés: a supplier Factur-X gives the cost of « Journée de conseil »', async () => {
+    // « Conseil Partenaires » bills the company 5 days at 500 €; F2026-101 sells 2 at 450 €.
+    const FILE = 'Facture CP-2026-77.pdf';
+    const party = (name: string, siren: string, vatId: string) => ({
+      name,
+      legalId: { id: siren, scheme: '0002' },
+      vatId,
+      electronicAddress: { id: siren, scheme: '0225' },
+      address: { line1: '1 rue Haute', city: 'Dijon', postCode: '21000', country: 'FR' },
+    });
+    const invoice = computeInvoice(
+      InvoiceDraft.parse({
+        processType: 'S1',
+        number: 'CP-2026-77',
+        issueDate: '2026-10-01',
+        typeCode: '380',
+        currency: 'EUR',
+        dueDate: '2026-10-31',
+        seller: party('Conseil Partenaires', '600000004', 'FR27600000004'),
+        buyer: party(DEMO_SELLER.name, DEMO_SELLER.siren, DEMO_SELLER.vatId),
+        payment: { meansCode: '30', accounts: [{ iban: 'FR7630006000011234567890189' }] },
+        lines: [
+          {
+            id: '1',
+            quantity: '5',
+            unitCode: 'C62',
+            price: { net: '500.00' },
+            vat: { category: 'S', rate: '20' },
+            item: { name: 'Journée de conseil' },
+            nature: 'services',
+          },
+        ],
+      }),
+    );
+    const pdf = await toFacturXPdf(invoice, { fonts: bundledFonts() });
+
+    await pane.getByRole('tab', { name: t('addin.nav.registry') }).click();
+    const section = pane.getByTestId('upload');
+    await section.scrollIntoViewIfNeeded();
+    await section
+      .getByTestId('upload-input')
+      .setInputFiles({ name: FILE, mimeType: 'application/pdf', buffer: Buffer.from(pdf) });
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.upload.invoiceAdded', { number: 'CP-2026-77', supplier: 'Conseil Partenaires' }),
+    );
+    await expect(section.getByTestId(`file-${FILE}`)).toContainText('Facture CP-2026-77');
+    await page.screenshot({ path: info.outputPath('upload.png') });
+    expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+
+    const loss = pane
+      .getByTestId('finding')
+      .filter({ hasText: 'Sur la facture F2026-101,' })
+      .filter({ hasText: '(la facture CP-2026-77 de Conseil Partenaires)' });
+    await expect(async () => {
+      await pane.getByRole('tab', { name: t('addin.nav.registry') }).click();
+      await pane.getByRole('tab', { name: t('addin.nav.checks') }).click();
+      await expect(loss).toHaveCount(1, { timeout: 2_000 });
+    }).toPass({ timeout: 60_000 });
+    await expect(loss).toContainText(t('addin.checks.blocking'));
+    await loss.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('upload-checks.png') });
+
+    // « Retirer le fichier »: its price leaves with it.
+    await pane.getByRole('tab', { name: t('addin.nav.registry') }).click();
+    await section
+      .getByTestId(`file-${FILE}`)
+      .getByRole('button', { name: t('addin.upload.remove') })
+      .click();
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.upload.removed', { file: FILE }),
+    );
+    await expect(async () => {
+      await pane.getByRole('tab', { name: t('addin.nav.registry') }).click();
+      await pane.getByRole('tab', { name: t('addin.nav.checks') }).click();
+      await expect(loss).toHaveCount(0, { timeout: 2_000 });
+    }).toPass({ timeout: 60_000 });
   });
 });

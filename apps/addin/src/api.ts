@@ -172,9 +172,13 @@ const SourceStats = z.object({
 /** A sheet of the workbook the company included in the check (« Inclure cette feuille »). */
 export const Source = z.object({
   id: z.string(),
-  /** `file`: a sheet of a OneDrive file the API reads itself (R4), not of an open workbook. */
-  type: z.enum(['sheet', 'file']).default('sheet'),
+  /**
+   * `file`, `upload`: a sheet of a OneDrive or Google Drive file (R4, R5), or of an uploaded one (R6),
+   * that the API reads itself, not of an open workbook.
+   */
+  type: z.enum(['sheet', 'file', 'upload']).default('sheet'),
   fileId: z.string().nullable().default(null),
+  uploadId: z.string().nullable().default(null),
   workbookId: z.string(),
   sheet: z.string(),
   kind: z.enum(DOC_KINDS),
@@ -266,6 +270,31 @@ export const GoogleView = z.object({
 });
 export type GoogleView = z.infer<typeof GoogleView>;
 export type DriveProvider = 'microsoft' | 'google';
+/** Where a file the API reads itself comes from: a cloud (R4, R5) or an upload from the pane (R6). */
+export type FileOwner = DriveProvider | 'upload';
+
+/** A file uploaded from the pane (R6): a workbook shown like a picked file, or a supplier invoice. */
+export const UploadView = ConnectorView.shape.connection.unwrap().shape.files.element.extend({
+  format: z.enum(['xlsx', 'xlsm', 'csv', 'facturx', 'ubl', 'cii']),
+  kind: z.enum(['workbook', 'invoice']),
+  size: z.number(),
+  invoice: z
+    .object({
+      number: z.string().nullable(),
+      supplier: z.string().nullable(),
+      issueDate: z.string().nullable(),
+      lines: z.number(),
+      /** Cents. */
+      netTotal: z.number().nullable(),
+      currency: z.string().nullable(),
+      /** The platform delivered it too: counted once, as received. */
+      received: z.boolean(),
+    })
+    .nullable(),
+});
+export type UploadView = z.infer<typeof UploadView>;
+export const UploadList = z.object({ uploads: z.array(UploadView) });
+export const UploadAdded = z.object({ upload: UploadView, replaced: z.boolean() });
 
 /** The « Registre » screen. */
 export const Registry = z.object({
@@ -783,8 +812,8 @@ export type LinkPoll = z.infer<typeof LinkPoll>;
 export const SCENARIOS = ['pdp_reject', 'customer_refuse', 'pay_late', 'siren_unknown'] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
-const filePath = (provider: DriveProvider, fileId: string, sheet?: string) =>
-  `/connectors/${provider}/files/${encodeURIComponent(fileId)}${sheet === undefined ? '' : `/sheets/${encodeURIComponent(sheet)}`}`;
+const filePath = (owner: FileOwner, fileId: string, sheet?: string) =>
+  `${owner === 'upload' ? '/uploads' : `/connectors/${owner}/files`}/${encodeURIComponent(fileId)}${sheet === undefined ? '' : `/sheets/${encodeURIComponent(sheet)}`}`;
 
 const sourcesPath = (workbookId: string, sheet?: string) =>
   `/workbooks/${encodeURIComponent(workbookId)}/sources${sheet === undefined ? '' : `/${encodeURIComponent(sheet)}`}`;
@@ -794,6 +823,8 @@ interface RequestOptions {
   body?: unknown;
   /** A body already in JSON (the chat's, from `ai`), sent as it is. */
   json?: string;
+  /** A file's bytes (R6), sent as they are. */
+  raw?: Blob;
   signal?: AbortSignal;
 }
 
@@ -815,13 +846,15 @@ export class ApiClient {
 
   async #send(
     path: string,
-    { method = 'GET', body, json, signal }: RequestOptions = {},
+    { method = 'GET', body, json, raw, signal }: RequestOptions = {},
   ): Promise<Response> {
     const headers: Record<string, string> = {};
     const token = this.#token();
     if (token) headers.authorization = `Bearer ${token}`;
-    const payload = json ?? (body === undefined ? undefined : JSON.stringify(body));
-    if (payload !== undefined) headers['content-type'] = 'application/json';
+    const payload = raw ?? json ?? (body === undefined ? undefined : JSON.stringify(body));
+    if (payload !== undefined) {
+      headers['content-type'] = raw ? 'application/octet-stream' : 'application/json';
+    }
     let res: Response;
     try {
       res = await this.#fetch(`${this.#base}${path}`, {
@@ -948,23 +981,29 @@ export class ApiClient {
     this.#json(ConnectorView, '/connectors/microsoft/files', { method: 'POST', body: { files } });
   removeFile = (fileId: string) =>
     this.#json(ConnectorView, filePath('microsoft', fileId), { method: 'DELETE' });
-  detectFileSheet = (fileId: string, sheet: string, provider: DriveProvider = 'microsoft') =>
+  detectFileSheet = (fileId: string, sheet: string, provider: FileOwner = 'microsoft') =>
     this.#json(FileDetection, `${filePath(provider, fileId, sheet)}/detect`, { method: 'POST' });
-  includeFileSheet = (
-    fileId: string,
-    layout: LayoutMapping,
-    provider: DriveProvider = 'microsoft',
-  ) =>
+  includeFileSheet = (fileId: string, layout: LayoutMapping, provider: FileOwner = 'microsoft') =>
     this.#json(SourceRead, filePath(provider, fileId, layout.sheet), {
       method: 'PUT',
       body: { layout },
     });
-  removeFileSheet = (fileId: string, sheet: string, provider: DriveProvider = 'microsoft') =>
+  removeFileSheet = (fileId: string, sheet: string, provider: FileOwner = 'microsoft') =>
     this.#json(
       z.object({ removed: z.boolean(), sheet: z.string() }),
       filePath(provider, fileId, sheet),
       { method: 'DELETE' },
     );
+
+  /** « Fichiers importés » (R6): the files uploaded from the pane. */
+  uploads = () => this.#json(UploadList, '/uploads');
+  upload = (name: string, file: Blob) =>
+    this.#json(UploadAdded, `/uploads?name=${encodeURIComponent(name)}`, {
+      method: 'POST',
+      raw: file,
+    });
+  removeUpload = (id: string) =>
+    this.#json(UploadList, filePath('upload', id), { method: 'DELETE' });
 
   /** « Fichiers Google Drive » (R5): the account and the files picked in Google's window. */
   google = () => this.#json(GoogleView, '/connectors/google');

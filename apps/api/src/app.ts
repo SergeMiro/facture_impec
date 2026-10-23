@@ -147,6 +147,14 @@ import {
   SourceSync,
   syncSource,
 } from './sources';
+import {
+  addUpload,
+  detectUploadSheet,
+  includeUploadSheet,
+  listUploads,
+  ownUpload,
+  removeUpload,
+} from './uploads';
 import { invoiceDetail, invoiceSummary, tenantView } from './views';
 import {
   assertTestMode,
@@ -212,13 +220,16 @@ export function createApp(deps: ApiDeps) {
   // task pane reads the API with CORS, which the resource policy would not affect, so it stays off.
   app.use('*', secureHeaders({ crossOriginResourcePolicy: false }));
 
-  // A sheet of 5 000 rows is a few MB; nothing else comes near 2 MB, and webhooks stay small.
+  // A sheet of 5 000 rows is a few MB, an uploaded file 10 MB at most (R6); nothing else comes near
+  // 2 MB, and webhooks stay small.
   const bigBody = maxBody(16 * MB);
   const body2Mb = maxBody(2 * MB);
   const smallBody = maxBody(256 * KB);
   app.use('*', (c, next) => {
     const path = c.req.path;
-    if (path.startsWith('/workbooks/') || path === '/detect') return bigBody(c, next);
+    if (path.startsWith('/workbooks/') || path === '/detect' || path === '/uploads') {
+      return bigBody(c, next);
+    }
     if (/^\/(webhooks|auth|onboarding)\//.test(path)) return smallBody(c, next);
     return body2Mb(c, next);
   });
@@ -379,6 +390,8 @@ export function createApp(deps: ApiDeps) {
     '/workbooks/*',
     '/registry',
     '/connectors/*',
+    '/uploads',
+    '/uploads/*',
     '/checks',
     '/links/*',
     '/findings/*',
@@ -621,6 +634,48 @@ export function createApp(deps: ApiDeps) {
       providerOf(c.req.param('provider')),
     );
     return c.json(await removeSource(deps, tenant, fileId, c.req.param('sheet')));
+  });
+
+  // ── Files uploaded from the pane (R6) ─────────────────────────────────────────────────────────
+  api.get('/uploads', async (c) => c.json(await listUploads(deps, c.get('tenant'))));
+
+  // The file's bytes as the body, its name in `?name=`: no multipart to parse.
+  api.post('/uploads', async (c) => {
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    const tenant = c.get('tenant');
+    return c.json(await addUpload(deps, tenant, c.get('principal'), c.req.query('name'), bytes));
+  });
+
+  api.delete('/uploads/:id', async (c) =>
+    c.json(await removeUpload(deps, c.get('tenant'), uuid(c.req.param('id')))),
+  );
+
+  api.post('/uploads/:id/sheets/:sheet/detect', async (c) =>
+    c.json(
+      await detectUploadSheet(
+        deps,
+        c.get('tenant'),
+        uuid(c.req.param('id')),
+        c.req.param('sheet'),
+        c.req.raw.signal,
+      ),
+    ),
+  );
+
+  api.put('/uploads/:id/sheets/:sheet', async (c) => {
+    const { layout } = await body(c, z.object({ layout: LayoutMapping }));
+    if (layout.sheet !== c.req.param('sheet')) {
+      throw new ApiError(400, 'invalid_request', undefined, 'layout.sheet differs from the path');
+    }
+    const tenant = c.get('tenant');
+    const id = uuid(c.req.param('id'));
+    return c.json(await includeUploadSheet(deps, tenant, c.get('principal'), id, layout));
+  });
+
+  api.delete('/uploads/:id/sheets/:sheet', async (c) => {
+    const tenant = c.get('tenant');
+    const id = await ownUpload(deps, tenant, uuid(c.req.param('id')));
+    return c.json(await removeSource(deps, tenant, id, c.req.param('sheet')));
   });
 
   // ── Checks across documents (R2) ──────────────────────────────────────────────────────────────

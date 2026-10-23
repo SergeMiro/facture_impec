@@ -85,6 +85,7 @@ describe('migrations', () => {
       'sources',
       'stripe_events',
       'tenants',
+      'uploads',
       'users',
       'validation_results',
       'weekly_reports',

@@ -97,6 +97,19 @@ export class FacturXPdfError extends Error {
   }
 }
 
+/**
+ * The files attached to a PDF. pdf-lib 2.11 throws a TypeError on a catalog with no /Names (a PDF
+ * made by most printers and scanners): that PDF has no attachment.
+ */
+function attachmentsOf(doc: PDFDocument) {
+  try {
+    return doc.getAttachments();
+  } catch (e) {
+    if (e instanceof TypeError) return [];
+    throw e;
+  }
+}
+
 /** Takes the invoice XML back out of a Factur-X PDF. Throws FacturXPdfError otherwise. */
 export async function readFacturXPdf(bytes: Uint8Array): Promise<FacturXContent> {
   let doc: PDFDocument;
@@ -105,7 +118,7 @@ export async function readFacturXPdf(bytes: Uint8Array): Promise<FacturXContent>
   } catch (e) {
     throw new FacturXPdfError('unreadable', e instanceof Error ? e.message : String(e));
   }
-  const file = doc.getAttachments().find((a) => XML_FILES.includes(a.name.toLowerCase()));
+  const file = attachmentsOf(doc).find((a) => XML_FILES.includes(a.name.toLowerCase()));
   if (!file) throw new FacturXPdfError('no-xml', `no ${FACTUR_X_FILE} attached`);
 
   const meta = doc.catalog.lookup(PDFName.of('Metadata'));
