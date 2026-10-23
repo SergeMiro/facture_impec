@@ -1083,6 +1083,7 @@ export const FILE_PROBLEMS = [
   'missing',
   'forbidden',
   'too_large',
+  'too_many_rows',
   'unreadable',
   'unsupported',
 ] as const;

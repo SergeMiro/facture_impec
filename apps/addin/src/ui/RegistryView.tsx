@@ -109,6 +109,7 @@ const PROBLEM: Record<string, MessageKey> = {
   missing: 'addin.connector.problem.missing',
   forbidden: 'addin.connector.problem.forbidden',
   too_large: 'addin.connector.problem.too_large',
+  too_many_rows: 'addin.connector.problem.too_many_rows',
   unreadable: 'addin.connector.problem.unreadable',
   unsupported: 'addin.connector.problem.unsupported',
 };

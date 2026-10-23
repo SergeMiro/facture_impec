@@ -1,4 +1,7 @@
 {
+  "addin.connector.problem.too_many_rows": "Une feuille dépasse 5 000 lignes non vides, en-tête compris : ce fichier n'est plus lu. Les documents déjà lus restent dans le registre. Répartissez les lignes entre plusieurs feuilles ; la prochaine vérification relira le fichier.",
+  "api.error.connector_file_too_many_rows": "Une feuille dépasse 5 000 lignes non vides, en-tête compris : ce fichier n'a pas été lu. Les données précédentes sont conservées. Répartissez les lignes entre plusieurs feuilles, puis choisissez le fichier à nouveau.",
+  "api.error.upload_too_many_rows": "Une feuille dépasse 5 000 lignes non vides, en-tête compris : ce fichier n'a pas été importé. Les données précédentes sont conservées. Répartissez les lignes entre plusieurs feuilles, puis importez le fichier à nouveau.",
   "app.title": "Facture Impec",
   "app.tagline": "Vos factures électroniques, directement depuis Excel.",
   "banner.testMode": "Mode test : aucune facture n'est envoyée à une vraie plateforme.",

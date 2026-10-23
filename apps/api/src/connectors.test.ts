@@ -4,6 +4,7 @@
 // disconnecting that deletes what was read, and RGPD.
 
 import { randomBytes } from 'node:crypto';
+import { FILE_LIMITS } from '@fi/core';
 import { type XlsxCell, xlsxOf } from '@fi/core/testing/xlsx';
 import type { Database } from '@fi/db';
 import {
@@ -360,6 +361,51 @@ describe('when something breaks', () => {
       { sheet: 'Commandes 2027', present: true, source: null },
       expect.objectContaining({ sheet: 'Commandes', present: false, source: expect.anything() }),
     ]);
+  });
+
+  it('keeps documents when a file exceeds the row limit, then reads it after recovery', async () => {
+    const c = await connected('wb-ms-limit', PERSONAL, 'cmd-limit');
+    const before = await database.db.select().from(docs).where(eq(docs.tenantId, c.id));
+    const tooLong = xlsxOf({
+      Commandes: [
+        ORDER_HEADER,
+        ...Array.from({ length: FILE_LIMITS.maxRows }, (_, i) => [
+          `C-${i}`,
+          SEP1,
+          'Durand SARL',
+          'Chaise pliante',
+          10,
+          40,
+        ]),
+      ],
+    });
+    await stand.putFile(PERSONAL.account, 'cmd-limit', 'Commandes 2026.xlsx', tooLong);
+    await check(c.connectionId);
+    const view = (await c.call('/connectors/microsoft')) as View;
+    expect(view.connection?.files[0]?.problem).toBe('too_many_rows');
+    expect(await database.db.select().from(docs).where(eq(docs.tenantId, c.id))).toEqual(before);
+    await check(c.connectionId);
+    expect(await c.audits('connected_file.problem')).toHaveLength(1);
+    // A first pick fails with the same explanation and adds no file.
+    await stand.putFile(PERSONAL.account, 'new-limit', 'Long.xlsx', tooLong);
+    const picked = await api.request('/connectors/microsoft/files', {
+      method: 'POST',
+      token: c.apiKey,
+      body: { files: [{ driveId: PERSONAL.driveId, itemId: 'new-limit' }] },
+    });
+    expect(picked.status).toBe(422);
+    expect(await picked.json()).toMatchObject({ error: { code: 'connector_file_too_many_rows' } });
+    expect(
+      await database.db.select().from(connectedFiles).where(eq(connectedFiles.tenantId, c.id)),
+    ).toHaveLength(1);
+
+    await stand.putFile(PERSONAL.account, 'cmd-limit', 'Commandes 2026.xlsx', ordersFile(40));
+    await check(c.connectionId);
+    const recovered = (await c.call('/connectors/microsoft')) as View;
+    expect(recovered.connection?.files[0]?.problem).toBeNull();
+    const after = await database.db.select().from(docs).where(eq(docs.tenantId, c.id));
+    expect(after).toHaveLength(1);
+    expect(after[0]?.netTotal).toBe(40_000);
   });
 
   it('waits when Microsoft asks to, and stops until the person reconnects when it refuses the token', async () => {

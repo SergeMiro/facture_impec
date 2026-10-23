@@ -399,6 +399,12 @@ curl -X POST -H "authorization: Bearer $FI_KEY" --data-binary @FA-2026-311.pdf \
 curl -H "authorization: Bearer $FI_KEY" http://localhost:4000/uploads
 ```
 
+Workbooks are limited to 5,000 nonempty rows per sheet, including the header. This limit also applies
+to OneDrive and Google Drive files. Files above this limit are refused before any documents change.
+A refused replacement preserves the previous upload. A connected file shows the problem and keeps
+its previous documents. If a sheet exceeds the limit, split its rows across sheets and include each
+new sheet. The next connector check reads the file again.
+
 A supplier invoice counts in B2 once the registry job ran (the worker, a few seconds; `checkNow` in
 tests). A plain PDF is refused until the owner decides (`docs/TODO.md`). The files live in the
 `uploads` table; a workbook's bytes are there in base64, so the table grows with them.

@@ -133,6 +133,48 @@ describe('an uploaded workbook', () => {
     await c.call(`/workbooks/${id}/sources/Commandes/sync`, 'POST', { snapshot }, 404);
   });
 
+  it('refuses partial CSV and XLSX replacements without changing the previous registry', async () => {
+    const c = await company('wb-upload-limit');
+    const { upload } = (await c.call(
+      '/uploads?name=Commandes.xlsx',
+      'POST',
+      ordersFile(30),
+    )) as Added;
+    const base = `/uploads/${upload.id}/sheets/Commandes`;
+    const { layout } = (await c.call(`${base}/detect`, 'POST')) as { layout: { kind: string } };
+    await c.call(base, 'PUT', { layout });
+    const before = await database.db.select().from(uploads).where(eq(uploads.tenantId, c.id));
+    const documents = await database.db.select().from(docs).where(eq(docs.tenantId, c.id));
+    const many = Array.from({ length: FILE_LIMITS.maxRows }, (_, i) => [
+      `C-${i}`,
+      '01/09/2026',
+      'Durand SARL',
+      'Chaise pliante',
+      10,
+      40,
+    ]);
+    for (const [name, bytes] of [
+      ['Commandes.xlsx', xlsxOf({ Commandes: [ORDER_HEADER, ...many] })],
+      ['Commandes.csv', text([ORDER_HEADER, ...many].map((r) => r.join(';')).join('\n'))],
+    ] as const) {
+      const response = await api.request(`/uploads?name=${name}`, {
+        method: 'POST',
+        token: c.apiKey,
+        body: bytes,
+      });
+      expect(response.status).toBe(422);
+      expect(await response.json()).toMatchObject({
+        error: { code: 'upload_too_many_rows', message: expect.stringContaining('5 000') },
+      });
+    }
+    expect(await database.db.select().from(uploads).where(eq(uploads.tenantId, c.id))).toEqual(
+      before,
+    );
+    expect(await database.db.select().from(docs).where(eq(docs.tenantId, c.id))).toEqual(documents);
+    expect(await c.audits('upload.replace')).toEqual([]);
+    expect(await c.audits('upload.add')).toHaveLength(1);
+  });
+
   it('reads a CSV file, and « Retirer » deletes the file and what it gave', async () => {
     const c = await company('wb-upload-02');
     const csv = text(

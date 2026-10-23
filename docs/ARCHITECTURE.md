@@ -814,6 +814,12 @@ Tests: `apps/api/src/uploads.test.ts`, `apps/api/src/purchases.test.ts` › a su
 from the pane (R6), `packages/core/src/pdf/pdf.test.ts` › a printed PDF, `apps/addin/src/controller.test.ts`
 › files uploaded from the pane (R6), `apps/addin/e2e/harness.spec.ts` › Fichiers importés.
 
+Files uploaded or read from a cloud use `readCompleteSheetFile`. A sheet with more than 5,000 nonempty
+rows stops the read before any registry changes. The header counts toward this limit. Uploads retain
+the previous file. Cloud connectors retain the previous documents and show `too_many_rows` until a
+complete read succeeds. The lower-level `readSheetFile` still reports truncation for callers that
+only need a preview.
+
 ### Decisions taken in R6
 
 | Topic | Decision | Why |

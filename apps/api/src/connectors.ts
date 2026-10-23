@@ -10,7 +10,7 @@ import { openSecret, sealSecret } from '@fi/agents';
 import {
   FILE_LIMITS,
   fileFormat,
-  readSheetFile,
+  readCompleteSheetFile,
   SheetFileError,
   type SheetSnapshot,
 } from '@fi/core';
@@ -567,7 +567,7 @@ async function activeConnection(
 async function download(remote: Remote, access: string, look: Look) {
   if (!fileFormat(look.readAs) || !look.isFile) throw new SheetFileError('unsupported', look.name);
   if ((look.size ?? 0) > FILE_LIMITS.maxBytes) throw new SheetFileError('too_large', look.name);
-  return readSheetFile(await remote.bytes(access, look), look.readAs);
+  return readCompleteSheetFile(await remote.bytes(access, look), look.readAs);
 }
 
 /**

@@ -959,3 +959,32 @@ Criteria, written here before the work:
 | Acceptance | `apps/addin/e2e/harness.spec.ts` › Fichiers importés: a supplier Factur-X gives the cost of « Journée de conseil » (the Factur-X PDF of Conseil Partenaires chosen in « Importer un fichier », the notice, « Sur la facture F2026-101, … (la facture CP-2026-77 de Conseil Partenaires) » in « Contrôles », gone after « Retirer le fichier »), green in local Chrome on 2026-10-23 (browser: local). Also `purchases.test.ts` (R6) and controller › takes a supplier invoice: its price is the cost, and B2 finds the loss. |
 | Audit and RGPD | Audit: `upload.add`, `upload.replace`, `upload.remove` (asserted in `uploads.test.ts`), `source.include` for the sheets. `uploads.test.ts` › RGPD › exports the files without their content, and erases them with the account. `docs/RGPD.md` (files uploaded from the pane), `docs/DEFERRED.md` (the invoice in « Réception » and the export, plain PDFs, several files, an object store), `docs/ARCHITECTURE.md` › What R6 added and its decisions, `docs/RUNBOOK.md` › Files uploaded from the pane (R6), `docs/CGU_ONEDRIVE.md` › Article [Z]. Left with the owner: `docs/TODO.md` › Files uploaded (R6). |
 | Gate | `pnpm verify` green on 2026-10-23 (tests with `--concurrency=1`): api 277, core 650 (branches 93.04 %) + oracle 276, agents 121 (branches 91.86 %), add-in 83, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 11. `pnpm test:e2e` green in local Chrome (browser: local): harness 36 s, B2Brouter stand-in 38 s. |
+
+## R4–R6 — Complete file reads (started 2026-10-23)
+
+The file reader reports truncated sheets, but uploads and cloud connectors ignored that report.
+Checks could therefore use only the first 5,000 rows without telling the person.
+Acceptance criteria before implementation:
+
+- Files above 5,000 nonempty rows per sheet are refused before any registry change.
+- Exactly 5,000 rows remain readable, including files with trailing empty rows.
+- A refused upload replacement keeps the previous file, documents and audit history.
+- A connected file above the limit shows a specific problem and keeps its previous documents.
+  Checks resume after the file returns within the limit.
+- French messages explain the limit, the preserved data and how to split the file.
+- Regression tests cover CSV, XLSX, uploads and connector recovery; `pnpm verify` passes.
+
+### Evidence (2026-10-23)
+
+- Complete reads: `packages/core/src/sheet/file.test.ts` → `complete files for registry checks`.
+  CSV and XLSX stop above the limit. Exact limits and trailing empty rows pass.
+- Upload preservation: `uploads.test.ts` → `refuses partial CSV and XLSX replacements without
+  changing the previous registry`. The file, documents and audit history stay unchanged.
+- Connector recovery: `connectors.test.ts` → `keeps documents when a file exceeds the row limit,
+  then reads it after recovery`. A first pick also returns `connector_file_too_many_rows`.
+- Both cloud providers use the same complete-read function. The pane shows the new problem through
+  `RegistryView.tsx`. No database migration is required: `problem` is a text column.
+- Gate passed: lint, typecheck and `turbo run test test:oracle --concurrency=1` (the `pnpm verify`
+  tasks, with packages tested sequentially). Core: 653 tests, 93.08% branch coverage. API: 279 tests.
+  The initial parallel run exceeded the database setup timeout. The sequential run passed without
+  changes to test timeouts.

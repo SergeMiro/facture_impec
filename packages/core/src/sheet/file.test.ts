@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { zipOf } from '../../test/xlsx';
-import { FILE_LIMITS, readSheetFile, SheetFileError } from './file';
+import { FILE_LIMITS, readCompleteSheetFile, readSheetFile, SheetFileError } from './file';
 import { amountOf, dateOf, decimalOf } from './values';
 
 const NS =
@@ -197,5 +197,37 @@ describe('a CSV file (R4)', () => {
     const cut = await readSheetFile(long, 'l.csv', { ...FILE_LIMITS, maxRows: 5 });
     expect(cut.sheets[0]?.rows).toHaveLength(5);
     expect(cut.truncated).toEqual(['l']);
+  });
+});
+
+describe('complete files for registry checks', () => {
+  const limits = { ...FILE_LIMITS, maxRows: 2 };
+  const text = (value: string) => new TextEncoder().encode(value);
+  const row = (n: number) => `<row r="${n}"><c r="A${n}"><v>${n}</v></c></row>`;
+
+  it('accepts the exact CSV limit with or without a final newline and empty rows', async () => {
+    for (const suffix of ['', '\n', '\r\n;\r\n  ;  \r\n']) {
+      const file = await readCompleteSheetFile(text(`a;b\n1;2${suffix}`), 'f.csv', limits);
+      expect(file.sheets[0]?.rows).toHaveLength(2);
+      expect(file.truncated).toEqual([]);
+    }
+  });
+
+  it('accepts the exact XLSX limit followed by empty formatted rows', async () => {
+    const bytes = workbook(`${row(1)}${row(2)}<row r="3"><c r="A3" s="1"/></row>`);
+    const file = await readCompleteSheetFile(bytes, 'f.xlsx', limits);
+    expect(file.sheets[0]?.rows).toHaveLength(2);
+    expect(file.truncated).toEqual([]);
+  });
+
+  it('refuses a partial CSV or XLSX, including an extra CSV row without a newline', async () => {
+    for (const suffix of ['', '\n']) {
+      await expect(
+        readCompleteSheetFile(text(`a;b\n1;2\n3;4${suffix}`), 'f.csv', limits),
+      ).rejects.toMatchObject({ reason: 'too_many_rows' });
+    }
+    await expect(
+      readCompleteSheetFile(workbook(row(1) + row(2) + row(3)), 'f.xlsx', limits),
+    ).rejects.toMatchObject({ reason: 'too_many_rows', message: 'Commandes' });
   });
 });

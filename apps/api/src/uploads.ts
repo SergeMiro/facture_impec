@@ -10,7 +10,7 @@ import {
   InvoiceXmlError,
   parseInvoiceXml,
   partySiren,
-  readSheetFile,
+  readCompleteSheetFile,
   SheetFileError,
   type SheetSnapshot,
   supplierKey,
@@ -66,12 +66,16 @@ function invoiceOf(xml: string): { format: 'ubl' | 'cii'; invoice: Invoice } {
 
 async function workbookOf(bytes: Uint8Array<ArrayBuffer>, readAs: string) {
   try {
-    return (await readSheetFile(bytes, readAs)).sheets;
+    return (await readCompleteSheetFile(bytes, readAs)).sheets;
   } catch (e) {
     if (e instanceof SheetFileError) {
       throw new ApiError(
         e.reason === 'too_large' ? 413 : 422,
-        e.reason === 'too_large' ? 'upload_too_large' : 'upload_unreadable',
+        e.reason === 'too_large'
+          ? 'upload_too_large'
+          : e.reason === 'too_many_rows'
+            ? 'upload_too_many_rows'
+            : 'upload_unreadable',
         undefined,
         e.message,
       );

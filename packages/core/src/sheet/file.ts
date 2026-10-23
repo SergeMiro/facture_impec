@@ -33,7 +33,7 @@ export interface SheetFile {
 /** The file cannot be read: what the person is told depends on the reason. */
 export class SheetFileError extends Error {
   constructor(
-    readonly reason: 'too_large' | 'unreadable' | 'unsupported',
+    readonly reason: 'too_large' | 'too_many_rows' | 'unreadable' | 'unsupported',
     detail: string,
   ) {
     super(detail);
@@ -61,6 +61,19 @@ export async function readSheetFile(
   if (format === 'csv') return readCsv(bytes, name, limits);
   if (format === 'xlsx') return readXlsx(bytes, limits);
   throw new SheetFileError('unsupported', name);
+}
+
+/** A registry read must be complete: partial documents would give misleading check results. */
+export async function readCompleteSheetFile(
+  bytes: Uint8Array<ArrayBuffer>,
+  name: string,
+  limits: FileLimits = FILE_LIMITS,
+): Promise<SheetFile> {
+  const file = await readSheetFile(bytes, name, limits);
+  if (file.truncated.length) {
+    throw new SheetFileError('too_many_rows', file.truncated.join(', '));
+  }
+  return file;
 }
 
 // ---------------------------------------------------------------------------------------------- zip
@@ -310,10 +323,6 @@ async function readXlsx(bytes: Uint8Array<ArrayBuffer>, limits: FileLimits): Pro
     if (root?.localName !== 'worksheet' || root.namespaceURI !== MAIN) continue;
     const rows: RawRow[] = [];
     for (const row of children(child(root, 'sheetData'), 'row')) {
-      if (rows.length >= limits.maxRows) {
-        truncated.push(name);
-        break;
-      }
       const cells: RawCell[] = [];
       let rowNumber = Number(row.getAttribute('r') ?? 0);
       for (const c of children(row, 'c')) {
@@ -323,7 +332,13 @@ async function readXlsx(bytes: Uint8Array<ArrayBuffer>, limits: FileLimits): Pro
         const cell = cellOf(c, ref[1], strings, formats);
         if (cell) cells.push(cell);
       }
-      if (cells.length && rowNumber > 0) rows.push({ row: rowNumber, cells });
+      if (cells.length && rowNumber > 0) {
+        if (rows.length >= limits.maxRows) {
+          truncated.push(name);
+          break;
+        }
+        rows.push({ row: rowNumber, cells });
+      }
     }
     sheets.push({ sheet: name.slice(0, 31), rows, formulas: true });
   }
@@ -402,7 +417,10 @@ function readCsv(bytes: Uint8Array<ArrayBuffer>, name: string, limits: FileLimit
   };
   const endRow = () => {
     endField();
-    if (cells.length) rows.push({ row: rowNumber, cells });
+    if (cells.length) {
+      if (rows.length >= limits.maxRows) truncated = true;
+      else rows.push({ row: rowNumber, cells });
+    }
     cells = [];
     col = 1;
     rowNumber++;
@@ -422,7 +440,6 @@ function readCsv(bytes: Uint8Array<ArrayBuffer>, name: string, limits: FileLimit
     else if (ch === '\n' || ch === '\r') {
       if (ch === '\r' && text[i + 1] === '\n') i++;
       endRow();
-      truncated = rows.length >= limits.maxRows;
     } else field += ch;
   }
   if (!truncated && (field !== '' || cells.length)) endRow();
