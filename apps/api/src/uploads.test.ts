@@ -4,7 +4,7 @@
 import { FILE_LIMITS, toCii, toUbl } from '@fi/core';
 import { type XlsxCell, xlsxOf } from '@fi/core/testing/xlsx';
 import type { Database } from '@fi/db';
-import { docs, eq, sources, uploads } from '@fi/db';
+import { docs, eq, sources, sql, uploads } from '@fi/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { checkNow } from './checks';
 import {
@@ -254,6 +254,89 @@ describe('an uploaded supplier invoice', () => {
     await checkNow(database.db, c.id, clock);
     const lines = await database.db.select().from(docs).where(eq(docs.tenantId, c.id));
     expect(lines.find((d) => d.number === 'FA-601')?.netTotal).toBe(36_000);
+  });
+});
+
+describe('concurrent uploads and atomic replacement', () => {
+  it('accepts concurrent identical uploads once without an internal error', async () => {
+    const c = await company('wb-upload-race');
+    const bytes = text('Article;Prix\nChaise;30\n');
+    const responses = await Promise.all(
+      [0, 1].map(() =>
+        api.request('/uploads?name=Tarifs.csv', {
+          method: 'POST',
+          token: c.apiKey,
+          body: bytes,
+        }),
+      ),
+    );
+    expect(responses.map((r) => r.status)).toEqual([200, 200]);
+    const bodies = await Promise.all(responses.map((r) => r.json() as Promise<Added>));
+    expect(bodies[0]?.upload.id).toBe(bodies[1]?.upload.id);
+    expect(await database.db.select().from(uploads).where(eq(uploads.tenantId, c.id))).toHaveLength(
+      1,
+    );
+    expect(await c.audits('upload.add')).toHaveLength(1);
+    expect(await c.audits('upload.replace')).toEqual([]);
+  });
+
+  it('refuses a concurrent supplier invoice duplicate under another filename', async () => {
+    const c = await company('wb-upload-invoice-race');
+    const bytes = text(toUbl(supplierDocument('FA-RACE', '35.00')));
+    const responses = await Promise.all(
+      ['original.xml', 'copy.xml'].map((name) =>
+        api.request(`/uploads?name=${name}`, {
+          method: 'POST',
+          token: c.apiKey,
+          body: bytes,
+        }),
+      ),
+    );
+    expect(responses.map((r) => r.status).sort()).toEqual([200, 409]);
+    const duplicate = responses.find((r) => r.status === 409);
+    expect(await duplicate?.json()).toMatchObject({ error: { code: 'upload_duplicate' } });
+    expect(await database.db.select().from(uploads).where(eq(uploads.tenantId, c.id))).toHaveLength(
+      1,
+    );
+    expect(await c.audits('upload.add')).toHaveLength(1);
+  });
+
+  it('rolls back the whole replacement when a sheet write fails, then retries the same bytes', async () => {
+    const c = await company('wb-upload-atomic');
+    const { upload } = (await c.call(
+      '/uploads?name=Commandes.xlsx',
+      'POST',
+      ordersFile(30),
+    )) as Added;
+    const base = `/uploads/${upload.id}/sheets/Commandes`;
+    const { layout } = (await c.call(`${base}/detect`, 'POST')) as { layout: { kind: string } };
+    await c.call(base, 'PUT', { layout });
+    const before = await database.db.select().from(uploads).where(eq(uploads.tenantId, c.id));
+    const documents = await database.db.select().from(docs).where(eq(docs.tenantId, c.id));
+    const queued = jobs.registry.length;
+    await database.db.execute(sql`create function pg_temp.reject_upload_read() returns trigger
+      language plpgsql as $$ begin raise exception 'test source write failure'; end $$`);
+    await database.db.execute(sql`create trigger reject_upload_read before update on sources
+      for each row execute function pg_temp.reject_upload_read()`);
+    try {
+      await c.call('/uploads?name=Commandes.xlsx', 'POST', ordersFile(40), 500);
+    } finally {
+      await database.db.execute(sql`drop trigger reject_upload_read on sources`);
+    }
+    expect(await database.db.select().from(uploads).where(eq(uploads.tenantId, c.id))).toEqual(
+      before,
+    );
+    expect(await database.db.select().from(docs).where(eq(docs.tenantId, c.id))).toEqual(documents);
+    expect(await c.audits('upload.replace')).toEqual([]);
+    expect(jobs.registry).toHaveLength(queued);
+
+    const retried = (await c.call('/uploads?name=Commandes.xlsx', 'POST', ordersFile(40))) as Added;
+    expect(retried).toMatchObject({ replaced: true, upload: { id: upload.id } });
+    const after = await database.db.select().from(docs).where(eq(docs.tenantId, c.id));
+    expect(after).toHaveLength(1);
+    expect(after[0]?.netTotal).toBe(40_000);
+    expect(await c.audits('upload.replace')).toHaveLength(1);
+    expect(jobs.registry.slice(queued)).toEqual([c.id]);
   });
 });
 

@@ -820,6 +820,11 @@ the previous file. Cloud connectors retain the previous documents and show `too_
 complete read succeeds. The lower-level `readSheetFile` still reports truncation for callers that
 only need a preview.
 
+Upload writes take a transaction lock per company before checking filenames and supplier invoice
+numbers. The lock also serializes requests from different API processes. A workbook replacement
+commits its bytes, included documents and audit events in one transaction. Nested source writes use
+savepoints. Registry checks are queued after the outer transaction commits.
+
 ### Decisions taken in R6
 
 | Topic | Decision | Why |

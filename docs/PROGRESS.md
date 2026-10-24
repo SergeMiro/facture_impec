@@ -1014,3 +1014,31 @@ encodings escaped as internal errors. Acceptance criteria before implementation:
   Both errors preserve the uploaded supplier invoice.
 - Gate: `pnpm verify --concurrency=1` passed. API: 280 tests. Core: 656 tests and 93.17% branch coverage.
   All ten test tasks passed, including the XML oracle and the add-in.
+
+## R6 — Concurrent uploads and atomic replacement (started 2026-10-23)
+
+Two simultaneous uploads of the same CSV returned 200 and 500. Duplicate checks ran before the write
+transaction. Workbook replacements also committed the file before updating its included sheets.
+Acceptance criteria before implementation:
+
+- Two identical uploads both succeed, retain one file and write one `upload.add` event.
+- The same supplier invoice uploaded concurrently under different names returns one success and one
+  explained duplicate, with one stored file.
+- A workbook replacement commits the file, included documents and audit events together.
+  A write failure preserves the previous state, and a retry completes the replacement.
+- Queue registry checks only after the transaction commits.
+- Regression tests and the full verification gate pass.
+
+### Evidence (2026-10-24)
+
+- All three new `uploads.test.ts` regressions failed before the fix and passed afterward.
+  They cover identical concurrent requests, supplier duplicates under different names, and a database
+  trigger that rejects a source update. The rejected replacement preserves the file, documents and
+  audit history. Retrying the same bytes succeeds and queues one registry check.
+- An isolated PostgreSQL 17.11 container with pooled connections passed two concurrent batches:
+  20 identical CSV uploads returned 20 successes and one file. One supplier invoice under 20 names
+  returned one success and 19 `upload_duplicate` responses. Two files and two `upload.add` events
+  remained in total. The container was removed after the run.
+- `pnpm verify --concurrency=1` passed: all ten test tasks, including 283 API tests and the XML oracle.
+- `pnpm test:e2e` passed against the B2Brouter stand-in and the workbook harness (2 passed, Excel web
+  skipped without an account). browser: local. The upload and supplier-cost scenarios passed.

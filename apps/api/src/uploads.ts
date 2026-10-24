@@ -24,6 +24,7 @@ import {
   isNotNull,
   ne,
   sources,
+  sql,
   type TenantRow,
   type UploadFormat,
   type UploadRow,
@@ -168,32 +169,35 @@ export async function addUpload(
 ) {
   const name = uploadName(rawName);
   const read = await readUpload(name, bytes);
-  const facts =
-    read.kind === 'invoice' ? await checkInvoice(deps, tenant, name, read.invoice) : null;
   const hash = createHash('sha256').update(bytes).digest('hex');
-  const [before] = await deps.db
-    .select()
-    .from(uploads)
-    .where(and(eq(uploads.tenantId, tenant.id), eq(uploads.name, name)));
-  if (before?.sha256 === hash) return { upload: await uploadView(deps, before), replaced: false };
+  const result = await deps.db.transaction(async (tx) => {
+    // Across API processes too. A supplier invoice can arrive under two different filenames, so
+    // the lock belongs to the company, not just the name. Parsing above holds no database lock.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`uploads:${tenant.id}`}))`);
+    const facts =
+      read.kind === 'invoice' ? await checkInvoice({ db: tx }, tenant, name, read.invoice) : null;
+    const [before] = await tx
+      .select()
+      .from(uploads)
+      .where(and(eq(uploads.tenantId, tenant.id), eq(uploads.name, name)));
+    if (before?.sha256 === hash) return { row: before, replaced: false, changed: false };
 
-  const now = deps.now();
-  const values = {
-    format: read.format,
-    size: bytes.byteLength,
-    sha256: hash,
-    content: read.kind === 'workbook' ? Buffer.from(bytes).toString('base64') : null,
-    sheets: read.kind === 'workbook' ? read.sheets.map((s) => s.sheet) : [],
-    parsed: read.kind === 'invoice' ? read.invoice : null,
-    supplierKey: facts?.key ?? null,
-    number: facts?.number ?? null,
-    uploadedBy: who(principal),
-    uploadedAt: now,
-    updatedAt: now,
-  };
-  // A workbook replaced by a workbook keeps its row, so its included sheets stay; anything else starts over.
-  const keep = before && isWorkbook(before.format) && read.kind === 'workbook';
-  const row = await deps.db.transaction(async (tx) => {
+    const now = deps.now();
+    const values = {
+      format: read.format,
+      size: bytes.byteLength,
+      sha256: hash,
+      content: read.kind === 'workbook' ? Buffer.from(bytes).toString('base64') : null,
+      sheets: read.kind === 'workbook' ? read.sheets.map((s) => s.sheet) : [],
+      parsed: read.kind === 'invoice' ? read.invoice : null,
+      supplierKey: facts?.key ?? null,
+      number: facts?.number ?? null,
+      uploadedBy: who(principal),
+      uploadedAt: now,
+      updatedAt: now,
+    };
+    // A workbook replaced by a workbook keeps its included sheets; anything else starts over.
+    const keep = before && isWorkbook(before.format) && read.kind === 'workbook';
     if (before && !keep) await tx.delete(uploads).where(eq(uploads.id, before.id));
     const [written] = keep
       ? await tx.update(uploads).set(values).where(eq(uploads.id, before.id)).returning()
@@ -210,19 +214,27 @@ export async function addUpload(
       objectId: written.id,
       after: { name, format: read.format, size: bytes.byteLength, sha256: hash },
     });
-    return written;
+
+    if (read.kind === 'workbook' && keep) {
+      const included = await tx.select().from(sources).where(eq(sources.uploadId, written.id));
+      // readSource uses nested transactions (savepoints). Its document and audit writes commit
+      // with this upload; registry checks must wait until the outer transaction commits.
+      const reading = {
+        db: tx,
+        now: deps.now,
+        jobs: { ...deps.jobs, enqueueRegistry: async () => {} },
+      };
+      for (const source of included) {
+        const snapshot = read.sheets.find((s) => s.sheet === source.sheet);
+        if (snapshot) await readSource(reading, tenant.id, source, snapshot);
+      }
+    }
+    return { row: written, replaced: before !== undefined, changed: true };
   });
 
-  if (read.kind === 'workbook' && keep) {
-    const included = await deps.db.select().from(sources).where(eq(sources.uploadId, row.id));
-    for (const source of included) {
-      const snapshot = read.sheets.find((s) => s.sheet === source.sheet);
-      if (snapshot) await readSource(deps, tenant.id, source, snapshot);
-    }
-  }
   // The registry job projects an invoice, and checks again after a sheet changed or a file left.
-  await deps.jobs.enqueueRegistry(tenant.id);
-  return { upload: await uploadView(deps, row), replaced: before !== undefined };
+  if (result.changed) await deps.jobs.enqueueRegistry(tenant.id);
+  return { upload: await uploadView(deps, result.row), replaced: result.replaced };
 }
 
 async function uploadOf(deps: Pick<ApiDeps, 'db'>, tenantId: string, id: string) {
