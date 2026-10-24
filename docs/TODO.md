@@ -252,9 +252,10 @@ Owner questions (BTP plan §13 and what stage 0 found):
 Left from stage 1 for later (2026-10-24):
 
 - [ ] **Légifrance, read in a browser**: loi n° 71-584 art. 1 and 2 (the retenue's 5 % of the TTC, its
-      release after a year) and C. trav. L8222-1 / D8222-1 (the 5 000 € HT threshold of the
-      attestation de vigilance). Both are `TODO(verify)` in `docs/research/BTP_RULES.md`: Légifrance
-      answered 403 to WebFetch and curl; a real browser (neo) may pass its Cloudflare check.
+      release after a year), `TODO(verify)` in `docs/research/BTP_RULES.md`: Légifrance answered 403
+      to WebFetch and curl, and in neo (2026-10-24) it asks a human to tick its Cloudflare check.
+      The Code du travail part is done: L8222-1, R8222-1 (5 000 € HT, not « D8222-1 »), D8222-5,
+      read 2026-10-24 on code.travail.gouv.fr.
 - [x] **OneDrive folders watched** (BTP plan stage 1 `drive` adapter): done 2026-10-24, stage 1D
       (`docs/plans/phase-1.md` › 1D; `apps/api/src/connectors.test.ts` › a watched OneDrive folder).
 - [ ] **OneDrive's picker in folder mode, on real accounts** (owner, with the app registration):
@@ -271,9 +272,9 @@ Left from stage 1 for later (2026-10-24):
 
 Left from stage 2A for later (2026-10-24):
 
-- [ ] **Légifrance, read in a browser**: C. trav. D8222-5 (the attestation de vigilance and the
-      extrait K / K bis asked again every six months), the base of the two renewals
-      (`packages/agents/src/obligations.ts`, `TODO(verify)`).
+- [x] **C. trav. D8222-5 read** (the attestation de vigilance and the extrait K / K bis asked again
+      every six months), the base of the two renewals: 2026-10-24, browser: local (neo), on
+      code.travail.gouv.fr (`docs/research/BTP_RULES.md` › Attestation de vigilance).
 - [ ] **ClassifyAgent on the production model**: record `classify` with Mistral once the owner's key
       is there (`pnpm --filter @fi/agents eval:record classify`, `EVAL_GATE=true`), as the other agents.
 - [ ] **Real documents**: the first pilot's attestations, Kbis, PV and contracts through the classifier

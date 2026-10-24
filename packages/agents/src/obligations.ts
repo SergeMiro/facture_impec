@@ -71,9 +71,9 @@ export interface DeriveInput {
 }
 
 /**
- * kind → deadline (D7): an attestation and a Kbis every six months (C. trav. D8222-5,
- * TODO(verify) on Légifrance), an insurance at its end, the retenue a year after the réception
- * (loi n° 71-584, art. 2), a sale at its due date. A Mode test key starts with `test:`.
+ * kind → deadline (D7): an attestation and a Kbis every six months (C. trav. D8222-5, read
+ * 2026-10-24, `docs/research/BTP_RULES.md`), an insurance at its end, the retenue a year after the
+ * réception (loi n° 71-584, art. 2), a sale at its due date. A Mode test key starts with `test:`.
  */
 export function deriveObligations(input: DeriveInput): ObligationDraft[] {
   const { kind, fields, siren } = input;

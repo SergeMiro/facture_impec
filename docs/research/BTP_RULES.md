@@ -6,7 +6,10 @@ What the BTP rules of `@fi/core` (`packages/core/src/rules/btp.ts`) rest on. Che
 How to read it, as in `docs/research/FR_RULES.md`: **verified** = read in the official text or a
 normative standard on that day; **inferred** = a third party or our own deduction, labelled.
 **browser: none.** Légifrance answered HTTP 403 (Cloudflare challenge) to WebFetch and curl, as on
-2026-10-17; its articles below are cited from the sources named.
+2026-10-17; its articles below are cited from the sources named. **browser: local** (BrowserOS neo,
+2026-10-24) for the Code du travail: Légifrance asked a human to tick its check, so the articles were
+read on the Ministry of Labour's Code du travail numérique (code.travail.gouv.fr), which gives
+Légifrance's text with its version date and article id.
 
 ## Sous-traitance: reverse charge (autoliquidation)
 
@@ -63,7 +66,25 @@ normative standard on that day; **inferred** = a third party or our own deductio
 
 ## Attestation de vigilance (for stage 2 and 3)
 
-- C. trav. art. D8222-5 (https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046078939): the
-  company checks, at the contract and every six months until it ends, that its co-contractor gave an
-  URSSAF attestation under six months old, and an extract of its registration (Kbis, RNE). The
-  threshold of L8222-1 / D8222-1 (5 000 € HT) is `TODO(verify)`. **inferred** (Légifrance unread).
+- **Who checks.** C. trav. art. L8222-1 (version of 2011-06-18, LEGIARTI000024197683): whoever
+  concludes a contract « d'un montant minimum » for works, services or an act of commerce checks, at
+  its conclusion « et périodiquement jusqu'à la fin de l'exécution du contrat », that the
+  co-contractor fulfils the formalities of L8221-3 and L8221-5 (registration, declarations); the
+  ways are « précisées par décret ». **verified** (code.travail.gouv.fr/code-du-travail/l8222-1).
+- **Threshold.** C. trav. art. **R**8222-1 (version of 2015-05-01, LEGIARTI000030422273): the checks
+  « sont obligatoires pour toute opération d'un montant au moins égal à 5 000 euros hors taxes »:
+  5 000 € HT included. This file said D8222-1, which does not exist (the Code du travail numérique
+  answers 404). **verified** (code.travail.gouv.fr/code-du-travail/r8222-1).
+- **What to get.** C. trav. art. D8222-5 (version of 2023-01-01, décret n° 2022-1015,
+  LEGIARTI000046078939): the company is deemed to have checked if it gets « lors de la conclusion et
+  tous les six mois jusqu'à la fin de son exécution » (1°) the URSSAF attestation (CSS L243-15)
+  « datant de moins de six mois », whose authenticity it checks with the URSSAF, and (2°) where
+  registration is compulsory, one of: a K or K bis extract, an RNE extract (métiers et artisanat), a
+  quote, advert or letter giving the name, full address and registration number, or the greffe's
+  electronic receipt (C. com. R123-6). **verified** (code.travail.gouv.fr/code-du-travail/d8222-5).
+- **The deadlines** (`packages/agents/src/obligations.ts`): an attestation is due again six months
+  after its date, the text's « moins de six mois » (**verified**). A Kbis: the text asks for one
+  every six months, not one under six months old; its date plus six months is our proxy
+  (**inferred**). Both are derived whatever the contract's amount: R8222-1 says when the check is
+  compulsory, and a company that files an attestation wants it followed (**inferred**). The
+  authenticity check with the URSSAF is the person's (`docs/DEFERRED.md`).
