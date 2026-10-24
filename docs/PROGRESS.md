@@ -1561,3 +1561,41 @@ Evidence (2026-10-24):
 | Tested | The two API tests and the controller test above; E2E step « BTP stage 2: an attestation makes its deadline; a letter is said by a person » of `apps/addin/e2e/harness.spec.ts`, passed 2026-10-24 in local Chrome (browser: local): an attestation issued 200 days ago shows « En retard »; the letter, said to be a PV de réception of 30 days ago, gives the retenue a year later, hidden at 90 days and shown with « Voir les échéances sur un an »; both files in « Reçus »; no horizontal scroll. Two `check()` on switches the server moves became a click and a wait (the BTP switch failed once under load: Playwright read it back before the save). |
 | Gate | `pnpm verify` green on 2026-10-24: api 336, add-in 114, agents 154 (evals included), core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 7, scripts 4. |
 
+
+## BTP plan — stage 3A: deadlines watched, requests decided and sent (started 2026-10-24)
+
+`docs/plans/phase-3.md` › 3A, `docs/DECISIONS.md` D8. Criteria, written before the work:
+
+- **Watched**: on the chasing timer, each open deadline in its horizon (an attestation, a Kbis or an
+  insurance 30 days before its date, a retenue on its date, an invoice that came as a document once
+  overdue) gets one draft request to its company, keyed by deadline and date: a second run makes
+  none. A deadline that moved (a newer attestation), closed or went away withdraws its draft; a
+  snoozed draft is a draft again on its day.
+- **Written**: each request's subject and text come from `fr.json` (the company that asks, the date,
+  the amount and the invoice when known, the law for the retenue); a Mode test one says « [TEST] ».
+- **Decided**: `GET /actions` lists them with what they will send, to whom, for which deadline;
+  `POST /actions/:id/decide` approves, rejects, edits (text, address; the company keeps a new
+  address) or snoozes (30 days at most). The revision the person saw must be the action's; another
+  company's action is not found; one already decided is refused; each decision writes an audit event.
+- **Sent once**: an approved request goes through the queue `action.send`: claimed, checked (the
+  deadline still open and on the same date, an address), e-mailed with answers going to the person
+  who approved, `sent`. A second approval, the job run twice, or a claim that never finished never
+  sends a second e-mail (the last goes back to a person, « envoi incertain »). Three failed tries
+  leave it `failed`. Mode test e-mails nobody.
+- **A new company**: approving « confirmer_tiers » adds the supplier from the directory and links
+  its documents and deadlines; a closed company, a duplicate SIREN, one the directory does not know
+  are refused in plain French.
+- **Closed by a person**: `POST /obligations/:id/close` (`done`, `dismissed`) closes a deadline and
+  withdraws its drafts.
+
+Evidence (2026-10-24):
+
+| Criterion | Evidence |
+|---|---|
+| Watched | `apps/api/src/actions.test.ts` › the watchers › draft one request per deadline in its horizon, once (an attestation at 17 days drafted, one at six months not, a second run drafts none; audit `action.draft`); › ask for a retenue on its day and remind an invoice only once it is overdue (neither on 24/10; both on 31/10, the reminder to the invoice's buyer contact with its number); › withdraw a draft whose deadline moved (`deadline_moved`, revision moved on, the new date drafted). › a decision › snoozed comes back on its day. |
+| Written | `packages/agents/src/requests.test.ts` (6 tests: before and after the date, the insurance named, the retenue's law and its amount only when known, the invoice's number and what is left, « [TEST] », no placeholder left in any kind). |
+| Decided | `actions.test.ts` › a decision › to an older revision or to another company is refused in plain French (409 `action_revision_changed` with the fr.json message, 404 for another company's and a malformed id, 400 for `to` without `edit`); › without an address asks for one; « Modifier » adds it, and the company keeps it (422 `action_needs_recipient`, then the edited text sent to the new address); › snoozed comes back on its day, within thirty days only (400 `action_snooze_range` at 61 days). |
+| Sent once | › approved in the pane sends one e-mail, once, with answers going to the person (a second approval 409, the job run twice: one mail, `Reply-To` the signed-in person, the deadline's `lastRemindedAt`, audit draft → decide → sent); › approved for a deadline closed meanwhile is not sent (`no_longer_needed`); › sending › that never finished goes back to a person (`send_unknown`, revision 2, no mail); › tries a failing mail three times, then leaves it failed; › in Mode test e-mails nobody (`notSent`). |
+| A new company | › « Ajouter comme fournisseur » › adds the company from the directory and links its documents and deadlines (supplier `sirene`, verified; the document and the deadline linked; its request drafted at once, without an address; `edit` refused 422 `action_not_editable`); › refuses a company the directory says is closed (409 `supplier_closed`, the draft unchanged). |
+| Closed by a person | › withdraw a draft whose deadline moved, and « C'est fait » withdraws the next (`{ withdrawn: 1 }`, nothing drafted after, a second close 409 `obligation_closed`). |
+| Gate | `pnpm verify` green on 2026-10-24: api 349, add-in 114, agents 160 (evals included), core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 8, scripts 4. |

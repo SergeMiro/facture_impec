@@ -89,6 +89,19 @@ describe('ApprovalDecision', () => {
     ).toBe(true);
   });
 
+  it('takes a recipient with an edit only, and only an address', () => {
+    const edit = { ...decision, decision: 'edit', comment: 'Bonjour…' };
+    expect(ApprovalDecision.parse({ ...edit, to: 'compta@client.example' }).to).toBe(
+      'compta@client.example',
+    );
+    const issues = (patch: Record<string, unknown>) =>
+      ApprovalDecision.safeParse({ ...decision, ...patch }).error?.issues.map((i) => i.message);
+    expect(issues({ to: 'compta@client.example' })).toEqual(['recipient_edit_only']);
+    expect(issues({ decision: 'edit', comment: 'Bonjour…', to: 'pas une adresse' })).toHaveLength(
+      1,
+    );
+  });
+
   it('refuses an edit without text, a snooze without a date, a date on anything else', () => {
     const issues = (patch: Record<string, unknown>) =>
       ApprovalDecision.safeParse({ ...decision, ...patch }).error?.issues.map((i) => i.message);

@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import { Address, InvoiceDraft, isIsoDate, LayoutMapping, SheetMapping, toCii } from '@fi/core';
 import { audit, CONNECTION_PROVIDERS, eq, PDP_PROVIDERS, type TenantRow, tenants } from '@fi/db';
-import { MAX_DOCUMENT_BYTES } from '@fi/domain';
+import { ApprovalDecision, MAX_DOCUMENT_BYTES } from '@fi/domain';
 import { PdpRequestError } from '@fi/pdp-adapter';
 import { t } from '@fi/shared';
 import { Hono } from 'hono';
@@ -12,6 +12,14 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { z } from 'zod';
+import {
+  ActionsQuery,
+  CloseObligationBody,
+  closeObligation,
+  decideAction,
+  deciderOf,
+  listActions,
+} from './actions';
 import { adminRoutes } from './admin';
 import { archivedPdf } from './archive';
 import { explainInvoice, invoicePdf, rehearseInvoice } from './assist';
@@ -385,6 +393,9 @@ export function createApp(deps: ApiDeps) {
     '/documents',
     '/documents/*',
     '/obligations',
+    '/obligations/*',
+    '/actions',
+    '/actions/*',
     '/checks',
     '/links/*',
     '/findings/*',
@@ -691,6 +702,30 @@ export function createApp(deps: ApiDeps) {
     const tenant = c.get('tenant');
     const doc = await getDocument(deps, tenant, c.req.param('id'));
     return c.json(documentView(await reviewDocument(deps, tenant, c.get('principal'), doc, input)));
+  });
+
+  // ── The requests a person approves (BTP stage 3, docs/DECISIONS.md D8) ────────────────────────
+  api.get('/actions', async (c) =>
+    c.json(await listActions(deps.db, c.get('tenant'), parse(ActionsQuery, c.req.query()))),
+  );
+
+  // From the pane: the signed-in person decides, whatever channel the body names.
+  api.post('/actions/:id/decide', async (c) => {
+    const id = c.req.param('id');
+    if (!z.uuid().safeParse(id).success) throw new ApiError(404, 'action_not_found');
+    const raw = await body(c, z.looseObject({}));
+    const decision = parse(ApprovalDecision, { ...raw, actionId: id, channel: 'excel' });
+    const decider = deciderOf(c.get('principal'), 'excel');
+    return c.json(await decideAction(deps, c.get('tenant'), decider, decision));
+  });
+
+  // « C'est fait » or « Ignorer » on a deadline; its drafts are withdrawn.
+  api.post('/obligations/:id/close', async (c) => {
+    const input = await body(c, CloseObligationBody);
+    const tenant = c.get('tenant');
+    return c.json(
+      await closeObligation(deps, tenant, c.get('principal'), c.req.param('id'), input),
+    );
   });
 
   // ── Files uploaded from the pane (R6) ─────────────────────────────────────────────────────────

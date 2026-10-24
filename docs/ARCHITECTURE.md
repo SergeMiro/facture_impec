@@ -1067,6 +1067,36 @@ job; a structured invoice ends in `document.validate`. `docs/DECISIONS.md` D7 ho
   checks the SIREN's key as the API does. « Déposer un document » sends the file to `POST /ingest` in
   the pane's mode; the workers read and sort it, « Actualiser » shows the result.
 
+## BTP back end, stage 3A: deadlines watched, requests decided and sent
+
+`docs/DECISIONS.md` D8. Nothing leaves without a person; the action row is the state.
+
+```text
+chasing timer ─► runWatchers (apps/api/src/watchers.ts)
+                   snoozed → draft on its day · drafts of a moved/closed/gone deadline → rejected
+                   claim older than 10 min → draft « send_unknown » · approved, unclaimed → requeued
+                   open deadline in its horizon → draftRequest (@fi/agents, fr.json) → actions (draft)
+pane ─► GET /actions · POST /actions/:id/decide (ApprovalDecision, revision) ─► approved
+      ─► queue action.send ─► runActionSend: claim (payload.sendingAt) → preflight → mail → sent
+pane ─► POST /obligations/:id/close (done | dismissed) ─► its drafts withdrawn
+```
+
+- **Horizons** (`WATCHED`): an attestation, a Kbis or an insurance 30 days before its date, from a
+  supplier; a retenue on its date, from a customer; an invoice that came as a document once overdue,
+  from its buyer (one reminder; one sent through Facture Impec has CollectAgent). The key
+  `<action kind>:<deadline id>:<date>` and a `not exists` on the deadline's date: one request per date.
+- **Decisions** (`apps/api/src/actions.ts`, `decideAction`): the row locked, the revision compared,
+  then moved on (a link e-mailed before it no longer decides). `edit` sets the text and the address;
+  the company keeps an address it had none of. `confirmer_tiers` approved: the directory first
+  (outside the transaction), then the supplier inserted or found, its documents (`extracted->>'siren'`)
+  and their deadlines linked; the requests those deadlines need are drafted at once (`draftDue` for
+  the company). Audit `action.decide`.
+- **Sending** (`runActionSend`): the claim is committed before the mail, so a crash never sends twice;
+  the watchers give a claim that never finished back to a person. The check before sending: the
+  deadline still open and on the date the request was written for. `Reply-To`: the person who
+  approved (else the company's first owner). Mode test: `sent` with `notSent`, no mail. Three failed
+  tries: `failed`, `mail_failed`.
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

@@ -27,6 +27,8 @@ export const ApprovalDecision = z
     decision: Decision,
     /** For `edit`, the new text of the message; for the others, an optional note. */
     comment: z.string().trim().min(1).max(2000).optional(),
+    /** For `edit`: the recipient's address, when the draft had none or the wrong one (D8). */
+    to: z.email().max(254).optional(),
     snoozeUntil: z.iso.datetime({ offset: true }).optional(),
     channel: ApprovalChannel,
   })
@@ -39,6 +41,9 @@ export const ApprovalDecision = z
     }
     if (d.decision !== 'snooze' && d.snoozeUntil) {
       ctx.addIssue({ code: 'custom', path: ['snoozeUntil'], message: 'snooze_only' });
+    }
+    if (d.decision !== 'edit' && d.to) {
+      ctx.addIssue({ code: 'custom', path: ['to'], message: 'recipient_edit_only' });
     }
   });
 export type ApprovalDecision = z.infer<typeof ApprovalDecision>;

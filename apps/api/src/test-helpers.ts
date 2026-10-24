@@ -103,6 +103,8 @@ export interface RecordedJobs extends Jobs {
   ingests: string[];
   validations: string[];
   classifies: string[];
+  /** Actions approved, to send. */
+  actions: string[];
 }
 
 export function recordedJobs(): RecordedJobs {
@@ -115,6 +117,7 @@ export function recordedJobs(): RecordedJobs {
   const ingests: string[] = [];
   const validations: string[] = [];
   const classifies: string[] = [];
+  const actions: string[] = [];
   return {
     sends,
     syncs,
@@ -125,6 +128,7 @@ export function recordedJobs(): RecordedJobs {
     ingests,
     validations,
     classifies,
+    actions,
     async enqueueSend(id) {
       sends.push(id);
     },
@@ -151,6 +155,9 @@ export function recordedJobs(): RecordedJobs {
     },
     async enqueueClassify(documentId) {
       classifies.push(documentId);
+    },
+    async enqueueAction(actionId) {
+      actions.push(actionId);
     },
   };
 }

@@ -51,6 +51,8 @@ export interface Jobs {
   enqueueValidate(documentId: string): Promise<void>;
   /** Classify a text document and derive its deadlines (src/document-pipeline.ts). */
   enqueueClassify(documentId: string): Promise<void>;
+  /** Send what a person approved (src/actions.ts). */
+  enqueueAction(actionId: string): Promise<void>;
 }
 
 export interface AiDeps {
@@ -75,6 +77,8 @@ export interface Mail {
   text: string;
   /** The sender's display name when an accounting firm's brand replaces ours (white label). */
   fromName?: string;
+  /** Where an answer goes when it is not for us: the company that asks (BTP requests, D8). */
+  replyTo?: string;
 }
 
 export interface Mailer {

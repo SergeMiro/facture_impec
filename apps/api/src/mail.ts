@@ -48,6 +48,7 @@ export class SmtpMailer implements Mailer {
       to: mail.to,
       subject: mail.subject,
       text: mail.text,
+      ...(mail.replyTo && { replyTo: mail.replyTo }),
     });
   }
 }

@@ -210,7 +210,7 @@ Each line says where it came from and what would bring it back.
 | A réception's deadline across copies | Keyed by its document: the same PV as a scan and as a PDF makes two retenues | Chantiers (stage 4): the key becomes the chantier and the réception date, and the copies meet. |
 | The chantier of a document | None: no pattern finds it reliably in a text | Stage 4's ERP connectors give chantiers; a document is linked by the address or the reference they list. |
 | An invoice's amounts without XML | `invoice_without_data`: a person says it is an invoice, it is `done` without a deadline | The owner's question « Reading invoices without XML » (`docs/TODO.md`): `extractInvoice` and its 98 % eval. |
-| Deadlines of a company not confirmed yet | Keyed by its SIREN, without a party; `confirmer_tiers` asks once | Stage 3: approving `confirmer_tiers` creates the party and links its open deadlines to it. |
+| Deadlines of a company not confirmed yet | Keyed by its SIREN, without a party; `confirmer_tiers` asks once | Done in stage 3A: approving `confirmer_tiers` adds the supplier and links its documents and deadlines. |
 
 ## The documents in the pane (BTP plan stage 2B, 2026-10-24)
 
@@ -221,3 +221,15 @@ Each line says where it came from and what would bring it back.
 | Finding a document | Newest first, by stage or kind through the API; the pane shows the newest 50 and « Afficher plus » | A pilot has hundreds: a search by name or company, as « Retrouver une facture ». |
 | A document seen as it is read | « Actualiser » after a deposit | The pane asks again by itself while a deposited document is being read (a few seconds). |
 | The deadlines on a sheet (BTP plan §12 « registre visible dans Excel ») | The « Échéances » part of the pane, read from the API each time | A pilot who wants them in the workbook: a sheet written on demand, as the registry export, never kept in step by itself. |
+
+## Requests a person approves (BTP plan stage 3A, 2026-10-24)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| Instant alerts (BTP plan §8 `notify`) | The pane's « À valider » and, in 3C, the weekly report | A pilot misses an urgent request between two reports: one e-mail when a draft is made, at most daily. |
+| Reminders of an invoice that came as a document | One request once it is overdue | A pilot asks for a cadence: CollectAgent's steps (courtesy before, firm after) on these deadlines too. |
+| A model rewriting a draft (`revise`) | The person writes in « Modifier » | A pilot finds the letters stiff: a model rewrites from the person's words, with its eval and fixture. |
+| The sender of a request | Our sender address, the company named in the text, `Reply-To` the person who approved | The owner's question « Sending actions' e-mails » (`docs/TODO.md`): the company's domain with SPF and DKIM. |
+| The company's own renewals (its own attestation, Kbis) | Listed in « Échéances », no request (nobody to ask) | A reminder to the company itself, with the instant alerts. |
+| Withdrawn, refused and failed requests in the pane | `GET /actions?status=` lists them; the pane shows the drafts | A pilot asks what happened to one: a « Historique » under « À valider ». |
+| A request to a supplier not marked sous-traitant | Drafted for any supplier whose attestation, Kbis or insurance runs out | Pilots find it noisy: only for suppliers marked « sous-traitant », with a switch. |

@@ -25,6 +25,8 @@ export const QUEUES = {
   validate: 'document.validate',
   /** A text document classified, linked and its deadlines derived (src/document-pipeline.ts). */
   classify: 'document.classify',
+  /** What a person approved, sent (src/actions.ts). `exclusive` per action. */
+  action: 'action.send',
 } as const;
 
 export function createBoss(database: Database): PgBoss {
@@ -106,6 +108,15 @@ export async function ensureQueues(boss: PgBoss): Promise<void> {
     retryBackoff: true,
     expireInSeconds: 600,
   });
+  // A failed mail is counted on the action itself (three tries, then « failed »): the queue's
+  // retries carry those tries.
+  await boss.createQueue(QUEUES.action, {
+    policy: 'exclusive',
+    retryLimit: 3,
+    retryDelay: 30,
+    retryBackoff: true,
+    expireInSeconds: 300,
+  });
 }
 
 export const syncKey = (target: SyncTarget) =>
@@ -139,6 +150,9 @@ export function bossJobs(boss: PgBoss): Jobs {
     },
     async enqueueClassify(documentId) {
       await boss.send(QUEUES.classify, { documentId }, { singletonKey: documentId });
+    },
+    async enqueueAction(actionId) {
+      await boss.send(QUEUES.action, { actionId }, { singletonKey: actionId });
     },
   };
 }

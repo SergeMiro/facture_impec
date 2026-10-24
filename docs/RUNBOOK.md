@@ -472,6 +472,26 @@ curl -H "authorization: Bearer $FI_KEY" "http://localhost:4000/obligations?horiz
 In the pane: the tab « Documents ». `?test=true` on both for Mode test, as the pane does. Recording the classifier's
 eval through llmfp: `docs/AI_PROVIDERS.md` (`pnpm --filter @fi/agents eval:record classify`).
 
+### Requests a person approves (stage 3A)
+
+The watchers run on the chasing timer (every 5 minutes) and draft one request per open deadline in its
+horizon (`docs/ARCHITECTURE.md` › stage 3A). What waits, and a decision by hand:
+
+```bash
+curl -H "authorization: Bearer $FI_KEY" "http://localhost:4000/actions"            # drafts
+curl -H "authorization: Bearer $FI_KEY" "http://localhost:4000/actions?status=sent"
+curl -X POST -H "authorization: Bearer $FI_KEY" -H 'content-type: application/json' \
+  -d '{"revision":0,"decision":"approve"}' http://localhost:4000/actions/<id>/decide
+curl -X POST -H "authorization: Bearer $FI_KEY" -H 'content-type: application/json' \
+  -d '{"status":"done"}' http://localhost:4000/obligations/<id>/close
+```
+
+A 409 `action_revision_changed` means the list is older than the action: read it again. A request
+stuck `approved`: `select status, error, payload_json->>'sendingAt', payload_json->>'tries' from actions
+where id = '<id>'`; a claim older than 10 minutes becomes a draft « send_unknown » at the next run,
+for a person to decide again (the e-mail may or may not have left). `failed` with `mail_failed`: SMTP
+refused it three times (`docs/DEPLOY.md` › mail); with `no_longer_needed`: its deadline closed or moved.
+
 ## Deployment
 
 The API image, the compose file and the settings of a hosted sandbox or prod: `docs/DEPLOY.md`. The

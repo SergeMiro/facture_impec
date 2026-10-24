@@ -198,9 +198,11 @@ Stages (`docs/plans/phase-N.md` each):
       « Échéances », « À vérifier », « Reçus » and « Déposer un document »: done 2026-10-24).
       Extraction of invoices waits for the owner (below); chantiers come with stage 4; what 2B left
       is in `docs/DEFERRED.md` › The documents in the pane.
-- [ ] **3 — watchers and approvals**: the deadline watchers, actions with `POST /actions/:id/decide`,
-      « À valider » in the pane, the e-mail digest with signed links, the Telegram bot; the invoice
-      deadlines joined to the existing chasing (CollectAgent), not duplicated.
+- [ ] **3 — watchers and approvals** (`docs/plans/phase-3.md`; 3A, the deadline watchers, the
+      requests from `fr.json`, `GET /actions`, `POST /actions/:id/decide`, the queue `action.send`,
+      « Ajouter comme fournisseur », `POST /obligations/:id/close`: done 2026-10-24). Left: 3B « À
+      valider » in the pane, 3C the weekly e-mail's links; the Telegram bot waits for the owner (below);
+      invoices sent through Facture Impec keep CollectAgent's chasing, not duplicated.
 - [ ] **4 — connectors**: the frame and the ERP-export connector (D5); EBP SaaS paused (D3).
 - [ ] **5, 6** paused (D3). **7 — observability, performance, runbook, onboarding.**
 
@@ -222,7 +224,8 @@ Owner questions (BTP plan §13 and what stage 0 found):
       (`docs/RGPD.md` › AI assistance); a model without training on the data, under contract?
 - [ ] **Mail ingestion** (D3): a forwarding address (an inbound e-mail provider, a monthly cost) or
       Gmail / Outlook OAuth (`gmail.readonly` is a restricted scope: Google's paid assessment).
-- [ ] **Telegram**: the bot's token and name (stage 3); BotFather, in the owner's account.
+- [ ] **Telegram**: the bot's token and name (stage 3); BotFather, in the owner's account, and the
+      API's public HTTPS address for its webhook. Until then, decisions come from the pane and e-mail.
 - [ ] **Sending actions' e-mails**: the sender domain (SPF, DKIM), with the SMTP of the pilot.
 - [ ] **Files' storage**: an object store (S3, encryption at rest, region) when hosting is chosen; the
       bytes stay in Postgres (`blobs`) until then.
@@ -257,3 +260,11 @@ Left from stage 2A for later (2026-10-24):
 
 - [ ] A Microsoft account that can upload an add-in in Excel on the web, then
       `apps/addin/e2e/excel-web.spec.ts` run once and its Excel selectors confirmed (`TODO(verify)`).
+
+Left from stage 3A for later (2026-10-24):
+
+- [ ] **Reply-To on CollectAgent's chasing e-mails**: a customer's answer to a reminder reaches our
+      sender address, not the company. `Mail.replyTo` exists since 3A (requests use it); the chasing
+      mails (`apps/api/src/collect.ts`) should set it to the person who sent the step, or the owner.
+- [ ] **The requests' letters read by a pilot**: the six `request.body.*` in `fr.json` (the
+      retenue's cites loi n° 71-584 art. 2, `TODO(verify)` with Légifrance above).

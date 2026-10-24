@@ -30,6 +30,7 @@ import { eventFor, type PdpAdapter, PdpUnavailableError, type SendResult } from 
 import type { FiEnv } from '@fi/shared/env';
 import type { PgBoss } from 'pg-boss';
 import { z } from 'zod';
+import { runActionSend } from './actions';
 import { archiveReceived, archiveSent, runArchive } from './archive';
 import { runAutopilot } from './autopilot';
 import { type Billing, recordUsage, runUsageReport } from './billing';
@@ -69,6 +70,7 @@ import { runWeeklyReports } from './report';
 import { purgeExpired } from './rgpd';
 import { runVatChecks } from './vat-checks';
 import type { Vies } from './vies';
+import { runWatchers } from './watchers';
 
 export interface WorkerDeps {
   /** Only FI_ENV, for the go-live gate (src/platform.ts); absent in unit tests: not prod. */
@@ -99,6 +101,7 @@ const InvoiceJob = SendJob;
 const RegistryJob = z.object({ tenantId: z.uuid() });
 const ConnectorJob = z.object({ connectionId: z.uuid() });
 const DocumentJob = z.object({ documentId: z.uuid() });
+const ActionJob = z.object({ actionId: z.uuid() });
 const SyncJob = z.object({
   provider: z.enum(PDP_PROVIDERS),
   account: z.string().min(1),
@@ -523,6 +526,10 @@ export async function startWorkers(
   await boss.work(QUEUES.classify, { ...polling, localConcurrency: 3 }, async ([job]) => {
     if (job) await runDocumentClassify(deps, DocumentJob.parse(job.data).documentId);
   });
+  // A request a person approved (src/actions.ts): a failed mail throws, and the queue tries again.
+  await boss.work(QUEUES.action, { ...polling, localConcurrency: 2 }, async ([job]) => {
+    if (job) await runActionSend(deps, ActionJob.parse(job.data).actionId);
+  });
   await boss.work(QUEUES.connector, polling, async ([job]) => {
     if (job) {
       await checkConnection(deps, ConnectorJob.parse(job.data).connectionId, options.log);
@@ -539,13 +546,15 @@ export async function startWorkers(
   // Chasing runs on its own timer rather than through the queue: it must see each business day,
   // and the scenario stack's accelerated clock turns a day into a fraction of a second. Plans are
   // locked row by row, so instances running it at once do not act twice. Expired sign-in rows go
-  // on the same timer (src/rgpd.ts purgeExpired).
+  // on the same timer (src/rgpd.ts purgeExpired), and so do the deadline watchers (src/watchers.ts),
+  // which must see each business day too.
   let collecting = false;
   const collect = async () => {
     if (collecting) return;
     collecting = true;
     try {
       await runCollect(deps, options.log);
+      await runWatchers(deps, options.log);
       await runWeeklyReports(deps, options.log);
       await purgeExpired(deps);
     } catch (e) {
