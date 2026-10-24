@@ -509,6 +509,17 @@ cursor; after that, the same file given again goes on from it. `export_missing`:
 the same file again goes on. A column not recognised: the person sees which one is needed; the
 labels known are in `packages/connectors/src/export/columns.ts`.
 
+An ERP invoice that made no deadline (stage 4B): its reason is in `result_json->'skipped'`.
+`paid`: nothing left to pay. `sent_here`: the invoice went through Facture Impec, its deadline is
+the platform's. `credit_note`, `not_invoice`: an avoir, a devis. `no_number`, `no_due_date`: the
+ERP's row lacks it. A payment not applied: `partial_payment` (less than what is left; nothing is
+summed, the next export's « Reste à payer » closes it), `invoice_unknown` (no deadline of that
+number). A deadline whose date or amount does not follow the ERP: a better source has it, `select
+o.due_on, o.amount, d.source from obligations o join documents d on d.id =
+o.source_document_id where o.key like '%facture_echeance:%:<number>'`; a PDP's values are never
+moved by the ERP. An ERP invoice that is never reminded: it has no customer (`withoutCustomer` in
+the import's result), the reminder has no one to go to.
+
 ## Deployment
 
 The API image, the compose file and the settings of a hosted sandbox or prod: `docs/DEPLOY.md`. The

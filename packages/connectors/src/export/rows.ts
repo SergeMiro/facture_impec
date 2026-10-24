@@ -3,6 +3,7 @@
 // out and the row kept; only a missing key skips the row.
 import {
   dateOf,
+  decimalOf,
   identifierOf,
   isTotalRow,
   isValidSiren,
@@ -11,17 +12,23 @@ import {
   percentValueOf,
   type RawCell,
   type RawRow,
+  roundToCents,
   textOf,
 } from '@fi/core';
 import {
   type ChantierRow,
   ChantierRow as ChantierSchema,
   type ErpAddress,
+  type FactureRow,
+  FactureRow as FactureSchema,
+  type PartyRef,
+  type ReglementRow,
+  ReglementRow as ReglementSchema,
   type Skipped,
   type TiersRow,
   TiersRow as TiersSchema,
 } from '../schemas';
-import type { ChantierField, TiersField } from './columns';
+import type { ChantierField, InvoiceField, PaymentField, TiersField } from './columns';
 import { cellsOf, type ExportSheet } from './read';
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; skipped: Skipped };
@@ -100,6 +107,29 @@ function statusOf(cell: RawCell | undefined): 'open' | 'closed' | undefined {
   return CLOSED.test(w) ? 'closed' : 'open';
 }
 
+/** An amount in cents: « 1 234,50 € », 1234.5; undefined when the cell holds no number. */
+function centsOf(cell: RawCell | undefined): number | undefined {
+  const decimal = decimalOf(cell);
+  return decimal === undefined ? undefined : (roundToCents(decimal) ?? undefined);
+}
+
+/** An invoice's number as the ERP writes it: an Excel number without « .0 », text as typed. */
+const numberOf = (cell: RawCell | undefined) =>
+  cell && typeof cell.value === 'number' && Number.isSafeInteger(cell.value)
+    ? String(cell.value)
+    : textOf(cell);
+
+/** Who a row names, when it names anyone. */
+function partyRefOf(
+  code: RawCell | undefined,
+  name: RawCell | undefined,
+  siren: RawCell | undefined,
+  siret: RawCell | undefined,
+): PartyRef | undefined {
+  const ref = { code: textOf(code), siren: idsOf(siren, siret).siren, name: textOf(name) };
+  return Object.values(ref).some((v) => v !== undefined) ? ref : undefined;
+}
+
 /** Data rows only: no empty row, no « Total » row an export may end with. */
 export const dataRows = (rows: readonly RawRow[]) =>
   rows.filter((r) => r.cells.some((c) => textOf(c) !== undefined) && !isTotalRow(r));
@@ -141,22 +171,92 @@ export function chantierRow(sheet: ExportSheet, row: RawRow): Parsed<ChantierRow
   const code = textOf(cells.code);
   if (!code) return skip('no_code');
   if (!name) return skip('no_name');
-  const customerIds = idsOf(cells.customerSiren, cells.customerSiret);
-  const customer = {
-    code: textOf(cells.customerCode),
-    siren: customerIds.siren,
-    name: textOf(cells.customerName),
-  };
   const parsed = ChantierSchema.safeParse({
     row: row.row,
     code,
     name,
-    customer: Object.values(customer).some((v) => v !== undefined) ? customer : undefined,
+    customer: partyRefOf(
+      cells.customerCode,
+      cells.customerName,
+      cells.customerSiren,
+      cells.customerSiret,
+    ),
     address: addressOf(cells),
     status: statusOf(cells.status),
     receptionOn: isoDate(cells.receptionOn),
     reservesLiftedOn: isoDate(cells.reservesLiftedOn),
     retenueBps: retenueOf(cells.retenue),
+  });
+  return parsed.success ? { ok: true, value: parsed.data } : skip('invalid');
+}
+
+/** Not an invoice: nothing is owed on it. */
+const NOT_INVOICE = /^(devis|pro ?forma|bon de commande|commande|bon de livraison|bl)\b/;
+
+/**
+ * A row of an invoice list: a sale or a situation with its due date and what is owed. An avoir (by
+ * its type or a negative amount), a devis or a pro forma is skipped with its reason.
+ */
+export function factureRow(sheet: ExportSheet, row: RawRow): Parsed<FactureRow> {
+  const cells = cellsOf(sheet as ExportSheet<'invoices'>, row) as Partial<
+    Record<InvoiceField, RawCell>
+  >;
+  const number = numberOf(cells.number);
+  const skip = (reason: Skipped['reason']): Parsed<FactureRow> => ({
+    ok: false,
+    skipped: { row: row.row, name: number ?? textOf(cells.customerName) ?? null, reason },
+  });
+  const type = words(cells.type);
+  if (NOT_INVOICE.test(type)) return skip('not_invoice');
+  if (/^avoir/.test(type)) return skip('credit_note');
+  if (!number) return skip('no_number');
+  const total = centsOf(cells.total);
+  const left = centsOf(cells.left);
+  if ((total ?? 0) < 0 || (left ?? 0) < 0) return skip('credit_note');
+  const dueOn = isoDate(cells.dueOn);
+  if (!dueOn) return skip('no_due_date');
+  if (!total && left === undefined) return skip('no_amount');
+  const chantier = { code: textOf(cells.chantierCode), name: textOf(cells.chantierName) };
+  const parsed = FactureSchema.safeParse({
+    row: row.row,
+    number,
+    kind: /situation/.test(type) || textOf(cells.situation) ? 'situation' : 'facture',
+    issuedOn: isoDate(cells.issuedOn),
+    dueOn,
+    customer: partyRefOf(
+      cells.customerCode,
+      cells.customerName,
+      cells.customerSiren,
+      cells.customerSiret,
+    ),
+    chantier: chantier.code || chantier.name ? chantier : undefined,
+    total: total || undefined,
+    left,
+  });
+  return parsed.success ? { ok: true, value: parsed.data } : skip('invalid');
+}
+
+/** A row of a payment list: the invoice it pays and how much. A refund is no payment. */
+export function reglementRow(sheet: ExportSheet, row: RawRow): Parsed<ReglementRow> {
+  const cells = cellsOf(sheet as ExportSheet<'payments'>, row) as Partial<
+    Record<PaymentField, RawCell>
+  >;
+  const invoice = numberOf(cells.invoiceNumber);
+  const skip = (reason: Skipped['reason']): Parsed<ReglementRow> => ({
+    ok: false,
+    skipped: { row: row.row, name: invoice ?? textOf(cells.customerName) ?? null, reason },
+  });
+  if (!invoice) return skip('no_number');
+  const amount = centsOf(cells.amount);
+  if (!amount) return skip('no_amount');
+  if (amount < 0) return skip('credit_note');
+  const parsed = ReglementSchema.safeParse({
+    row: row.row,
+    invoice,
+    paidOn: isoDate(cells.paidOn),
+    amount,
+    mode: textOf(cells.mode),
+    reference: textOf(cells.reference),
   });
   return parsed.success ? { ok: true, value: parsed.data } : skip('invalid');
 }

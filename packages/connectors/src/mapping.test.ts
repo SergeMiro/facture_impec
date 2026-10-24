@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type ChantierFields,
   chantierChange,
+  chantierOf,
   customerOf,
   type PartyFields,
   partyChange,
@@ -115,12 +116,26 @@ describe('the shared mapping', () => {
       { id: 'c', erpRef: null, siren: '400000006', legalName: 'Martin' },
       { id: 'd', erpRef: null, siren: '500000005', legalName: 'MARTIN' },
     ];
-    const row = (customer: object) => ({ row: 2, code: 'X', name: 'X', customer });
-    expect(customerOf(row({ code: 'C001', name: 'Autre' }), customers)).toBe('a');
-    expect(customerOf(row({ siren: '300000007' }), customers)).toBe('b');
-    expect(customerOf(row({ name: 'mairie de talant' }), customers)).toBe('b');
-    expect(customerOf(row({ name: 'Martin' }), customers)).toBeNull();
-    expect(customerOf(row({ code: 'C999' }), customers)).toBeNull();
-    expect(customerOf({ row: 2, code: 'X', name: 'X' }, customers)).toBeNull();
+    expect(customerOf({ code: 'C001', name: 'Autre' }, customers)).toBe('a');
+    expect(customerOf({ siren: '300000007' }, customers)).toBe('b');
+    expect(customerOf({ name: 'mairie de talant' }, customers)).toBe('b');
+    expect(customerOf({ name: 'Martin' }, customers)).toBeNull();
+    expect(customerOf({ code: 'C999' }, customers)).toBeNull();
+    expect(customerOf(undefined, customers)).toBeNull();
+  });
+
+  it('find an invoice’s chantier by its code, a code in the « Chantier » column, or a unique name', () => {
+    const known = [
+      { id: 'a', erpRef: 'CH-01', name: 'Les Tilleuls' },
+      { id: 'b', erpRef: 'CH-02', name: 'École Jean Macé' },
+      { id: 'c', erpRef: 'CH-03', name: 'Garage' },
+      { id: 'd', erpRef: 'CH-04', name: 'GARAGE' },
+    ];
+    expect(chantierOf({ code: 'CH-01', name: 'Autre' }, known)).toBe('a');
+    expect(chantierOf({ name: 'CH-02' }, known)).toBe('b');
+    expect(chantierOf({ name: 'ecole jean mace' }, known)).toBe('b');
+    expect(chantierOf({ name: 'Garage' }, known)).toBeNull();
+    expect(chantierOf({ code: 'CH-99' }, known)).toBeNull();
+    expect(chantierOf(undefined, known)).toBeNull();
   });
 });

@@ -1,15 +1,19 @@
 // The ERP's lists brought in (BTP stage 4, docs/DECISIONS.md D9): a person gives an export of
-// clients, suppliers or chantiers from Batigest or EBP. It is read at once, so a missing column is
+// clients, suppliers, chantiers, invoices or payments from Batigest or EBP. It is read at once, so a missing column is
 // said before anything is kept; then its bytes go to the FileStore and the queue `erp.sync` writes it
 // batch by batch, each batch with its cursor in one transaction: a run stopped in the middle goes on
 // from the row it reached. What a row changes is decided by `@fi/connectors`, one mapping for every
-// connector; this file only writes it.
+// connector; this file only writes it. An invoice becomes a document and its deadline, the same one
+// the PDP and the mail make; a payment closes it (stage 4B).
+import { deriveObligations, saleDeadlineKey } from '@fi/agents';
 import {
   type ChantierFields,
   type ChantierRow,
   type Connector,
   type Cursor,
+  canonical,
   chantierChange,
+  chantierOf,
   customerOf,
   dataRows,
   type ErpAddress,
@@ -18,15 +22,18 @@ import {
   type ExportList,
   type ExportRow,
   exportConnector,
+  type FactureRow,
   type PartyFields,
   type PartySide,
   partyChange,
+  type ReglementRow,
   readExport,
   type Skipped,
   type TiersRow,
 } from '@fi/connectors';
 import { FILE_LIMITS } from '@fi/core';
 import {
+  actions,
   and,
   audit,
   blobs,
@@ -34,25 +41,33 @@ import {
   chantiers,
   connectorSyncs,
   type Db,
+  type DocumentRow,
   documents,
   eq,
   inArray,
+  invoices,
+  isNull,
+  obligations,
+  or,
   parties,
   type SyncResult,
   sql,
   type TenantRow,
   type Tx,
+  tenants,
 } from '@fi/db';
 import { type FatalError, isFatal } from '@fi/domain';
 import { isMessageKey, t } from '@fi/shared';
 import { z } from 'zod';
 import type { ApiDeps } from './deps';
+import { saveObligations } from './document-pipeline';
 import { ApiError } from './errors';
 import { postgresFiles, sha256Of } from './files';
 import { parse } from './http';
 import { uploadName } from './uploads';
+import { withdrawDrafts } from './watchers';
 
-/** One sync row per list (D9): `export:customers`, `export:suppliers`, `export:chantiers`. */
+/** One sync row per list (D9): `export:customers`, `export:invoices`… */
 export const syncKeyOf = (list: ExportList) => `export:${list}`;
 const ERP_SYNCS = EXPORT_LISTS.map(syncKeyOf);
 
@@ -71,10 +86,19 @@ const mimeOf = (bytes: Uint8Array) =>
     ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     : 'text/csv';
 
+const COLUMNS: Record<ExportList, string> = {
+  customers: 'tiers',
+  suppliers: 'tiers',
+  chantiers: 'chantier',
+  invoices: 'invoice',
+  payments: 'payment',
+};
+
 /** « Il manque une colonne : « SIRET » ou « SIREN » » from the reader's `customers:siren|siret`. */
 function columnOf(detail: string): string {
-  const [list, fields = ''] = detail.split(':');
-  const key = `erp.column.${list === 'chantiers' ? 'chantier' : 'tiers'}.${fields.split('|')[0]}`;
+  const [list = '', fields = ''] = detail.split(':');
+  const section = COLUMNS[list as ExportList] ?? 'tiers';
+  const key = `erp.column.${section}.${fields.split('|')[0]}`;
   return isMessageKey(key) ? t(key) : fields;
 }
 
@@ -271,7 +295,11 @@ function added(result: SyncResult, counts: Counts): SyncResult {
 
 const isTiers = (r: ExportRow): r is { ok: true; value: TiersRow } => r.ok && 'siren' in r.value;
 const isChantier = (r: ExportRow): r is { ok: true; value: ChantierRow } =>
-  r.ok && !('siren' in r.value);
+  r.ok && 'code' in r.value && !('siren' in r.value);
+const isFacture = (r: ExportRow): r is { ok: true; value: FactureRow } =>
+  r.ok && 'number' in r.value;
+const isReglement = (r: ExportRow): r is { ok: true; value: ReglementRow } =>
+  r.ok && 'invoice' in r.value;
 
 const partyFields = (p: typeof parties.$inferSelect): PartyFields => ({
   legalName: p.legalName,
@@ -390,7 +418,7 @@ async function applyChantiers(
   const inserts: (typeof chantiers.$inferInsert)[] = [];
   for (const row of list) {
     const before = byCode.get(row.code);
-    const customerId = customerOf(row, customers);
+    const customerId = customerOf(row.customer, customers);
     if (!customerId && !before?.customerId) counts.withoutCustomer++;
     const change = chantierChange(row, customerId, before);
     if (change.kind === 'insert') {
@@ -418,6 +446,302 @@ async function applyChantiers(
   return counts;
 }
 
+// ── Invoices and payments (stage 4B) ──────────────────────────────────────────────────────────
+
+/** An ERP invoice is kept as the record the ERP gave, as JSON. */
+const ERP_MIME = 'application/json';
+const ERP = { actor: 'agent:erp', decidedBy: 'agent:erp', reason: 'deadline_done' };
+
+/** One document per invoice number: a newer export rewrites it. */
+const refOf = (number: string) => `facture:${number}`;
+
+/** What the ERP said of an invoice, without the file's row: the same invoice is the same bytes. */
+function recordOf(row: FactureRow) {
+  const { row: _row, ...record } = row;
+  return record;
+}
+
+/** A paid invoice's deadline closed and its reminders withdrawn, audited by the ERP. */
+async function closePaid(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+  why: Record<string, unknown>,
+  now: Date,
+) {
+  await tx
+    .update(obligations)
+    .set({ status: 'done', closedAt: now, updatedAt: now })
+    .where(eq(obligations.id, id));
+  const withdrawn = await withdrawDrafts(tx, tenantId, eq(actions.obligationId, id), ERP, now);
+  await audit(tx, {
+    tenantId,
+    actor: ERP.actor,
+    action: 'obligation.close',
+    objectType: 'obligation',
+    objectId: id,
+    before: { status: 'open' },
+    after: { status: 'done', withdrawn: withdrawn.length, ...why },
+  });
+}
+
+/** The customer and chantier the ERP names, set where the document and its deadline have none. */
+async function fillLinks(
+  tx: Tx,
+  tenantId: string,
+  documentId: string,
+  key: string,
+  links: { partyId: string | null; chantierId: string | null },
+  now: Date,
+) {
+  if (!links.partyId && !links.chantierId) return;
+  const set = <T extends typeof documents | typeof obligations>(table: T) => ({
+    partyId: sql`coalesce(${table.partyId}, ${links.partyId})`,
+    chantierId: sql`coalesce(${table.chantierId}, ${links.chantierId})`,
+    updatedAt: now,
+  });
+  await tx.update(documents).set(set(documents)).where(eq(documents.id, documentId));
+  await tx
+    .update(obligations)
+    .set(set(obligations))
+    .where(
+      and(
+        eq(obligations.tenantId, tenantId),
+        eq(obligations.key, key),
+        or(isNull(obligations.partyId), isNull(obligations.chantierId)),
+      ),
+    );
+}
+
+/** An invoice's document written: new, or the same one rewritten with what the ERP says now. */
+async function keepInvoice(
+  tx: Tx,
+  tenantId: string,
+  before: DocumentRow | undefined,
+  row: FactureRow,
+  links: { partyId: string | null; chantierId: string | null },
+  now: Date,
+): Promise<DocumentRow> {
+  const record = recordOf(row);
+  const bytes = new TextEncoder().encode(canonical(record));
+  const stored = await postgresFiles.put(tx, { tenantId, bytes, mime: ERP_MIME });
+  const values = {
+    name: row.number,
+    mime: ERP_MIME,
+    size: stored.size,
+    sha256: stored.sha256,
+    storageKey: stored.key,
+    kind: row.kind === 'situation' ? 'situation' : 'facture_vente',
+    stage: 'done',
+    partyId: links.partyId ?? before?.partyId ?? null,
+    chantierId: links.chantierId ?? before?.chantierId ?? null,
+    extracted: { format: 'erp-json', record },
+    updatedAt: now,
+  } as const;
+  const [doc] = before
+    ? await tx.update(documents).set(values).where(eq(documents.id, before.id)).returning()
+    : await tx
+        .insert(documents)
+        .values({
+          tenantId,
+          source: 'erp',
+          sourceRef: refOf(row.number),
+          hints: {},
+          isTest: false,
+          receivedAt: now,
+          ...values,
+        })
+        .returning();
+  if (!doc) throw new Error(`document of invoice ${row.number} not written`);
+  if (before && before.storageKey !== stored.key) await dropFile(tx, tenantId, before.storageKey);
+  return doc;
+}
+
+/** The invoices sent through Facture Impec among these numbers: CollectAgent chases those. */
+async function sentHere(tx: Tx, tenantId: string, numbers: readonly string[]) {
+  const rows = await tx
+    .select({ number: invoices.number })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.tenantId, tenantId),
+        eq(invoices.direction, 'out'),
+        eq(invoices.isTest, false),
+        inArray(invoices.number, [...numbers]),
+      ),
+    );
+  return new Set(rows.map((r) => r.number));
+}
+
+/** The company's deadlines of these sales, locked: by key. */
+async function salesDeadlines(tx: Tx, tenantId: string, keys: readonly string[]) {
+  const rows = await tx
+    .select({
+      id: obligations.id,
+      key: obligations.key,
+      status: obligations.status,
+      amount: obligations.amount,
+    })
+    .from(obligations)
+    .where(and(eq(obligations.tenantId, tenantId), inArray(obligations.key, [...keys])))
+    .for('update');
+  return new Map(rows.map((o) => [o.key, o]));
+}
+
+/**
+ * A batch of invoices: each owed one a document and its deadline (`facture_echeance`, the key the
+ * PDP and the mail use, so a better source keeps its values); one with nothing left to pay closes
+ * the deadline it has. An invoice sent through Facture Impec is left to CollectAgent.
+ */
+async function applyInvoices(
+  tx: Tx,
+  tenant: Pick<TenantRow, 'id' | 'siren'>,
+  rows: readonly ExportRow[],
+  now: Date,
+): Promise<Counts> {
+  const counts = noCounts();
+  for (const r of rows) if (!r.ok) counts.skipped.push(r.skipped);
+  const list = rows.filter(isFacture).map((r) => r.value);
+  if (!list.length) return counts;
+  const skip = (row: FactureRow, reason: Skipped['reason']) =>
+    counts.skipped.push({ row: row.row, name: row.number, reason });
+  const sent = await sentHere(
+    tx,
+    tenant.id,
+    list.map((r) => r.number),
+  );
+  const docs = await tx
+    .select()
+    .from(documents)
+    .where(
+      and(
+        eq(documents.tenantId, tenant.id),
+        eq(documents.source, 'erp'),
+        eq(documents.isTest, false),
+        inArray(
+          documents.sourceRef,
+          list.map((r) => refOf(r.number)),
+        ),
+      ),
+    )
+    .for('update');
+  const docOf = new Map(docs.map((d) => [d.sourceRef, d]));
+  const deadlines = await salesDeadlines(
+    tx,
+    tenant.id,
+    list.map((r) => saleDeadlineKey(tenant.siren, r.number, false)),
+  );
+  const customers = await tx
+    .select({
+      id: parties.id,
+      erpRef: parties.erpRef,
+      siren: parties.siren,
+      legalName: parties.legalName,
+    })
+    .from(parties)
+    .where(and(eq(parties.tenantId, tenant.id), eq(parties.kind, 'customer')));
+  const known = await tx
+    .select({ id: chantiers.id, erpRef: chantiers.erpRef, name: chantiers.name })
+    .from(chantiers)
+    .where(eq(chantiers.tenantId, tenant.id));
+
+  for (const row of list) {
+    if (sent.has(row.number)) {
+      skip(row, 'sent_here');
+      continue;
+    }
+    const key = saleDeadlineKey(tenant.siren, row.number, false);
+    const payable = row.left ?? row.total ?? 0;
+    const before = docOf.get(refOf(row.number));
+    const changed = before?.sha256 !== sha256Of(new TextEncoder().encode(canonical(recordOf(row))));
+    const partyId = customerOf(row.customer, customers);
+    const links = { partyId, chantierId: chantierOf(row.chantier, known) };
+    const deadline = deadlines.get(key);
+
+    if (payable === 0) {
+      // Paid: whichever source made the deadline, the ERP knows it is paid.
+      const closing = deadline?.status === 'open';
+      if (deadline && closing) {
+        await closePaid(tx, tenant.id, deadline.id, { source: 'erp', number: row.number }, now);
+        deadline.status = 'done';
+      }
+      if (before && changed) await keepInvoice(tx, tenant.id, before, row, links, now);
+      if (closing || (before && changed)) counts.updated++;
+      else if (before || deadline) counts.unchanged++;
+      else skip(row, 'paid');
+      continue;
+    }
+    // Owed to a customer nobody knows: no reminder can go (the customers' list is given next).
+    if (!partyId && !before?.partyId) counts.withoutCustomer++;
+    if (before && !changed) {
+      const filling =
+        (links.partyId && !before.partyId) || (links.chantierId && !before.chantierId);
+      if (filling) await fillLinks(tx, tenant.id, before.id, key, links, now);
+      if (filling) counts.updated++;
+      else counts.unchanged++;
+      continue;
+    }
+    const doc = await keepInvoice(tx, tenant.id, before, row, links, now);
+    const drafts = deriveObligations({
+      documentId: doc.id,
+      kind: 'facture_vente',
+      fields: { issuedOn: null, validTo: null, receptionOn: null },
+      siren: customers.find((c) => c.id === partyId)?.siren ?? row.customer?.siren ?? null,
+      invoice: { number: row.number, sellerSiren: tenant.siren, dueDate: row.dueOn, payable },
+      isTest: false,
+    });
+    await saveObligations(tx, doc, drafts, doc.partyId, now);
+    // A better source kept its values: the ERP still says whose and which chantier it is.
+    await fillLinks(tx, tenant.id, doc.id, key, links, now);
+    if (before) counts.updated++;
+    else counts.added++;
+  }
+  return counts;
+}
+
+/**
+ * A batch of payments: one that pays what is left closes its invoice's deadline. A smaller one is
+ * counted, not summed (docs/DEFERRED.md); a payment of an invoice not known is counted too.
+ */
+async function applyPayments(
+  tx: Tx,
+  tenant: Pick<TenantRow, 'id' | 'siren'>,
+  rows: readonly ExportRow[],
+  now: Date,
+): Promise<Counts> {
+  const counts = noCounts();
+  for (const r of rows) if (!r.ok) counts.skipped.push(r.skipped);
+  const list = rows.filter(isReglement).map((r) => r.value);
+  if (!list.length) return counts;
+  const skip = (p: ReglementRow, reason: Skipped['reason']) =>
+    counts.skipped.push({ row: p.row, name: p.invoice, reason });
+  const keyOf = (p: ReglementRow) => saleDeadlineKey(tenant.siren, p.invoice, false);
+  const deadlines = await salesDeadlines(tx, tenant.id, list.map(keyOf));
+  const sent = await sentHere(
+    tx,
+    tenant.id,
+    list.map((p) => p.invoice),
+  );
+  for (const p of list) {
+    const deadline = deadlines.get(keyOf(p));
+    if (!deadline) skip(p, sent.has(p.invoice) ? 'sent_here' : 'invoice_unknown');
+    else if (deadline.status !== 'open') counts.unchanged++;
+    else if (deadline.amount !== null && p.amount < deadline.amount) skip(p, 'partial_payment');
+    else {
+      await closePaid(
+        tx,
+        tenant.id,
+        deadline.id,
+        { source: 'erp', number: p.invoice, paidOn: p.paidOn ?? null, amount: p.amount },
+        now,
+      );
+      deadline.status = 'done';
+      counts.updated++;
+    }
+  }
+  return counts;
+}
+
 /** The sync row, locked, if it still reads this file and has not finished. */
 async function stillReading(tx: Tx, id: string, sha256: string) {
   const [row] = await tx
@@ -437,6 +761,26 @@ async function failed(db: Db, id: string, sha256: string, code: string, now: Dat
       .set({ lastError: code, lastRunAt: now, updatedAt: now })
       .where(eq(connectorSyncs.id, id));
   });
+}
+
+function applyBatch(
+  tx: Tx,
+  tenant: Pick<TenantRow, 'id' | 'siren'>,
+  list: ExportList,
+  rows: readonly ExportRow[],
+  now: Date,
+): Promise<Counts> {
+  switch (list) {
+    case 'customers':
+    case 'suppliers':
+      return applyParties(tx, tenant.id, list === 'suppliers' ? 'supplier' : 'customer', rows, now);
+    case 'chantiers':
+      return applyChantiers(tx, tenant.id, rows, now);
+    case 'invoices':
+      return applyInvoices(tx, tenant, rows, now);
+    case 'payments':
+      return applyPayments(tx, tenant, rows, now);
+  }
 }
 
 /**
@@ -459,6 +803,11 @@ export async function runErpSync(
     .where(and(eq(connectorSyncs.tenantId, tenantId), eq(connectorSyncs.connector, key)));
   const file = row?.result?.file;
   if (!row || !file || row.result?.finishedAt) return;
+  const [tenant] = await deps.db
+    .select({ id: tenants.id, siren: tenants.siren })
+    .from(tenants)
+    .where(and(eq(tenants.id, tenantId), isNull(tenants.deletedAt)));
+  if (!tenant) return;
   const stored = await postgresFiles.get(deps.db, tenantId, file.key);
   if (!stored) {
     await failed(deps.db, row.id, file.sha256, 'export_missing', deps.now());
@@ -476,16 +825,7 @@ export async function runErpSync(
         const now = deps.now();
         const reading = await stillReading(tx, row.id, file.sha256);
         if (!reading) return false;
-        const counts =
-          list === 'chantiers'
-            ? await applyChantiers(tx, tenantId, batch.rows, now)
-            : await applyParties(
-                tx,
-                tenantId,
-                list === 'suppliers' ? 'supplier' : 'customer',
-                batch.rows,
-                now,
-              );
+        const counts = await applyBatch(tx, tenant, list, batch.rows, now);
         await tx
           .update(connectorSyncs)
           .set({

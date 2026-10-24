@@ -57,3 +57,16 @@ or CSV. Three series of commits, each with `pnpm verify` green:
 - `pull` by cursor on an EBP test account: paused with EBP SaaS (D3).
 
 ## Deviations found while building
+
+- **4B, a deadline's rank comes from its document** (D9): no `obligations.source` column; the rank
+  is read through `source_document_id` → `documents.source` in `saveObligations`, so every path
+  (PDP, ERP, e-mail) is ordered without a migration.
+- **4B, an ERP's invoice record goes with the account**: kind `facture_vente`, it would have been
+  kept ten years by the erasure as a real invoice; the invoice is the ERP's, Facture Impec holds a
+  copy. `apps/api/src/rgpd.ts` deletes documents `source: 'erp'` (`docs/RGPD.md`).
+- **4B, invoice numbers kept as written**: the SIREN reader drops dots and uppercases; numbers have
+  their own reader (`numberOf`), an Excel number cell read as its integer.
+- **4B, an invoice sent through Facture Impec is skipped** (`sent_here`), as row and as payment: its
+  deadline and its payment are the platform's (`docs/DEFERRED.md`).
+- **4B, payments are not summed**: a payment closes a deadline when it covers what is left; the rest
+  waits for a pilot's export (`docs/DEFERRED.md`).

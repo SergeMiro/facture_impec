@@ -56,7 +56,17 @@ interface ImportView {
   finishedAt: string | null;
   error: { code: string; message: string } | null;
 }
-type Imports = Record<'customers' | 'suppliers' | 'chantiers', ImportView | null>;
+type Imports = Record<
+  'customers' | 'suppliers' | 'chantiers' | 'invoices' | 'payments',
+  ImportView | null
+>;
+const NOTHING = {
+  customers: null,
+  suppliers: null,
+  chantiers: null,
+  invoices: null,
+  payments: null,
+};
 
 async function company() {
   const tenant = await newTenant(api.request);
@@ -260,7 +270,7 @@ describe('the lists an ERP exports, imported once', () => {
     expect(await b.partiesOf('customer')).toMatchObject([
       { legalName: 'Client de B', erpRef: null, siret: null },
     ]);
-    expect(await b.imports()).toEqual({ customers: null, suppliers: null, chantiers: null });
+    expect(await b.imports()).toEqual(NOTHING);
     // B's own import of the same file is B's: A's « already imported » does not apply to it.
     expect((await b.give('clients.csv', csv(CUSTOMERS))).status).toBe(202);
     await runQueued();
@@ -356,7 +366,7 @@ describe('the lists an ERP exports, imported once', () => {
     expect((await c.give('vide.csv', new Uint8Array())).status).toBe(422);
     expect(api.jobs.erp).toEqual([]);
     expect(await c.blobsOf()).toEqual([]);
-    expect(await c.imports()).toEqual({ customers: null, suppliers: null, chantiers: null });
+    expect(await c.imports()).toEqual(NOTHING);
     // Said by the person, the same file goes.
     expect((await c.give('liste.csv', unknown, 'suppliers')).status).toBe(202);
     await runQueued();

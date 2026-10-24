@@ -27,6 +27,7 @@ import {
   isNotNull,
   obligations,
   parties,
+  type SQL,
   sql,
   type TenantRow,
   type Tx,
@@ -64,17 +65,31 @@ async function partiesOf(db: DbOrTx, tenantId: string, sirens: readonly string[]
 const testKey = (isTest: boolean, key: string) => `${isTest ? 'test:' : ''}${key}`;
 
 /**
- * The deadlines of one document, each kept once per company by its key: a newer document moves
- * its date forward (a new attestation, a new period, reminders again), an older or the same one
- * changes nothing. A deadline the company dismissed stays dismissed. Returns those written.
+ * How far a deadline's values are believed, by its document's source (D9, stage 4B): the PDP's
+ * structured invoice, then the ERP, then anything else (the mail, a drive, an upload).
+ */
+const rankOf = (documentId: SQL) =>
+  sql`coalesce((select case d.source when 'pdp' then 3 when 'erp' then 2 else 1 end
+    from ${documents} d where d.id = ${documentId}), 1)`;
+
+/**
+ * The deadlines of one document, each kept once per company by its key. A better source rewrites
+ * its date and amount; the same one moves it only to a later date (a new attestation, a new period,
+ * reminders again) or when the same document is read again with other values; a worse one never.
+ * A deadline the company dismissed stays dismissed, an invoice's closed as paid stays closed. The
+ * document's chantier is set on a deadline that has none. Returns those written.
  */
 export async function saveObligations(
   tx: Tx,
-  doc: Pick<DocumentRow, 'id' | 'tenantId' | 'isTest'>,
+  doc: Pick<DocumentRow, 'id' | 'tenantId' | 'isTest'> & Partial<Pick<DocumentRow, 'chantierId'>>,
   drafts: readonly ObligationDraft[],
   partyId: string | null,
   now: Date,
 ): Promise<number> {
+  const kept = sql`${obligations.status} = 'dismissed'
+    or (${obligations.status} = 'done' and ${obligations.kind} = 'facture_echeance')`;
+  const theirs = rankOf(sql`excluded.source_document_id`);
+  const ours = rankOf(sql`${obligations.sourceDocumentId}`);
   let written = 0;
   for (const o of drafts) {
     const rows = await tx
@@ -85,6 +100,7 @@ export async function saveObligations(
         dueOn: o.dueOn,
         key: o.key,
         partyId,
+        chantierId: doc.chantierId ?? null,
         sourceDocumentId: doc.id,
         amount: o.amount,
         isTest: doc.isTest,
@@ -96,12 +112,17 @@ export async function saveObligations(
           sourceDocumentId: sql`excluded.source_document_id`,
           amount: sql`excluded.amount`,
           partyId: sql`coalesce(excluded.party_id, ${obligations.partyId})`,
-          status: sql`case when ${obligations.status} = 'dismissed' then 'dismissed' else 'open' end`,
-          closedAt: sql`case when ${obligations.status} = 'dismissed' then ${obligations.closedAt} end`,
+          chantierId: sql`coalesce(${obligations.chantierId}, excluded.chantier_id)`,
+          status: sql`case when ${kept} then ${obligations.status} else 'open' end`,
+          closedAt: sql`case when ${kept} then ${obligations.closedAt} end`,
           lastRemindedAt: null,
           updatedAt: now,
         },
-        setWhere: sql`excluded.due_on > ${obligations.dueOn}`,
+        setWhere: sql`${theirs} > ${ours} or (${theirs} = ${ours} and (
+          excluded.due_on > ${obligations.dueOn}
+          or (excluded.source_document_id = ${obligations.sourceDocumentId}
+            and (excluded.due_on <> ${obligations.dueOn}
+              or excluded.amount is distinct from ${obligations.amount}))))`,
       })
       .returning({ id: obligations.id });
     written += rows.length;

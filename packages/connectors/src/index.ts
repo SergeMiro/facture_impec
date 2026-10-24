@@ -6,6 +6,8 @@ export {
   type ExportList,
   fieldOf,
   guessList,
+  INVOICE_FIELDS,
+  PAYMENT_FIELDS,
   TIERS_FIELDS,
 } from './export/columns';
 export {
@@ -20,7 +22,9 @@ export { dataRows, type Parsed } from './export/rows';
 export {
   type Change,
   type ChantierFields,
+  canonical,
   chantierChange,
+  chantierOf,
   customerOf,
   type PartyFields,
   type PartySide,
@@ -29,6 +33,9 @@ export {
 export {
   ChantierRow,
   ErpAddress,
+  FactureRow,
+  type PartyRef,
+  ReglementRow,
   Siren,
   Siret,
   SKIP_REASONS,

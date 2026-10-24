@@ -205,8 +205,9 @@ Stages (`docs/plans/phase-N.md` each):
       done 2026-10-24). Left: the Telegram bot waits for the owner (below);
       invoices sent through Facture Impec keep CollectAgent's chasing, not duplicated.
 - [ ] **4 — connectors** (`docs/plans/phase-4.md`; 4A, `@fi/connectors`, the export connector,
-      `POST /erp/imports`, `GET /erp`, the queue `erp.sync`: done 2026-10-24). Left: 4B invoices and
-      payments from an export and the order of sources, 4C the pane; EBP SaaS paused (D3).
+      `POST /erp/imports`, `GET /erp`, the queue `erp.sync`: done 2026-10-24; 4B invoices and
+      payments from an export, the order of sources PDP > ERP > e-mail: done 2026-10-24). Left: 4C
+      the pane; EBP SaaS paused (D3).
 - [ ] **5, 6** paused (D3). **7 — observability, performance, runbook, onboarding.**
 
 Owner questions (BTP plan §13 and what stage 0 found):
@@ -273,6 +274,18 @@ Left from stage 4A for later (2026-10-24):
 - [ ] **EBP SaaS** (D3): with a developer account and a test company, the `ebp` connector on the same
       frame (OAuth per company, its API's cursor), and the DoD's « `pull` by cursor on a test
       account ».
+
+Left from stage 4B for later (2026-10-24):
+
+- [ ] **Real invoice and payment exports, TODO(verify)**: the labels of the `invoices` and `payments`
+      lists (« N° facture », « Échéance », « Reste à payer », « Date de règlement »…) are common usage,
+      not Batigest's or EBP's files. With the first pilot: export its unpaid invoices and its payments,
+      import them, add what is not recognised, and a test with the real header row.
+- [ ] **The retenue de garantie in a situation's « Reste à payer »**: ask the first BTP pilot whether
+      their ERP's amount left includes the retenue; if it does, the reminder asks for money not yet
+      due (`docs/DEFERRED.md`).
+- [ ] **A partial payment, a bounced cheque**: see what the pilot's payments list shows and decide
+      whether to sum payments and reopen a deadline (`docs/DEFERRED.md`).
 
 Left from stage 3A for later (2026-10-24):
 

@@ -38,18 +38,20 @@ export const TiersRow = z.object({
 });
 export type TiersRow = z.infer<typeof TiersRow>;
 
+/** Who a row names: by the ERP's code, a SIREN, or a name. */
+const PartyRef = z.object({
+  code: text(100).optional(),
+  siren: Siren.optional(),
+  name: text(200).optional(),
+});
+export type PartyRef = z.infer<typeof PartyRef>;
+
 /** A chantier: its ERP code is the key, its customer found by code, SIREN or name. */
 export const ChantierRow = z.object({
   row: z.number().int().positive(),
   code: text(100),
   name: text(200),
-  customer: z
-    .object({
-      code: text(100).optional(),
-      siren: Siren.optional(),
-      name: text(200).optional(),
-    })
-    .optional(),
+  customer: PartyRef.optional(),
   address: ErpAddress.optional(),
   /** Undefined: the export does not say, and a chantier already known keeps its status. */
   status: z.enum(['open', 'closed']).optional(),
@@ -60,6 +62,39 @@ export const ChantierRow = z.object({
 });
 export type ChantierRow = z.infer<typeof ChantierRow>;
 
+const Cents = z.number().int().safe();
+
+/**
+ * A sale or a situation the company invoiced (stage 4B): its number is the key, with the company's
+ * SIREN, of the same deadline the PDP and the mail make. An avoir, a devis, a pro forma never get
+ * here: they are skipped with their reason.
+ */
+export const FactureRow = z.object({
+  row: z.number().int().positive(),
+  number: text(100),
+  kind: z.enum(['facture', 'situation']),
+  issuedOn: IsoDate.optional(),
+  dueOn: IsoDate,
+  customer: PartyRef.optional(),
+  chantier: z.object({ code: text(100).optional(), name: text(200).optional() }).optional(),
+  /** TTC, in cents. */
+  total: Cents.positive().optional(),
+  /** What is left to pay, in cents: 0 once paid. */
+  left: Cents.nonnegative().optional(),
+});
+export type FactureRow = z.infer<typeof FactureRow>;
+
+/** A payment of one invoice, by its number (stage 4B). */
+export const ReglementRow = z.object({
+  row: z.number().int().positive(),
+  invoice: text(100),
+  paidOn: IsoDate.optional(),
+  amount: Cents.positive(),
+  mode: text(100).optional(),
+  reference: text(100).optional(),
+});
+export type ReglementRow = z.infer<typeof ReglementRow>;
+
 /** Why a row was not imported; `erp.skip.*` in fr.json words each. */
 export const SKIP_REASONS = [
   'no_siren',
@@ -68,6 +103,16 @@ export const SKIP_REASONS = [
   'no_code',
   'duplicate',
   'invalid',
+  // Invoices and payments (stage 4B).
+  'no_number',
+  'no_due_date',
+  'no_amount',
+  'credit_note',
+  'not_invoice',
+  'paid',
+  'sent_here',
+  'invoice_unknown',
+  'partial_payment',
 ] as const;
 export type SkipReason = (typeof SKIP_REASONS)[number];
 

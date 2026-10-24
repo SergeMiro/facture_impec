@@ -655,7 +655,8 @@ export async function deleteTenant(
     // BTP back end: the actions quote people and the deadlines serve an account that is gone; so do
     // the connectors' cursors. Of the files received, only real invoices stay (the company's purchase
     // and sales records), without what their e-mail said of the sender; attestations, contracts and
-    // lists of employees go, their bytes with them. The building sites go: an address can be a home.
+    // lists of employees go, their bytes with them, and so do the records an ERP's list gave (the
+    // invoice itself is the ERP's, stage 4B). The building sites go: an address can be a home.
     await tx.delete(actionLinks).where(eq(actionLinks.tenantId, tenant.id));
     await tx.delete(actions).where(eq(actions.tenantId, tenant.id));
     await tx.delete(obligations).where(eq(obligations.tenantId, tenant.id));
@@ -667,6 +668,7 @@ export async function deleteTenant(
           eq(documents.tenantId, tenant.id),
           or(
             eq(documents.isTest, true),
+            eq(documents.source, 'erp'),
             isNull(documents.kind),
             notInArray(documents.kind, [...INVOICE_KINDS]),
           ),

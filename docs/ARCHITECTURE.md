@@ -1141,6 +1141,34 @@ POST /erp/imports ─► readExport (refusal: 4xx, nothing kept) ─► blobs + 
       ─► tx { finishedAt, lastOkAt, drop the bytes, audit erp.sync }
 ```
 
+## BTP back end, stage 4B: invoices, payments and the order of sources
+
+- **Two more lists** (`export:invoices`, `export:payments`): `FactureRow` and `ReglementRow` in
+  `@fi/connectors`, read by the same frame. A row that makes no deadline is skipped with its reason
+  (`no_number`, `no_due_date`, `credit_note`, `not_invoice`); an invoice number is kept as the ERP
+  writes it (`numberOf`, not `identifierOf`, which would drop its dots).
+- **An owed invoice is a document** `source: 'erp'`, one per number (`source_ref facture:<n>`), kind
+  `facture_vente` or `situation`, stage `done`, its record as `extracted {format: 'erp-json'}` and
+  its bytes the canonical JSON of that record. `deriveObligations` gives its deadline under
+  `saleDeadlineKey(own SIREN, number)`, the key the PDP's invoice and the mail's use, so the three
+  meet on one row. Its customer and chantier are found as in 4A (`customerOf`, `chantierOf`) and
+  filled on the document and the deadline where they are empty. An invoice sent through Facture
+  Impec is skipped (`sent_here`): its deadline is the platform's.
+- **The order of sources** is decided in `saveObligations` (`document-pipeline.ts`), for every
+  caller: a deadline's rank is its document's source (PDP 3, ERP 2, anything else 1). A better
+  source rewrites the date and the amount, a worse one never does; the same document rewrites its
+  own. A worse source still brings a chantier the deadline lacks. A deadline closed as paid stays
+  closed whoever writes it again.
+- **Paid**: « Reste à payer » at 0, or a payment of at least what is left, closes the deadline
+  (`done`, `closedAt`), withdraws its drafted reminders and audits `obligation.close` by
+  `agent:erp`. A smaller payment, a payment of an unknown invoice, are counted, not applied.
+
+```
+invoices row ─► sent here? skip ─► left 0? close the open deadline ─► changed? ─► blob + document (erp-json)
+   ─► deriveObligations ─► saveObligations (rank: pdp 3 > erp 2 > mail 1) ─► party / chantier filled
+payments row ─► deadline by saleDeadlineKey ─► open and fully paid? close + withdraw drafts + audit
+```
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

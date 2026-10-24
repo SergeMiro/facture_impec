@@ -35,6 +35,13 @@ export function kindOf(
   return sirens.length > 0 && sirens.every((s) => s === own) ? 'facture_vente' : 'facture_achat';
 }
 
+/**
+ * The deadline of a sale, whichever source brings it (the PDP, an ERP, the mail): the seller's SIREN
+ * and the invoice's number (D7, D9).
+ */
+export const saleDeadlineKey = (sellerSiren: string, number: string, isTest: boolean) =>
+  `${isTest ? 'test:' : ''}facture_echeance:${sellerSiren}:${number}`;
+
 export interface ObligationDraft {
   kind: ObligationKind;
   /** Unique per company: the same deadline from another copy or source finds this one. */
@@ -119,7 +126,7 @@ export function deriveObligations(input: DeriveInput): ObligationDraft[] {
       if (!inv?.number || !inv.dueDate || !inv.sellerSiren || inv.payable <= 0) return [];
       return one({
         kind: 'facture_echeance',
-        key: key('facture_echeance', inv.sellerSiren, inv.number),
+        key: saleDeadlineKey(inv.sellerSiren, inv.number, input.isTest),
         dueOn: inv.dueDate,
         amount: inv.payable,
         siren: siren,

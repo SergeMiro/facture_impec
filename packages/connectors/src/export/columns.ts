@@ -6,7 +6,13 @@
 import { normalizeHeader } from '@fi/core';
 
 /** What a file lists: one entity, and for companies, which side. */
-export const EXPORT_LISTS = ['customers', 'suppliers', 'chantiers'] as const;
+export const EXPORT_LISTS = [
+  'customers',
+  'suppliers',
+  'chantiers',
+  'invoices',
+  'payments',
+] as const;
 export type ExportList = (typeof EXPORT_LISTS)[number];
 
 export const TIERS_FIELDS = [
@@ -41,6 +47,35 @@ export const CHANTIER_FIELDS = [
   'retenue',
 ] as const;
 export type ChantierField = (typeof CHANTIER_FIELDS)[number];
+
+/** A sale or a situation the company invoiced (stage 4B). */
+export const INVOICE_FIELDS = [
+  'number',
+  'type',
+  'issuedOn',
+  'dueOn',
+  'customerCode',
+  'customerName',
+  'customerSiren',
+  'customerSiret',
+  'chantierCode',
+  'chantierName',
+  'total',
+  'left',
+  'situation',
+] as const;
+export type InvoiceField = (typeof INVOICE_FIELDS)[number];
+
+/** A payment a customer made, by its invoice's number (stage 4B). */
+export const PAYMENT_FIELDS = [
+  'invoiceNumber',
+  'paidOn',
+  'amount',
+  'mode',
+  'reference',
+  'customerName',
+] as const;
+export type PaymentField = (typeof PAYMENT_FIELDS)[number];
 
 /** Labels as `normalizeHeader` writes them: « N° client » is "n client", « E-mail » "e mail". */
 type Labels<F extends string> = Readonly<Record<F, readonly string[]>>;
@@ -212,9 +247,180 @@ const CHANTIER: Labels<ChantierField> = {
   ],
 };
 
-export const LABELS = { customers: TIERS, suppliers: TIERS, chantiers: CHANTIER } as const;
+const INVOICE_NUMBER = [
+  'n facture',
+  'no facture',
+  'numero facture',
+  'numero de facture',
+  'num facture',
+  'ref facture',
+  'reference facture',
+  'facture',
+];
 
-export type FieldOf<L extends ExportList> = L extends 'chantiers' ? ChantierField : TiersField;
+const INVOICE: Labels<InvoiceField> = {
+  number: [
+    ...INVOICE_NUMBER,
+    'n piece',
+    'no piece',
+    'numero piece',
+    'numero de piece',
+    'piece',
+    'n document',
+    'numero document',
+    'numero',
+    'n',
+  ],
+  type: ['type', 'type de piece', 'type piece', 'type de document', 'nature', 'nature de piece'],
+  issuedOn: [
+    'date',
+    'date facture',
+    'date de facture',
+    'date de la facture',
+    'date piece',
+    'date de piece',
+    'date d emission',
+    'date emission',
+  ],
+  dueOn: [
+    'echeance',
+    'date echeance',
+    'date d echeance',
+    'date de l echeance',
+    'date limite de paiement',
+    'date limite de reglement',
+    'a payer le',
+  ],
+  customerCode: CHANTIER.customerCode,
+  customerName: CHANTIER.customerName,
+  customerSiren: CHANTIER.customerSiren,
+  customerSiret: CHANTIER.customerSiret,
+  chantierCode: [
+    'code chantier',
+    'n chantier',
+    'no chantier',
+    'numero chantier',
+    'numero de chantier',
+    'ref chantier',
+    'code affaire',
+    'n affaire',
+    'no affaire',
+    'numero affaire',
+    'numero d affaire',
+  ],
+  chantierName: [
+    'chantier',
+    'affaire',
+    'libelle chantier',
+    'libelle du chantier',
+    'nom du chantier',
+    'nom chantier',
+    'libelle affaire',
+  ],
+  total: [
+    'montant ttc',
+    'total ttc',
+    'ttc',
+    'net a payer',
+    'net a payer ttc',
+    'montant',
+    'total',
+    'montant total',
+  ],
+  left: [
+    'reste a payer',
+    'reste du',
+    'restant du',
+    'reste a regler',
+    'reste a encaisser',
+    'montant restant',
+    'restant',
+    'solde',
+    'solde du',
+  ],
+  situation: [
+    'n situation',
+    'no situation',
+    'numero situation',
+    'numero de situation',
+    'situation n',
+  ],
+};
+
+const PAYMENT: Labels<PaymentField> = {
+  invoiceNumber: [
+    ...INVOICE_NUMBER,
+    'facture reglee',
+    'n piece',
+    'no piece',
+    'numero piece',
+    'piece',
+    'n document',
+  ],
+  paidOn: [
+    'date',
+    'date reglement',
+    'date de reglement',
+    'date du reglement',
+    'date paiement',
+    'date de paiement',
+    'date encaissement',
+    'date d encaissement',
+    'regle le',
+    'paye le',
+    'encaisse le',
+  ],
+  amount: [
+    'montant',
+    'montant regle',
+    'montant reglement',
+    'montant du reglement',
+    'montant encaisse',
+    'montant paye',
+    'montant ttc',
+    'somme',
+    'regle',
+    'encaissement',
+  ],
+  mode: [
+    'mode',
+    'mode de reglement',
+    'mode reglement',
+    'mode de paiement',
+    'moyen de paiement',
+    'type de reglement',
+  ],
+  reference: [
+    'n reglement',
+    'no reglement',
+    'numero reglement',
+    'numero de reglement',
+    'ref reglement',
+    'reference reglement',
+    'reference',
+    'ref',
+    'n cheque',
+    'numero de cheque',
+    'n remise',
+  ],
+  customerName: ['client', 'nom client', 'nom du client', 'raison sociale'],
+};
+
+export const LABELS = {
+  customers: TIERS,
+  suppliers: TIERS,
+  chantiers: CHANTIER,
+  invoices: INVOICE,
+  payments: PAYMENT,
+} as const;
+
+export type FieldOf<L extends ExportList> = L extends 'chantiers'
+  ? ChantierField
+  : L extends 'invoices'
+    ? InvoiceField
+    : L extends 'payments'
+      ? PaymentField
+      : TiersField;
 
 /** The field a header names in this list, if any. */
 export function fieldOf<L extends ExportList>(list: L, header: string): FieldOf<L> | undefined {
@@ -227,12 +433,27 @@ export function fieldOf<L extends ExportList>(list: L, header: string): FieldOf<
   return undefined;
 }
 
+/** What only an invoice list says: when it falls due, what is left to pay, the situation. */
+const DUE =
+  /\b(echeance|reste a payer|reste du|restant du|reste a regler|(n|no|numero|numero de) situation)\b/;
+/** A payment's own labels; a list of customers may have a « Mode de règlement », so not that one. */
+const PAID =
+  /\b(date (de |du |d )?(reglement|paiement|encaissement)|montant (du )?(regle|reglement|encaisse|paye)|(n|no|numero|numero de|ref|reference) reglement|facture reglee|reglements|encaissements)\b/;
+const INVOICE_NAMED = /\b(n|no|num|numero|numero de|date|date de) facture\b/;
+/** An amount: a list of customers may show its payment terms as « Échéance », not an amount due. */
+const AMOUNT = /\b(ttc|net a payer|montant|reste a payer|reste du|restant du|reste a regler)\b/;
+
 /**
- * The list a row of labels looks like: a chantier or an affaire is named, else the side its labels
- * say (« Code fournisseur »); undefined when nothing tells, and the person says.
+ * The list a row of labels looks like: invoices by their due date or what is left to pay (an invoice
+ * list may also show what was paid), payments by their date or amount paid (they name their invoice
+ * too), then a chantier or an affaire named, else the side its labels say (« Code fournisseur »);
+ * undefined when nothing tells, and the person says.
  */
 export function guessList(headers: readonly string[]): ExportList | undefined {
   const words = headers.map(normalizeHeader).join(' | ');
+  if (DUE.test(words) && (AMOUNT.test(words) || INVOICE_NAMED.test(words))) return 'invoices';
+  if (PAID.test(words)) return 'payments';
+  if (INVOICE_NAMED.test(words)) return 'invoices';
   if (/\b(chantier|affaire|reception|retenue|rg)\b/.test(words)) return 'chantiers';
   const supplier = /\bfournisseurs?\b/.test(words);
   const customer = /\bclients?\b/.test(words);
@@ -246,4 +467,6 @@ export const REQUIRED: { readonly [L in ExportList]: readonly (readonly FieldOf<
   customers: [['name'], ['siren', 'siret']],
   suppliers: [['name'], ['siren', 'siret']],
   chantiers: [['code'], ['name']],
+  invoices: [['number'], ['dueOn'], ['total', 'left']],
+  payments: [['invoiceNumber'], ['amount']],
 };

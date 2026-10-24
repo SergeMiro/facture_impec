@@ -1698,3 +1698,37 @@ Evidence (2026-10-24):
 | Audited, and gone with the account | the first test's audit rows; › go with the account, the import and its file (no `connector_syncs` row, no blob after `DELETE /tenant`; the job queued before does nothing); `apps/api/src/rgpd.ts` exports `result`; `docs/RGPD.md`. |
 | Gate | `pnpm verify` green on 2026-10-24: api 361, connectors 10, add-in 115, agents 162 (evals included), core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 8, scripts 4; `pnpm boundaries`: 11 packages. The harness E2E passes (local Chrome; browser: local). |
 | Found on the way | Postgres gives a jsonb's keys back in its own order: comparing addresses as JSON text made every second import « update » each chantier with an address. `@fi/connectors` compares with the keys sorted (`mapping.test.ts`, and the chantiers imported again unchanged in `erp.test.ts`). |
+
+## BTP plan — stage 4B: invoices and payments from an export, and the order of sources (started 2026-10-24)
+
+`docs/plans/phase-4.md` › 4B, `docs/DECISIONS.md` D9 (stage 4B rows). Criteria, written before the code:
+
+- **Two more lists**: `invoices` (number, due date, total or what is left; type, date, customer,
+  chantier, n° de situation when given) and `payments` (the invoice's number and the amount; date,
+  mode, reference when given), recognised by their French labels and guessed from them; a required
+  column missing is said by name, nothing kept.
+- **An invoice row → a document**: `source: 'erp'`, one per invoice number, kind `facture_vente` or
+  `situation`, its customer and chantier found, its deadline `facture_echeance` by the same key as
+  the PDP's; the same file again changes nothing, a newer one rewrites the document and its deadline.
+- **Not a deadline, and why**: no number, no due date, an avoir, a devis, nothing left to pay, an
+  invoice sent through Facture Impec: skipped and counted by reason.
+- **PDP > ERP > e-mail**: the same invoice from the PDP and from the ERP, in either order, makes one
+  deadline with the PDP's date and amount; the ERP's chantier is set on it; the ERP read again does
+  not move it.
+- **Paid**: « Reste à payer » at 0 or a payment of what is left closes the deadline (`done`), audited
+  by `agent:erp`; it stays closed when the invoice comes again; a smaller payment changes nothing and
+  is counted; a payment of an unknown invoice too.
+- **Watched as before**: an ERP invoice's overdue deadline drafts `relance_facture` with its number.
+
+Evidence (2026-10-24):
+
+| Criterion | Evidence |
+|---|---|
+| Two more lists | `packages/connectors/src/export/{columns,rows,connector}.ts`, `schemas.ts` (`FactureRow`, `ReglementRow`). `export.test.ts` › read an invoice list (« N° facture », « Échéance », « Reste à payer », a situation, a customer by code and SIREN, a chantier; skipped: `no_due_date`, `credit_note`, `not_invoice`, `no_number`, `no_amount`, `duplicate`; « Reste à payer » 0 read) › read a payment list (a duplicate by reference, `no_number`, a refund `credit_note`) › say what stops an import (`invoices:dueOn`) › guess a list only when its labels tell (a customers' list with « Échéance » or « Mode de règlement » stays customers). |
+| An invoice row → a document | `apps/api/src/erp.ts` `applyInvoices`, `keepInvoice`; `apps/api/src/erp-invoices.test.ts` › make each owed invoice a document and its deadline (added 3, documents `source: 'erp'` kind `facture_vente` / `situation` with their customer and chantier, deadlines by `saleDeadlineKey`; the same file again 200; a newer export updated 2, unchanged 1, a chantier filled where it was empty). `packages/connectors/src/mapping.test.ts` › find an invoice's chantier by code, by a code in « Chantier », by a unique name. |
+| Not a deadline, and why | same test: skipped `paid`, `sent_here` (an invoice sent through Facture Impec), `credit_note`; `withoutCustomer` 1. |
+| PDP > ERP > e-mail | `apps/api/src/document-pipeline.ts` `saveObligations` (rank through the document's source); `erp-invoices.test.ts` › keep the PDP's values for the same invoice, whichever came first (§12): PDP then ERP keeps the PDP's date and amount and takes the ERP's chantier; ERP, then the mail (writes nothing), then the PDP rewrites them and keeps the chantier; the ERP again does not move them; the ERP's « Reste à payer » 0 closes it. |
+| Paid | same file › first test: a payment of what is left closes the deadline (`updated` 1) and withdraws its reminder; `partial_payment`, `invoice_unknown`, `sent_here` counted; the paid invoice in a newer export stays `done`; « Reste à payer » 0 closes S2026-07; `obligation.close` audited by `agent:erp` on those deadlines. |
+| Watched as before | same test: `draftDue` drafts one `relance_facture` with F2026-0101 for the overdue ERP invoice (`apps/api/src/watchers.ts` reads the number from the ERP's record). |
+| Gate | `pnpm verify` green on 2026-10-24: api 364, connectors 13, add-in 115, agents 162 (evals included), core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 8, scripts 4; `pnpm boundaries`: 11 packages. The harness E2E passes (local Chrome; browser: local). |
+| Found on the way | An ERP's invoice record has kind `facture_vente`: the account's erasure would have kept it ten years as a real invoice. `apps/api/src/rgpd.ts` deletes documents `source: 'erp'` (`erp-invoices.test.ts` › go with the account: only the PDP's document and its bytes stay). The SIREN reader drops dots and uppercases: an invoice number has its own (`numberOf`). |

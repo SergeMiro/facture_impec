@@ -308,13 +308,15 @@ export async function draftDue(db: Db, now: Date, tenantId?: string): Promise<nu
     const watch = WATCHED[o.kind];
     if (!watch) continue;
     const invoice = (d.extracted?.invoice ?? null) as Invoice | null;
+    // An ERP's invoice is its record (stage 4B), not an EN 16931 invoice.
+    const record = (d.extracted?.record ?? null) as { number?: string } | null;
     const draft = draftRequest({
       kind: watch.action,
       company: d.company,
       to: d.partyEmail ?? invoice?.buyer?.contact?.email ?? null,
       dueOn: o.dueOn,
       today,
-      reference: invoice?.number ?? null,
+      reference: invoice?.number ?? record?.number ?? null,
       amount: o.amount,
       currency: invoice?.currency ?? 'EUR',
       insurance: o.key.endsWith(':rc') ? 'rc' : 'decennale',

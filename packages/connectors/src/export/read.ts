@@ -50,7 +50,9 @@ function headerOf(sheet: SheetSnapshot, list: ExportList | undefined) {
   let best: { row: RawRow; score: number } | undefined;
   for (const row of sheet.rows.slice(0, HEADER_SCAN_ROWS)) {
     const labels = row.cells.map(labelOf);
-    const lists: readonly ExportList[] = list ? [list] : ['customers', 'chantiers'];
+    const lists: readonly ExportList[] = list
+      ? [list]
+      : ['customers', 'chantiers', 'invoices', 'payments'];
     const score = Math.max(
       ...lists.map((l) => labels.filter((label) => fieldOf(l, label) !== undefined).length),
     );

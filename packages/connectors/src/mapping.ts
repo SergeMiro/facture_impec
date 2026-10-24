@@ -3,7 +3,7 @@
 // keeps what a person or the directory set and only gets what it lacks; a chantier is the ERP's,
 // rewritten by each import where the ERP says something.
 import { partyKey } from '@fi/core';
-import type { ChantierRow, ErpAddress, TiersRow } from './schemas';
+import type { ChantierRow, ErpAddress, PartyRef, TiersRow } from './schemas';
 
 export type PartySide = 'customer' | 'supplier';
 
@@ -35,8 +35,8 @@ export type Change<T> =
   | { kind: 'update'; values: Partial<T> }
   | { kind: 'unchanged' };
 
-/** A value as text, keys sorted: Postgres gives a jsonb's keys back in its own order. */
-const canonical = (v: unknown): string =>
+/** A value as JSON, keys sorted: Postgres gives a jsonb's keys back in its own order. */
+export const canonical = (v: unknown): string =>
   v !== null && typeof v === 'object' && !Array.isArray(v)
     ? `{${Object.entries(v)
         .filter(([, x]) => x !== undefined)
@@ -121,20 +121,43 @@ export function chantierChange(
   return changed(known, said);
 }
 
-/** Which known customer a chantier row names: its ERP code, else its SIREN, else its exact name. */
+/** The one item whose name is this one, case and accents aside; none when two share it. */
+function onlyNamed<T>(items: readonly T[], nameOf: (t: T) => string, name: string): T | undefined {
+  const key = partyKey(name);
+  const named = items.filter((i) => partyKey(nameOf(i)) === key);
+  return named.length === 1 ? named[0] : undefined;
+}
+
+/**
+ * Which known customer a row names (a chantier's, an invoice's): its ERP code, else its SIREN, else
+ * a name only one customer has.
+ */
 export function customerOf(
-  row: ChantierRow,
+  ref: PartyRef | undefined,
   customers: readonly { id: string; erpRef: string | null; siren: string; legalName: string }[],
 ): string | null {
-  const c = row.customer;
-  if (!c) return null;
-  const byCode = c.code ? customers.find((p) => p.erpRef === c.code) : undefined;
+  if (!ref) return null;
+  const byCode = ref.code ? customers.find((p) => p.erpRef === ref.code) : undefined;
   if (byCode) return byCode.id;
-  const bySiren = c.siren ? customers.find((p) => p.siren === c.siren) : undefined;
+  const bySiren = ref.siren ? customers.find((p) => p.siren === ref.siren) : undefined;
   if (bySiren) return bySiren.id;
-  if (!c.name) return null;
-  const key = partyKey(c.name);
-  const named = customers.filter((p) => partyKey(p.legalName) === key);
+  if (!ref.name) return null;
   // Two customers of the same name: no guess.
-  return named.length === 1 ? (named[0]?.id ?? null) : null;
+  return onlyNamed(customers, (p) => p.legalName, ref.name)?.id ?? null;
+}
+
+/**
+ * Which chantier an invoice row names: its ERP code, else a « Chantier » column holding a code or a
+ * name only one chantier has.
+ */
+export function chantierOf(
+  ref: { code?: string | undefined; name?: string | undefined } | undefined,
+  known: readonly { id: string; erpRef: string | null; name: string }[],
+): string | null {
+  if (!ref) return null;
+  for (const code of [ref.code, ref.name]) {
+    const byCode = code ? known.find((c) => c.erpRef === code) : undefined;
+    if (byCode) return byCode.id;
+  }
+  return ref.name ? (onlyNamed(known, (c) => c.name, ref.name)?.id ?? null) : null;
 }

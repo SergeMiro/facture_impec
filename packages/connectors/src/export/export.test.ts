@@ -178,6 +178,124 @@ describe('the lists an ERP exports', () => {
     ]);
   });
 
+  it('read an invoice list: what is owed, by when, to whom, and skip what is not owed', async () => {
+    const file = csv([
+      'N° facture;Type;Date;Échéance;Code client;Client;Chantier;Montant TTC;Reste à payer;N° situation',
+      'F2026-101;Facture;02/10/2026;01/11/2026;C001;Dupont;CH-01;1 200,00 €;1 200,00;',
+      'S2026-07;Situation de travaux;05/10/2026;04/11/2026;;Mairie de Talant;Les Tilleuls;9 500,00;3 000,00;4',
+      'F2026-102;Facture;06/10/2026;05/11/2026;C001;Dupont;;480,00;0,00;',
+      'F2026-103;Facture;07/10/2026;;C001;Dupont;;100,00;100,00;',
+      'AV2026-01;Avoir;08/10/2026;08/10/2026;C001;Dupont;;-120,00;-120,00;',
+      'D2026-12;Devis;09/10/2026;09/11/2026;C002;Martin;;5 000,00;5 000,00;',
+      ';Facture;10/10/2026;10/11/2026;C002;Martin;;10,00;10,00;',
+      'F2026-104;Facture;11/10/2026;11/11/2026;C002;Martin;;;;',
+      'F2026-101;Facture;02/10/2026;01/11/2026;C001;Dupont;CH-01;1 200,00;1 200,00;',
+      'Total;;;;;;;;4 300,00;',
+    ]);
+    const sheet = await readExport(file);
+    expect(sheet.list).toBe('invoices');
+    expect(sheet.columns).toMatchObject({
+      number: 'A',
+      type: 'B',
+      issuedOn: 'C',
+      dueOn: 'D',
+      customerCode: 'E',
+      customerName: 'F',
+      chantierName: 'G',
+      total: 'H',
+      left: 'I',
+      situation: 'J',
+    });
+    const [batch] = await pullAll({ file, sha256: 'a'.repeat(64) });
+    expect(batch?.entity).toBe('facture');
+    const rows = batch?.rows ?? [];
+    expect(rows.slice(0, 3)).toEqual([
+      {
+        ok: true,
+        value: {
+          row: 2,
+          number: 'F2026-101',
+          kind: 'facture',
+          issuedOn: '2026-10-02',
+          dueOn: '2026-11-01',
+          customer: { code: 'C001', name: 'Dupont' },
+          chantier: { name: 'CH-01' },
+          total: 120_000,
+          left: 120_000,
+        },
+      },
+      {
+        ok: true,
+        value: {
+          row: 3,
+          number: 'S2026-07',
+          kind: 'situation',
+          issuedOn: '2026-10-05',
+          dueOn: '2026-11-04',
+          customer: { name: 'Mairie de Talant' },
+          chantier: { name: 'Les Tilleuls' },
+          total: 950_000,
+          left: 300_000,
+        },
+      },
+      // Paid: it is read, and the API closes its deadline or counts it.
+      expect.objectContaining({ ok: true, value: expect.objectContaining({ left: 0 }) }),
+    ]);
+    expect(rows.slice(3).map((r) => (r.ok ? 'ok' : [r.skipped.row, r.skipped.reason]))).toEqual([
+      [5, 'no_due_date'],
+      [6, 'credit_note'],
+      [7, 'not_invoice'],
+      [8, 'no_number'],
+      [9, 'no_amount'],
+      [10, 'duplicate'],
+    ]);
+  });
+
+  it('read a payment list: the invoice it pays and how much', async () => {
+    const file = csv([
+      'Date règlement;N° facture;Client;Mode de règlement;Montant;Référence',
+      '15/10/2026;F2026-101;Dupont;Virement;1 200,00;VIR-881',
+      '16/10/2026;S2026-07;Mairie de Talant;Chèque;1 500,00;',
+      '16/10/2026;S2026-07;Mairie de Talant;Chèque;1 500,00;',
+      '17/10/2026;;Martin;Virement;50,00;',
+      '18/10/2026;F2026-104;Martin;Remboursement;-50,00;',
+    ]);
+    const sheet = await readExport(file);
+    expect(sheet.list).toBe('payments');
+    const [batch] = await pullAll({ file, sha256: 'b'.repeat(64) });
+    expect(batch?.entity).toBe('reglement');
+    expect(batch?.rows).toEqual([
+      {
+        ok: true,
+        value: {
+          row: 2,
+          invoice: 'F2026-101',
+          paidOn: '2026-10-15',
+          amount: 120_000,
+          mode: 'Virement',
+          reference: 'VIR-881',
+        },
+      },
+      {
+        ok: true,
+        value: {
+          row: 3,
+          invoice: 'S2026-07',
+          paidOn: '2026-10-16',
+          amount: 150_000,
+          mode: 'Chèque',
+        },
+      },
+      // The same invoice, day and amount without a reference: the same payment, listed twice.
+      { ok: false, skipped: { row: 4, name: 'S2026-07', reason: 'duplicate' } },
+      { ok: false, skipped: { row: 5, name: 'Martin', reason: 'no_number' } },
+      { ok: false, skipped: { row: 6, name: 'F2026-104', reason: 'credit_note' } },
+    ]);
+    // An invoice list without a due date says so.
+    const noDue = csv(['N° facture;Client;Montant TTC;Reste à payer', 'F1;Dupont;10,00;10,00']);
+    expect((await fatal(readExport(noDue))).message).toBe('invoices:dueOn');
+  });
+
   it('say what stops an import, and import nothing', async () => {
     // No SIREN nor SIRET: a company cannot be known.
     const noSiren = csv(['Code client;Raison sociale;Ville', 'C1;Dupont;Dijon']);
@@ -225,5 +343,12 @@ describe('the lists an ERP exports', () => {
     expect(guessList(['N° client', 'Nom'])).toBe('customers');
     expect(guessList(['Fournisseur', 'SIRET'])).toBe('suppliers');
     expect(guessList(['Client', 'Fournisseur'])).toBeUndefined();
+    // An invoice list may name its chantier, its payment mode and what was paid.
+    expect(
+      guessList(['N° facture', 'Chantier', 'Mode de règlement', 'Échéance', 'Montant TTC']),
+    ).toBe('invoices');
+    expect(guessList(['N° facture', 'Date de règlement', 'Montant'])).toBe('payments');
+    // Payment terms on a list of customers do not make it invoices.
+    expect(guessList(['Code client', 'Nom', 'Mode de règlement', 'Échéance'])).toBe('customers');
   });
 });
