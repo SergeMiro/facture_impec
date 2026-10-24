@@ -1228,3 +1228,41 @@ public service) is where a seller checks it. Criteria, written here before the w
 | Deterministic core | Core reads `RuleContext.buyer.vat`, no network; `checkOf` (`apps/api/src/invoices.ts`) adds the last answer to the check key; `vies.test.ts` › asks once a day… (the next day's same answer: no new verdict, no new note). |
 | Audit and RGPD | `vies.test.ts` › keeps the answer… (audit `vat.check`, actor `agent:party`), › exports the answers with the company, and a deletion erases them. `docs/ONBOARDING.md` §5 (the API as read on 2026-10-24, decisions, `TODO(verify)` on the consultation number with a real French requester), `docs/RGPD.md` (VIES as recipient, register row), `docs/DEFERRED.md`, `docs/ARCHITECTURE.md` › §6 VIES, `docs/RULES.md` regenerated. Migration `0018_vat_checks.sql`. Stand-in `/vies` in `apps/mock-pdp` for tests, scenarios and E2E. |
 | Gate | `pnpm verify` green on 2026-10-24 (tests with `--concurrency=1`): api 294, core 659 (branches 93.21 %) + oracle 276, agents 121 (branches 91.86 %), add-in 103, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 13. `pnpm test:e2e` green in local Chrome (browser: local): 3 passed, the live B2Brouter run skipped (no key). |
+
+## §4 After a send: credit notes and write-offs (started 2026-10-24)
+
+Plan §4's state machine has the user's ways out of a sent invoice (`credit_note`, `dispute`,
+`write_off`), and the MonitorAgent proposes « Établir un avoir », but no route or button reached them:
+a sent invoice could not be cancelled, and an unpaid one could not be given up. A refused invoice
+(« Refusée ») is not corrected under its number: AFNOR XP Z12-014 use case 5, as summarised by
+https://ma-facture-electronique.org/cas-dusage/cas-5-refus-acheteur/ (read 2026-10-24), cancels it by a
+credit note, then a new invoice with a new number. Criteria, written here before the work:
+
+- **« Établir un avoir » on a sent invoice**: from the invoice's fiche, one click (after a
+  confirmation saying what it does) prepares the full credit note of an invoice the platform has
+  (deposited, delivered, accepted, refused, overdue, chasing): type 381, the same lines, the original's
+  number and date as preceding invoice (BG-3), numbered in its own series `AV<year>-<n>`, dated today,
+  in « Mode test » when the invoice is. It is a draft: checked like any invoice, sent only by
+  « Envoyer ». A second click opens the same credit note; an invoice not sent yet is cancelled, not
+  credited; a paid one is refused with a plain message.
+- **The invoice is cancelled when its credit note leaves**: when the platform has the credit note, the
+  original goes to « Annulée par un avoir » (a refused one through « en litige » first), chasing
+  stops, and both timelines name the other document. The pane links one to the other.
+- **« Abandonner la créance »** on an overdue or chased invoice, after a confirmation: written off,
+  chasing stops.
+- **A refusal says the right way**: the fiche of a refused invoice explains that it is not corrected
+  under its number: a credit note, then a new invoice with a new number.
+- **Audit, tests, docs**: every step writes an audit event; API and add-in tests; `docs/STATE_MACHINE.md`
+  or `docs/ARCHITECTURE.md`, `docs/DEFERRED.md` (partial credit notes, refunds of paid invoices,
+  invoices corrected by a 384), `docs/TODO.md` (what waits for the owner) updated.
+
+### Evidence (2026-10-24)
+
+| Criterion | Evidence |
+|---|---|
+| « Établir un avoir » on a sent invoice | `apps/api/src/credits.test.ts` › prepares the full credit note of a sent invoice… (`AV<year>-0001`, type 381, no due date, BG-3 = the invoice's number and date, same amount, `validated`, never autopiloted; a second click answers 200 with the same one; the next invoice's credit note is `-0002`), › numbers a test credit note in the test series (`TEST-AV…`, BG-3 `TEST-F…`), › makes one credit note when asked twice at once, and frees it when the draft is cancelled, › says plainly why an invoice gets no credit note (`credit_not_sent`, `credit_paid`, `credit_of_credit`). Core: `packages/core/src/credit.test.ts` › credits every golden invoice in full with no error, leaves the original draft as it was, numbers the series. Changed from the criterion: an unsent invoice is « cancelled » by removing its rows from the sheet (the pane has no « Annuler »), which the message says. |
+| The invoice is cancelled when its credit note leaves | `credits.test.ts` › prepares the full credit note… (`delivered` until the credit note is deposited, then `credited`; `credit_note` transition naming the credit note; `credit.by` / `credit.of` on both fiches), › puts a refused invoice « en litige » with its credit note, then cancels it, › leaves an invoice paid meanwhile as it is (`credit_note_not_applied`). Same transaction as the deposit (`runSend` → `creditOriginal`); the chasing plan ends (`endPlan`, shared with « Encaissée »). Add-in: `apps/addin/src/controller.test.ts` › cancels a sent invoice by a credit note from its fiche… (real API: refused on a paid invoice with the API's message; the credit note's fiche opens; the original shows `credited` and its credit note). E2E: `apps/addin/e2e/b2brouter.spec.ts` › a sent invoice is cancelled by a credit note from its fiche (B2Brouter stand-in through the real adapter). |
+| « Abandonner la créance » | `credits.test.ts` › write-off › gives up an unpaid invoice past its due date and ends its chasing (409 `cannot_write_off` before the due date; `written_off`, no pending step left; asked again: 200). Pane: confirmation `confirm-write-off` in `InvoiceView.tsx`. |
+| A refusal says the right way | The fiche of a refused or disputed invoice says « un avoir, puis une nouvelle facture » (`addin.credit.refused`); `monitor.refusal.open` reworded (`packages/agents/src/monitor.test.ts` › says how a refusal is answered…); the MonitorAgent's `fix_and_resend` on a refusal is shown as « Corriger : un avoir, puis une nouvelle facture » (`apps/addin/src/ui/timeline.test.ts` › never advises resending a refused invoice under its number). The prompt and its eval: `docs/TODO.md` › Credit notes. |
+| Audit, tests, docs | `credits.test.ts` › prepares the full credit note… (audit `invoice.create` on the credit note, `invoice.credit_note` by `system` on the invoice; `credit_of` in the creation's audited state). The weekly report leaves credit notes out of its counts (same test, `weekFacts`). `docs/ARCHITECTURE.md` › §4 After a send, `docs/STATE_MACHINE.md` regenerated (`credit_note` by user or system), `docs/DEFERRED.md` › After a send, `docs/TODO.md` › Credit notes (quota, accountant, T24, monitor prompt), `docs/B2BROUTER.md` T24. Migration `0019_credit_notes.sql`. |
+| Gate | `pnpm verify` green on 2026-10-24 (tests with `--concurrency=1`): api 301, core 685 + oracle 276, agents 121, add-in 106, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 13. `pnpm test:e2e` green in local Chrome (browser: local): 4 passed, the live B2Brouter run skipped (no key). |

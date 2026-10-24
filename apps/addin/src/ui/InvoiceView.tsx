@@ -1,7 +1,9 @@
 // Screen 4, Fiche facture (plan §5): what to fix and where, the rehearsal, sending, the XML and PDF,
 // « Relancer », the MonitorAgent's next step, the timeline, and in Mode test the scenario panel. An
 // invoice the autopilot will send says when, with « Annuler l'envoi automatique ». A blocking finding
-// of the checks across documents turns « Envoyer » into « Envoyer quand même ».
+// of the checks across documents turns « Envoyer » into « Envoyer quand même ». After the send,
+// « Établir un avoir » and « Abandonner la créance », each after a confirmation; a credit note and the
+// invoice it cancels link to each other.
 import { frDate, frMoney } from '@fi/core';
 import { isMessageKey, type MessageKey, t } from '@fi/shared';
 import {
@@ -21,9 +23,22 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { useState } from 'react';
-import { type InvoiceEvent, MONITOR_PROPOSALS, SCENARIOS, type Scenario } from '../api';
+import {
+  type InvoiceDetail,
+  type InvoiceEvent,
+  MONITOR_PROPOSALS,
+  SCENARIOS,
+  type Scenario,
+} from '../api';
 import type { OpenInvoice } from '../controller';
-import { ChasePanel, dayLabel, kindLabel, NextStepCard, stepStatus } from './ChasePanel';
+import {
+  ChasePanel,
+  dayLabel,
+  kindLabel,
+  NextStepCard,
+  proposalLabel,
+  stepStatus,
+} from './ChasePanel';
 import { FindingCard } from './ChecksView';
 import { parisDateTime, parisTime, useFi } from './context';
 import { TEST_ORANGE } from './theme';
@@ -78,6 +93,11 @@ const statusLabel = (status: string | null) => {
   return isMessageKey(key) ? t(key) : (status ?? '');
 };
 
+const textOf = (payload: object, key: string): string => {
+  const value: unknown = (payload as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : '';
+};
+
 export function eventText(e: InvoiceEvent): string {
   const payload = (typeof e.payload === 'object' && e.payload) || {};
   const simulated = 'simulated' in payload && payload.simulated === true;
@@ -105,8 +125,9 @@ export function eventText(e: InvoiceEvent): string {
       : t('addin.invoice.event.promiseRemoved');
   } else if (e.type === 'note' && e.event === 'monitor') {
     const proposal = MONITOR_PROPOSALS.find((p) => 'proposal' in payload && payload.proposal === p);
+    const kind = 'kind' in payload && typeof payload.kind === 'string' ? payload.kind : undefined;
     text = proposal
-      ? t('addin.invoice.event.monitor', { proposal: t(`monitor.proposal.${proposal}`) })
+      ? t('addin.invoice.event.monitor', { proposal: proposalLabel(kind, proposal) })
       : t('addin.invoice.event.monitorOpen');
   } else if (e.type === 'note' && e.event === 'scenario_planned') {
     const status = 'status' in payload && typeof payload.status === 'string' ? payload.status : '';
@@ -121,6 +142,15 @@ export function eventText(e: InvoiceEvent): string {
     const id = 'requestIdentifier' in payload ? payload.requestIdentifier : null;
     text = t(valid ? 'addin.invoice.event.vatValid' : 'addin.invoice.event.vatInvalid', { vatId });
     if (typeof id === 'string' && id) text = `${text} ${t('addin.invoice.event.vatProof', { id })}`;
+  } else if (e.type === 'note' && e.event === 'credit_note_drafted') {
+    text = t('addin.invoice.event.creditDrafted', { number: textOf(payload, 'number') });
+  } else if (e.type === 'note' && e.event === 'credit_note_of') {
+    text = t('addin.invoice.event.creditOf', { number: textOf(payload, 'number') });
+  } else if (e.type === 'note' && e.event === 'credit_note_not_applied') {
+    text = t('addin.invoice.event.creditNotApplied', {
+      number: textOf(payload, 'number'),
+      status: statusLabel(textOf(payload, 'status')),
+    });
   } else if (e.type === 'note' && e.event === 'sent_despite_findings') {
     const found = 'findings' in payload && Array.isArray(payload.findings) ? payload.findings : [];
     text = t('addin.invoice.event.sentDespite', { count: found.length });
@@ -179,7 +209,11 @@ export function InvoiceView() {
       <Link onClick={() => fi.navigate({ name: 'dashboard' })}>{t('addin.invoice.back')}</Link>
       <div className={styles.heading}>
         <Subtitle2 as="h2" id="invoice-title">
-          {d.number ? t('addin.invoice.title', { number }) : t('addin.invoice.noNumber')}
+          {!d.number
+            ? t('addin.invoice.noNumber')
+            : d.typeCode === '381'
+              ? t('addin.invoice.creditTitle', { number })
+              : t('addin.invoice.title', { number })}
         </Subtitle2>
         <Badge appearance="tint" data-testid="invoice-status">
           {d.statusLabel}
@@ -222,6 +256,8 @@ export function InvoiceView() {
       )}
 
       {d.nextStep && <NextStepCard next={d.nextStep} />}
+
+      <AfterSend key={d.id} detail={d} />
 
       <Issues open={open} />
 
@@ -340,6 +376,112 @@ export function InvoiceView() {
         ))}
       </ol>
     </section>
+  );
+}
+
+/** The platform has it, unpaid, not cancelled: a credit note can cancel it (API src/credits.ts). */
+const CREDITABLE = [
+  'deposited',
+  'delivered',
+  'accepted',
+  'refused_by_customer',
+  'disputed',
+  'overdue',
+  'chasing',
+];
+const REFUSED = ['refused_by_customer', 'disputed'];
+const WRITABLE_OFF = ['overdue', 'chasing'];
+/** A credit note still on its way: it cancels its invoice « une fois transmis ». */
+const NOT_SENT = ['draft', 'needs_fix', 'validated', 'ready_to_send', 'sending', 'rejected_by_pdp'];
+
+/** After the send: the credit note and its invoice, « Établir un avoir », « Abandonner la créance ». */
+function AfterSend({ detail: d }: { detail: InvoiceDetail }) {
+  const styles = useStyles();
+  const [state, fi] = useFi();
+  const [asking, ask] = useState<'credit' | 'writeOff' | null>(null);
+  const number = d.number ?? '';
+  const amount = d.payable !== null ? frMoney(d.payable, d.currency ?? 'EUR') : '';
+  const { of, by } = d.credit;
+
+  if (of) {
+    if (d.status === 'cancelled') return null;
+    const params = { number: of.number ?? '', date: of.issueDate ? frDate(of.issueDate) : '' };
+    return (
+      <MessageBar intent="info" layout="multiline" data-testid="credit-of">
+        <MessageBarBody>
+          {t(NOT_SENT.includes(d.status) ? 'addin.credit.of' : 'addin.credit.ofSent', params)}
+        </MessageBarBody>
+        <MessageBarActions>
+          <Button size="small" onClick={() => void fi.openInvoice(of.id)}>
+            {t('addin.credit.openOriginal', { number: of.number ?? '' })}
+          </Button>
+        </MessageBarActions>
+      </MessageBar>
+    );
+  }
+  if (by) {
+    const done = d.status === 'credited';
+    return (
+      <MessageBar intent={done ? 'success' : 'info'} layout="multiline" data-testid="credit-by">
+        <MessageBarBody>
+          {done
+            ? t('addin.credit.byDone', { number: by.number ?? '' })
+            : t('addin.credit.by', { number: by.number ?? '', status: by.statusLabel })}
+        </MessageBarBody>
+        <MessageBarActions>
+          <Button size="small" onClick={() => void fi.openInvoice(by.id)}>
+            {t('addin.credit.openCredit', { number: by.number ?? '' })}
+          </Button>
+        </MessageBarActions>
+      </MessageBar>
+    );
+  }
+  if (!CREDITABLE.includes(d.status) || d.typeCode === '381') return null;
+  const writable = WRITABLE_OFF.includes(d.status);
+
+  return (
+    <div className={styles.section} data-testid="after-send">
+      <Subtitle2 as="h3">{t('addin.credit.title')}</Subtitle2>
+      {REFUSED.includes(d.status) && (
+        <Caption1 className={styles.muted}>{t('addin.credit.refused')}</Caption1>
+      )}
+      {asking === 'credit' && (
+        <MessageBar intent="warning" layout="multiline" data-testid="confirm-credit">
+          <MessageBarBody>{t('addin.credit.confirm', { number, amount })}</MessageBarBody>
+          <MessageBarActions>
+            <Button
+              appearance="primary"
+              disabled={state.busy.includes('credit')}
+              onClick={() => void fi.creditNote()}
+            >
+              {t('addin.credit.confirmYes')}
+            </Button>
+            <Button onClick={() => ask(null)}>{t('addin.invoice.cancel')}</Button>
+          </MessageBarActions>
+        </MessageBar>
+      )}
+      {asking === 'writeOff' && (
+        <MessageBar intent="warning" layout="multiline" data-testid="confirm-write-off">
+          <MessageBarBody>{t('addin.writeOff.confirm', { number, amount })}</MessageBarBody>
+          <MessageBarActions>
+            <Button
+              appearance="primary"
+              disabled={state.busy.includes('writeOff')}
+              onClick={() => void fi.writeOff().then(() => ask(null))}
+            >
+              {t('addin.writeOff.confirmYes')}
+            </Button>
+            <Button onClick={() => ask(null)}>{t('addin.invoice.cancel')}</Button>
+          </MessageBarActions>
+        </MessageBar>
+      )}
+      {asking === null && (
+        <div className={styles.actions}>
+          <Button onClick={() => ask('credit')}>{t('addin.credit.make')}</Button>
+          {writable && <Button onClick={() => ask('writeOff')}>{t('addin.writeOff.make')}</Button>}
+        </div>
+      )}
+    </div>
   );
 }
 

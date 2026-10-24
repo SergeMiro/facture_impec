@@ -531,6 +531,8 @@ export type InvoiceEvent = z.infer<typeof InvoiceEvent>;
 const InvoiceSummary = z.object({
   id: z.string(),
   number: z.string().nullable(),
+  /** 380 invoice, 381 credit note (« avoir »), 386 advance invoice. */
+  typeCode: z.string().default('380'),
   status: z.string(),
   statusLabel: z.string(),
   issueDate: z.string().nullable(),
@@ -586,6 +588,22 @@ export const InvoiceDetail = InvoiceSummary.extend({
   events: z.array(InvoiceEvent),
   chase: ChasePlan.nullable(),
   nextStep: NextStep.nullable(),
+  /** A credit note: the invoice it cancels (`of`); an invoice: its credit note (`by`). */
+  credit: z
+    .object({
+      of: z
+        .object({ id: z.string(), number: z.string().nullable(), issueDate: z.string().nullable() })
+        .nullable(),
+      by: z
+        .object({
+          id: z.string(),
+          number: z.string().nullable(),
+          status: z.string(),
+          statusLabel: z.string(),
+        })
+        .nullable(),
+    })
+    .default({ of: null, by: null }),
 });
 export type InvoiceDetail = z.infer<typeof InvoiceDetail>;
 
@@ -1068,6 +1086,12 @@ export class ApiClient {
       method: 'POST',
       body: paidOn ? { paidOn } : {},
     });
+  /** « Établir un avoir »: the credit note's fiche, the same one when asked again. */
+  creditNote = (id: string) =>
+    this.#json(InvoiceDetail, `/invoices/${id}/credit-note`, { method: 'POST' });
+  /** « Abandonner la créance »: the invoice is given up, its chasing ends. */
+  writeOff = (id: string) =>
+    this.#json(InvoiceDetail, `/invoices/${id}/write-off`, { method: 'POST' });
   /** « Promesse de paiement » until that day; null withdraws it. */
   promise = (id: string, until: string | null) =>
     this.#json(InvoiceDetail, `/invoices/${id}/promise`, { method: 'POST', body: { until } });

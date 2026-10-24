@@ -59,6 +59,7 @@ import {
   pickFiles,
   removeFile,
 } from './connectors';
+import { createCreditNote, writeOff } from './credits';
 import type { ApiDeps } from './deps';
 import {
   decideEdit,
@@ -854,6 +855,20 @@ export function createApp(deps: ApiDeps) {
     const tenant = c.get('tenant');
     const id = uuid(c.req.param('id'));
     await recordPayment(deps, tenant, id, await body(c, PaymentBody));
+    return c.json(await detailOf(tenant, id));
+  });
+
+  // « Établir un avoir » (plan §4, src/credits.ts): the credit note's fiche; asked again, the same one.
+  api.post('/invoices/:id/credit-note', async (c) => {
+    const tenant = c.get('tenant');
+    const { row, created } = await createCreditNote(deps, tenant, uuid(c.req.param('id')));
+    return c.json(invoiceDetail(row, await invoiceDetailData(deps, row)), created ? 201 : 200);
+  });
+
+  api.post('/invoices/:id/write-off', async (c) => {
+    const tenant = c.get('tenant');
+    const id = uuid(c.req.param('id'));
+    await writeOff(deps, tenant, id);
     return c.json(await detailOf(tenant, id));
   });
 

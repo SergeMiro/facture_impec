@@ -264,12 +264,23 @@ function Paid({ detail }: { detail: InvoiceDetail }) {
 }
 
 /** The MonitorAgent's advice while a rejection or refusal waits for the user. */
+/**
+ * The advice's name. A refused invoice is not sent again under its number (AFNOR XP Z12-014 use case
+ * 5): « fix and resend » on a refusal means a credit note, then a new invoice.
+ */
+export function proposalLabel(kind: string | undefined, proposal: NextStep['proposal']): string {
+  if (!proposal) return '';
+  return kind === 'refusal' && proposal === 'fix_and_resend'
+    ? t('monitor.proposal.fix_and_reissue')
+    : t(`monitor.proposal.${proposal}`);
+}
+
 export function NextStepCard({ next }: { next: NextStep }) {
   const styles = useStyles();
   return (
     <Card className={styles.card} data-testid="next-step">
       <Subtitle2 as="h3">{t('addin.next.title')}</Subtitle2>
-      {next.proposal && <Text weight="semibold">{t(`monitor.proposal.${next.proposal}`)}</Text>}
+      {next.proposal && <Text weight="semibold">{proposalLabel(next.kind, next.proposal)}</Text>}
       <Body1>{next.why}</Body1>
       {next.rules.length > 0 && (
         <Caption1 className={styles.muted}>

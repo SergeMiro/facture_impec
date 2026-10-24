@@ -2,12 +2,11 @@
 // once and its chasing plan ends, then a job reports the payment to the platform that holds the
 // invoice. The payment_reports row is written with the payment, before the platform is called, so the
 // payment is reported once whatever happens to the job (docs/B2BROUTER.md T21 for a lost answer).
-import { endSteps, isIsoDate, parisToday } from '@fi/core';
+import { isIsoDate, parisToday } from '@fi/core';
 import {
   and,
   applyTransition,
   audit,
-  chasePlans,
   eq,
   invoices,
   lockInvoice,
@@ -19,6 +18,7 @@ import {
 } from '@fi/db';
 import { PdpUnavailableError } from '@fi/pdp-adapter';
 import { z } from 'zod';
+import { endPlan } from './collect';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { label } from './invoices';
@@ -57,17 +57,7 @@ export async function recordPayment(
       payload: { paidOn, amount, source: 'user' },
       at: now,
     });
-    const [plan] = await tx
-      .select()
-      .from(chasePlans)
-      .where(eq(chasePlans.invoiceId, id))
-      .for('update');
-    if (plan) {
-      await tx
-        .update(chasePlans)
-        .set({ steps: endSteps(plan.steps, now), nextStepOn: null, updatedAt: new Date() })
-        .where(eq(chasePlans.id, plan.id));
-    }
+    await endPlan(tx, id, now);
     // The platform that holds the invoice (test invoices sit on the test platform).
     const [held] = row.pdpRef
       ? await tx

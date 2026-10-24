@@ -104,7 +104,8 @@ Each closes with a call or two on the owner's sandbox key (`docs/RUNBOOK.md` § 
       `document_type_code` list · T10 sending twice · T11 event names · T16 deleting an attachment ·
       T19 Schematron failure on import or on send · T20 the sandbox's path for a French invoice ·
       T21 a second `POST /payments` after a lost answer · T22 what `{account}` is, and whether it
-      differs between sandbox and production · T23 a valid key on an account it cannot reach.
+      differs between sandbox and production · T23 a valid key on an account it cannot reach ·
+      T24 an imported credit note (381) and its invoice.
 - [ ] With staging (`stag_` key and a ticket): T7 how « 213 Rejetée » shows; T14 inbound invoices.
 - [ ] With B2Brouter's support: T8 meaning of `allegedly_paid`, `closed`, `expired`…; T15 webhook
       retries, timeout and source addresses; T18 whether 212 (paid) is required.
@@ -132,6 +133,23 @@ Each closes with a call or two on the owner's sandbox key (`docs/RUNBOOK.md` § 
       `apps/api/src/vies.ts`.
 - [ ] From the prod server, watch the sweep's log for a week: VIES never answering `IP_BLOCKED` or
       `GLOBAL_MAX_CONCURRENT_REQ` to our traffic.
+
+## Credit notes (§4), built on 2026-10-24
+
+- [ ] **Owner: does a credit note count in the monthly quota?** Every deposit counts now
+      (`recordUsage` in `runSend`), credit notes included. Not counting them is a one-line filter on
+      `credit_of` (money: `docs/BILLING.md`).
+- [ ] **Accountant:** confirm the path of a refused invoice (credit note, then a new invoice with a
+      new number) and of « Abandonner la créance » (wording, and whether it should also propose a
+      credit note so the company recovers the VAT on the unpaid amount: `docs/DEFERRED.md`).
+- [ ] **B2Brouter T24** (`docs/B2BROUTER.md` §11): does an imported CII of type 381 with its preceding
+      invoice become a credit note linked to it on B2Brouter (`is_credit_note`,
+      `invoice_references`), and does it follow the same statuses? Then let the credit-note E2E run on
+      the live sandbox (`apps/addin/e2e/b2brouter.spec.ts` skips it there).
+- [ ] **MonitorAgent prompt:** say in `packages/agents/prompts/monitor.md` that a refused invoice is
+      fixed by a credit note and a new invoice, never resent under its number, then record the
+      `monitor` eval again (`packages/agents/evals/recordings/`). Until then the pane shows its
+      `fix_and_resend` on a refusal as « Corriger : un avoir, puis une nouvelle facture ».
 
 ## Excel on the web E2E
 

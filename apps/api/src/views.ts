@@ -40,6 +40,8 @@ export function invoiceSummary(row: InvoiceRow) {
   return {
     id: row.id,
     number: row.number,
+    /** 380 invoice, 381 credit note (« avoir »), 386 advance invoice. */
+    typeCode: row.document.typeCode ?? '380',
     direction: row.direction,
     status: row.status,
     statusLabel: t(`invoice.status.${row.status}`),
@@ -92,9 +94,23 @@ export interface DetailData {
   plan?: ChasePlanRow | undefined;
   /** Open findings of the checks across documents (R2, src/checks.ts). */
   findings?: ReturnType<typeof findingView>[];
+  /** A credit note: the invoice it cancels (`of`); an invoice: its credit note (`by`), src/credits.ts. */
+  credit?: {
+    of: CreditLink | null;
+    by: (CreditLink & { status: string; statusLabel: string }) | null;
+  };
 }
 
-export function invoiceDetail(row: InvoiceRow, { issues, events, plan, findings }: DetailData) {
+interface CreditLink {
+  id: string;
+  number: string | null;
+  issueDate?: string | null;
+}
+
+export function invoiceDetail(
+  row: InvoiceRow,
+  { issues, events, plan, findings, credit }: DetailData,
+) {
   return {
     ...invoiceSummary(row),
     document: row.document,
@@ -103,5 +119,6 @@ export function invoiceDetail(row: InvoiceRow, { issues, events, plan, findings 
     events: events.map(eventView),
     chase: chaseView(plan),
     nextStep: nextStep(row, events),
+    credit: credit ?? { of: null, by: null },
   };
 }

@@ -1186,6 +1186,27 @@ export class Controller {
     if (ok) void this.sync();
   };
 
+  /** « Établir un avoir », after the user confirmed it: the credit note's fiche opens. */
+  creditNote = async (): Promise<void> => {
+    const id = this.#state.invoice?.detail.id;
+    if (!id) return;
+    const avoir = await this.#act('credit', () => this.api.creditNote(id));
+    if (!avoir || this.#state.invoice?.detail.id !== id) return;
+    await this.openInvoice(avoir.id);
+    this.notify('success', t('addin.credit.made', { number: avoir.number ?? '' }));
+    void this.sync();
+  };
+
+  /** « Abandonner la créance », after the user confirmed it: chasing stops. */
+  writeOff = async (): Promise<void> => {
+    const ok = await this.#chase(
+      'writeOff',
+      (id) => this.api.writeOff(id),
+      (d) => t('addin.writeOff.done', { number: d.number ?? '' }),
+    );
+    if (ok) void this.sync();
+  };
+
   /** « Promesse de paiement » until `until` (YYYY-MM-DD); null withdraws it. */
   promisePayment = (until: string | null): Promise<boolean> =>
     this.#chase(

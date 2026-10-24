@@ -44,7 +44,7 @@ Each line says where it came from and what would bring it back.
 | Chase drafts reworded by a model (tone, the customer's history) | M5: deterministic templates in `fr.json`; no model writes amounts, dates or legal text | A pilot customer finds the templates stiff; then a model rewrites only the wording around the code-written facts, with an eval. |
 | Partial payments and instalments | M5: « Encaissée » records the whole amount payable; the adapter and the stand-in already carry an amount | A customer is paid in instalments: a balance on the invoice, the plan chasing what is left. |
 | Credit notes generated from a refusal | M5: the MonitorAgent proposes « avoir » and drafts the message; the user issues the credit note in their own tool | The credit-note builder (type 381) from the original invoice, with the `credited` transition it ends in. |
-| Chasing again after a dispute is settled | M5: a refusal or a dispute pauses the plan, and the state machine has no way back from `refused_by_customer` to the chased states | The state machine gets a « litige réglé » transition back to `accepted`; the plan then resumes from the next step. |
+| Chasing again after a dispute is settled | M5: a refusal or a dispute pauses the plan, and the state machine has no way back from `refused_by_customer` to the chased states | The state machine gets a « litige réglé » transition back to `accepted`; the plan then resumes from the next step. Since §4 (2026-10-24) a refused invoice is settled by a credit note and a new invoice (AFNOR XP Z12-014 use case 5), which the new invoice's own plan chases: bring this back only if the platform lets a customer withdraw a refusal (`docs/B2BROUTER.md` T7, T8). |
 | Weekly report per person (opt-out, HTML) | M5: one plain-text mail to every owner of the company | An owner asks to stop it. |
 | Send throughput beyond one API process | M5 k6: 4 send workers per process, about 8 invoices/s end to end (`docs/PROGRESS.md` M5) | A company sends several thousand invoices at once, or several API processes share the queue. |
 | Formal-notice wording reviewed by a lawyer | M5: written from articles L441-10 and D441-5 of the Code de commerce; always a draft the user reads and sends | Before the first paying customer uses it: the owner or a lawyer reads `chase.body.formal_notice`. |
@@ -149,6 +149,18 @@ Each line says where it came from and what would bring it back.
 | Terms and privacy links on Microsoft's consent screen | 2026-10-22: the registration's Branding has none yet | The CGU and the privacy page are published (`TERMS_URL`): the owner adds both in Entra → Branding & properties. |
 | The File Picker in an Office dialog instead of a frame over the pane | R4: a frame over the task pane, with its own « Fermer » | The picker refuses to run inside the pane's frame on some Excel (TODO(verify) 3 in `docs/MICROSOFT365.md`). |
 | Writing into a connected file | R4: picked files are only read, never modified (R8 writes only into the open workbook) | Users want corrections applied to their OneDrive files too: needs `Files.ReadWrite` and the co-authoring question of R8. |
+
+## After a send: credit notes (§4), built on 2026-10-24
+
+| Item | Current behaviour | Bring back when |
+|---|---|---|
+| A partial credit note (some lines, a part of the amount: a discount granted afterwards, goods returned) | « Établir un avoir » credits the whole invoice | A pilot company needs it: the credit note's lines chosen in the pane, and the original stays due for the rest (not `credited`). |
+| A credit note on a paid invoice (a refund) | Refused with `credit_paid`: « faites cet avoir avec votre comptable » | A pilot refunds customers: the refund recorded as a payment out, and the platform told. |
+| A corrective invoice (type 384) or resending a refused invoice under its number | Not offered: the state machine's `resend` (disputed → needs_fix) has no route, because a refused invoice is not corrected under its number (AFNOR XP Z12-014 use case 5) | The norm or B2Brouter (T24) says a 384 is the way for a case we meet. |
+| A credit note the platform rejects | It cannot be corrected in the sheet (it has no row) and the pane has no « Annuler »: the API's `PUT /invoices/:id` and `POST /invoices/:id/cancel` work | It happens: an « Annuler l'avoir » button on its fiche, then « Établir un avoir » again. |
+| Credit notes written into the sheet | A credit note lives in the pane and the API only; the original's row says « Annulée par un avoir » | Users want their credit notes in their workbook, or the sheet's own credit notes (type 381 rows) linked to their invoices. |
+| Credit notes in the weekly report | Left out of its counts (sent, paid, overdue): a credit note's amount would add, not subtract | Owners ask for « avoirs émis » in the report: a line of its own, and the sent total net of them. |
+| A credit note per write-off for the VAT on the unpaid amount | « Abandonner la créance » only stops chasing and records the loss; recovering the VAT on an irrecoverable debt needs a rectifying document | The accountant's answer in `docs/TODO.md` › Credit notes. |
 
 ## Google Sheets host (R9)
 

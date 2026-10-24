@@ -83,11 +83,11 @@ describe('MonitorAgent', () => {
     expect(r2.advice.draft?.body).toContain('« Déjà reçue. »');
   });
 
-  it('offers the three options with a template draft when the AI is off or fails', async () => {
+  it('says how a refusal is answered, with a template draft, when the AI is off or fails', async () => {
     const { orchestrator } = testOrchestrator({ retries: 0 });
     const off = await adviseNext(invoice, refusal, { tenantId: 't', orchestrator, ai: null });
     expect(off.advice).toMatchObject({ proposal: null, degraded: 'ai_off' });
-    expect(off.advice.why).toContain('Trois possibilités');
+    expect(off.advice.why).toContain('nouveau numéro');
     const failed = await adviseNext(invoice, refusal, {
       tenantId: 't',
       orchestrator,

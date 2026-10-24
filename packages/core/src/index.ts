@@ -2,6 +2,7 @@
 export * from './chase';
 export * from './checks';
 export * from './compute';
+export * from './credit';
 export * from './dates';
 export * from './export';
 export * from './ids';

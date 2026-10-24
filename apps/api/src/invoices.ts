@@ -289,6 +289,8 @@ export interface InvoiceInput {
   parties?: PartyBook | undefined;
   /** What a sync knows (the numbers issued as it sees them), and who this invoice is among them. */
   known?: (Known & { self: string }) | undefined;
+  /** A credit note: the sent invoice it cancels (src/credits.ts). */
+  creditOf?: string | undefined;
 }
 
 /** The buyer completed from its confirmed customer (plan §6 phase 2): the sheet always wins. */
@@ -327,6 +329,7 @@ export async function createInvoice(
           source: input.excelBinding ? 'excel' : 'api',
           excelBinding: input.excelBinding ?? null,
           partyId,
+          creditOf: input.creditOf ?? null,
         })
         .returning();
       if (!inserted) throw new Error('insert returned nothing');
@@ -336,7 +339,12 @@ export async function createInvoice(
         action: 'invoice.create',
         objectType: 'invoice',
         objectId: inserted.id,
-        after: { fingerprint: computed.fingerprint, isTest, partyId },
+        after: {
+          fingerprint: computed.fingerprint,
+          isTest,
+          partyId,
+          ...(input.creditOf && { creditOf: input.creditOf }),
+        },
       });
       const now = deps.now();
       const given = input.known;
@@ -368,6 +376,32 @@ export async function getInvoice(deps: ApiDeps, tenant: TenantRow, id: string) {
   return row;
 }
 
+/** The credit note of an invoice that is not cancelled, if any (one per invoice, invoices_credit_of). */
+export async function liveCreditNote(db: DbOrTx, invoiceId: string) {
+  const [row] = await db
+    .select()
+    .from(invoices)
+    .where(and(eq(invoices.creditOf, invoiceId), ne(invoices.status, 'cancelled')));
+  return row;
+}
+
+/** A credit note and the invoice it cancels, each as the other's fiche names it. */
+async function creditLinks(db: DbOrTx, row: InvoiceRow) {
+  const [of] = row.creditOf
+    ? await db
+        .select({ id: invoices.id, number: invoices.number, issueDate: invoices.issueDate })
+        .from(invoices)
+        .where(eq(invoices.id, row.creditOf))
+    : [];
+  const by = await liveCreditNote(db, row.id);
+  return {
+    of: of ?? null,
+    by: by
+      ? { id: by.id, number: by.number, status: by.status, statusLabel: label(by.status) }
+      : null,
+  };
+}
+
 export async function invoiceDetailData(deps: ApiDeps, row: InvoiceRow) {
   const [last] = await deps.db
     .select({ issues: validationResults.issues })
@@ -385,6 +419,7 @@ export async function invoiceDetailData(deps: ApiDeps, row: InvoiceRow) {
     events,
     plan: await chasePlanOf(deps.db, row.id),
     findings: await invoiceFindings(deps.db, row.id),
+    credit: await creditLinks(deps.db, row),
   };
 }
 

@@ -41,6 +41,7 @@ import {
   type GoogleConnector,
   type MicrosoftConnector,
 } from './connectors';
+import { creditOriginal } from './credits';
 import type {
   AiDeps,
   Jobs,
@@ -185,6 +186,8 @@ export async function runSend(deps: WorkerDeps, invoiceId: string): Promise<void
         patch: { pdpRef: result.pdpRef },
         payload: { pdpRef: result.pdpRef },
       });
+      // A credit note now held by the platform cancels the invoice it names.
+      await creditOriginal(tx, invoiceId, deps.now());
       if (!claim.isTest) {
         await recordUsage(tx, deps, { id: invoiceId, tenantId: claim.tenantId }, deps.now());
       }

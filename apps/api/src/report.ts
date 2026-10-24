@@ -53,6 +53,8 @@ async function tally(
         eq(invoices.tenantId, tenantId),
         eq(invoices.direction, 'out'),
         eq(invoices.isTest, false),
+        // A credit note (381) is neither sent nor paid business: its amount would add, not subtract.
+        sql`coalesce(${invoices.document}->>'typeCode', '380') <> '381'`,
         where,
       ),
     );

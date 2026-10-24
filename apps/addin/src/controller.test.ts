@@ -529,6 +529,48 @@ describe('a new user on the demo sheet', () => {
       t('addin.autopilot.held', { number: state().invoice?.detail.number ?? '' }),
     );
   });
+
+  it('cancels a sent invoice by a credit note from its fiche; the two fiches link to each other', async () => {
+    const worker: WorkerDeps = {
+      db: database.db,
+      pdp: { mock: adapter },
+      test: api.deps.test,
+      jobs: api.jobs,
+      ai: api.deps.ai,
+      mailer: null,
+      now: () => new Date(),
+    };
+    // Paid: no credit note, and the pane says why.
+    const paid = row(2)?.invoiceId;
+    if (!paid) throw new Error('row 2 has no invoice');
+    await controller.openInvoice(paid);
+    await controller.creditNote();
+    expect(state().notice?.text).toBe(t('api.error.credit_paid'));
+
+    const id = row(4)?.invoiceId;
+    if (!id) throw new Error('row 4 has no invoice');
+    await controller.openInvoice(id);
+    controller.askSend();
+    await controller.send();
+    await runSend(worker, id);
+    await controller.openInvoice(id);
+    expect(state().invoice?.detail).toMatchObject({ status: 'deposited', credit: { by: null } });
+
+    await controller.creditNote();
+    const avoir = state().invoice?.detail;
+    expect(avoir).toMatchObject({ typeCode: '381', isTest: true, credit: { of: { id } } });
+    expect(avoir?.number).toMatch(/^TEST-AV\d{4}-0001$/);
+    expect(state().notice?.text).toBe(t('addin.credit.made', { number: avoir?.number ?? '' }));
+
+    controller.askSend();
+    await controller.send();
+    await runSend(worker, avoir?.id ?? '');
+    await controller.openInvoice(id);
+    expect(state().invoice?.detail).toMatchObject({
+      status: 'credited',
+      credit: { by: { id: avoir?.id, status: 'deposited' } },
+    });
+  });
 });
 
 describe('the other sheets of the workbook (R1)', () => {

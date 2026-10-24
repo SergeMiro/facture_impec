@@ -119,8 +119,8 @@ export const TRANSITIONS = {
   credit_note: {
     from: ['disputed', ...AFTER_DEPOSIT],
     to: 'credited',
-    by: ['user'],
-    note: 'Cancelled by a credit note; after deposit this is the only way to cancel.',
+    by: ['user', 'system'],
+    note: 'Cancelled by a credit note; after deposit this is the only way to cancel. Applied when the platform has the credit note.',
   },
   overdue: {
     from: ['delivered', 'accepted'],

@@ -30,6 +30,7 @@ import {
 import { BILLING_INTERVALS, BILLING_STATUSES, PLANS, type Plan, type WhiteLabel } from '@fi/shared';
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   bigint,
   bigserial,
   boolean,
@@ -376,6 +377,8 @@ export const invoices = pgTable(
      * background keeps its findings as they are and the autopilot does not send it.
      */
     editLockUntil: timestamp('edit_lock_until', { withTimezone: true }),
+    /** A credit note (plan §4): the sent invoice it cancels, once the platform has it. */
+    creditOf: uuid('credit_of').references((): AnyPgColumn => invoices.id),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -387,6 +390,10 @@ export const invoices = pgTable(
     index('invoices_tenant_status').on(t.tenantId, t.status),
     index('invoices_pdp_ref').on(t.pdpRef),
     index('invoices_autopilot').on(t.autopilotAt).where(sql`${t.autopilotAt} is not null`),
+    // One credit note per invoice; a cancelled draft frees it.
+    uniqueIndex('invoices_credit_of')
+      .on(t.creditOf)
+      .where(sql`${t.creditOf} is not null and ${t.status} <> 'cancelled'`),
   ],
 );
 

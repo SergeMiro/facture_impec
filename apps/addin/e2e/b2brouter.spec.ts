@@ -124,3 +124,86 @@ test('an invoice goes to B2Brouter and its status comes back to the sheet by its
     await expect(page.getByTestId('cell-M2')).toHaveText(testLabel('paid'), { timeout: 30_000 });
   });
 });
+
+// Plan §4 on the stand-in: a sent invoice is cancelled by a credit note made from its fiche, sent
+// through the same adapter; the sheet then says « Annulée par un avoir ». How B2Brouter itself takes
+// an imported 381 is docs/B2BROUTER.md T24, so this one does not run against the live sandbox.
+test('a sent invoice is cancelled by a credit note from its fiche', async ({
+  page,
+  context,
+}, info) => {
+  test.skip(Boolean(LIVE), 'docs/B2BROUTER.md T24: an imported credit note on the sandbox');
+  const timeline = [
+    { status: 'received_by_platform', after: 'PT1S' },
+    { status: 'delivered', after: 'PT2S' },
+  ];
+  expect((await control('', { method: 'PUT', body: JSON.stringify({ timeline }) })).ok).toBe(true);
+  const owner = 'gerant-avoir@atelier-dupont.test';
+  await seedDemo({
+    api,
+    adminToken: E2E.adminToken,
+    email: owner,
+    provider: 'b2brouter',
+    account: String(Date.now()).slice(-9),
+  });
+  const number = `E2E-${String(Date.now()).slice(-8)}`;
+  await page.goto('/harness.html');
+  const pane = page.getByTestId('pane');
+  const status = pane.getByTestId('invoice-status');
+
+  await test.step('Envoyer en test, until the customer has it', async () => {
+    await signIn(pane, context, owner);
+    await pane.getByRole('button', { name: t('addin.detect.confirm') }).click();
+    await page.getByTestId('ribbon-modetest').click();
+    await typeInCell(page, 'A2', number);
+    await row(pane, `TEST-${number}`)
+      .getByRole('button', { name: t('addin.dash.view') })
+      .click();
+    await pane.getByRole('button', { name: t('addin.invoice.sendTest') }).click();
+    await pane
+      .getByTestId('confirm-send')
+      .getByRole('button', { name: t('addin.invoice.confirm') })
+      .click();
+    await pane.getByRole('button', { name: t('addin.invoice.back') }).click();
+    await expect(page.getByTestId('cell-M2')).toHaveText(testLabel('delivered'), {
+      timeout: 150_000,
+    });
+  });
+
+  await test.step('« Établir un avoir », confirmed: its fiche opens, named after the invoice', async () => {
+    await row(pane, `TEST-${number}`)
+      .getByRole('button', { name: t('addin.dash.view') })
+      .click();
+    await pane.getByRole('button', { name: t('addin.credit.make') }).click();
+    await pane
+      .getByTestId('confirm-credit')
+      .getByRole('button', { name: t('addin.credit.confirmYes') })
+      .click();
+    await expect(pane.getByTestId('credit-of')).toContainText(`TEST-${number}`);
+    await expect(pane.getByRole('heading', { name: /TEST-AV\d{4}-0001/ })).toBeVisible();
+    await page.screenshot({ path: info.outputPath('credit-note.png') });
+  });
+
+  await test.step('Envoyer en test: the invoice is « Annulée par un avoir », on the sheet too', async () => {
+    await pane.getByRole('button', { name: t('addin.invoice.sendTest') }).click();
+    await pane
+      .getByTestId('confirm-send')
+      .getByRole('button', { name: t('addin.invoice.confirm') })
+      .click();
+    const left = ['deposited', 'delivered'].map((s) =>
+      literal(t(`invoice.status.${s}` as MessageKey)),
+    );
+    await expect(status).toHaveText(new RegExp(left.join('|')), { timeout: 60_000 });
+    await pane
+      .getByTestId('credit-of')
+      .getByRole('button', { name: t('addin.credit.openOriginal', { number: `TEST-${number}` }) })
+      .click();
+    await expect(status).toHaveText(t('invoice.status.credited'), { timeout: 60_000 });
+    await expect(pane.getByTestId('credit-by')).toContainText(/TEST-AV\d{4}-0001/);
+    await page.screenshot({ path: info.outputPath('credited.png') });
+    await pane.getByRole('button', { name: t('addin.invoice.back') }).click();
+    await expect(page.getByTestId('cell-M2')).toHaveText(testLabel('credited'), {
+      timeout: 30_000,
+    });
+  });
+});

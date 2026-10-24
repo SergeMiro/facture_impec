@@ -80,6 +80,20 @@ async function savePlan(
     .where(eq(chasePlans.id, plan.id));
 }
 
+/** Paid, credited or written off by the user: the plan ends now, not at the next run. */
+export async function endPlan(tx: Tx, invoiceId: string, now: Date): Promise<void> {
+  const [plan] = await tx
+    .select()
+    .from(chasePlans)
+    .where(eq(chasePlans.invoiceId, invoiceId))
+    .for('update');
+  if (!plan) return;
+  await tx
+    .update(chasePlans)
+    .set({ steps: endSteps(plan.steps, now), nextStepOn: null, updatedAt: new Date() })
+    .where(eq(chasePlans.id, plan.id));
+}
+
 // ── The run ───────────────────────────────────────────────────────────────────────────────────────
 
 /** delivered/accepted, past the due date (Europe/Paris), something left to pay → overdue. */

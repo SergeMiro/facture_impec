@@ -72,7 +72,7 @@ stateDiagram-v2
 | refused_by_customer | deposited, delivered | refused_by_customer | pdp | The customer refused it (« Refusée »), with a reason. |
 | dispute | refused_by_customer | disputed | user, system | The refusal is being handled; chasing pauses. |
 | resend | disputed | needs_fix | user | The user corrects the invoice and sends it again (validation runs again). |
-| credit_note | disputed, deposited, delivered, accepted, overdue, chasing | credited | user | Cancelled by a credit note; after deposit this is the only way to cancel. |
+| credit_note | disputed, deposited, delivered, accepted, overdue, chasing | credited | user, system | Cancelled by a credit note; after deposit this is the only way to cancel. Applied when the platform has the credit note. |
 | overdue | delivered, accepted | overdue | system | Daily job: the due date has passed and no payment was recorded. |
 | chase | overdue | chasing | system, agent | A chasing plan is active (CollectAgent). |
 | paid | deposited, delivered, accepted, overdue, chasing | paid | user, pdp | Payment received (« Encaissée »), from the platform or recorded by the user. |

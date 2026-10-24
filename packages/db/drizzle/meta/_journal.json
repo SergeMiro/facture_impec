@@ -134,6 +134,13 @@
       "when": 1792841494755,
       "tag": "0018_vat_checks",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792845560891,
+      "tag": "0019_credit_notes",
+      "breakpoints": true
     }
   ]
 }

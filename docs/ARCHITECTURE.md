@@ -867,6 +867,34 @@ sent, once a day per number, and keeps each answer in `vat_checks` with VIES' co
 the answer is part of the check key; core rule FF-VIES-01 warns when it says « not valid ». Core never
 calls the network. Details and decisions: `docs/ONBOARDING.md` §5.
 
+## §4 After a send: credit notes and write-offs
+
+Once the platform has an invoice it is never edited nor cancelled again (`api.error.not_editable`,
+`cannot_cancel`). `apps/api/src/credits.ts` adds the two ways out the state machine already had:
+
+- **« Établir un avoir »** (`POST /invoices/:id/credit-note`) builds the full credit note with core's
+  `creditNoteDraft` (`packages/core/src/credit.ts`): the invoice's stored draft, type 381, no due
+  date, the invoice's number and date as preceding invoice (BG-3, BR-FR-CO-05), numbered in its own
+  series `AV<year>-<n>` (`nextCreditNumber`; `TEST-AV…` in Mode test) and dated today. It is stored as
+  a new invoice through `createInvoice`, with `invoices.credit_of` naming the original: checked like
+  any invoice, never autopiloted (`autopilot.ts` sends type 380 only), sent only by « Envoyer ». The
+  partial unique index `invoices_credit_of` keeps one live credit note per invoice; asking again
+  returns it, a cancelled draft frees it. Not sent yet → cancel instead (`credit_not_sent`); being sent,
+  rejected by the platform, paid, or itself a credit note → a plain refusal.
+- **The original is cancelled when the credit note is deposited**: `runSend` calls `creditOriginal` in
+  the transaction that records the deposit, so both move together. A refused original goes through
+  `dispute` (« Litige en cours », already when the credit note is drafted), then `credit_note`
+  (« Annulée par un avoir »); its chasing plan ends at once (`endPlan`, shared with « Encaissée »). An
+  original paid meanwhile stays paid; its timeline gets `credit_note_not_applied`.
+- **« Abandonner la créance »** (`POST /invoices/:id/write-off`) applies `write_off` on an overdue or
+  chased invoice; its plan ends.
+- Each fiche names the other (`credit.of` / `credit.by` in the detail, timeline notes
+  `credit_note_drafted` and `credit_note_of`). A refused invoice is never sent again under its number
+  (AFNOR XP Z12-014 use case 5, https://ma-facture-electronique.org/cas-dusage/cas-5-refus-acheteur/,
+  read 2026-10-24): the state machine's `resend` stays unexposed, the fiche of a refused invoice says
+  « un avoir, puis une nouvelle facture », and the MonitorAgent's `fix_and_resend` on a refusal is shown
+  under that name until its prompt says it (`docs/TODO.md`).
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

@@ -1,0 +1,3 @@
+ALTER TABLE "invoices" ADD COLUMN "credit_of" uuid;--> statement-breakpoint
+ALTER TABLE "invoices" ADD CONSTRAINT "invoices_credit_of_invoices_id_fk" FOREIGN KEY ("credit_of") REFERENCES "public"."invoices"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "invoices_credit_of" ON "invoices" USING btree ("credit_of") WHERE "invoices"."credit_of" is not null and "invoices"."status" <> 'cancelled';
