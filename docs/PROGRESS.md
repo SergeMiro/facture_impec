@@ -1658,3 +1658,43 @@ Evidence (2026-10-24):
 | Deleted with the account | `apps/api/src/action-links.test.ts` › go with the account, and a link mailed before serves no more (no `action_links` row left after `DELETE /tenant`, the mailed link 410); `apps/api/src/rgpd.ts` deletes them before the actions; `docs/RGPD.md`. |
 | Gate | `pnpm verify` green on 2026-10-24: api 355, add-in 115, agents 162 (evals included), core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 8, scripts 4. The harness E2E passes (local Chrome; browser: local) with the kinds' strings moved to `action.kind.*`. |
 | Found on the way | Two requests with the same deadline are listed in no fixed order (`listActions` breaks the tie by id): the test first took « the first Ignorer » for the request it had approved and failed one run in three; it now finds each link's request from the hash of its secret. |
+
+## BTP plan — stage 4A: the connector frame, companies and chantiers from an ERP export (started 2026-10-24)
+
+`docs/plans/phase-4.md` › 4A, `docs/DECISIONS.md` D9. Criteria, written before the API side:
+
+- **The frame**: `@fi/connectors` holds the `Connector` (`probe`, `pull` by cursor in batches of
+  500 rows of one entity), one Zod schema per entity row, and the mapping as pure functions; it
+  imports `@fi/core` and `@fi/domain` only (`pnpm boundaries`).
+- **Read at once**: `POST /erp/imports?name=&list=` reads the `.xlsx` or `.csv` before keeping
+  anything: the row of labels below a title, each column by its French label, the list guessed (or
+  said). A required column missing (a name, a SIREN or SIRET for companies, a code for chantiers),
+  an unknown list, a file that is no workbook: a French refusal that names what to do, nothing
+  written, nothing queued.
+- **Written by the queue**: `erp.sync`, stately per company and list, each batch and its cursor in
+  one transaction; the file's bytes in the FileStore until the run ends.
+- **Once**: the same file again does nothing (200, nothing queued); a newer one adds what is new and
+  updates what changed; another company's data is never touched.
+- **What a person set stays**: a known company keeps its name, e-mail and sous-traitance switch; the
+  ERP fills what is empty and gives its code. A new company is `source: 'erp'`, not looked up. A
+  chantier is the ERP's, its customer found by the ERP's code, its SIREN, or a name only one has.
+- **A stop in the middle**: the run goes on from its cursor and ends with the same result as a run
+  without a stop; a fatal error (the file's bytes gone) says so, and the same file again goes on.
+- **What it did**: `GET /erp` gives each list's last import: running, done or failed, added, updated,
+  unchanged, the rows skipped by reason with the first twenty by name, the chantiers without a
+  customer; the error in French.
+- **Audited, and gone with the account**: `erp.import` (the person) and `erp.sync` (`agent:erp`);
+  the sync rows and their file go with `DELETE /tenant`; the export gives them.
+
+Evidence (2026-10-24):
+
+| Criterion | Evidence |
+|---|---|
+| The frame | `packages/connectors/src/{types,schemas,mapping}.ts`, `src/export/`; `scripts/boundaries/rules.ts` (`packages/connectors`: core and domain); `packages/connectors/src/mapping.test.ts` (4: a supplier's sous-traitance only at creation, only empty fields filled, a chantier rewritten where the ERP speaks and the same address in another key order no change, the customer by code, SIREN or a unique name). |
+| Read at once | `packages/connectors/src/export/export.test.ts` (6: labels below a title, a 4-digit postcode given its zero, an invalid e-mail dropped, a particulier `no_siren`, a wrong check digit `siren_invalid`, a total row ignored; suppliers' sous-traitant column or family, a duplicate; chantiers from a workbook with dates, status, retenue, 12 % refused; the fatal errors; batches of 500 resumed from a cursor). `apps/api/src/erp.test.ts` › say what stops a file, in French, and keep nothing (« Il manque une colonne à cette liste : « SIRET » ou « SIREN » », « « Code chantier » », `export_list_unknown`, `list=clients` 400, a PDF 415, an empty file 422; no job, no blob, no sync row; the same file with `list=suppliers` imported). |
+| Written by the queue, once, what a person set stays | `apps/api/src/erp.test.ts` › add what is new, fill what a known company lacks, and link the chantiers (202 and one job `export:customers`; « running » then « done » with added 1, updated 1, `no_siren` 1 and « Mme Durand » row 5; the directory's name and the person's e-mail kept, SIRET, address and `C001` filled; the new customer `source: 'erp'`, `verifiedAt` null; suppliers with their sous-traitance; three chantiers, customers by code and by name, one without; the same file again 200, nothing queued, the rows equal; a newer file added 1, updated 1, unchanged 1; the chantiers again: unchanged, then a réception and a status updated, the retenue kept; the file's blob gone after each run; five `erp.import` and five `erp.sync` by `agent:erp`). › never touch another company's data. |
+| A stop in the middle | same file › go on from the cursor after a stop, and end as a run without a stop (1 202 rows; the job killed after its first batch: « failed », `erp_interrupted` « reprend tout seul », 500 companies, cursor row 501; the retry ends equal to an uninterrupted run on another company, 1 201 added). › go on when the same file is given again after its bytes were lost (`export_missing`, then 202 `again`, then done). |
+| What it did | `apps/api/src/erp.ts` `syncView`, `GET /erp`; the assertions above read it. |
+| Audited, and gone with the account | the first test's audit rows; › go with the account, the import and its file (no `connector_syncs` row, no blob after `DELETE /tenant`; the job queued before does nothing); `apps/api/src/rgpd.ts` exports `result`; `docs/RGPD.md`. |
+| Gate | `pnpm verify` green on 2026-10-24: api 361, connectors 10, add-in 115, agents 162 (evals included), core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 8, scripts 4; `pnpm boundaries`: 11 packages. The harness E2E passes (local Chrome; browser: local). |
+| Found on the way | Postgres gives a jsonb's keys back in its own order: comparing addresses as JSON text made every second import « update » each chantier with an address. `@fi/connectors` compares with the keys sorted (`mapping.test.ts`, and the chantiers imported again unchanged in `erp.test.ts`). |

@@ -27,6 +27,8 @@ export const QUEUES = {
   classify: 'document.classify',
   /** What a person approved, sent (src/actions.ts). `exclusive` per action. */
   action: 'action.send',
+  /** An ERP's list written (src/erp.ts). `stately` per company and list: one running, one waiting. */
+  erp: 'erp.sync',
 } as const;
 
 export function createBoss(database: Database): PgBoss {
@@ -117,6 +119,14 @@ export async function ensureQueues(boss: PgBoss): Promise<void> {
     retryBackoff: true,
     expireInSeconds: 300,
   });
+  // 5 000 rows in ten batches take seconds; a retry goes on from the last batch written (D9).
+  await boss.createQueue(QUEUES.erp, {
+    policy: 'stately',
+    retryLimit: 3,
+    retryDelay: 60,
+    retryBackoff: true,
+    expireInSeconds: 600,
+  });
 }
 
 export const syncKey = (target: SyncTarget) =>
@@ -153,6 +163,13 @@ export function bossJobs(boss: PgBoss): Jobs {
     },
     async enqueueAction(actionId) {
       await boss.send(QUEUES.action, { actionId }, { singletonKey: actionId });
+    },
+    async enqueueErp(tenantId, connector) {
+      await boss.send(
+        QUEUES.erp,
+        { tenantId, connector },
+        { singletonKey: `${tenantId}:${connector}` },
+      );
     },
   };
 }

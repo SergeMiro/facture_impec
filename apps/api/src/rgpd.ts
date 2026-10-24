@@ -472,6 +472,7 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       cursor: c.cursor,
       lastOkAt: c.lastOkAt?.toISOString() ?? null,
       lastError: c.lastError,
+      result: c.result,
     })),
     /**
      * The invoices above, the received ones and the documents of the included sheets, line by line,

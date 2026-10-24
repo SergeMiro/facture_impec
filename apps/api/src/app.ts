@@ -64,6 +64,7 @@ import {
   proposeFix,
   proposeUndo,
 } from './edits';
+import { erpImports, importExport } from './erp';
 import { ApiError } from './errors';
 import { body, optionalBody, parse, uuid } from './http';
 import {
@@ -222,7 +223,12 @@ export function createApp(deps: ApiDeps) {
   const mailBody = maxBody(MAX_MAIL_BYTES);
   app.use('*', (c, next) => {
     const path = c.req.path;
-    if (path.startsWith('/workbooks/') || path === '/detect' || path === '/uploads') {
+    if (
+      path.startsWith('/workbooks/') ||
+      path === '/detect' ||
+      path === '/uploads' ||
+      path === '/erp/imports'
+    ) {
       return bigBody(c, next);
     }
     if (path === '/ingest') return ingestBody(c, next);
@@ -400,6 +406,8 @@ export function createApp(deps: ApiDeps) {
     '/obligations/*',
     '/actions',
     '/actions/*',
+    '/erp',
+    '/erp/*',
     '/checks',
     '/links/*',
     '/findings/*',
@@ -730,6 +738,18 @@ export function createApp(deps: ApiDeps) {
     return c.json(
       await closeObligation(deps, tenant, c.get('principal'), c.req.param('id'), input),
     );
+  });
+
+  // ── The ERP's lists (BTP stage 4, docs/DECISIONS.md D9) ──────────────────────────────────────
+  api.get('/erp', async (c) => c.json(await erpImports(deps, c.get('tenant'))));
+
+  // An export's bytes as the body, its name in `?name=`, what it lists in `?list=` when its labels
+  // do not say.
+  api.post('/erp/imports', async (c) => {
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    const query = { name: c.req.query('name'), list: c.req.query('list') };
+    const { status, body: answer } = await importExport(deps, c.get('tenant'), query, bytes);
+    return c.json(answer, status);
   });
 
   // ── Files uploaded from the pane (R6) ─────────────────────────────────────────────────────────

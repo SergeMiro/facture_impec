@@ -53,6 +53,8 @@ export interface Jobs {
   enqueueClassify(documentId: string): Promise<void>;
   /** Send what a person approved (src/actions.ts). */
   enqueueAction(actionId: string): Promise<void>;
+  /** Write an ERP's list given by a person (src/erp.ts): `connector` is its sync row's key. */
+  enqueueErp(tenantId: string, connector: string): Promise<void>;
 }
 
 export interface AiDeps {

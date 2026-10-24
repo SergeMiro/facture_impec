@@ -106,6 +106,8 @@ export interface RecordedJobs extends Jobs {
   classifies: string[];
   /** Actions approved, to send. */
   actions: string[];
+  /** ERP lists given, to write: the company and its sync row's key. */
+  erp: { tenantId: string; connector: string }[];
 }
 
 export function recordedJobs(): RecordedJobs {
@@ -119,6 +121,7 @@ export function recordedJobs(): RecordedJobs {
   const validations: string[] = [];
   const classifies: string[] = [];
   const actions: string[] = [];
+  const erp: { tenantId: string; connector: string }[] = [];
   return {
     sends,
     syncs,
@@ -130,6 +133,7 @@ export function recordedJobs(): RecordedJobs {
     validations,
     classifies,
     actions,
+    erp,
     async enqueueSend(id) {
       sends.push(id);
     },
@@ -159,6 +163,9 @@ export function recordedJobs(): RecordedJobs {
     },
     async enqueueAction(actionId) {
       actions.push(actionId);
+    },
+    async enqueueErp(tenantId, connector) {
+      erp.push({ tenantId, connector });
     },
   };
 }

@@ -1,6 +1,7 @@
 // Which workspace package may import which (BTP plan §3 « violation = build failure »; Biome has no
 // such rule, docs/DECISIONS.md D1). Production code only: tests and their helpers may reach anything
-// they declare. The arrows point down: domain ← shared ← core ← (db, pdp-adapter, agents) ← api.
+// they declare. The arrows point down: domain ← shared ← core ← (db, pdp-adapter, agents,
+// connectors) ← api.
 
 export interface PackageRule {
   /** Workspace packages its production code may import, by folder name (`core` for `@fi/core`). */
@@ -43,6 +44,8 @@ export const RULES: Record<string, PackageRule> = {
   },
   'packages/pdp-adapter': { imports: ['core', 'shared', 'domain'], forbid: [...SERVER, ...MODELS] },
   'packages/agents': { imports: ['core', 'shared', 'domain'], forbid: SERVER },
+  // The connectors read ERPs and give rows (docs/DECISIONS.md D9); the API writes what they map.
+  'packages/connectors': { imports: ['core', 'domain'], forbid: [...SERVER, ...MODELS] },
   // The pane streams the API's chat with the client half of `ai` (R8); it never holds a provider.
   'apps/addin': {
     imports: ['core', 'shared', 'domain'],
@@ -54,7 +57,9 @@ export const RULES: Record<string, PackageRule> = {
     imports: ['core', 'shared', 'pdp-adapter', 'domain'],
     forbid: ['pg', 'pg-boss', 'drizzle-orm', 'drizzle-orm/*', '@electric-sql/*', ...MODELS],
   },
-  'apps/api': { imports: ['agents', 'core', 'db', 'domain', 'pdp-adapter', 'shared'] },
+  'apps/api': {
+    imports: ['agents', 'connectors', 'core', 'db', 'domain', 'pdp-adapter', 'shared'],
+  },
 };
 
 /** Test infrastructure, by path inside its package: exempt from `imports`, `forbid` and `browser`. */

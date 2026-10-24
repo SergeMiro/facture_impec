@@ -502,6 +502,13 @@ plus valable »: `select decision, revision, used_at, expires_at from action_lin
 '<id>'`: used, older than 7 days, or the request changed since (its `revision` above the link's). The
 decision itself is in `audit_events` (`action.decide`, actor `user:<id>`), the channel on the action.
 
+An ERP list (stage 4A) given from the pane and not imported: `select connector, last_error,
+cursor_json, result_json->>'finishedAt', result_json->'skipped' from connector_syncs where tenant_id =
+'<id>'`. `erp_interrupted`: a batch failed, the queue tries again three times a minute apart from the
+cursor; after that, the same file given again goes on from it. `export_missing`: the bytes are gone,
+the same file again goes on. A column not recognised: the person sees which one is needed; the
+labels known are in `packages/connectors/src/export/columns.ts`.
+
 ## Deployment
 
 The API image, the compose file and the settings of a hosted sandbox or prod: `docs/DEPLOY.md`. The

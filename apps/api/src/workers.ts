@@ -53,6 +53,7 @@ import type {
   TestPlatform,
 } from './deps';
 import { runDocumentClassify } from './document-pipeline';
+import { runErpSync } from './erp';
 import { INJECTED_PREFIX, triagePending } from './inbound';
 import {
   documentsBehind,
@@ -105,6 +106,7 @@ const RegistryJob = z.object({ tenantId: z.uuid() });
 const ConnectorJob = z.object({ connectionId: z.uuid() });
 const DocumentJob = z.object({ documentId: z.uuid() });
 const ActionJob = z.object({ actionId: z.uuid() });
+const ErpJob = z.object({ tenantId: z.uuid(), connector: z.string().min(1) });
 const SyncJob = z.object({
   provider: z.enum(PDP_PROVIDERS),
   account: z.string().min(1),
@@ -532,6 +534,13 @@ export async function startWorkers(
   // A request a person approved (src/actions.ts): a failed mail throws, and the queue tries again.
   await boss.work(QUEUES.action, { ...polling, localConcurrency: 2 }, async ([job]) => {
     if (job) await runActionSend(deps, ActionJob.parse(job.data).actionId);
+  });
+  // An ERP's list (src/erp.ts): a fatal error is kept on its sync row, anything else is retried.
+  await boss.work(QUEUES.erp, polling, async ([job]) => {
+    if (job) {
+      const { tenantId, connector } = ErpJob.parse(job.data);
+      await runErpSync(deps, tenantId, connector);
+    }
   });
   await boss.work(QUEUES.connector, polling, async ([job]) => {
     if (job) {

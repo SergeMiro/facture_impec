@@ -326,8 +326,11 @@ export const parties = pgTable(
     requiresPurchaseOrder: boolean('requires_purchase_order').notNull().default(false),
     /** A public body (B2G): DGFiP G2.32 does not apply. */
     publicEntity: boolean('public_entity').notNull().default(false),
-    /** sirene: a customer looked up in the directory; invoice: a supplier as its own invoice names it (R3). */
-    source: text('source', { enum: ['sirene', 'invoice'] })
+    /**
+     * sirene: a customer looked up in the directory; invoice: a supplier as its own invoice names it
+     * (R3); erp: a company an ERP's list gave (docs/DECISIONS.md D9), not looked up.
+     */
+    source: text('source', { enum: ['sirene', 'invoice', 'erp'] })
       .notNull()
       .default('sirene'),
     /** When the directory confirmed it; null for a supplier nobody looked up. */
@@ -1516,6 +1519,24 @@ export const actionLinks = pgTable(
   ],
 );
 
+/** What a connector's run read and did (docs/DECISIONS.md D9); src/erp.ts parses it. */
+export interface SyncResult {
+  /** The export it reads; its bytes are in the FileStore until the run ends. */
+  file: { name: string; sha256: string; key: string; size: number } | null;
+  startedAt: string;
+  /** Null while it runs. */
+  finishedAt: string | null;
+  added: number;
+  updated: number;
+  unchanged: number;
+  /** Rows not imported, by reason (`erp.skip.*` in fr.json). */
+  skipped: Record<string, number>;
+  /** The first rows not imported, by name, for the person to fix in the ERP. */
+  examples: { row: number; name: string | null; reason: string }[];
+  /** Chantiers whose customer was not found among the companies. */
+  withoutCustomer: number;
+}
+
 /** Where a connector stopped reading an ERP (BTP plan §9 `connector_sync`). */
 export const connectorSyncs = pgTable(
   'connector_syncs',
@@ -1531,6 +1552,8 @@ export const connectorSyncs = pgTable(
     lastOkAt: timestamp('last_ok_at', { withTimezone: true }),
     /** The last failure, as a code; null once a run succeeds. */
     lastError: text('last_error'),
+    /** What the current or last run read and did, for the pane (D9). */
+    result: jsonb('result_json').$type<SyncResult>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

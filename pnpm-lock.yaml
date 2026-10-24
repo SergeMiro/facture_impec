@@ -105,6 +105,9 @@ importers:
       '@fi/agents':
         specifier: workspace:*
         version: link:../../packages/agents
+      '@fi/connectors':
+        specifier: workspace:*
+        version: link:../../packages/connectors
       '@fi/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -277,6 +280,25 @@ importers:
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
+
+  packages/connectors:
+    dependencies:
+      '@fi/core':
+        specifier: workspace:*
+        version: link:../core
+      '@fi/domain':
+        specifier: workspace:*
+        version: link:../domain
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: ^22.20.5
+        version: 22.20.5
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@22.20.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.4(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/core:
     dependencies:

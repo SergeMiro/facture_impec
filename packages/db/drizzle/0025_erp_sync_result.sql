@@ -1,0 +1,1 @@
+ALTER TABLE "connector_syncs" ADD COLUMN "result_json" jsonb;

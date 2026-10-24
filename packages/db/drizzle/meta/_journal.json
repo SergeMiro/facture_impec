@@ -176,6 +176,13 @@
       "when": 1792865626207,
       "tag": "0024_action_links",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792867289146,
+      "tag": "0025_erp_sync_result",
+      "breakpoints": true
     }
   ]
 }

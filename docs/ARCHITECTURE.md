@@ -1112,6 +1112,35 @@ pane ─► POST /obligations/:id/close (done | dismissed) ─► its drafts wit
   or a request no longer a draft, is refused before the claim; a failure on our side gives the link
   back.
 
+## BTP back end, stage 4A: the ERP's lists
+
+EBP SaaS waits for its developer account (D3); the connector frame is built and tested with the
+exports every ERP makes (D5, D9).
+
+- **`@fi/connectors`** (`packages/connectors`, core and domain only): `Connector` (`probe`,
+  `pull(cfg, cursor)` → batches of 500 rows of one entity with the cursor reached), one Zod schema
+  per entity row (`TiersRow`, `ChantierRow`), and the mapping (`partyChange`, `chantierChange`,
+  `customerOf`): what a row changes, decided without a database, so every connector maps the same
+  way. The export connector (`src/export/`) reads a workbook or CSV with `@fi/core`'s reader, finds
+  the row of labels in the first 30 rows, gives each column its field by French label (`columns.ts`,
+  `TODO(verify)` with real exports) and guesses the list; its cursor is the file's SHA-256 and the
+  row reached.
+- **The API** (`apps/api/src/erp.ts`): `POST /erp/imports` reads the file at once (a refusal keeps
+  nothing), keeps its bytes in the FileStore and starts its list's `connector_syncs` row
+  (`export:customers`, `export:suppliers`, `export:chantiers`; `result_json` from migration 0025),
+  then queues `erp.sync`. The job pulls from the cursor and writes each batch with its cursor and
+  its counts in one transaction, under a lock on the sync row that also checks the file is still
+  the one given; at the end it marks the run done and drops the bytes. `GET /erp` gives each list's
+  last import.
+
+```
+POST /erp/imports ─► readExport (refusal: 4xx, nothing kept) ─► blobs + connector_syncs (cursor null)
+   ─► queue erp.sync (stately per company and list, 3 tries 60 s apart)
+      ─► runErpSync: for each batch of 500 ─► tx { lock sync row, same file? → parties / chantiers,
+                                                    cursor + counts }
+      ─► tx { finishedAt, lastOkAt, drop the bytes, audit erp.sync }
+```
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

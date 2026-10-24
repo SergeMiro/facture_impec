@@ -204,7 +204,9 @@ Stages (`docs/plans/phase-N.md` each):
       in the pane, « C'est fait » on the deadlines: done 2026-10-24; 3C the weekly e-mail's links:
       done 2026-10-24). Left: the Telegram bot waits for the owner (below);
       invoices sent through Facture Impec keep CollectAgent's chasing, not duplicated.
-- [ ] **4 — connectors**: the frame and the ERP-export connector (D5); EBP SaaS paused (D3).
+- [ ] **4 — connectors** (`docs/plans/phase-4.md`; 4A, `@fi/connectors`, the export connector,
+      `POST /erp/imports`, `GET /erp`, the queue `erp.sync`: done 2026-10-24). Left: 4B invoices and
+      payments from an export and the order of sources, 4C the pane; EBP SaaS paused (D3).
 - [ ] **5, 6** paused (D3). **7 — observability, performance, runbook, onboarding.**
 
 Owner questions (BTP plan §13 and what stage 0 found):
@@ -261,6 +263,16 @@ Left from stage 2A for later (2026-10-24):
 
 - [ ] A Microsoft account that can upload an add-in in Excel on the web, then
       `apps/addin/e2e/excel-web.spec.ts` run once and its Excel selectors confirmed (`TODO(verify)`).
+
+Left from stage 4A for later (2026-10-24):
+
+- [ ] **Real exports, TODO(verify)**: the column labels of `packages/connectors/src/export/columns.ts`
+      come from common French usage, not from Batigest's or EBP's real files. With the first pilot:
+      export clients, suppliers and chantiers from their ERP, import them, add the labels not
+      recognised (and a test with the real header row, its data made up).
+- [ ] **EBP SaaS** (D3): with a developer account and a test company, the `ebp` connector on the same
+      frame (OAuth per company, its API's cursor), and the DoD's « `pull` by cursor on a test
+      account ».
 
 Left from stage 3A for later (2026-10-24):
 

@@ -235,3 +235,14 @@ Each line says where it came from and what would bring it back.
 | A request to a supplier not marked sous-traitant | Drafted for any supplier whose attestation, Kbis or insurance runs out | Pilots find it noisy: only for suppliers marked « sous-traitant », with a switch. |
 | The weekly e-mail's links (3C) | Plain text, owners only, « Envoyer » and « Ignorer » (« Ajouter comme fournisseur »), ten listed | A pilot wants « Modifier » or « Plus tard » from the e-mail (a page with the text and the address), members who are not owners, or an HTML e-mail with buttons. |
 | Old links | Expired links stay in `action_links` until their action or the account goes | Many reports: a daily purge of links expired more than 30 days ago, with `purgeExpired`. |
+
+## The ERP's lists (BTP plan stage 4A, 2026-10-24)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| A column whose label is not known | The import names the column it needs; the labels known are common French usage | A pilot's export uses other labels: add them to `columns.ts`; if they vary from pilot to pilot, a screen to map a column by hand, kept per company and list. |
+| Companies from an ERP checked in the directory | Not looked up (`source: 'erp'`, `verifiedAt` null); looked up when invoiced, as today | A pilot wants them checked: a background lookup within SIRENE's limit, a few a minute. |
+| Particuliers and companies without a SIREN in the ERP | Skipped and counted, the first twenty by name | A pilot's chantiers are mostly for private customers: a customer without SIREN, keyed by the ERP's code, for chantiers only. |
+| A company or chantier gone from the ERP | Kept: an export lists, it does not delete | A pilot closes chantiers by removing them: a chantier missing from a complete export marked closed, never deleted. |
+| The same file given again on purpose | « Déjà importé », nothing done | A person deleted a company in Facture Impec and wants it back: « Importer à nouveau » forcing a run. |
+| A list split in several files | Each file is an import of its own; the list's row shows the last one | A pilot splits a list of more than 5 000 rows: the files listed together. |

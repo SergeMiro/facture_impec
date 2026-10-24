@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@fi/agents": "workspace:*",
+    "@fi/connectors": "workspace:*",
     "@fi/core": "workspace:*",
     "@fi/db": "workspace:*",
     "@fi/domain": "workspace:*",
