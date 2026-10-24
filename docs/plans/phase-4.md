@@ -70,3 +70,12 @@ or CSV. Three series of commits, each with `pnpm verify` green:
   deadline and its payment are the platform's (`docs/DEFERRED.md`).
 - **4B, payments are not summed**: a payment closes a deadline when it covers what is left; the rest
   waits for a pilot's export (`docs/DEFERRED.md`).
+- **4C, the vocabulary of lists and skip reasons in `@fi/domain`**: the add-in may import only
+  `core`, `shared` and `domain` (`scripts/boundaries/rules.ts`); `@fi/connectors` re-exports them.
+- **4C, the section in Réglages for every company**, not only BTP ones: an ERP's customers and
+  invoices help any company's reminders. The plan's « Paramètres » is the pane's « Réglages ».
+- **4C, export instructions kept generic**: the menus of Batigest and EBP are not documented where
+  we can read them; « affichez les colonnes utiles… exportez au format Excel ou CSV », and the real
+  menus written with the first pilot (`TODO(verify)`, `docs/TODO.md`).
+- **4C, deadlines narrowed by chantier on the client**: the pane already holds the deadlines of the
+  horizon; a `?chantier=` filter and a chantier page wait for a pilot with many (`docs/DEFERRED.md`).

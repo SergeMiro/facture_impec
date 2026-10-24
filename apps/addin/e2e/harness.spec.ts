@@ -13,7 +13,8 @@
 // Microsoft's stand-in, gives a finding once it changes there, the file never opened; since R5 the same
 // from Google Drive, picked in Google's window (its stand-in). R6: a supplier's Factur-X uploaded from
 // the pane gives the cost B2 compares a sale with. §6: « Vérifier dans VIES » on a Luxembourg
-// customer's invoice, against VIES' stand-in.
+// customer's invoice, against VIES' stand-in. BTP stage 4: chantiers and invoices exported from the
+// ERP, given in « Réglages », give deadlines « Documents » shows by chantier.
 // browser: local (Chrome of this server; Browserbase cannot reach localhost).
 
 import { readFile } from 'node:fs/promises';
@@ -886,6 +887,73 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
     await expect(pane.getByTestId('notice')).toContainText(t('addin.documents.closed.done'));
     await expect(due).toHaveCount(0);
     await page.screenshot({ path: info.outputPath('approvals-closed.png') });
+    expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+  });
+
+  await test.step('BTP stage 4: the ERP’s chantiers and invoices in Réglages, their deadlines by chantier', async () => {
+    await pane.getByRole('tab', { name: t('addin.nav.settings') }).click();
+    const erp = pane.getByTestId('erp');
+    await expect(erp).toContainText(t('addin.erp.testNote'));
+    const csv = (...lines: string[]) => Buffer.from(lines.join('\r\n'), 'utf8');
+    const give = pane.getByTestId('erp-input');
+    await give.setInputFiles({
+      name: 'chantiers.csv',
+      mimeType: 'text/csv',
+      buffer: csv(
+        'Code chantier;Libellé;Client',
+        'CH-01;Les Tilleuls;Mairie de Talant',
+        'CH-02;École Jean Macé;Mairie de Talant',
+      ),
+    });
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.erp.started', { file: 'chantiers.csv', list: t('erp.list.chantiers'), rows: 2 }),
+    );
+    // The queue writes it; the section asks every few seconds until it ends.
+    const chantiers = pane.getByTestId('erp-chantiers');
+    await expect(chantiers).toContainText(t('addin.erp.status.done'), { timeout: 30_000 });
+    await expect(chantiers).toContainText(
+      t('addin.erp.counts.tiers', { added: 2, updated: 0, unchanged: 0 }),
+    );
+
+    await give.setInputFiles({
+      name: 'factures.csv',
+      mimeType: 'text/csv',
+      buffer: csv(
+        'N° facture;Échéance;Chantier;Client;Reste à payer',
+        'F-1;01/01/2026;CH-01;Mairie de Talant;1 200,00',
+        'F-2;01/02/2026;CH-02;Mairie de Talant;300,00',
+        'AV-1;01/03/2026;CH-01;Mairie de Talant;-50,00',
+      ),
+    });
+    const invoices = pane.getByTestId('erp-invoices');
+    await expect(invoices).toContainText(t('addin.erp.status.done'), { timeout: 30_000 });
+    await expect(invoices).toContainText(
+      t('addin.erp.reason', { reason: t('erp.skip.credit_note'), count: 1 }),
+    );
+    await expect(invoices).toContainText(
+      t('addin.erp.withoutCustomer.invoices', { count: 2 }).slice(0, 40),
+    );
+    await invoices.getByRole('button', { name: t('addin.erp.showRows') }).click();
+    await expect(invoices).toContainText(t('addin.erp.row', { row: 4, name: 'AV-1' }));
+    await invoices.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('erp.png') });
+    expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+
+    // What comes from the ERP is real: « Documents » shows it once Mode test is off.
+    const testMode = pane.getByLabel(t('addin.settings.workbookTest'));
+    await testMode.click();
+    await expect(testMode).not.toBeChecked();
+    await pane.getByRole('tab', { name: t('addin.nav.documents') }).click();
+    await pane.getByRole('tab', { name: /^Échéances/ }).click();
+    const dues = pane.getByTestId('due-facture_echeance');
+    await expect(dues).toHaveCount(2);
+    await expect(dues.first()).toContainText(
+      t('addin.documents.chantier', { name: 'Les Tilleuls' }),
+    );
+    await pane.getByTestId('chantier-filter').selectOption({ label: 'École Jean Macé' });
+    await expect(dues).toHaveCount(1);
+    await expect(dues).toContainText(frMoney(30_000));
+    await page.screenshot({ path: info.outputPath('documents-chantier.png') });
     expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
   });
 });

@@ -14,6 +14,7 @@ import {
   DocumentKind,
   DocumentSource,
   DocumentStage,
+  EXPORT_LISTS,
   ObligationKind,
 } from '@fi/domain';
 import type { UIDataTypes, UIMessage } from 'ai';
@@ -894,6 +895,8 @@ export const DocumentItem = z.object({
   isTest: z.boolean(),
   receivedAt: z.string(),
   party: z.object({ id: z.string(), name: z.string() }).nullable(),
+  /** Its building site (BTP stage 4). */
+  chantier: z.object({ id: z.string(), name: z.string() }).nullable(),
   siren: z.string().nullable(),
   /** In review: the start of its text and what was read, for the form. */
   review: z
@@ -933,6 +936,8 @@ export const Obligation = z.object({
   /** Cents, when what is due is money. */
   amount: z.number().int().nullable(),
   party: z.object({ id: z.string(), name: z.string() }).nullable(),
+  /** Its building site (BTP stage 4). */
+  chantier: z.object({ id: z.string(), name: z.string() }).nullable(),
   siren: z.string().nullable(),
   document: z.object({ id: z.string(), name: z.string() }).nullable(),
 });
@@ -941,6 +946,41 @@ export const Obligations = z.object({
   today: z.string(),
   horizon: z.number().int(),
   obligations: z.array(Obligation),
+});
+
+/** What a list given from the ERP holds (BTP stage 4). */
+export const ErpList = z.enum(EXPORT_LISTS);
+export type ErpList = z.infer<typeof ErpList>;
+
+/** A list's last import: what it read, what it did, and the rows it skipped by reason. */
+export const ErpImport = z.object({
+  status: z.enum(['running', 'done', 'failed']),
+  file: z.object({ name: z.string(), size: z.number().int() }).nullable(),
+  startedAt: z.string(),
+  finishedAt: z.string().nullable(),
+  added: z.number().int(),
+  updated: z.number().int(),
+  unchanged: z.number().int(),
+  /** Rows not imported by reason (`erp.skip.*`). */
+  skipped: z.record(z.string(), z.number().int()),
+  /** The first of them, by row and the name the ERP gives. */
+  examples: z.array(
+    z.object({ row: z.number().int(), name: z.string().nullable(), reason: z.string() }),
+  ),
+  /** Chantiers or owed invoices whose customer is not known. */
+  withoutCustomer: z.number().int(),
+  error: z.object({ code: z.string(), message: z.string() }).nullable(),
+});
+export type ErpImport = z.infer<typeof ErpImport>;
+/** `GET /erp`: each list's last import, null for a list never given. */
+export const ErpImports = z.record(ErpList, ErpImport.nullable());
+export type ErpImports = z.infer<typeof ErpImports>;
+const ErpImported = z.object({
+  list: ErpList,
+  rows: z.number().int(),
+  /** The same file again: imported already, or going on from where it stopped. */
+  again: z.boolean(),
+  import: ErpImport.nullable(),
 });
 
 /** A request waiting for a person, as « À valider » lists it (BTP stage 3). */
@@ -1386,5 +1426,15 @@ export class ApiClient {
       raw: file,
     });
     return { document: DocumentState.parse(await res.json()), created: res.status === 201 };
+  };
+
+  // ── The ERP's lists (BTP stage 4) ─────────────────────────────────────────────────────────────
+  erpImports = () => this.#json(ErpImports, '/erp');
+  /** An export given: its bytes as the body; `list` when the person said what it holds. */
+  importErp = async (name: string, file: Blob, list?: ErpList) => {
+    const query = new URLSearchParams({ name });
+    if (list) query.set('list', list);
+    const res = await this.#send(`/erp/imports?${query}`, { method: 'POST', raw: file });
+    return { ...ErpImported.parse(await res.json()), queued: res.status === 202 };
   };
 }

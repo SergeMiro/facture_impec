@@ -2,6 +2,7 @@
 // read it: what the shared mapping may rely on. A row that does not pass is skipped with its reason,
 // never written half.
 import { isValidSiren, isValidSiret } from '@fi/core';
+import { SKIP_REASONS, type SkipReason } from '@fi/domain';
 import { z } from 'zod';
 
 const text = (max: number) => z.string().trim().min(1).max(max);
@@ -95,26 +96,8 @@ export const ReglementRow = z.object({
 });
 export type ReglementRow = z.infer<typeof ReglementRow>;
 
-/** Why a row was not imported; `erp.skip.*` in fr.json words each. */
-export const SKIP_REASONS = [
-  'no_siren',
-  'siren_invalid',
-  'no_name',
-  'no_code',
-  'duplicate',
-  'invalid',
-  // Invoices and payments (stage 4B).
-  'no_number',
-  'no_due_date',
-  'no_amount',
-  'credit_note',
-  'not_invoice',
-  'paid',
-  'sent_here',
-  'invoice_unknown',
-  'partial_payment',
-] as const;
-export type SkipReason = (typeof SKIP_REASONS)[number];
+/** Why a row was not imported: `@fi/domain`'s vocabulary, worded by `erp.skip.*` in fr.json. */
+export { SKIP_REASONS, type SkipReason };
 
 export interface Skipped {
   row: number;

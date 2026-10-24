@@ -1732,3 +1732,32 @@ Evidence (2026-10-24):
 | Watched as before | same test: `draftDue` drafts one `relance_facture` with F2026-0101 for the overdue ERP invoice (`apps/api/src/watchers.ts` reads the number from the ERP's record). |
 | Gate | `pnpm verify` green on 2026-10-24: api 364, connectors 13, add-in 115, agents 162 (evals included), core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 8, scripts 4; `pnpm boundaries`: 11 packages. The harness E2E passes (local Chrome; browser: local). |
 | Found on the way | An ERP's invoice record has kind `facture_vente`: the account's erasure would have kept it ten years as a real invoice. `apps/api/src/rgpd.ts` deletes documents `source: 'erp'` (`erp-invoices.test.ts` › go with the account: only the PDP's document and its bytes stay). The SIREN reader drops dots and uppercases: an invoice number has its own (`numberOf`). |
+
+## BTP plan — stage 4C: the ERP's lists in the pane, and the chantiers in « Documents » (started 2026-10-24)
+
+`docs/plans/phase-4.md` › 4C. Criteria, written before the code:
+
+- **« Votre logiciel de gestion » in Réglages**: how to export a list, « Ce fichier contient » (guessed
+  by default, or one of the five lists), a file given (Excel or CSV); a refusal says in French what
+  is missing and that nothing was imported; the same file again says so.
+- **Each list's last import**: its file and day, « en cours », « terminé » or « interrompu » with
+  what to do; what it added, updated, left unchanged; the rows skipped by reason in plain French,
+  with the first ones by row and name; the invoices or chantiers whose customer is not known, and
+  what to give next. An import running is followed until it ends.
+- **Mode test said**: what comes from the ERP is real; with « Mode test » on, the section says
+  where it shows.
+- **The chantiers in « Documents »**: a deadline and a received document show their chantier; the
+  deadlines can be narrowed to one chantier.
+- **E2E**: chantiers then invoices given in Réglages, the invoice's deadline with its chantier in
+  « Échéances ».
+
+Evidence (2026-10-24):
+
+| Criterion | Evidence |
+|---|---|
+| « Votre logiciel de gestion » in Réglages | `apps/addin/src/ui/ErpPart.tsx` (between the general settings and the defaults, `SettingsView.tsx`), `controller.ts` `importErp`, `api.ts` `importErp` (`POST /erp/imports?name=&list=`). `controller.test.ts` › « Votre logiciel de gestion » (BTP stage 4C) › gives the chantiers then the invoices…: the start said with the file, the list and its rows; the same file again says « … a déjà été importé : rien n'a changé » (`addin.erp.again`); an invoices file without its due date column says the column by its French name (`api.error.export_column_missing`) and keeps nothing. |
+| Each list's last import | `ErpPart.tsx` `Imported`, `skippedOf`; `controller.ts` `loadErp`, `#followErp` (every `ERP_POLL_MS`, 3 s, while an import runs). Same test: `running` then `done` with « L'import de … est terminé » (`addin.erp.done`); added 2, `no_code` 1 with row 4 « Sans code », `withoutCustomer` 2; invoices added 2, `credit_note` 1. `apps/addin/src/ui/erp.test.ts` › words every list and every reason (the vocabulary moved to `@fi/domain` `EXPORT_LISTS`, `SKIP_REASONS`) › the reasons the most frequent first, an unknown one counted as « Une autre raison ». |
+| Mode test said | `addin.erp.testNote` shown while « Mode test » is on (E2E below: visible in Réglages). |
+| The chantiers in « Documents » | `apps/api/src/document-lists.ts`: `GET /documents` and `GET /obligations` give `chantier {id, name}`; `erp-invoices.test.ts` › make each owed invoice…: F2026-0101 and S2026-07 with « Les Tilleuls », F2026-0104 without. `DocumentsView.tsx` « Chantier : … » on a deadline and a received document, `chantiersOf` and the « Chantier » filter (`erp.test.ts` › each chantier once, by name); the controller test reads both deadlines with their chantier. |
+| E2E | `apps/addin/e2e/harness.spec.ts` › step « BTP stage 4 »: in Réglages, `chantiers.csv` then `factures.csv` given, each followed to « Terminé », the avoir's row shown by « Voir les lignes »; « Mode test » turned off, « Échéances » shows 2 deadlines, the first « Chantier : Les Tilleuls », the filter « École Jean Macé » leaves one at 300,00 €; no horizontal scroll. Screenshots `erp.png`, `documents-chantier.png` (local Chrome; browser: local). |
+| Gate | `pnpm verify` green on 2026-10-24: api 364, connectors 13, add-in 119, agents 162 (evals included), core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 8, scripts 4; `pnpm boundaries`: 11 packages. The harness E2E passes (local Chrome; browser: local). |

@@ -19,6 +19,7 @@ export {
   Sha256,
   StructuredPayload,
 } from './envelope';
+export { EXPORT_LISTS, type ExportList, SKIP_REASONS, type SkipReason } from './erp';
 export { FatalError, isFatal, RetryableError } from './errors';
 export {
   ACTION_KINDS,

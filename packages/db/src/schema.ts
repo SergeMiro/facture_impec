@@ -1533,7 +1533,7 @@ export interface SyncResult {
   skipped: Record<string, number>;
   /** The first rows not imported, by name, for the person to fix in the ERP. */
   examples: { row: number; name: string | null; reason: string }[];
-  /** Chantiers whose customer was not found among the companies. */
+  /** Chantiers, or owed invoices (stage 4B), whose customer was not found among the companies. */
   withoutCustomer: number;
 }
 

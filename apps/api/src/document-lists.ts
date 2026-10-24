@@ -1,10 +1,11 @@
 // What the pane lists of the BTP back end (`docs/plans/phase-2.md` › 2B): the company's documents,
-// newest first, and the deadlines they made, the soonest first. Mode test and real ones apart, as
-// « Réception ».
+// newest first, and the deadlines they made, the soonest first, each with its company and chantier.
+// Mode test and real ones apart, as « Réception ».
 import { addDays, parisToday } from '@fi/core';
 import {
   and,
   asc,
+  chantiers,
   count,
   type Db,
   desc,
@@ -72,6 +73,8 @@ export async function listDocuments(db: Db, tenant: Pick<TenantRow, 'id'>, q: Do
         receivedAt: documents.receivedAt,
         partyId: documents.partyId,
         partyName: parties.legalName,
+        chantierId: documents.chantierId,
+        chantierName: chantiers.name,
         extracted: sql<Record<string, unknown> | null>`case when ${x} is null then null else
           jsonb_build_object('format', ${x}->'format', 'ocr', ${x}->'ocr', 'pages', ${x}->'pages',
             'fields', ${x}->'fields', 'siren', ${x}->'siren',
@@ -79,6 +82,7 @@ export async function listDocuments(db: Db, tenant: Pick<TenantRow, 'id'>, q: Do
       })
       .from(documents)
       .leftJoin(parties, eq(parties.id, documents.partyId))
+      .leftJoin(chantiers, eq(chantiers.id, documents.chantierId))
       .where(where)
       .orderBy(desc(documents.receivedAt), desc(documents.id))
       .limit(q.limit)
@@ -92,6 +96,7 @@ export async function listDocuments(db: Db, tenant: Pick<TenantRow, 'id'>, q: Do
       return {
         ...documentView(row),
         party: row.partyId ? { id: row.partyId, name: row.partyName ?? '' } : null,
+        chantier: row.chantierId ? { id: row.chantierId, name: row.chantierName ?? '' } : null,
         /** Whose it is by SIREN, known to the company or not. */
         siren: text(read.siren),
         // What a person needs to answer: the start of the text, the dates and SIRENs read.
@@ -133,6 +138,8 @@ export async function listObligations(
       amount: obligations.amount,
       partyId: obligations.partyId,
       partyName: parties.legalName,
+      chantierId: obligations.chantierId,
+      chantierName: chantiers.name,
       documentId: obligations.sourceDocumentId,
       documentName: documents.name,
       documentKind: documents.kind,
@@ -140,6 +147,7 @@ export async function listObligations(
     })
     .from(obligations)
     .leftJoin(parties, eq(parties.id, obligations.partyId))
+    .leftJoin(chantiers, eq(chantiers.id, obligations.chantierId))
     .leftJoin(documents, eq(documents.id, obligations.sourceDocumentId))
     .where(
       and(
@@ -161,6 +169,8 @@ export async function listObligations(
       overdue: r.dueOn < today,
       amount: r.amount,
       party: r.partyId ? { id: r.partyId, name: r.partyName ?? '' } : null,
+      /** The building site it belongs to (stage 4: from the ERP, or the document's). */
+      chantier: r.chantierId ? { id: r.chantierId, name: r.chantierName ?? '' } : null,
       /** A company not confirmed yet is known by its SIREN only. */
       siren: r.partyId ? null : r.siren,
       document: r.documentId

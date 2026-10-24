@@ -129,6 +129,7 @@ async function company() {
   };
   return {
     tenant,
+    call,
     give,
     imported,
     deadlines,
@@ -220,6 +221,24 @@ describe('invoices and payments from an ERP export', () => {
         tilleuls.id,
       ],
     ]);
+    // The pane lists them with their chantier (stage 4C); the situation is due beyond two years.
+    const listed = (await c.call('/obligations?test=false&horizon=730')).body.obligations as {
+      document: { name: string } | null;
+      chantier: { id: string; name: string } | null;
+    }[];
+    expect(listed.map((o) => [o.document?.name, o.chantier])).toEqual([
+      ['F2026-0104', null],
+      ['F2026-0101', { id: tilleuls.id, name: 'Les Tilleuls' }],
+    ]);
+    const received = (await c.call('/documents?test=false')).body.documents as {
+      name: string;
+      chantier: { name: string } | null;
+    }[];
+    expect(Object.fromEntries(received.map((d) => [d.name, d.chantier?.name ?? null]))).toEqual({
+      'F2026-0101': 'Les Tilleuls',
+      'F2026-0104': null,
+      'S2026-07': 'Les Tilleuls',
+    });
 
     // Watched as any sale: the overdue one with a customer is reminded, by its number; the one
     // without a customer cannot be.

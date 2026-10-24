@@ -1169,6 +1169,24 @@ invoices row ─► sent here? skip ─► left 0? close the open deadline ─�
 payments row ─► deadline by saleDeadlineKey ─► open and fully paid? close + withdraw drafts + audit
 ```
 
+## BTP back end, stage 4C: the ERP's lists in the pane
+
+- **« Votre logiciel de gestion »** is a part of Réglages for every company (an ERP is not only
+  BTP's): `apps/addin/src/ui/ErpPart.tsx`. A file goes raw to `POST /erp/imports` with its name and,
+  when the person chose it, its list; the API guesses the list otherwise. The answer is the
+  import's row (`ErpImported`), or `again` for a file already imported.
+- **Followed until it ends**: the controller asks `GET /erp` every `ERP_POLL_MS` (3 s) while a list
+  is `running`, at most 200 times, and says once when it ends (done, or the API's message when it
+  failed). Opening Réglages loads the lists; sign-out stops the timer.
+- **One vocabulary** for the lists and the reasons a row is skipped: `EXPORT_LISTS` and
+  `SKIP_REASONS` live in `@fi/domain` (the add-in may not import `@fi/connectors`), which re-exports
+  them; each has its French words in `erp.list.*` and `erp.skip.*`, a test checks none is missing.
+- **Chantiers in « Documents »**: `GET /documents` and `GET /obligations` join `chantiers` and give
+  `chantier {id, name}`; the pane shows it on a deadline and a received document and narrows the
+  deadlines to one chantier on the client, over the deadlines it already has (no new endpoint).
+- **ERP data is real**: the « Documents » part follows the workbook's « Mode test »; with it on, the
+  ERP section says where its deadlines show.
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

@@ -4,16 +4,9 @@
 // labels are common French usage, not a pilot's real file: TODO(verify) with the first pilot's
 // exports from Batigest and EBP (docs/TODO.md).
 import { normalizeHeader } from '@fi/core';
+import { EXPORT_LISTS, type ExportList } from '@fi/domain';
 
-/** What a file lists: one entity, and for companies, which side. */
-export const EXPORT_LISTS = [
-  'customers',
-  'suppliers',
-  'chantiers',
-  'invoices',
-  'payments',
-] as const;
-export type ExportList = (typeof EXPORT_LISTS)[number];
+export { EXPORT_LISTS, type ExportList };
 
 export const TIERS_FIELDS = [
   'code',

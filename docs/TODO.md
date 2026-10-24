@@ -206,8 +206,9 @@ Stages (`docs/plans/phase-N.md` each):
       invoices sent through Facture Impec keep CollectAgent's chasing, not duplicated.
 - [ ] **4 — connectors** (`docs/plans/phase-4.md`; 4A, `@fi/connectors`, the export connector,
       `POST /erp/imports`, `GET /erp`, the queue `erp.sync`: done 2026-10-24; 4B invoices and
-      payments from an export, the order of sources PDP > ERP > e-mail: done 2026-10-24). Left: 4C
-      the pane; EBP SaaS paused (D3).
+      payments from an export, the order of sources PDP > ERP > e-mail: done 2026-10-24; 4C
+      « Votre logiciel de gestion » in Réglages, the chantiers in « Documents »: done 2026-10-24).
+      Left: EBP SaaS paused (D3); real exports with the first pilot (below).
 - [ ] **5, 6** paused (D3). **7 — observability, performance, runbook, onboarding.**
 
 Owner questions (BTP plan §13 and what stage 0 found):
@@ -286,6 +287,15 @@ Left from stage 4B for later (2026-10-24):
       due (`docs/DEFERRED.md`).
 - [ ] **A partial payment, a bounced cheque**: see what the pilot's payments list shows and decide
       whether to sum payments and reopen a deadline (`docs/DEFERRED.md`).
+
+Left from stage 4C for later (2026-10-24):
+
+- [ ] **How to export, TODO(verify)**: « Votre logiciel de gestion » says it in one generic sentence
+      (`addin.erp.how`). With the first pilot, open Batigest's and EBP's export screens for clients,
+      chantiers, unpaid invoices and payments, and write the real menus, a line per ERP.
+- [ ] **A pilot's real file through the pane**: give its exports in Réglages (Excel desktop and on the
+      web), read what the section says of the skipped rows, and change the words where they are not
+      clear to them.
 
 Left from stage 3A for later (2026-10-24):
 

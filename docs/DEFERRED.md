@@ -255,3 +255,14 @@ Each line says where it came from and what would bring it back.
 | An invoice sent through Facture Impec and paid in the ERP | Its payment row is skipped (`sent_here`); the invoice follows the platform's statuses | A pilot records payments only in its ERP: the payment marks the invoice paid, through `applyTransition`, audited. |
 | An invoice number written as an Excel number | Kept as the number reads (`0042` becomes `42`) | A pilot's numbers lose their zeros: read the cell's displayed text instead of its value. |
 | An invoice from the mail sent through Facture Impec | Not checked against `invoices`: a mailed copy of one's own invoice makes a deadline beside the platform's | A pilot forwards its own invoices to its address: the same `sent_here` check as the ERP's. |
+
+## The ERP's lists in the pane (BTP plan stage 4C, 2026-10-24)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| A chantier's page | The chantier's name on a deadline and a received document; the deadlines narrowed to one chantier in the pane | A pilot runs many chantiers: `GET /chantiers` and a page per chantier (its customer, documents, deadlines, retenue), `GET /obligations?chantier=` on the server. |
+| The documents narrowed by chantier | Only the deadlines have the filter; « Reçus » shows the chantier on each | A pilot looks for a chantier's PV or attestation among many: the same filter on « Reçus » and « À vérifier ». |
+| An import longer than ten minutes | The pane follows it for 200 × 3 s, then « Actualiser » shows where it is | A pilot's list takes longer (thousands of rows): follow while the pane is open, or a notice in the weekly e-mail. |
+| How to export from each ERP | One generic sentence (`addin.erp.how`) | The first pilots' real menus (Batigest, EBP): a line per ERP, written from their screens (`docs/TODO.md`). |
+| Choosing the columns of an export | The import names a missing column in French | Already listed under stage 4A: a screen to map a column by hand when pilots' labels vary. |
+

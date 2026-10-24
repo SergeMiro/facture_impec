@@ -1,6 +1,7 @@
 // « Documents » (BTP plan stage 2B, `docs/plans/phase-2.md`; stage 3B, `phase-3.md`): the requests
 // waiting for a person (« À valider »), the deadlines the company's documents make, the documents a
 // person must say something about, and every document received. In « Mode test », the test ones.
+// Stage 4C: each with its chantier, and the deadlines of one chantier.
 import { frDate, frMoney, isValidSiren } from '@fi/core';
 import {
   DEADLINE_DATE,
@@ -118,6 +119,9 @@ function Due({ item, today }: { item: Obligation; today: string }) {
         </span>
         <Text>{t(`addin.documents.due.${item.kind}`)}</Text>
         {who && <Text size={200}>{who}</Text>}
+        {item.chantier && (
+          <Text size={200}>{t('addin.documents.chantier', { name: item.chantier.name })}</Text>
+        )}
         <Caption1 className={styles.muted}>
           {item.amount !== null && `${frMoney(item.amount)} · `}
           {item.document
@@ -147,19 +151,51 @@ function Due({ item, today }: { item: Obligation; today: string }) {
   );
 }
 
+/** The chantiers the deadlines name, once each, by name. */
+export function chantiersOf(items: readonly Pick<Obligation, 'chantier'>[]) {
+  const sites = new Map<string, string>();
+  for (const { chantier } of items) if (chantier) sites.set(chantier.id, chantier.name);
+  return [...sites]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+}
+
 function DeadlinesPart() {
   const styles = useStyles();
   const [state, fi] = useFi();
+  const [site, setSite] = useState('');
   const pane = state.documents;
   if (!pane) return null;
   const year = pane.horizon >= YEAR_HORIZON;
+  const sites = chantiersOf(pane.obligations);
+  // A chantier whose deadlines are all closed since leaves the choice: back to every deadline.
+  const picked = sites.some((s) => s.id === site) ? site : '';
+  const shown = picked
+    ? pane.obligations.filter((o) => o.chantier?.id === picked)
+    : pane.obligations;
   return (
     <div className={styles.section} data-testid="deadlines">
-      {pane.obligations.length === 0 ? (
+      {sites.length > 0 && (
+        <Field label={t('addin.documents.chantierFilter')}>
+          <Select
+            value={picked}
+            onChange={(_, d) => setSite(d.value)}
+            data-testid="chantier-filter"
+          >
+            <option value="">{t('addin.documents.allChantiers')}</option>
+            {sites.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
+      {shown.length === 0 ? (
         <Text>{t(year ? 'addin.documents.noDueYear' : 'addin.documents.noDue')}</Text>
       ) : (
         <ul className={styles.list}>
-          {pane.obligations.map((o) => (
+          {shown.map((o) => (
             <Due key={o.id} item={o} today={pane.today} />
           ))}
         </ul>
@@ -314,6 +350,9 @@ function Received({ doc }: { doc: DocumentItem }) {
           {doc.kind ? t(`addin.documents.kind.${doc.kind}`) : t('addin.documents.notYetKnown')}
           {doc.party && ` · ${doc.party.name}`}
         </Text>
+        {doc.chantier && (
+          <Text size={200}>{t('addin.documents.chantier', { name: doc.chantier.name })}</Text>
+        )}
         <Caption1 className={styles.muted}>
           {t(`addin.documents.source.${doc.source}`, { date: parisDateTime(doc.receivedAt) })}
         </Caption1>

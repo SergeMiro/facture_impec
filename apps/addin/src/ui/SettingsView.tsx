@@ -1,7 +1,7 @@
 // Screen 6, Réglages (plan §5): mode (Review, or the autopilot with its ceiling: chasing, and invoices
 // to the customers opted in), chasing cadence, pseudonymization, PDP connection and the company's own
-// platform key, Mode test, the invoice defaults, the AI choice, the subscription, the RGPD export and
-// the account's deletion.
+// platform key, Mode test, the lists of the company's ERP (BTP stage 4C), the invoice defaults, the AI
+// choice, the subscription, the RGPD export and the account's deletion.
 import { isMessageKey, t } from '@fi/shared';
 import {
   Badge,
@@ -22,6 +22,7 @@ import {
 import { type FormEvent, useEffect, useState } from 'react';
 import { AI_PROVIDERS, type AiChoice, type Settings } from '../api';
 import { useFi } from './context';
+import { ErpPart } from './ErpPart';
 import { DeleteAccount, Subscription } from './Subscription';
 
 const useStyles = makeStyles({
@@ -80,6 +81,8 @@ export function SettingsView() {
         {t('addin.settings.title')}
       </Subtitle2>
       <General settings={settings} />
+      <Divider />
+      <ErpPart />
       <Divider />
       <Defaults settings={settings} />
       <Divider />

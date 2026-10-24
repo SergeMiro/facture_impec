@@ -22,6 +22,7 @@ import {
   runActionSend,
   runCollect,
   runDocumentJobs,
+  runErpJobs,
   runSend,
   runSync,
   SIRENE_CASES,
@@ -2076,6 +2077,99 @@ describe('« À valider » (BTP stage 3B)', () => {
     await controller.closeObligation(due?.id ?? '', 'done');
     expect(state().notice?.text).toBe(t('addin.documents.closed.done'));
     expect(state().documents?.obligations).toEqual([]);
+  });
+});
+
+describe('« Votre logiciel de gestion » (BTP stage 4C)', () => {
+  const SIREN = '999000821';
+  const { controller, state } = pane(new FakeWorkbook({ [DEMO_SHEET]: demoSheet() }));
+  const csv = (...lines: string[]) => new Blob([lines.join('\r\n')], { type: 'text/csv' });
+  const CHANTIERS = csv(
+    'Code chantier;Libellé;Client',
+    'CH-01;Les Tilleuls;Mairie de Talant',
+    'CH-02;École Jean Macé;Mairie de Talant',
+    ';Sans code;Mairie de Talant',
+  );
+  const INVOICES = csv(
+    'N° facture;Échéance;Chantier;Client;Reste à payer',
+    'F-1;01/01/2026;CH-01;Mairie de Talant;1 200,00',
+    'F-2;01/02/2026;CH-02;Mairie de Talant;300,00',
+    'AV-1;01/03/2026;CH-01;Mairie de Talant;-50,00',
+  );
+
+  beforeAll(async () => {
+    const vatId = `FR${String((12 + 3 * (Number(SIREN) % 97)) % 97).padStart(2, '0')}${SIREN}`;
+    const key = (
+      await newTenant(api.request, {
+        ...SELLER,
+        siren: SIREN,
+        vatId,
+        ownerEmail: 'erp@entreprise-demo.test',
+      })
+    ).apiKey;
+    await controller.start();
+    await controller.signInWithKey(key);
+  });
+
+  it('gives the chantiers then the invoices, follows each import, and shows the deadlines by chantier', async () => {
+    controller.navigate({ name: 'settings' });
+    await until(() => state().erp !== null, 'the ERP lists');
+    expect(Object.values(state().erp ?? {})).toEqual([null, null, null, null, null]);
+
+    await controller.importErp(CHANTIERS, 'chantiers.csv');
+    expect(state().notice?.text).toBe(
+      t('addin.erp.started', { file: 'chantiers.csv', list: t('erp.list.chantiers'), rows: 3 }),
+    );
+    expect(state().erp?.chantiers?.status).toBe('running');
+    await runErpJobs(api);
+    await until(() => state().erp?.chantiers?.status === 'done', 'the chantiers imported');
+    expect(state().notice?.text).toBe(t('addin.erp.done', { file: 'chantiers.csv' }));
+    expect(state().erp?.chantiers).toMatchObject({
+      added: 2,
+      skipped: { no_code: 1 },
+      examples: [{ row: 4, name: 'Sans code', reason: 'no_code' }],
+      // The customers' list was never given.
+      withoutCustomer: 2,
+    });
+
+    // The same file again: nothing to do, and the pane says so.
+    await controller.importErp(CHANTIERS, 'chantiers (2).csv');
+    expect(state().notice).toMatchObject({
+      tone: 'info',
+      text: t('addin.erp.again', { file: 'chantiers (2).csv' }),
+    });
+
+    // A list without its due dates: the API's words, nothing imported.
+    await controller.importErp(csv('N° facture;Montant TTC', 'F-9;10,00'), 'f.csv', 'invoices');
+    expect(state().notice).toMatchObject({
+      tone: 'error',
+      text: t('api.error.export_column_missing', { column: t('erp.column.invoice.dueOn') }),
+    });
+    expect(state().erp?.invoices).toBeNull();
+
+    await controller.importErp(INVOICES, 'factures.csv');
+    await runErpJobs(api);
+    await until(() => state().erp?.invoices?.status === 'done', 'the invoices imported');
+    expect(state().erp?.invoices).toMatchObject({
+      added: 2,
+      skipped: { credit_note: 1 },
+      withoutCustomer: 2,
+    });
+
+    // Real, as everything from the ERP: « Documents » outside Mode test shows them with their site.
+    expect(state().testMode).toBe(false);
+    await controller.loadDocuments();
+    const due = state().documents?.obligations ?? [];
+    expect(due.map((o) => [o.kind, o.dueOn, o.amount, o.chantier?.name])).toEqual([
+      ['facture_echeance', '2026-01-01', 120_000, 'Les Tilleuls'],
+      ['facture_echeance', '2026-02-01', 30_000, 'École Jean Macé'],
+    ]);
+    // One import, one moment: the two documents in either order.
+    const received = state().documents?.received ?? [];
+    expect(received.map((d) => [d.name, d.source, d.chantier?.name]).sort()).toEqual([
+      ['F-1', 'erp', 'Les Tilleuls'],
+      ['F-2', 'erp', 'École Jean Macé'],
+    ]);
   });
 });
 

@@ -9,6 +9,7 @@ import { createApp } from './app';
 import type { Billing } from './billing';
 import type { ApiDeps, Jobs, PdpRegistry, SyncTarget } from './deps';
 import { runDocumentClassify } from './document-pipeline';
+import { runErpSync } from './erp';
 import { runDocumentIngest, runDocumentValidate } from './ingest';
 import { RequestWindows } from './limits';
 import { OutboxMailer } from './mail';
@@ -281,6 +282,11 @@ export async function runDocumentJobs(api: ReturnType<typeof testApi>): Promise<
     for (const id of validations.splice(0)) await runDocumentValidate(deps, id);
     for (const id of classifies.splice(0)) await runDocumentClassify(deps, id);
   }
+}
+
+/** The task pane's ERP tests (BTP stage 4C): the lists given are written as the queue would. */
+export async function runErpJobs(api: ReturnType<typeof testApi>): Promise<void> {
+  for (const job of api.jobs.erp.splice(0)) await runErpSync(api.deps, job.tenantId, job.connector);
 }
 
 let tenants = 0;

@@ -30,6 +30,8 @@ import {
   type DocumentItem,
   type Edit,
   type EditDecided,
+  type ErpImports,
+  type ErpList,
   type Evidence,
   type Explained,
   type ExportFile,
@@ -248,6 +250,8 @@ export interface FiState {
   reception: Reception | null;
   /** « Documents »; null until loaded. */
   documents: DocumentsPane | null;
+  /** « Votre logiciel de gestion » (BTP stage 4): each list's last import; null until loaded. */
+  erp: ErpImports | null;
   /** Clients; null until loaded. */
   customers: Customers | null;
   /** « Retrouver une facture » on the Tableau de bord: the last search and what it found so far. */
@@ -317,6 +321,11 @@ export const AUTO_SYNC_MS = 1_500;
 /** While invoices on the sheet are on their way: first status check, then twice as late each time. */
 export const SHEET_POLL_MS = 30_000;
 export const SHEET_POLL_MAX_MS = 300_000;
+/** While an ERP list is imported: the section asks every 3 s, for 10 minutes at most. */
+export const ERP_POLL_MS = 3_000;
+const ERP_POLLS = 200;
+const importing = (erp: ErpImports | null) =>
+  !!erp && Object.values(erp).some((i) => i?.status === 'running');
 
 const TOKEN_KEY = 'token';
 /** Set once the person answered the Scout's suggestion: it is never shown again on this device. */
@@ -390,6 +399,7 @@ const INITIAL: FiState = {
   report: null,
   reception: null,
   documents: null,
+  erp: null,
   customers: null,
   search: null,
   registry: null,
@@ -437,6 +447,7 @@ export class Controller {
   #syncAgain = false;
   #linkTimer: unknown = null;
   #googleTimer: unknown = null;
+  #erpTimer: unknown = null;
   #linkRequest: { id: string; kind: 'login' | 'signup' } | null = null;
   #poll: { timer: unknown; left: number } | null = null;
   #sheetPoll: { timer: unknown; delay: number } | null = null;
@@ -497,6 +508,7 @@ export class Controller {
     if (screen.name === 'settings') {
       if (!this.#state.settings) void this.loadSettings();
       void this.loadBilling();
+      void this.loadErp();
     }
     if (screen.name === 'dashboard') void this.loadReport();
     if (screen.name === 'reception') void this.loadReception();
@@ -840,6 +852,7 @@ export class Controller {
     this.#closeChat();
     this.#stopFollowing();
     this.#stopGoogle();
+    this.#stopErp();
     await this.#stopListening?.();
     this.#stopListening = null;
     await Promise.all([...this.#sourceWatch.keys()].map((sheet) => this.#unwatchSource(sheet)));
@@ -855,6 +868,7 @@ export class Controller {
       report: null,
       reception: null,
       documents: null,
+      erp: null,
       customers: null,
       search: null,
       registry: null,
@@ -1439,6 +1453,70 @@ export class Controller {
     });
     if (pane) this.#set({ documents: pane });
   };
+
+  // ── Votre logiciel de gestion (BTP stage 4C) ──────────────────────────────────────────────────
+  /** Each list's last import; one still running is followed until it ends. */
+  loadErp = async (): Promise<void> => {
+    const erp = await this.#act('erp', () => this.api.erpImports());
+    if (!erp) return;
+    this.#set({ erp });
+    if (importing(erp) && this.#erpTimer === null) this.#followErp(ERP_POLLS);
+  };
+
+  /**
+   * « Donner un fichier »: the API reads it at once (a refusal says what is missing, nothing kept),
+   * then its queue writes it; the section follows it until it ends.
+   */
+  importErp = async (file: Blob, name: string, list?: ErpList): Promise<void> => {
+    const given = await this.#act('erpImport', () => this.api.importErp(name, file, list));
+    if (!given) return;
+    const { erp } = this.#state;
+    if (given.import && erp) this.#set({ erp: { ...erp, [given.list]: given.import } });
+    if (!given.queued) {
+      this.notify('info', t('addin.erp.again', { file: name }));
+      return;
+    }
+    this.notify(
+      'success',
+      t(given.again ? 'addin.erp.resumed' : 'addin.erp.started', {
+        file: name,
+        list: t(`erp.list.${given.list}`),
+        rows: given.rows,
+      }),
+    );
+    this.#followErp(ERP_POLLS);
+  };
+
+  #stopErp(): void {
+    if (this.#erpTimer !== null) this.#deps.timers.clearTimeout(this.#erpTimer);
+    this.#erpTimer = null;
+  }
+
+  #followErp(left: number): void {
+    this.#stopErp();
+    if (left <= 0) return;
+    this.#erpTimer = this.#deps.timers.setTimeout(async () => {
+      this.#erpTimer = null;
+      const before = this.#state.erp;
+      let erp: ErpImports;
+      try {
+        erp = await this.api.erpImports();
+      } catch {
+        // A missed check is not worth a notice: the next one tries again.
+        this.#followErp(left - 1);
+        return;
+      }
+      if (!this.#state.me) return;
+      this.#set({ erp });
+      const ended = Object.entries(erp).find(
+        ([list, i]) =>
+          i && i.status !== 'running' && before?.[list as ErpList]?.status === 'running',
+      )?.[1];
+      if (ended?.error) this.notify('warning', ended.error.message);
+      else if (ended) this.notify('success', t('addin.erp.done', { file: ended.file?.name ?? '' }));
+      if (importing(erp)) this.#followErp(left - 1);
+    }, ERP_POLL_MS);
+  }
 
   /** « Afficher plus » under « Reçus ». */
   moreDocuments = async (): Promise<void> => {
