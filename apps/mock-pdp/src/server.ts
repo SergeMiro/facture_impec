@@ -23,5 +23,5 @@ const { app } = createMockPdp({
 
 const server = await listen(app.fetch, env.MOCK_PDP_PORT);
 console.log(
-  `mock-pdp listening on ${server.url} (×${env.MOCK_PDP_SPEED}, webhooks ${env.MOCK_PDP_WEBHOOK_URL ?? 'off'}, B2Brouter stand-in at /b2brouter, webhooks ${env.MOCK_PDP_B2BROUTER_WEBHOOK_URL ?? 'off'}; Stripe stand-in at /stripe, webhooks ${env.MOCK_STRIPE_WEBHOOK_URL ?? 'off'}; company directory at /sirene; Microsoft stand-in at /microsoft)`,
+  `mock-pdp listening on ${server.url} (×${env.MOCK_PDP_SPEED}, webhooks ${env.MOCK_PDP_WEBHOOK_URL ?? 'off'}, B2Brouter stand-in at /b2brouter, webhooks ${env.MOCK_PDP_B2BROUTER_WEBHOOK_URL ?? 'off'}; Stripe stand-in at /stripe, webhooks ${env.MOCK_STRIPE_WEBHOOK_URL ?? 'off'}; company directory at /sirene; VIES at /vies; Microsoft stand-in at /microsoft)`,
 );

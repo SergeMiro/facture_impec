@@ -82,6 +82,8 @@ export const ServerEnvSchema = z
     MAIL_SMTP_URL: optionalText(),
     MAIL_FROM: optionalText(),
     SIRENE_URL: z.url().default('https://recherche-entreprises.api.gouv.fr'),
+    // EU customers' VAT numbers (docs/ONBOARDING.md §4), checked by the sweep (src/vat-checks.ts).
+    VIES_URL: z.url().default('https://ec.europa.eu/taxation_customs/vies/rest-api'),
     // The published terms a new account accepts (docs/ONBOARDING.md). Empty: no sign-up outside local.
     TERMS_URL: z.preprocess(blank, z.url().optional()),
     // Billing (docs/BILLING.md): the owner's Stripe account. Empty key: nobody is billed or gated.

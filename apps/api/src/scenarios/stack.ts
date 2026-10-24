@@ -87,6 +87,7 @@ export async function startStack(options: StackOptions = {}): Promise<Stack> {
     env: {
       ...env,
       MOCK_PDP_URL: mock.url,
+      VIES_URL: `${mock.url}/vies`,
       ...(b2brouter && { B2BROUTER_BASE_URL: `${mock.url}/b2brouter` }),
     },
     port: 0,

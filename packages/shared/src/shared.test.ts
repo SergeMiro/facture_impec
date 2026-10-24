@@ -23,6 +23,7 @@ describe('ServerEnvSchema', () => {
       AI_DAILY_TOKENS: 300_000,
       AI_STRUCTURED_OUTPUTS: false,
       SIRENE_URL: 'https://recherche-entreprises.api.gouv.fr',
+      VIES_URL: 'https://ec.europa.eu/taxation_customs/vies/rest-api',
       STRIPE_AUTOMATIC_TAX: false,
       MOCK_STRIPE_WEBHOOK_SECRET: 'whsec_local-mock-stripe-secret',
     });

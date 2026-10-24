@@ -122,6 +122,28 @@ describe('validate', () => {
     expect(ids).toEqual(['FF-FMT-02']);
   });
 
+  it('warns on a VIES « not valid » only for the number it was about, on an exempt EU sale', () => {
+    const eu = goldens.find((g) => g.name === '06-intra-eu-supply');
+    if (!eu) throw new Error('no intra-EU golden');
+    const invalid = { vatId: 'DE129273398', valid: false };
+    const vies = (draft: unknown, vat: typeof invalid) =>
+      validate(computeInvoice(InvoiceDraft.parse(draft)), { today: TODAY, buyer: { vat } }).filter(
+        (i) => i.ruleId === 'FF-VIES-01',
+      );
+    const [issue] = vies(eu.draft, invalid);
+    expect(issue).toMatchObject({ severity: 'warning', path: 'buyer.vatId' });
+    expect(issue?.messageFr).toBe(
+      "Selon le service européen VIES, le numéro de TVA « DE129273398 » de votre client n'est pas valide. Sans numéro valide, la vente ne peut pas être exonérée de TVA française.",
+    );
+    expect(vies(eu.draft, { ...invalid, valid: true })).toEqual([]);
+    const other = structuredClone(eu.draft);
+    setPath(other, 'buyer.vatId', 'DE811569869');
+    expect(vies(other, invalid)).toEqual([]);
+    const taxed = structuredClone(base.draft);
+    setPath(taxed, 'buyer.vatId', 'DE129273398');
+    expect(vies(taxed, invalid)).toEqual([]);
+  });
+
   it('defaults the context to today in Paris and no customer settings', () => {
     const ctx = ruleContext();
     expect(ctx.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);

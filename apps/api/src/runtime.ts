@@ -26,6 +26,7 @@ import { type Listening, listen } from './listen';
 import { OutboxMailer, SmtpMailer } from './mail';
 import { createMicrosoftClient, MICROSOFT_HOSTS } from './microsoft';
 import { type Directory, RechercheEntreprises } from './sirene';
+import { type Vies, ViesClient } from './vies';
 import { startWorkers } from './workers';
 
 export interface ApiOptions {
@@ -51,6 +52,8 @@ export interface ApiOptions {
   microsoft?: MicrosoftConnector | null;
   /** Default: googleFromEnv (GOOGLE_*). */
   google?: GoogleConnector | null;
+  /** Default: VIES at VIES_URL. */
+  vies?: Vies | null;
   pollingIntervalSeconds?: number;
   /** Chasing timer (real seconds); default COLLECT_EVERY_SECONDS. */
   collectEverySeconds?: number;
@@ -318,6 +321,7 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
     ownPdp: options.ownPdp === undefined ? ownPdpFromEnv(env, pdp) : options.ownPdp,
     microsoft: options.microsoft === undefined ? microsoftFromEnv(env) : options.microsoft,
     google: options.google === undefined ? googleFromEnv(env) : options.google,
+    vies: options.vies === undefined ? new ViesClient(env.VIES_URL) : options.vies,
     fonts: bundledFonts(),
     now,
   };

@@ -124,6 +124,61 @@ Decisions:
 
 | Source | Why not now | Bring in when |
 |---|---|---|
-| **VIES** (`POST https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number`, keyless) | Busy answers come back as HTTP 200 with `isValid: false` and `userError: MS_MAX_CONCURRENT_REQ` (observed), no published rate limit, and its terms forbid retransmitting its data beyond the user's own invoicing. The DGFiP list already gives active French numbers. | A customer invoices other EU companies and wants their numbers checked (`docs/DEFERRED.md`). Source: https://ec.europa.eu/taxation_customs/vies/#/technical-information, read 2026-10-18. |
+| **VIES** for the company's own number at sign-up | The DGFiP list already gives active French numbers. VIES checks the customers' numbers from 2026-10-24: §5. | — |
 | **INSEE API Sirene 3.11** (`https://api.insee.fr/api-sirene/3.11`, free key in `X-INSEE-Api-Key-Integration`, 30 req/min, 2 000 req/h, masked values `[ND]`; v4 in beta since 2026-10-13, v3.11 kept until mid-2028) | Needs an account and a key; the DINUM API answers the same question without. | The DINUM API is unavailable too often, or its terms change. |
 | DGFiP dataset queried directly (`data.economie.gouv.fr` Explore v2.1) | Already in the directory's `tva`. | The directory drops `tva`. |
+
+## 5. VIES: EU customers' VAT numbers (plan §6 PartyAgent `vies.check`, from 2026-10-24)
+
+Code: `apps/api/src/vies.ts` (client), `apps/api/src/vat-checks.ts` (the sweep), stand-in
+`apps/mock-pdp/src/vies.ts` (`/vies`), rule FF-VIES-01 (`packages/core/src/rules/fr.ts`); tests
+`apps/api/src/vies.test.ts`, `packages/core/src/rules/rules.test.ts`, `packages/core/src/ids.test.ts`.
+
+**Sources**, read on **2026-10-24** by plain HTTP (`browser: none`): the Swagger file
+`swagger_publicVAT.yaml` linked from https://ec.europa.eu/taxation_customs/vies/#/technical-information,
+the service's disclaimer page, and live calls to `check-vat-number` and `check-vat-test-service` with
+public numbers of large companies (Google Ireland among them). The owner's own number was not used.
+
+### 5.1 The call
+
+- `POST {VIES_URL}/check-vat-number`, JSON `{countryCode, vatNumber, requesterMemberStateCode?,
+  requesterNumber?}`, no key. `VIES_URL` defaults to `https://ec.europa.eu/taxation_customs/vies/rest-api`.
+- Answer: `{countryCode, vatNumber, requestDate, valid, requestIdentifier, name, address, trader…}`.
+  `---` stands for nothing: Germany never gives a name or an address. `requestIdentifier` is empty
+  without an accepted requester.
+- A refusal is **HTTP 200** with `{actionSucceed: false, errorWrappers: [{error}]}`. Codes (Swagger):
+  `INVALID_INPUT`, `INVALID_REQUESTER_INFO`, `SERVICE_UNAVAILABLE`, `MS_UNAVAILABLE`, `TIMEOUT`,
+  `VAT_BLOCKED`, `IP_BLOCKED`, `GLOBAL_MAX_CONCURRENT_REQ`, `GLOBAL_MAX_CONCURRENT_REQ_TIME`,
+  `MS_MAX_CONCURRENT_REQ`, `MS_MAX_CONCURRENT_REQ_TIME`. A body it cannot read: HTTP 500 `VOW-ERR-1`.
+- Country codes are VIES' own: Greece is `EL` (a sheet's `GR` is sent as `EL`), Northern Ireland `XI`.
+- No published rate limit. The disclaimer allows the data for the user's own needs only: the answers
+  stay with the company that asked, in its export, and are sent nowhere else.
+- **NOT CONFIRMED**: the consultation number VIES returns for an accepted French requester (the test
+  service returns `""`): `TODO(verify)` with the first real company, then record its format here.
+
+### 5.2 Decisions
+
+- **When.** The periodic sweep (`pdp.sweep`, every `PDP_SYNC_INTERVAL_SECONDS`) asks about the numbers
+  of outbound invoices not yet sent (draft, needs_fix, validated) whose VAT breakdown has an intra-EU
+  supply (K) or a reverse charge (AE): once a number per company per Paris day, at most 20 a sweep,
+  one at a time, with the company's own VAT number as requester. French numbers and countries outside
+  VIES are never sent (`viesNumber` in `packages/core/src/ids.ts`). No invoice waits for VIES.
+- **What is kept.** Every answer, valid or not, with the name, address and consultation number VIES
+  gives, in `vat_checks` (one row per number and day), an audit event `vat.check` (actor
+  `agent:party`), and a note on each invoice's timeline: once, then again only when VIES changes its
+  answer, not every day.
+- **What is said.** The last answer goes into the invoice's check (core `RuleContext.buyer.vat`, part
+  of the check key): « not valid » gives the warning FF-VIES-01 on the customer's VAT number. A
+  warning, not an error: VIES can lag a new registration and the person decides. The message does not
+  carry the date, so the daily check leaves the verdict alone; the date and the consultation number
+  are on the timeline. « Envoi automatique » waits 15 minutes after the last change and never sends
+  past a warning, so it stops on a number VIES already said is not valid; when VIES could not answer
+  in time, it sends as before (DEFERRED: remembering that a member state is down).
+- **Refusals.** `INVALID_INPUT` reads as « not valid » (the country code is checked before asking, so
+  the number itself is malformed). `INVALID_REQUESTER_INFO`: asked again without requester. A member
+  state busy or down (`MS_*`, `TIMEOUT`): its other numbers wait for the next sweep. `VAT_BLOCKED`:
+  that number only. Anything else (VIES itself busy or out of reach, an unreadable answer): the sweep
+  stops asking until the next one. Nothing is kept, nothing is said against the invoice.
+- **Local and tests.** Unit tests, `pnpm scenario` and the E2E run use the stand-in at `/vies`
+  (synthetic answers; a few numbers play the cases: `VIES_CASES`). `pnpm dev` asks the real service, as
+  it does the directory.

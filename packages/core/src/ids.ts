@@ -57,6 +57,33 @@ export function hasValidFrenchVatKey(vatId: string): boolean {
   return key === frenchVatKey(vatId.slice(4));
 }
 
+/** VIES' member state codes (2026-10-24): Greece is EL, Northern Ireland XI (goods only). */
+const VIES_STATES = new Set(
+  'AT BE BG CY CZ DE DK EE EL ES FI FR HR HU IE IT LT LU LV MT NL PL PT RO SE SI SK XI'.split(' '),
+);
+
+/** A VAT number VIES can check: country code and national number, without spaces, dots or dashes. */
+export interface ViesNumber {
+  country: string;
+  number: string;
+  /** Both together, as kept and compared. */
+  vatId: string;
+}
+
+/**
+ * Another member state's VAT number, as VIES takes it (GR is read as EL). Null for a French number,
+ * which DGFiP's list already gives, and for a country VIES does not cover.
+ */
+export function viesNumber(vatId: string | undefined): ViesNumber | null {
+  const v = vatId?.toUpperCase().replace(/[\s.-]/g, '') ?? '';
+  const country = v.slice(0, 2) === 'GR' ? 'EL' : v.slice(0, 2);
+  const number = v.slice(2);
+  if (country === 'FR' || !VIES_STATES.has(country) || !/^[0-9A-Z+*]{2,12}$/.test(number)) {
+    return null;
+  }
+  return { country, number, vatId: `${country}${number}` };
+}
+
 /** IBAN structure and ISO 7064 mod 97-10 check. Spaces are not allowed here (FF-FMT-02 handles them). */
 export function isValidIban(value: string): boolean {
   if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(value)) return false;

@@ -31,3 +31,4 @@ export {
   sirenFor,
 } from './sirene';
 export { StripeStandIn, type StripeStandInOptions } from './stripe';
+export { VIES_CASES, viesStandIn } from './vies';

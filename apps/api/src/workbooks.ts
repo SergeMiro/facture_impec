@@ -49,6 +49,7 @@ import {
 } from './invoices';
 import { type Enriched, filledNote, PartyBook } from './parties';
 import { routeFor } from './platform';
+import { loadViesBook } from './vies';
 
 /** Rows one request may carry; a bigger sheet is read in parts (docs/DEFERRED.md). */
 export const MAX_ROWS = 5_000;
@@ -339,6 +340,7 @@ export async function syncSheet(
     new Set(removed.map((b) => b.id)),
     tenant,
   );
+  const vies = await loadViesBook(deps.db, tenant.id);
   const known = matched.filter((b): b is SheetBound => b !== undefined);
   const last = await latestIssues(
     deps.db,
@@ -368,7 +370,7 @@ export async function syncSheet(
           excelBinding: row.binding,
           isTest,
           parties: book,
-          history: { index: history, self: `new:${i}` },
+          known: { history, vies, self: `new:${i}` },
         });
         changed = true;
         if (created.issues) {
@@ -379,7 +381,14 @@ export async function syncSheet(
         }
         continue;
       }
-      const check = checkOf(tenant, row.computed, history, row.enriched.party, now, target.id);
+      const check = checkOf(
+        tenant,
+        row.computed,
+        { history, vies },
+        row.enriched.party,
+        now,
+        target.id,
+      );
       const saved = await saveSheetInvoice(deps, tenant, target, {
         computed: row.computed,
         partyId: row.enriched.partyId,

@@ -6,6 +6,7 @@ import {
   isValidSiren,
   isValidSiret,
   luhn,
+  viesNumber,
 } from './ids';
 
 describe('French identifiers', () => {
@@ -47,5 +48,24 @@ describe('French identifiers', () => {
     expect(isValidIban('DE89370400440532013000')).toBe(true);
     expect(isValidIban('FR7630006000011234567890188')).toBe(false);
     expect(isValidIban('FR76 3000 6000 0112 3456 7890 189')).toBe(false);
+  });
+});
+
+describe('VAT numbers VIES can check', () => {
+  it('takes another member state number as VIES does, and leaves French ones to DGFiP', () => {
+    expect(viesNumber('de 129.273-398')).toEqual({
+      country: 'DE',
+      number: '129273398',
+      vatId: 'DE129273398',
+    });
+    expect(viesNumber('GR094014201')?.vatId).toBe('EL094014201');
+    expect(viesNumber('IE6388047V')?.vatId).toBe('IE6388047V');
+    expect(viesNumber('XI123456789')?.country).toBe('XI');
+    expect(viesNumber('FR88100000009')).toBeNull();
+    expect(viesNumber('CHE123456789')).toBeNull(); // Switzerland: not in VIES
+    expect(viesNumber('GB123456789')).toBeNull();
+    expect(viesNumber('DE1')).toBeNull();
+    expect(viesNumber('DE12345678901234')).toBeNull();
+    expect(viesNumber(undefined)).toBeNull();
   });
 });

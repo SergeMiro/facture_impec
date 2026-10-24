@@ -71,6 +71,8 @@ export default defineConfig({
         GOOGLE_OAUTH_URL: `http://localhost:${E2E.mock}/google/oauth`,
         GOOGLE_API_URL: `http://localhost:${E2E.mock}/google/api`,
         CONNECTOR_SEALING_KEY: E2E.sealingKey,
+        // EU customers' VAT numbers through VIES' stand-in: the sweep never asks the real one.
+        VIES_URL: `http://localhost:${E2E.mock}/vies`,
         // No AI: the agents' deterministic answers, the same on every run.
         AI_PROVIDER: '',
       },

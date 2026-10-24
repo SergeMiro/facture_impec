@@ -1211,6 +1211,35 @@ export const uploads = pgTable(
   (t) => [uniqueIndex('uploads_name').on(t.tenantId, t.name)],
 );
 
+/**
+ * What VIES said of a customer's VAT number (plan §6 PartyAgent `vies.check`): one answer per number
+ * and day at most, kept with the company's account as its proof of checking. Only answers are kept: a
+ * VIES that could not answer leaves nothing.
+ */
+export const vatChecks = pgTable(
+  'vat_checks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    /** As core viesNumber writes it: country code and number. */
+    vatId: text('vat_id').notNull(),
+    valid: boolean('valid').notNull(),
+    /** What VIES gives of the company ("---" and empty read as null; some countries give nothing). */
+    name: text('name'),
+    address: text('address'),
+    /** VIES' consultation number, when it gave one for our requester number. */
+    requestIdentifier: text('request_identifier'),
+    /** The Paris day of the answer: one per number and day. */
+    checkedOn: text('checked_on').notNull(),
+    /** VIES' own request date. */
+    checkedAt: timestamp('checked_at', { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('vat_checks_day').on(t.tenantId, t.vatId, t.checkedOn)],
+);
+
 /** Stripe events already applied: an endpoint may receive the same event twice (docs/BILLING.md). */
 export const stripeEvents = pgTable('stripe_events', {
   id: text('id').primaryKey(),
@@ -1245,3 +1274,4 @@ export type ConnectionRow = typeof connections.$inferSelect;
 export type ConnectedFileRow = typeof connectedFiles.$inferSelect;
 export type RuleExceptionRow = typeof ruleExceptions.$inferSelect;
 export type ItemSynonymRow = typeof itemSynonyms.$inferSelect;
+export type VatCheckRow = typeof vatChecks.$inferSelect;

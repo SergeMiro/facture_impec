@@ -78,7 +78,7 @@ const statusLabel = (status: string | null) => {
   return isMessageKey(key) ? t(key) : (status ?? '');
 };
 
-function eventText(e: InvoiceEvent): string {
+export function eventText(e: InvoiceEvent): string {
   const payload = (typeof e.payload === 'object' && e.payload) || {};
   const simulated = 'simulated' in payload && payload.simulated === true;
   let text: string;
@@ -115,6 +115,12 @@ function eventText(e: InvoiceEvent): string {
     text = t('addin.invoice.event.autopilotCancelled');
   } else if (e.type === 'note' && e.event === 'autopilot_held') {
     text = t('addin.invoice.event.autopilotHeld');
+  } else if (e.type === 'note' && e.event === 'vat_check') {
+    const vatId = 'vatId' in payload && typeof payload.vatId === 'string' ? payload.vatId : '';
+    const valid = 'valid' in payload && payload.valid === true;
+    const id = 'requestIdentifier' in payload ? payload.requestIdentifier : null;
+    text = t(valid ? 'addin.invoice.event.vatValid' : 'addin.invoice.event.vatInvalid', { vatId });
+    if (typeof id === 'string' && id) text = `${text} ${t('addin.invoice.event.vatProof', { id })}`;
   } else if (e.type === 'note' && e.event === 'sent_despite_findings') {
     const found = 'findings' in payload && Array.isArray(payload.findings) ? payload.findings : [];
     text = t('addin.invoice.event.sentDespite', { count: found.length });

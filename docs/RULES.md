@@ -2,7 +2,7 @@
 
 # Validation rules
 
-224 rules: 211 errors and 13 warnings. 157 of the 223 CEN EN 16931 rules are applied; the others are listed at the end with the reason.
+225 rules: 211 errors and 14 warnings. 157 of the 223 CEN EN 16931 rules are applied; the others are listed at the end with the reason.
 
 ## How to read this
 
@@ -239,7 +239,7 @@ Rules of the tax administration specifications that the AFNOR list does not carr
 
 Our own checks: legal mentions of the Commercial Code, identifier keys (Luhn, VAT key, IBAN), numbering, formatting that can be fixed automatically, the line amount (FF-LINE-CALC, which CEN does not check) and sanity checks.
 
-29 rules.
+30 rules.
 
 | Id | Level | Scope | BT | Checks | Message |
 |---|---|---|---|---|---|
@@ -268,6 +268,7 @@ Our own checks: legal mentions of the Commercial Code, identifier keys (Luhn, VA
 | FF-TVA-01 | error | vat | BT-120 | Franchise en base: the exemption text is « TVA non applicable, art. 293 B du CGI ». | La mention « TVA non applicable, art. 293 B du CGI » manque. |
 | FF-TVA-02 | error | vat | BT-120, BT-121 | Reverse charge (AE): code VATEX-FR-AE or VATEX-EU-AE, and the text says « Autoliquidation ». | La mention « Autoliquidation » manque. |
 | FF-TVA-03 | error | vat | BT-120, BT-121 | Intra-community supply (K): code VATEX-EU-IC and an exemption text. | Le motif de l'exonération pour livraison dans l'UE manque. |
+| FF-VIES-01 | warning | buyer | BT-48 | An intra-EU supply (K) or reverse charge (AE) names a customer VAT number that VIES, last asked, said is not valid. | Selon le service européen VIES, le numéro de TVA « {valeur} » de votre client n'est pas valide. Sans numéro valide, la vente ne peut pas être exonérée de TVA française. |
 | FF-CN-01 | warning | document | BT-25, BT-26 | A referenced invoice exists in the local history with that date, not after the issue date. | Nous ne retrouvons pas la facture d'origine indiquée. |
 | FF-CUR-01 | warning | document | BT-5 | The invoice is in euros; another currency is allowed but worth a second look. | La facture est en {value}, pas en euros. |
 | FF-QTY-01 | warning | lines | BT-129 | Quantities are not negative, except on credit notes. | Une ligne a une quantité négative. |

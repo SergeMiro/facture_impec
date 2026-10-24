@@ -88,6 +88,7 @@ describe('migrations', () => {
       'uploads',
       'users',
       'validation_results',
+      'vat_checks',
       'weekly_reports',
     ]);
   });

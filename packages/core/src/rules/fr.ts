@@ -7,6 +7,7 @@ import {
   isValidIban,
   isValidSiren,
   isValidSiret,
+  viesNumber,
 } from '../ids';
 import type { Invoice } from '../model';
 import { compareDecimal, decimalPlaces, isDecimal, normalizeDecimal } from '../money';
@@ -911,6 +912,24 @@ export const FR_RULES: Rule[] = [
         (b) =>
           b.category === 'K' && (b.exemptionCode !== 'VATEX-EU-IC' || missing(b.exemptionReason)),
       ).map((f) => ({ ...f, path: `${f.path}.exemptionCode` })),
+  }),
+  rule({
+    ...ff,
+    id: 'FF-VIES-01',
+    severity: 'warning',
+    scope: 'buyer',
+    bt: ['BT-48'],
+    summary:
+      'An intra-EU supply (K) or reverse charge (AE) names a customer VAT number that VIES, last asked, said is not valid.',
+    check: (inv, ctx) => {
+      const vat = ctx.buyer.vat;
+      if (!vat || vat.valid) return [];
+      const exempt = inv.vatBreakdown.some((b) => b.category === 'K' || b.category === 'AE');
+      // An answer about another number says nothing of this one: it is checked again.
+      return when(exempt && viesNumber(inv.buyer.vatId)?.vatId === vat.vatId, 'buyer.vatId', {
+        valeur: vat.vatId,
+      });
+    },
   }),
   rule({
     ...dgfip,

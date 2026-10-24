@@ -59,6 +59,8 @@ import { adapterFor, awaitsGoLive, routeFor } from './platform';
 import { registryBehind } from './registry';
 import { runWeeklyReports } from './report';
 import { purgeExpired } from './rgpd';
+import { runVatChecks } from './vat-checks';
+import type { Vies } from './vies';
 
 export interface WorkerDeps {
   /** Only FI_ENV, for the go-live gate (src/platform.ts); absent in unit tests: not prod. */
@@ -79,6 +81,8 @@ export interface WorkerDeps {
   microsoft?: MicrosoftConnector | null;
   /** Google Drive files (R5); absent: no Google connection is checked. */
   google?: GoogleConnector | null;
+  /** EU customers' VAT numbers (src/vat-checks.ts); absent: never asked. */
+  vies?: Vies | null;
   now: () => Date;
 }
 
@@ -478,6 +482,7 @@ export async function startWorkers(
     await runArchive(deps, options.log);
     await runInboundPoll(deps, options.log);
     await runUsageReport(deps, options.log);
+    await runVatChecks(deps, options.log);
   });
   await boss.work(QUEUES.monitor, { ...polling, localConcurrency: 2 }, async ([job]) => {
     if (job) await runMonitor(deps, InvoiceJob.parse(job.data).invoiceId);

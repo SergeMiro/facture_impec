@@ -46,7 +46,16 @@ export interface RuleContext {
     deliversElsewhere: boolean;
     /** Public entity (B2G): DGFiP G2.32 does not apply. */
     publicEntity: boolean;
+    /** VIES' last answer on the customer's VAT number (FF-VIES-01); absent: never asked. */
+    vat?: ViesVerdict | undefined;
   };
+}
+
+/** What VIES last said of a VAT number (the API asks and keeps the proof, core only reads it). */
+export interface ViesVerdict {
+  /** As core viesNumber writes it: country code and number, nothing between. */
+  vatId: string;
+  valid: boolean;
 }
 
 export interface Rule {

@@ -858,6 +858,15 @@ authentication. Both use the same token exchange, picker and `auth.html` popup r
 current-document and sidebar permissions. It performs no remote deployment. Contracts, installation,
 limits and the real-account verification list are in `docs/GOOGLE_SHEETS.md`.
 
+## §6 VIES: EU customers' VAT numbers
+
+The PartyAgent's `vies.check` from plan §6, without a model: the sweep (`runVatChecks` in
+`apps/api/src/vat-checks.ts`) asks VIES about the customer VAT numbers of intra-EU invoices not yet
+sent, once a day per number, and keeps each answer in `vat_checks` with VIES' consultation number.
+`checkOf` reads the last answers (`loadViesBook`) and gives core the one about the invoice's buyer, so
+the answer is part of the check key; core rule FF-VIES-01 warns when it says « not valid ». Core never
+calls the network. Details and decisions: `docs/ONBOARDING.md` §5.
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

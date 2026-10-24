@@ -48,6 +48,7 @@ import {
   uploads,
   users,
   validationResults,
+  vatChecks,
   weeklyReports,
 } from '@fi/db';
 import { z } from 'zod';
@@ -106,6 +107,7 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     exceptions,
     synonyms,
     uploaded,
+    viesAnswers,
   ] = await Promise.all([
     db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
     db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
@@ -196,6 +198,11 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       .where(eq(itemSynonyms.tenantId, tenant.id))
       .orderBy(asc(itemSynonyms.createdAt)),
     db.select().from(uploads).where(eq(uploads.tenantId, tenant.id)).orderBy(asc(uploads.name)),
+    db
+      .select()
+      .from(vatChecks)
+      .where(eq(vatChecks.tenantId, tenant.id))
+      .orderBy(asc(vatChecks.checkedAt), asc(vatChecks.vatId)),
   ]);
   const sheetOf = new Map(sheets.map((s) => [s.id, s.sheet]));
   const itemKeys = new Map(articles.map((a) => [a.id, a.key]));
@@ -339,6 +346,16 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
         source: p.source,
         createdAt: p.createdAt.toISOString(),
       })),
+    /** What VIES answered on the customers' VAT numbers, with its consultation numbers (§6). */
+    vatChecks: viesAnswers.map((v) => ({
+      vatId: v.vatId,
+      valid: v.valid,
+      name: v.name,
+      address: v.address,
+      requestIdentifier: v.requestIdentifier,
+      checkedOn: v.checkedOn,
+      checkedAt: v.checkedAt.toISOString(),
+    })),
     /** The ten-year register; the documents themselves are the invoices above and their XML. */
     archive,
     /**
@@ -565,6 +582,8 @@ export async function deleteTenant(
     await tx.delete(sheetMappings).where(eq(sheetMappings.tenantId, tenant.id));
     // The customer directory holds contacts (an e-mail may name a person); the invoices keep their buyer.
     await tx.delete(parties).where(eq(parties.tenantId, tenant.id));
+    // VIES' answers name the customers' companies, a sole trader by name.
+    await tx.delete(vatChecks).where(eq(vatChecks.tenantId, tenant.id));
     await tx.delete(agentRuns).where(eq(agentRuns.tenantId, tenant.id));
     await tx
       .update(apiKeys)

@@ -13,6 +13,7 @@ import {
   NumberingHistory,
   parisToday,
   validate,
+  viesNumber,
 } from '@fi/core';
 import {
   and,
@@ -49,6 +50,7 @@ import { ApiError, isUniqueViolation } from './errors';
 import { PartyBook } from './parties';
 import { awaitsGoLive, routeFor } from './platform';
 import { RULESET } from './ruleset';
+import { loadViesBook, type ViesBook } from './vies';
 
 export const EDITABLE: readonly InvoiceState[] = ['draft', 'needs_fix', 'validated'];
 const BEFORE_DEPOSIT: readonly InvoiceState[] = [
@@ -155,24 +157,40 @@ export interface Check {
   run: () => Issue[];
 }
 
+/** What a check reads besides the invoice: the numbers issued, VIES' answers on customers' numbers. */
+export interface Known {
+  history: NumberingHistory;
+  vies: ViesBook;
+}
+
+export async function loadKnown(db: DbOrTx, tenant: TenantRow, isTest: boolean): Promise<Known> {
+  return {
+    history: new NumberingHistory(await loadHistory(db, tenant, isTest)),
+    vies: await loadViesBook(db, tenant.id),
+  };
+}
+
 /**
  * One check of an invoice: the rules' code, the content, the day, the company's and the customer's
- * settings, and the few issued numbers that decide the history rules. `self` is the invoice in
- * `history`, left out of its own.
+ * settings, the few issued numbers that decide the history rules, and VIES' last answer on the
+ * customer's VAT number. `self` is the invoice in `history`, left out of its own.
  */
 export function checkOf(
   tenant: TenantRow,
   computed: Pick<Computed, 'document' | 'fingerprint'>,
-  history: NumberingHistory,
+  known: Known,
   buyer: BuyerSettings | null | undefined,
   now: Date,
   self?: string,
 ): Check {
+  const vatId = viesNumber(computed.document.buyer.vatId)?.vatId;
+  const vat = vatId ? known.vies.get(vatId) : undefined;
   const context = {
     today: parisToday(now),
-    history: history.for(computed.document, self),
+    history: known.history.for(computed.document, self),
     seller: { vatOnDebits: tenant.vatOnDebits },
-    buyer: buyerSettings(buyer),
+    // Absent when never asked: the key of an invoice without an EU number does not move.
+    buyer: { ...buyerSettings(buyer), ...(vat && { vat }) },
   };
   return {
     key: hashOf({ ruleset: RULESET, fingerprint: computed.fingerprint, ...context }),
@@ -188,8 +206,8 @@ async function partySettings(db: DbOrTx, partyId: string | null) {
 
 /** The check of a stored invoice, with the numbers issued and its customer's settings as they are now. */
 async function checkStored(db: DbOrTx, row: InvoiceRow, tenant: TenantRow, now: Date) {
-  const history = new NumberingHistory(await loadHistory(db, tenant, row.isTest));
-  return checkOf(tenant, row, history, await partySettings(db, row.partyId), now, row.id);
+  const known = await loadKnown(db, tenant, row.isTest);
+  return checkOf(tenant, row, known, await partySettings(db, row.partyId), now, row.id);
 }
 
 /** Stores a verdict, moves the status, and remembers what it was checked against. */
@@ -269,8 +287,8 @@ export interface InvoiceInput {
   isTest?: boolean | undefined;
   /** The company's customers, when the caller already read them (a sync reads them once). */
   parties?: PartyBook | undefined;
-  /** The numbers issued as a sync sees them, and who this invoice is among them. */
-  history?: { index: NumberingHistory; self: string } | undefined;
+  /** What a sync knows (the numbers issued as it sees them), and who this invoice is among them. */
+  known?: (Known & { self: string }) | undefined;
 }
 
 /** The buyer completed from its confirmed customer (plan §6 phase 2): the sheet always wins. */
@@ -321,8 +339,8 @@ export async function createInvoice(
         after: { fingerprint: computed.fingerprint, isTest, partyId },
       });
       const now = deps.now();
-      const given = input.history;
-      const check = given && checkOf(tenant, computed, given.index, party, now, given.self);
+      const given = input.known;
+      const check = given && checkOf(tenant, computed, given, party, now, given.self);
       const issues = await runValidation(tx, inserted, tenant, now, check);
       await planAutopilot(tx, now, tenant, inserted.id);
       return { row: inserted, issues };
@@ -437,18 +455,66 @@ export async function recheckParty(tx: Tx, tenant: TenantRow, party: PartyRow, n
         inArray(invoices.status, [...EDITABLE]),
       ),
     );
-  const histories = new Map<boolean, NumberingHistory>();
+  const knowns = new Map<boolean, Known>();
   for (const row of rows) {
-    let history = histories.get(row.isTest);
-    if (!history) {
-      history = new NumberingHistory(await loadHistory(tx, tenant, row.isTest));
-      histories.set(row.isTest, history);
+    let known = knowns.get(row.isTest);
+    if (!known) {
+      known = await loadKnown(tx, tenant, row.isTest);
+      knowns.set(row.isTest, known);
     }
-    const { key, run } = checkOf(tenant, row, history, party, now, row.id);
+    const { key, run } = checkOf(tenant, row, known, party, now, row.id);
     if (key === row.validatedKey) continue;
     await storeVerdict(tx, row.id, key, run(), now);
     await planAutopilot(tx, now, tenant, row.id);
   }
+}
+
+/**
+ * VIES answered on a customer's VAT number (src/vat-checks.ts): the invoices not yet sent that name
+ * it are checked again, and get a new verdict only when it differs. Returns their ids.
+ */
+export async function recheckBuyerVat(
+  tx: Tx,
+  tenant: TenantRow,
+  vatId: string,
+  now: Date,
+): Promise<string[]> {
+  const rows = (
+    await tx
+      .select()
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.tenantId, tenant.id),
+          eq(invoices.direction, 'out'),
+          inArray(invoices.status, [...EDITABLE]),
+          isNotNull(sql`${invoices.document}->'buyer'->>'vatId'`),
+        ),
+      )
+  ).filter((r) => viesNumber(r.document.buyer.vatId)?.vatId === vatId);
+  const last = await latestIssues(
+    tx,
+    rows.map((r) => r.id),
+  );
+  const knowns = new Map<boolean, Known>();
+  for (const row of rows) {
+    let known = knowns.get(row.isTest);
+    if (!known) {
+      known = await loadKnown(tx, tenant, row.isTest);
+      knowns.set(row.isTest, known);
+    }
+    const party = await partySettings(tx, row.partyId);
+    const { key, run } = checkOf(tenant, row, known, party, now, row.id);
+    if (key === row.validatedKey) continue;
+    const issues = run();
+    if (row.status !== 'draft' && hashOf(issues) === hashOf(last.get(row.id) ?? null)) {
+      await tx.update(invoices).set({ validatedKey: key }).where(eq(invoices.id, row.id));
+      continue;
+    }
+    await storeVerdict(tx, row.id, key, issues, now);
+    await planAutopilot(tx, now, tenant, row.id);
+  }
+  return rows.map((r) => r.id);
 }
 
 /** A sheet invoice already stored, as the sheet has it now (src/workbooks.ts syncSheet). */

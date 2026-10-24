@@ -16,6 +16,7 @@ import { GoogleStandIn, type GoogleStandInOptions } from './google';
 import { MicrosoftStandIn, type MicrosoftStandInOptions } from './microsoft';
 import { sireneStandIn } from './sirene';
 import { StripeStandIn, type StripeStandInOptions } from './stripe';
+import { viesStandIn } from './vies';
 
 const Payment = z.object({ amount: z.number().int().nonnegative() });
 
@@ -151,6 +152,7 @@ export function createMockPdp(options: MockPdpOptions) {
   });
   app.route('/stripe', stripe.app);
   app.route('/sirene', sireneStandIn());
+  app.route('/vies', viesStandIn());
   const microsoft = new MicrosoftStandIn({
     ...MICROSOFT_STAND_IN_APP,
     ...(options.log && { log: options.log }),

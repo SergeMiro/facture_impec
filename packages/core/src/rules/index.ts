@@ -81,6 +81,7 @@ export const ContextInput = z.object({
       requiresPurchaseOrder: z.boolean(),
       deliversElsewhere: z.boolean(),
       publicEntity: z.boolean(),
+      vat: z.object({ vatId: z.string(), valid: z.boolean() }),
     })
     .partial()
     .optional(),

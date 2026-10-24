@@ -1189,3 +1189,42 @@ Acceptance evidence (2026-10-24):
 - `pnpm --filter @fi/site test:e2e`: 4 passed. Automatic video playback, chapters, pause/replay, reduced motion, phone playback and error fallback remain working. browser: local.
 - `pnpm verify --concurrency=1` passed all ten tasks. `pnpm build` passed both builds.
 - Preview: https://facture-impec-site-2fxarc9jc-sergemiros-projects.vercel.app (Vercel login required). Production still waits for publisher identity, address and contact email, as required by `RUNBOOK.md`.
+
+## §6 VIES — EU customers' VAT numbers (started 2026-10-24)
+
+Plan §6 gives the PartyAgent a `vies.check(vat_id)` tool; M7 and M8 left it out (`docs/ONBOARDING.md`
+§4, `docs/DEFERRED.md`). An intra-EU supply (K) or an EU reverse charge (AE) is exempt from French VAT
+only if the customer's VAT number is valid in its own country, and VIES (the European Commission's
+public service) is where a seller checks it. Criteria, written here before the work:
+
+- **Checked without a click**: an invoice not yet sent, with a K or AE breakdown and a customer VAT
+  number (BT-48) of another EU member state, has that number checked in VIES within one sweep (5
+  minutes by default), once a day per number at most, one request at a time. The company's own VAT
+  number goes as the requester, so VIES can return a consultation number. French numbers stay with
+  DGFiP's list; numbers outside VIES' member states are never sent.
+- **Proof kept**: every answer (valid or not, the name and address VIES gives, its consultation
+  number, the day) is kept with the company's account and written on the invoice's timeline.
+- **An invalid number is said plainly**: a number VIES says is not valid gives a warning on the
+  customer's VAT number (FF-VIES-01): what VIES said and when, why it matters (no exemption without a
+  valid number), what to do. A warning, not an error: VIES can lag a new registration, and the
+  person decides.
+- **Calm when VIES cannot answer**: busy, unavailable, timed out or blocked: nothing is stored,
+  nothing is said against the invoice, the next sweep tries again; no invoice waits for VIES.
+- **Deterministic core**: the rule reads the stored answer from its context; core makes no network
+  call; the answer is part of the check key, so the same answer gives the same verdict and a new one
+  checks the invoice again.
+- **Audit and RGPD**: each check writes an audit event; the answers are in the account export and
+  erased with it; `docs/ONBOARDING.md`, `docs/RGPD.md`, `docs/DEFERRED.md`, `docs/RULES.md` updated,
+  with the VIES API as read on 2026-10-24.
+
+### Evidence (2026-10-24)
+
+| Criterion | Evidence |
+|---|---|
+| Checked without a click | `apps/api/src/vies.test.ts` › the sweep asking VIES › keeps the answer with its proof… (one question, our number as requester), › asks once a day per number… (`de 811 569 869` and `DE811569869` asked once; again the next day), › never asks about French numbers, standard-rate sales or invoices already sent, › stops asking for this sweep when VIES itself is down, and asks at most a batch (20 a sweep). `packages/core/src/ids.test.ts` › VAT numbers VIES can check (GR → EL, XI, FR and non-EU never). Wired in the sweep (`apps/api/src/workers.ts`). |
+| Proof kept | `vies.test.ts` › keeps the answer with its proof… (`vat_checks` row with VIES' consultation number, the note on the timeline with the number, answer, consultation number and day). Add-in: `apps/addin/src/ui/timeline.test.ts` › tells what VIES answered… |
+| An invalid number is said plainly | `packages/core/src/rules/rules.test.ts` › warns on a VIES « not valid » only for the number it was about, on an exempt EU sale (exact message); fixture `fixtures/invalid/fr.json` FF-VIES-01; `vies.test.ts` › keeps the answer… (FF-VIES-01 warning on `buyer.vatId` after the sweep). Changed from the criterion: the date of the answer is on the timeline, not in the message, so the daily check leaves the verdict alone (`docs/ONBOARDING.md` §5.2). |
+| Calm when VIES cannot answer | `vies.test.ts` › says it could not answer when VIES is busy, down, out of reach or unreadable; › keeps nothing when VIES cannot answer, and goes on with the other member states; › stops asking for this sweep when VIES itself is down. |
+| Deterministic core | Core reads `RuleContext.buyer.vat`, no network; `checkOf` (`apps/api/src/invoices.ts`) adds the last answer to the check key; `vies.test.ts` › asks once a day… (the next day's same answer: no new verdict, no new note). |
+| Audit and RGPD | `vies.test.ts` › keeps the answer… (audit `vat.check`, actor `agent:party`), › exports the answers with the company, and a deletion erases them. `docs/ONBOARDING.md` §5 (the API as read on 2026-10-24, decisions, `TODO(verify)` on the consultation number with a real French requester), `docs/RGPD.md` (VIES as recipient, register row), `docs/DEFERRED.md`, `docs/ARCHITECTURE.md` › §6 VIES, `docs/RULES.md` regenerated. Migration `0018_vat_checks.sql`. Stand-in `/vies` in `apps/mock-pdp` for tests, scenarios and E2E. |
+| Gate | `pnpm verify` green on 2026-10-24 (tests with `--concurrency=1`): api 294, core 659 (branches 93.21 %) + oracle 276, agents 121 (branches 91.86 %), add-in 103, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 13. `pnpm test:e2e` green in local Chrome (browser: local): 3 passed, the live B2Brouter run skipped (no key). |

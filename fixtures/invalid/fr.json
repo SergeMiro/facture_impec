@@ -351,6 +351,15 @@
       "unset": ["vatExemptions[0].reason"]
     },
     {
+      "rule": "FF-VIES-01",
+      "base": "06-intra-eu-supply",
+      "context": {
+        "buyer": {
+          "vat": { "vatId": "DE129273398", "valid": false }
+        }
+      }
+    },
+    {
       "rule": "DGFIP-G2.32",
       "base": "04-franchise-293b",
       "set": {

@@ -7,6 +7,7 @@ import type { Billing } from './billing';
 import type { GoogleConnector, MicrosoftConnector } from './connectors';
 import type { RequestWindows } from './limits';
 import type { Directory } from './sirene';
+import type { Vies } from './vies';
 
 /** The adapters this deployment can use; a tenant on a missing provider cannot send yet. */
 export type PdpRegistry = Partial<Record<PdpProvider, PdpAdapter>>;
@@ -114,6 +115,8 @@ export interface ApiDeps {
   microsoft?: MicrosoftConnector | null;
   /** Google Drive files read without Excel (R5, src/connectors.ts); absent or null: not offered. */
   google?: GoogleConnector | null;
+  /** EU customers' VAT numbers, asked by the sweep (src/vat-checks.ts); absent or null: never asked. */
+  vies?: Vies | null;
   /** Request counters (src/limits.ts); default: fresh ones per app. */
   limits?: RequestWindows;
   now: () => Date;
