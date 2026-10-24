@@ -1111,3 +1111,27 @@ Office nested authentication. To close this host difference, before implementati
 - `pnpm verify --concurrency=1` passed all ten test tasks, with 100 add-in tests. `pnpm build` passed.
 - The full browser run passed 3 scenarios, including Google Sheets and the existing Excel harness;
   real Excel web skipped. browser: local. Microsoft consent is still G5, not a claim of this run.
+
+## R9 — Sheet changes with relocated status columns (started 2026-10-24)
+
+A Google poll reported `A1` as a full-sheet change. If `FI_Statut` occupied column A, the controller
+mistook that notification for its own write. It also treated every column between the two status
+columns as owned, even when those columns were separated by user data. Acceptance criteria:
+
+- Google reports a full-sheet range that includes every readable column.
+- Edits between separated status columns trigger a sync; writes confined to the actual status
+  columns remain ignored.
+- Controller regressions reproduce both layouts before the fix and pass afterward.
+- The verification gate and browser scenarios remain green.
+
+### Evidence (2026-10-24)
+
+- Both `controller.test.ts` → `relocated status columns` regressions failed before the fix and passed
+  afterward, after waiting for the initial sync to finish. They exercise the real API and Google
+  native-service adapter with status columns before the invoice data, and a user column between
+  separated status columns.
+- Google poll notifications now cover `A1:ZZZ5000`. The controller ignores only actual owned
+  columns. Separate owned areas such as `M2:M4,O2:O4` remain ignored.
+- `pnpm verify --concurrency=1` passed all ten tasks, with 102 add-in tests. `pnpm build` passed.
+- The final full browser run passed 3 scenarios, including Google Sheets and the existing Excel
+  harness; real Excel web skipped without an account. browser: local.

@@ -1005,11 +1005,15 @@ export class Controller {
   /** Our own writes fire the change event too: they must not start another sync. */
   #ownColumnsOnly(address: string): boolean {
     if (!this.#statusCols) return false;
-    const cols = [...address.matchAll(/([A-Z]{1,3})\d*/g)].map((m) => columnIndex(m[1] ?? 'A'));
     const own = [this.#statusCols.statusCol, this.#statusCols.detailCol].map(columnIndex);
-    const lo = Math.min(...cols);
-    const hi = Math.max(...cols);
-    return cols.length > 0 && lo >= Math.min(...own) && hi <= Math.max(...own);
+    return address.split(',').every((area) => {
+      const cols = [...area.matchAll(/([A-Z]{1,3})\d*/g)].map((m) => columnIndex(m[1] ?? 'A'));
+      const lo = Math.min(...cols);
+      const hi = Math.max(...cols);
+      // Only two columns are ours. A rectangle spanning separated status columns also contains
+      // user data; separate owned areas such as M2:M4,O2:O4 are still our own writes.
+      return cols.length > 0 && hi - lo <= 1 && own.includes(lo) && own.includes(hi);
+    });
   }
 
   rowAt(row: number): RowStatus | undefined {

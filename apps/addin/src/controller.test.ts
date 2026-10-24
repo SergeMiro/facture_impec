@@ -31,7 +31,16 @@ import {
   toolCallResult,
   type WorkerDeps,
 } from '@fi/api/testing';
-import { addDays, computeInvoice, frMoney, InvoiceDraft, parisToday, toCii } from '@fi/core';
+import {
+  addDays,
+  columnIndex,
+  columnLetters,
+  computeInvoice,
+  frMoney,
+  InvoiceDraft,
+  parisToday,
+  toCii,
+} from '@fi/core';
 import { type XlsxCell, xlsxOf } from '@fi/core/testing/xlsx';
 import { type MessageKey, TERMS_VERSION, TRIAL_REAL_SENDS, t } from '@fi/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -57,6 +66,8 @@ import {
 import { type MicrosoftPort, MicrosoftPortError } from './microsoft/port';
 import { standInMicrosoftPort } from './microsoft/stand-in';
 import type { Timers } from './offline';
+import { fakeGoogleSheets } from './sheets/fake';
+import { googleSheetsPort } from './sheets/port';
 import { memoryStore } from './storage';
 
 const BASE = 'http://api.test';
@@ -1895,5 +1906,83 @@ describe('the subscription, then leaving', () => {
       commerceAllowed: false,
     });
     expect(ipad.state().commerce).toBe(false);
+  });
+});
+
+describe('relocated status columns', () => {
+  it('syncs Google edits when the status columns come before the invoice data', async () => {
+    const shifted = Object.fromEntries(
+      Object.entries(demoSheet()).map(([address, cell]) => {
+        const match = /^([A-Z]+)(\d+)$/.exec(address);
+        return [`${columnLetters(columnIndex(match?.[1] ?? 'A') + 2)}${match?.[2]}`, cell];
+      }),
+    );
+    const book = new FakeWorkbook({
+      [DEMO_SHEET]: { ...shifted, A1: 'FI_Statut', B1: 'FI_Détail' },
+    });
+    const native = fakeGoogleSheets(book);
+    const port = googleSheetsPort(async (request) => native.host.dispatch(request), {
+      pollMs: 20,
+      reconcileMs: 60_000,
+    });
+    const { controller, state } = pane(book, memoryStore(), { port });
+    try {
+      await controller.start();
+      await controller.signInWithKey(apiKey);
+      await until(() => state().detection !== null, 'Google column detection');
+      const mapping = state().detection?.mapping;
+      if (!mapping) throw new Error('no mapping');
+      await controller.confirmMapping(mapping);
+      await controller.sync();
+      const path = `/workbooks/${state().workbookId}/sync`;
+      const syncs = () => calls.filter((call) => call === `POST ${path}`).length;
+      const before = syncs();
+      book.type(DEMO_SHEET, 'M2', 600);
+      await until(() => syncs() > before, 'edit after front status columns');
+    } finally {
+      await controller.signOut();
+      port.close();
+    }
+  });
+
+  it('syncs user data between separated status columns, but ignores the two owned columns', async () => {
+    const book = new FakeWorkbook({
+      [DEMO_SHEET]: {
+        ...demoSheet(),
+        M1: 'FI_Statut',
+        N1: 'Commentaire',
+        N2: 'Note',
+        O1: 'FI_Détail',
+      },
+    });
+    let changed: (address: string) => void = () => {};
+    book.onChange = async (_sheet, handler) => {
+      changed = handler;
+      return async () => {};
+    };
+    const { controller, state } = pane(book);
+    try {
+      await controller.start();
+      await controller.signInWithKey(apiKey);
+      await until(() => state().detection !== null, 'separated status column detection');
+      const mapping = state().detection?.mapping;
+      if (!mapping) throw new Error('no mapping');
+      await controller.confirmMapping(mapping);
+      await controller.sync();
+      const path = `/workbooks/${state().workbookId}/sync`;
+      const syncs = () => calls.filter((call) => call === `POST ${path}`).length;
+      const before = syncs();
+      book.type(DEMO_SHEET, 'N2', 'Changed note');
+      changed('N2');
+      await until(() => syncs() > before, 'user column between status columns');
+      const after = syncs();
+      changed('M2');
+      changed('O2');
+      changed('M2:M4,O2:O4');
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(syncs()).toBe(after);
+    } finally {
+      await controller.signOut();
+    }
   });
 });

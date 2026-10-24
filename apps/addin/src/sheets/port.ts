@@ -75,7 +75,7 @@ export function googleSheetsPort(transport: SheetsTransport, options: SheetsPort
           watch.reconciledAt = Date.now();
           // A full-sheet signal merges every edit since the previous poll. Script/API edits do
           // not fire onEdit, so the periodic reconciliation also covers them and recalculations.
-          for (const handler of watch.handlers) handler('A1');
+          for (const handler of watch.handlers) handler('A1:ZZZ5000');
         }
       }
     } catch (e) {
