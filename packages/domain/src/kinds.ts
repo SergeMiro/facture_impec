@@ -31,6 +31,24 @@ export const INVOICE_KINDS: readonly DocumentKind[] = [
   'avoir',
 ];
 
+/** The kinds that prove a company's standing: each renews, and needs to know whose it is (D7). */
+export const STANDING_KINDS: readonly DocumentKind[] = [
+  'attestation_vigilance',
+  'kbis',
+  'attestation_assurance_decennale',
+  'attestation_assurance_rc',
+];
+
+/** The date a kind's deadline counts from (D7): read from the document, or given by a person. */
+export const DEADLINE_DATE: Partial<Record<DocumentKind, 'issuedOn' | 'validTo' | 'receptionOn'>> =
+  {
+    attestation_vigilance: 'issuedOn',
+    kbis: 'issuedOn',
+    attestation_assurance_decennale: 'validTo',
+    attestation_assurance_rc: 'validTo',
+    pv_reception: 'receptionOn',
+  };
+
 /** Where a document came from (BTP plan §5). `excel` is the task pane, in Excel or Google Sheets. */
 export const DOCUMENT_SOURCES = ['mail', 'drive', 'pdp', 'excel', 'erp'] as const;
 export const DocumentSource = z.enum(DOCUMENT_SOURCES);

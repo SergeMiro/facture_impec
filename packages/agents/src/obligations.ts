@@ -3,7 +3,13 @@
 // unknown company, or why a person must look. No model and no database here: the caller reads the
 // company's parties and writes the result in one transaction.
 import { addMonths } from '@fi/core';
-import { type DocumentKind, INVOICE_KINDS, type ObligationKind } from '@fi/domain';
+import {
+  DEADLINE_DATE,
+  type DocumentKind,
+  INVOICE_KINDS,
+  type ObligationKind,
+  STANDING_KINDS,
+} from '@fi/domain';
 import type { ClassifyLabel } from './classify';
 import type { DocumentFields } from './document-fields';
 
@@ -15,14 +21,6 @@ export const REVIEW_REASONS = [
   'party_unclear',
 ] as const;
 export type ReviewReason = (typeof REVIEW_REASONS)[number];
-
-/** The kinds that prove a company's standing: each renews, and needs to know whose it is. */
-const STANDING: readonly DocumentKind[] = [
-  'attestation_vigilance',
-  'kbis',
-  'attestation_assurance_decennale',
-  'attestation_assurance_rc',
-];
 
 /**
  * A sale when the company's SIREN is the only one named; a purchase otherwise (the usual case). A
@@ -186,15 +184,9 @@ export function settleDocument(input: SettleInput): Settled {
   if (INVOICE_KINDS.includes(kind)) {
     return review('invoice_without_data');
   }
-  if (STANDING.includes(kind)) {
-    if (!siren || unclear) return review('party_unclear');
-    const date =
-      kind === 'attestation_vigilance' || kind === 'kbis'
-        ? input.fields.issuedOn
-        : input.fields.validTo;
-    if (!date) return review('dates_missing');
-  }
-  if (kind === 'pv_reception' && !input.fields.receptionOn) return review('dates_missing');
+  if (STANDING_KINDS.includes(kind) && (!siren || unclear)) return review('party_unclear');
+  const date = DEADLINE_DATE[kind];
+  if (date && !input.fields[date]) return review('dates_missing');
 
   const obligations = deriveObligations({
     documentId: input.documentId,
@@ -209,6 +201,7 @@ export function settleDocument(input: SettleInput): Settled {
     reviewReason: null,
     obligations,
     // Whose standing it proves, unknown to the company: it confirms the new sous-traitant.
-    confirm: STANDING.includes(kind) && siren && !partyId && siren !== input.own ? siren : null,
+    confirm:
+      STANDING_KINDS.includes(kind) && siren && !partyId && siren !== input.own ? siren : null,
   };
 }

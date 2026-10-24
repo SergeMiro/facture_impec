@@ -44,6 +44,9 @@ importers:
       '@fi/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@fi/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@fi/shared':
         specifier: workspace:*
         version: link:../../packages/shared

@@ -8,6 +8,8 @@ import { createAiDeps } from './ai';
 import { createApp } from './app';
 import type { Billing } from './billing';
 import type { ApiDeps, Jobs, PdpRegistry, SyncTarget } from './deps';
+import { runDocumentClassify } from './document-pipeline';
+import { runDocumentIngest, runDocumentValidate } from './ingest';
 import { RequestWindows } from './limits';
 import { OutboxMailer } from './mail';
 import { SCENARIO_SELLER, scenarioDraft } from './scenarios/invoice';
@@ -31,6 +33,8 @@ export {
   SIRENE_CASES,
   VIES_CASES,
 } from '@fi/mock-pdp';
+// The task pane's documents tests (BTP stage 2B) deposit text PDFs.
+export { writePdf } from '../scripts/golden/documents';
 // The task pane's tests move invoices as the workers would.
 export { runCollect } from './collect';
 export { checkConnection, type GoogleConnector, type MicrosoftConnector } from './connectors';
@@ -247,6 +251,21 @@ export function testApi(
     });
   };
   return { app, deps, jobs, mailer, request };
+}
+
+/**
+ * The task pane's documents tests (BTP stage 2B): the documents queued are read, checked and
+ * classified as the workers would, until nothing is left.
+ */
+export async function runDocumentJobs(api: ReturnType<typeof testApi>): Promise<void> {
+  const { db, ai, now } = api.deps;
+  const deps = { db, ai, now, jobs: api.jobs };
+  const { ingests, validations, classifies } = api.jobs;
+  while (ingests.length + validations.length + classifies.length > 0) {
+    for (const id of ingests.splice(0)) await runDocumentIngest(deps, id);
+    for (const id of validations.splice(0)) await runDocumentValidate(deps, id);
+    for (const id of classifies.splice(0)) await runDocumentClassify(deps, id);
+  }
 }
 
 let tenants = 0;

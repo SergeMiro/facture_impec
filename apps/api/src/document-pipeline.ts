@@ -32,7 +32,7 @@ import {
   type Tx,
   tenants,
 } from '@fi/db';
-import { DocumentKind } from '@fi/domain';
+import { DEADLINE_DATE, DocumentKind } from '@fi/domain';
 import { z } from 'zod';
 import { tenantAi } from './ai';
 import { type Principal, who } from './auth';
@@ -261,10 +261,7 @@ const NO_FIELDS: DocumentFields = {
 /** The field a person still has to give, by what the derivation lacked. */
 function missingField(settled: Settled): string {
   if (settled.reviewReason === 'party_unclear') return 'siren';
-  if (settled.kind === 'pv_reception') return 'receptionOn';
-  return settled.kind === 'attestation_vigilance' || settled.kind === 'kbis'
-    ? 'issuedOn'
-    : 'validTo';
+  return DEADLINE_DATE[settled.kind] ?? 'kind';
 }
 
 /**

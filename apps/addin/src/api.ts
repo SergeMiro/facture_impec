@@ -8,6 +8,7 @@ import {
   SheetMapping,
   SheetSnapshot,
 } from '@fi/core';
+import { DocumentKind, DocumentSource, DocumentStage, ObligationKind } from '@fi/domain';
 import type { UIDataTypes, UIMessage } from 'ai';
 import { z } from 'zod';
 import type { PickedFile } from './microsoft/port';
@@ -874,6 +875,76 @@ export const InboundExport = z.object({
 });
 export type InboundExport = z.infer<typeof InboundExport>;
 
+/** A document of the BTP back end as « Documents » lists it (stage 2B). */
+export const DocumentItem = z.object({
+  id: z.string(),
+  source: DocumentSource,
+  name: z.string(),
+  kind: DocumentKind.nullable(),
+  stage: DocumentStage,
+  /** Why a person must look; a code the pane words. */
+  reviewReason: z.string().nullable(),
+  isTest: z.boolean(),
+  receivedAt: z.string(),
+  party: z.object({ id: z.string(), name: z.string() }).nullable(),
+  siren: z.string().nullable(),
+  /** In review: the start of its text and what was read, for the form. */
+  review: z
+    .object({
+      excerpt: z.string().nullable(),
+      fields: z
+        .object({
+          issuedOn: z.string().nullable(),
+          validTo: z.string().nullable(),
+          receptionOn: z.string().nullable(),
+          sirens: z.array(z.string()),
+        })
+        .nullable(),
+    })
+    .nullable(),
+});
+export type DocumentItem = z.infer<typeof DocumentItem>;
+export const DocumentPage = z.object({
+  documents: z.array(DocumentItem),
+  total: z.number().int(),
+});
+export type DocumentPage = z.infer<typeof DocumentPage>;
+
+/** What one document became, as `POST /ingest` and a review answer it. */
+const DocumentState = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: DocumentKind.nullable(),
+  stage: DocumentStage,
+});
+
+export const Obligation = z.object({
+  id: z.string(),
+  kind: ObligationKind,
+  dueOn: z.string(),
+  overdue: z.boolean(),
+  /** Cents, when what is due is money. */
+  amount: z.number().int().nullable(),
+  party: z.object({ id: z.string(), name: z.string() }).nullable(),
+  siren: z.string().nullable(),
+  document: z.object({ id: z.string(), name: z.string() }).nullable(),
+});
+export type Obligation = z.infer<typeof Obligation>;
+export const Obligations = z.object({
+  today: z.string(),
+  horizon: z.number().int(),
+  obligations: z.array(Obligation),
+});
+
+/** A person's answer about a document in review. */
+export interface ReviewInput {
+  kind: DocumentKind;
+  issuedOn?: string;
+  validTo?: string;
+  receptionOn?: string;
+  siren?: string;
+}
+
 export const TEST_INBOUND_KINDS = ['normal', 'duplicate', 'iban_change'] as const;
 export type TestInboundKind = (typeof TEST_INBOUND_KINDS)[number];
 export type ExportFile = 'fec' | 'csv';
@@ -1231,4 +1302,30 @@ export class ApiClient {
     (await this.#send(`/inbound/exports/${id}/${file}`)).blob();
   testInbound = (kind: TestInboundKind) =>
     this.#json(Inbound, '/inbound/test', { method: 'POST', body: { kind } });
+
+  /** « Documents » (BTP stage 2B): what arrived, what needs a person, the deadlines. */
+  documents = (query: {
+    test: boolean;
+    stage?: DocumentStage;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const params = new URLSearchParams({ test: String(query.test) });
+    if (query.stage) params.set('stage', query.stage);
+    if (query.limit) params.set('limit', String(query.limit));
+    if (query.offset) params.set('offset', String(query.offset));
+    return this.#json(DocumentPage, `/documents?${params}`);
+  };
+  obligations = (test: boolean, horizon: number) =>
+    this.#json(Obligations, `/obligations?test=${test}&horizon=${horizon}`);
+  reviewDocument = (id: string, input: ReviewInput) =>
+    this.#json(DocumentState, `/documents/${id}/review`, { method: 'POST', body: input });
+  /** A file brought to the back end from the pane: its bytes as the body, as `/uploads`. */
+  ingest = async (name: string, file: Blob, test: boolean) => {
+    const res = await this.#send(`/ingest?name=${encodeURIComponent(name)}&test=${test}`, {
+      method: 'POST',
+      raw: file,
+    });
+    return { document: DocumentState.parse(await res.json()), created: res.status === 201 };
+  };
 }

@@ -20,6 +20,7 @@ import {
   mockModel,
   newTenant,
   runCollect,
+  runDocumentJobs,
   runSend,
   runSync,
   SIRENE_CASES,
@@ -33,6 +34,7 @@ import {
   toolCallResult,
   VIES_CASES,
   type WorkerDeps,
+  writePdf,
 } from '@fi/api/testing';
 import {
   addDays,
@@ -55,6 +57,7 @@ import {
   SETTING,
   SHEET_POLL_MAX_MS,
   SHEET_POLL_MS,
+  YEAR_HORIZON,
 } from './controller';
 import { FakeWorkbook } from './excel/fake';
 import {
@@ -1872,6 +1875,104 @@ describe('files uploaded from the pane (R6)', () => {
     expect(state().uploads).toEqual([]);
     controller.navigate({ name: 'checks' });
     await until(() => b2() === undefined, 'the loss gone');
+  });
+});
+
+describe('the documents and their deadlines (BTP stage 2B)', () => {
+  const SIREN = '999000805';
+  const SOUS_TRAITANT = '300000007';
+  const { controller, state } = pane(new FakeWorkbook({ [DEMO_SHEET]: demoSheet() }));
+  const letter = writePdf([
+    {
+      lines: [
+        { text: 'Madame, Monsieur,' },
+        { text: 'Suite à notre rendez-vous sur le chantier, voici le document demandé.' },
+      ],
+    },
+  ]);
+
+  beforeAll(async () => {
+    const vatId = `FR${String((12 + 3 * (Number(SIREN) % 97)) % 97).padStart(2, '0')}${SIREN}`;
+    const key = (
+      await newTenant(api.request, {
+        ...SELLER,
+        siren: SIREN,
+        vatId,
+        ownerEmail: 'documents@entreprise-demo.test',
+      })
+    ).apiKey;
+    await controller.start();
+    await controller.signInWithKey(key);
+  });
+
+  it('a deposited document waits for a person, who says what it is; its deadline follows', async () => {
+    controller.navigate({ name: 'documents' });
+    await until(() => state().documents !== null, 'the documents');
+    const test = state().testMode;
+    expect(state().documents).toMatchObject({
+      test,
+      horizon: 90,
+      obligations: [],
+      review: [],
+      reviewTotal: 0,
+      received: [],
+      receivedTotal: 0,
+    });
+
+    await controller.depositDocument(new Blob([new Uint8Array(letter)]), 'courrier.pdf');
+    expect(state().notice?.text).toBe(t('addin.documents.deposited', { file: 'courrier.pdf' }));
+    expect(state().documents?.received).toEqual([
+      expect.objectContaining({ name: 'courrier.pdf', stage: 'ingested', kind: null }),
+    ]);
+    await controller.depositDocument(new Blob([new Uint8Array(letter)]), 'courrier (copie).pdf');
+    expect(state().notice?.text).toBe(t('addin.documents.known', { file: 'courrier (copie).pdf' }));
+
+    // Read and classified as the workers would: a letter names no kind, a person must say.
+    await runDocumentJobs(api);
+    await controller.loadDocuments();
+    const [waiting] = state().documents?.review ?? [];
+    expect(waiting).toMatchObject({
+      name: 'courrier.pdf',
+      stage: 'needs_review',
+      reviewReason: 'unclassified',
+      review: { excerpt: expect.stringMatching(/^Madame, Monsieur,/) },
+    });
+    expect(state().documents?.reviewTotal).toBe(1);
+    if (!waiting) throw new Error('nothing to review');
+
+    // A Kbis of five months ago: renewed in about a month.
+    const issuedOn = addDays(parisToday(), -152);
+    expect(
+      await controller.reviewDocument(waiting.id, {
+        kind: 'kbis',
+        issuedOn,
+        siren: SOUS_TRAITANT,
+      }),
+    ).toBe(true);
+    expect(state().notice?.text).toBe(t('addin.documents.reviewed', { file: 'courrier.pdf' }));
+    expect(state().documents).toMatchObject({ review: [], reviewTotal: 0 });
+    expect(state().documents?.obligations).toEqual([
+      expect.objectContaining({
+        kind: 'kbis_renouvellement',
+        overdue: false,
+        party: null,
+        siren: SOUS_TRAITANT,
+        document: expect.objectContaining({ id: waiting.id }),
+      }),
+    ]);
+    expect(state().documents?.received[0]).toMatchObject({ kind: 'kbis', stage: 'done' });
+
+    // Settled already: the API's words, nothing changed.
+    expect(await controller.reviewDocument(waiting.id, { kind: 'autre' })).toBe(false);
+    expect(state().notice).toMatchObject({
+      tone: 'error',
+      text: t('api.error.document_not_in_review'),
+    });
+
+    await controller.loadDocuments(YEAR_HORIZON);
+    expect(state().documents?.horizon).toBe(YEAR_HORIZON);
+    await controller.loadDocuments();
+    expect(state().documents?.horizon).toBe(YEAR_HORIZON);
   });
 });
 

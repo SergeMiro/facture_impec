@@ -480,8 +480,26 @@ export async function documentsBehind(
   };
 }
 
+/** What a document's view reads: a list selects these columns only. */
+export type DocumentViewRow = Pick<
+  DocumentRow,
+  | 'id'
+  | 'source'
+  | 'name'
+  | 'mime'
+  | 'size'
+  | 'sha256'
+  | 'kind'
+  | 'stage'
+  | 'reviewReason'
+  | 'isTest'
+  | 'extracted'
+  | 'validation'
+  | 'receivedAt'
+>;
+
 /** The pane's and the API's view: never the bytes, nor the text read (stage 2 shows what matters). */
-export function documentView(row: DocumentRow) {
+export function documentView(row: DocumentViewRow) {
   const extracted = row.extracted ?? {};
   const issues = row.validation ?? [];
   return {

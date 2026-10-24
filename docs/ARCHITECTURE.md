@@ -1050,6 +1050,23 @@ job; a structured invoice ends in `document.validate`. `docs/DECISIONS.md` D7 ho
 - **The sweep** requeues a document read but not classified for ten minutes; the backlog (429 at
   200) counts every document `ingested`, read or not. Three classify jobs at a time per process.
 
+## BTP back end, stage 2B: the documents and their deadlines in the pane
+
+- **`GET /documents`** (`apps/api/src/document-lists.ts`): the company's documents newest first, by
+  `stage` or `kind`, 50 at a time (`limit`, `offset`, `total`), Mode test apart (`test`). Each has its
+  view, its company (`party`) and SIREN; one in review has the first 300 characters of its text and
+  the dates and SIRENs read, for the form. The database trims what was read (`jsonb_build_object`,
+  `left(…, 300)`): a list never carries whole texts.
+- **`GET /obligations?horizon=`**: the open deadlines due within the horizon (90 days by default, 730
+  at most), overdue ones first by their date, each with `overdue`, its amount, its company (or the
+  SIREN of one not confirmed yet) and the document it came from. Paris day.
+- **The pane** (`apps/addin/src/ui/DocumentsView.tsx`, `controller.ts` › Documents): one tab
+  « Documents » loads the three lists at once: « Échéances » (« Voir les échéances sur un an »), « À
+  vérifier » with its form, « Reçus » (« Afficher plus »). The form asks only what the chosen kind
+  needs, from `@fi/domain` (`DEADLINE_DATE`, `STANDING_KINDS`, shared with `settleDocument`), and
+  checks the SIREN's key as the API does. « Déposer un document » sends the file to `POST /ingest` in
+  the pane's mode; the workers read and sort it, « Actualiser » shows the result.
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

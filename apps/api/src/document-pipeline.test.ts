@@ -2,10 +2,12 @@
 // stage, the review reason, the deadlines and the questions each document makes, once each; a
 // newer attestation moves its renewal, an older one does not; Mode test stays apart; the model is
 // asked only what the patterns cannot say, without an identifier; a person's review settles the
-// rest. The golden documents run the same queue end to end (src/ingest.test.ts).
+// rest; the pane lists the documents and the deadlines they made. The golden documents run the same
+// queue end to end (src/ingest.test.ts).
 import { createHash } from 'node:crypto';
 import type { ResolvedAi } from '@fi/agents';
 import { handleFor, mockModel, textResult } from '@fi/agents/testing';
+import { addDays, frDate, parisToday } from '@fi/core';
 import {
   actions,
   and,
@@ -19,6 +21,7 @@ import {
 } from '@fi/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GOLDEN_COMPANIES } from '../scripts/golden/documents';
+import { EXCERPT_CHARS } from './document-lists';
 import { type ClassifyDeps, runDocumentClassify } from './document-pipeline';
 import { checkBacklog, documentsBehind, INGEST_BACKLOG } from './ingest';
 import { fakeAdapter, newTenant, testAi, testApi, testDatabase } from './test-helpers';
@@ -68,7 +71,7 @@ let n = 0;
 async function text(
   tenantId: string,
   body: string,
-  options: { name?: string; subject?: string; isTest?: boolean } = {},
+  options: { name?: string; subject?: string; isTest?: boolean; receivedAt?: Date } = {},
 ): Promise<DocumentRow> {
   n++;
   const [row] = await database.db
@@ -84,7 +87,7 @@ async function text(
       storageKey: `key-${n}`,
       hints: options.subject ? { subject: options.subject } : {},
       isTest: options.isTest ?? false,
-      receivedAt: new Date(),
+      receivedAt: options.receivedAt ?? new Date(),
       extracted: { text: body, ocr: false, pages: 1, truncated: false },
     })
     .returning();
@@ -394,5 +397,161 @@ describe('the queue', () => {
     await checkBacklog(database.db, c.id);
     await text(c.id, LETTER);
     await expect(checkBacklog(database.db, c.id)).rejects.toMatchObject({ code: 'ingest_busy' });
+  });
+});
+
+describe('what the pane lists', () => {
+  /** A document of `minutes` ago, classified as the queue would. */
+  async function settled(tenantId: string, body: string, minutes: number, isTest = false) {
+    const d = await text(tenantId, body, {
+      receivedAt: new Date(Date.now() - minutes * 60_000),
+      isTest,
+    });
+    await runDocumentClassify(off, d.id);
+    return d;
+  }
+  interface Listed {
+    id: string;
+    review: { excerpt: string } | null;
+  }
+  interface Page {
+    total: number;
+    documents: Listed[];
+  }
+  interface Dues {
+    obligations: { kind: string }[];
+  }
+  const json = async <T>(res: Response): Promise<T> => {
+    expect(res.status).toBe(200);
+    return (await res.json()) as T;
+  };
+
+  it('the documents, newest first, by stage or kind, a page at a time, test ones apart', async () => {
+    const c = await company();
+    const list = (query: string, token = c.apiKey) => api.request(`/documents?${query}`, { token });
+    await database.db.insert(parties).values({
+      tenantId: c.id,
+      kind: 'supplier',
+      legalName: 'Atelier Dupont SARL',
+      siren: SOUS_TRAITANT,
+      source: 'invoice',
+    });
+    const attestation = await settled(c.id, vigilance(SOUS_TRAITANT, '01/10/2026'), 30);
+    const letter = await settled(c.id, `${LETTER}\n${'Détail des travaux. '.repeat(40)}`, 20);
+    const extract = await settled(c.id, kbis(OTHER, '01/10/2026'), 10);
+    const test = await settled(c.id, kbis(OTHER, '02/10/2026'), 5, true);
+
+    const all = await json<Page>(await list(''));
+    expect(all).toMatchObject({ total: 3, limit: 50, offset: 0 });
+    expect(all.documents.map((d) => d.id)).toEqual([extract.id, letter.id, attestation.id]);
+    expect(all.documents[0]).toMatchObject({
+      kind: 'kbis',
+      stage: 'done',
+      party: null,
+      siren: OTHER,
+      review: null,
+    });
+    expect(all.documents[2]).toMatchObject({
+      party: { name: 'Atelier Dupont SARL' },
+      siren: SOUS_TRAITANT,
+    });
+    // A list never carries a settled document's text.
+    expect(JSON.stringify(all)).not.toContain('Greffe du tribunal');
+
+    // In review: why, the start of the text and what was read, for the form.
+    const review = await json<Page>(await list('stage=needs_review'));
+    expect(review.total).toBe(1);
+    expect(review.documents[0]).toMatchObject({
+      id: letter.id,
+      reviewReason: 'unclassified',
+      review: {
+        excerpt: expect.stringMatching(/^Madame, Monsieur,/),
+        fields: { issuedOn: null, validTo: null, receptionOn: null, sirens: [] },
+      },
+    });
+    expect(review.documents[0]?.review?.excerpt.length).toBeLessThanOrEqual(EXCERPT_CHARS);
+
+    expect((await json<Page>(await list('kind=kbis'))).documents.map((d) => d.id)).toEqual([
+      extract.id,
+    ]);
+    const page = await json<Page>(await list('limit=2&offset=2'));
+    expect(page).toMatchObject({ total: 3, limit: 2, offset: 2 });
+    expect(page.documents.map((d) => d.id)).toEqual([attestation.id]);
+    expect((await json<Page>(await list('test=true'))).documents.map((d) => d.id)).toEqual([
+      test.id,
+    ]);
+    expect((await list('stage=nowhere')).status).toBe(400);
+    expect((await list('limit=500')).status).toBe(400);
+
+    const stranger = await company();
+    expect(await json<Page>(await list('', stranger.apiKey))).toMatchObject({
+      total: 0,
+      documents: [],
+    });
+  });
+
+  it('the open deadlines within the horizon, overdue first, each with its company and source', async () => {
+    const c = await company();
+    const obligationsOf = (query: string, token = c.apiKey) =>
+      api.request(`/obligations?${query}`, { token });
+    const today = parisToday();
+    // Dates relative to today: the deadlines fall where the test says, whatever the day it runs.
+    const day = (offset: number) => frDate(addDays(today, offset));
+    await database.db.insert(parties).values({
+      tenantId: c.id,
+      kind: 'supplier',
+      legalName: 'Atelier Dupont SARL',
+      siren: SOUS_TRAITANT,
+      source: 'invoice',
+    });
+    // Issued seven months ago: its renewal is a month late. A Kbis of five months: due in a month.
+    const late = await settled(c.id, vigilance(SOUS_TRAITANT, day(-213)), 3);
+    const soon = await settled(c.id, kbis(OTHER, day(-152)), 2);
+    // An insurance ending in eight months: past ninety days, within the year.
+    await settled(
+      c.id,
+      `ATTESTATION D'ASSURANCE RESPONSABILITE CIVILE DECENNALE\nAssuré : SIREN ${OTHER}\nValable jusqu'au ${day(240)}`,
+      1,
+    );
+    await settled(c.id, kbis(OTHER, day(-150)), 1, true);
+
+    const soonest = await json<Dues>(await obligationsOf(''));
+    expect(soonest).toMatchObject({ today, horizon: 90 });
+    expect(soonest.obligations).toEqual([
+      expect.objectContaining({
+        kind: 'attestation_vigilance_renouvellement',
+        overdue: true,
+        amount: null,
+        party: expect.objectContaining({ name: 'Atelier Dupont SARL' }),
+        siren: null,
+        document: { id: late.id, name: late.name, kind: 'attestation_vigilance' },
+      }),
+      expect.objectContaining({
+        kind: 'kbis_renouvellement',
+        overdue: false,
+        party: null,
+        siren: OTHER,
+        document: expect.objectContaining({ id: soon.id }),
+      }),
+    ]);
+    const year = await json<Dues>(await obligationsOf('horizon=365'));
+    expect(year.obligations.map((o) => o.kind)).toEqual([
+      'attestation_vigilance_renouvellement',
+      'kbis_renouvellement',
+      'assurance_expiration',
+    ]);
+
+    // A dismissed deadline is not listed; test ones apart; another company's never.
+    await database.db
+      .update(obligations)
+      .set({ status: 'dismissed', closedAt: new Date() })
+      .where(eq(obligations.sourceDocumentId, soon.id));
+    expect((await json<Dues>(await obligationsOf(''))).obligations).toHaveLength(1);
+    expect((await json<Dues>(await obligationsOf('test=true'))).obligations).toEqual([
+      expect.objectContaining({ kind: 'kbis_renouvellement', siren: OTHER }),
+    ]);
+    expect((await obligationsOf('horizon=0')).status).toBe(400);
+    const stranger = await company();
+    expect((await json<Dues>(await obligationsOf('', stranger.apiKey))).obligations).toEqual([]);
   });
 });

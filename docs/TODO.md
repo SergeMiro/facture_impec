@@ -192,10 +192,12 @@ Stages (`docs/plans/phase-N.md` each):
       2026-10-24; 1B, FileStore, `POST /ingest`, the ingest and validate workers with OCR, the PDP
       adapter, 50 golden documents and a measured p95: done 2026-10-24; 1C, raw e-mail (`.eml`):
       done 2026-10-24). Left: drive folders watched (below), the e-mail provider (owner, D3).
-- [ ] **2 — documents pipeline** (`docs/plans/phase-2.md`; 2A, classify with its eval, dates and
+- [x] **2 — documents pipeline** (`docs/plans/phase-2.md`; 2A, classify with its eval, dates and
       SIRENs read, the company linked, deadlines derived, `POST /documents/:id/review`: done
-      2026-10-24). Left: 2B, `GET /documents`, `GET /obligations` and the pane's « Documents » and
-      « Échéances ». Extraction of invoices waits for the owner (below); chantiers come with stage 4.
+      2026-10-24; 2B, `GET /documents`, `GET /obligations` and the pane's « Documents » tab with
+      « Échéances », « À vérifier », « Reçus » and « Déposer un document »: done 2026-10-24).
+      Extraction of invoices waits for the owner (below); chantiers come with stage 4; what 2B left
+      is in `docs/DEFERRED.md` › The documents in the pane.
 - [ ] **3 — watchers and approvals**: the deadline watchers, actions with `POST /actions/:id/decide`,
       « À valider » in the pane, the e-mail digest with signed links, the Telegram bot; the invoice
       deadlines joined to the existing chasing (CollectAgent), not duplicated.

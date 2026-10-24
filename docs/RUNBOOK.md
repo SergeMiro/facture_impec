@@ -462,7 +462,14 @@ curl -X POST -H "authorization: Bearer $FI_KEY" -H 'content-type: application/js
 ```
 
 Deadlines are rows of `obligations`, one per `key`; `select kind, key, due_on, status from
-obligations where tenant_id = '<id>' order by due_on` shows a company's. Recording the classifier's
+obligations where tenant_id = '<id>' order by due_on` shows a company's. What the pane shows (2B):
+
+```bash
+curl -H "authorization: Bearer $FI_KEY" "http://localhost:4000/documents?stage=needs_review"
+curl -H "authorization: Bearer $FI_KEY" "http://localhost:4000/obligations?horizon=365"
+```
+
+In the pane: the tab « Documents ». `?test=true` on both for Mode test, as the pane does. Recording the classifier's
 eval through llmfp: `docs/AI_PROVIDERS.md` (`pnpm --filter @fi/agents eval:record classify`).
 
 ## Deployment

@@ -24,6 +24,7 @@ import {
   type ConnectorView,
   type Degraded,
   type DirectoryCompany,
+  type DocumentItem,
   type Edit,
   type EditDecided,
   type Evidence,
@@ -39,6 +40,7 @@ import {
   type LayoutDetection,
   type Me,
   type NormalChoice,
+  type Obligation,
   type Offer,
   Offline,
   type Party,
@@ -48,6 +50,7 @@ import {
   type PostalAddress,
   type Registry,
   type Rehearsal,
+  type ReviewInput,
   type RowStatus,
   type Scenario,
   type SearchQuery,
@@ -97,6 +100,8 @@ export type Screen =
   | { name: 'checks' }
   /** R8: the conversation about one finding, from « Demander à l'assistant ». */
   | { name: 'chat'; findingId: string }
+  /** BTP stage 2B: the deadlines, the documents to review, every document received. */
+  | { name: 'documents' }
   | { name: 'settings' };
 
 export interface Notice {
@@ -124,6 +129,25 @@ export interface Signup {
   /** What the directory found; null: the person types the company (directory down). */
   found: DirectoryCompany | null;
   email: string | null;
+}
+
+/** « Échéances »: the next ninety days by default; « Voir sur un an » asks for the year. */
+export const DOCUMENT_HORIZON = 90;
+export const YEAR_HORIZON = 365;
+/** « Reçus » shows this many documents, then « Afficher plus ». */
+const DOCUMENT_PAGE = 50;
+
+/** « Documents » (BTP stage 2B), on the side « Mode test » shows. */
+export interface DocumentsPane {
+  test: boolean;
+  /** The Paris day the deadlines were counted from. */
+  today: string;
+  horizon: number;
+  obligations: Obligation[];
+  review: DocumentItem[];
+  reviewTotal: number;
+  received: DocumentItem[];
+  receivedTotal: number;
 }
 
 /** Réception: the supplier invoices of the side « Mode test » shows (test or real). */
@@ -198,6 +222,8 @@ export interface FiState {
   /** The weekly card of the Tableau de bord; null until loaded, or where it could not be. */
   report: WeeklyReport | null;
   reception: Reception | null;
+  /** « Documents »; null until loaded. */
+  documents: DocumentsPane | null;
   /** Clients; null until loaded. */
   customers: Customers | null;
   /** « Retrouver une facture » on the Tableau de bord: the last search and what it found so far. */
@@ -339,6 +365,7 @@ const INITIAL: FiState = {
   settings: null,
   report: null,
   reception: null,
+  documents: null,
   customers: null,
   search: null,
   registry: null,
@@ -452,6 +479,7 @@ export class Controller {
     if (screen.name === 'customers') void this.loadCustomers();
     if (screen.name === 'registry') void this.loadRegistry();
     if (screen.name === 'checks') void this.loadChecks();
+    if (screen.name === 'documents') void this.loadDocuments();
   };
 
   /** The connection is back (browser `online` event). */
@@ -802,6 +830,7 @@ export class Controller {
       // Another company may sign in next on this pane: nothing of this one stays on screen.
       report: null,
       reception: null,
+      documents: null,
       customers: null,
       search: null,
       registry: null,
@@ -1330,6 +1359,7 @@ export class Controller {
     this.notify('info', t(on ? 'addin.testMode.on' : 'addin.testMode.off'));
     if (this.#state.screen.name === 'invoice') this.navigate({ name: 'dashboard' });
     if (this.#state.screen.name === 'reception') void this.loadReception();
+    if (this.#state.screen.name === 'documents') void this.loadDocuments();
     void this.sync();
   };
 
@@ -1357,6 +1387,72 @@ export class Controller {
       return { test, inbound, exports, subcontractors };
     });
     if (reception) this.#set({ reception });
+  };
+
+  // ── Documents (BTP plan stage 2B) ─────────────────────────────────────────────────────────────
+  /** The three parts at once; `horizon` changes how far « Échéances » looks. */
+  loadDocuments = async (horizon?: number): Promise<void> => {
+    const test = this.#state.testMode;
+    const days = horizon ?? this.#state.documents?.horizon ?? DOCUMENT_HORIZON;
+    const pane = await this.#act('documents', async () => {
+      const [due, review, received] = await Promise.all([
+        this.api.obligations(test, days),
+        this.api.documents({ test, stage: 'needs_review', limit: 200 }),
+        this.api.documents({ test, limit: DOCUMENT_PAGE }),
+      ]);
+      return {
+        test,
+        today: due.today,
+        horizon: due.horizon,
+        obligations: due.obligations,
+        review: review.documents,
+        reviewTotal: review.total,
+        received: received.documents,
+        receivedTotal: received.total,
+      };
+    });
+    if (pane) this.#set({ documents: pane });
+  };
+
+  /** « Afficher plus » under « Reçus ». */
+  moreDocuments = async (): Promise<void> => {
+    const pane = this.#state.documents;
+    if (!pane) return;
+    const page = await this.#act('moreDocuments', () =>
+      this.api.documents({ test: pane.test, limit: DOCUMENT_PAGE, offset: pane.received.length }),
+    );
+    const now = this.#state.documents;
+    if (!page || !now) return;
+    const known = new Set(now.received.map((d) => d.id));
+    this.#set({
+      documents: {
+        ...now,
+        received: [...now.received, ...page.documents.filter((d) => !known.has(d.id))],
+        receivedTotal: page.total,
+      },
+    });
+  };
+
+  /** A person says what a document in review is; its deadline then shows in « Échéances ». */
+  reviewDocument = async (id: string, input: ReviewInput): Promise<boolean> => {
+    const done = await this.#act(`review:${id}`, () => this.api.reviewDocument(id, input));
+    if (!done) return false;
+    await this.loadDocuments();
+    this.notify('success', t('addin.documents.reviewed', { file: done.name }));
+    return true;
+  };
+
+  /** « Déposer un document »: the file goes to the back end, which reads and sorts it. */
+  depositDocument = async (file: Blob, name: string): Promise<void> => {
+    const made = await this.#act('deposit', () =>
+      this.api.ingest(name, file, this.#state.testMode),
+    );
+    if (!made) return;
+    this.notify(
+      made.created ? 'success' : 'info',
+      t(made.created ? 'addin.documents.deposited' : 'addin.documents.known', { file: name }),
+    );
+    await this.loadDocuments();
   };
 
   #putInbound(row: Inbound): void {

@@ -211,4 +211,13 @@ Each line says where it came from and what would bring it back.
 | The chantier of a document | None: no pattern finds it reliably in a text | Stage 4's ERP connectors give chantiers; a document is linked by the address or the reference they list. |
 | An invoice's amounts without XML | `invoice_without_data`: a person says it is an invoice, it is `done` without a deadline | The owner's question « Reading invoices without XML » (`docs/TODO.md`): `extractInvoice` and its 98 % eval. |
 | Deadlines of a company not confirmed yet | Keyed by its SIREN, without a party; `confirmer_tiers` asks once | Stage 3: approving `confirmer_tiers` creates the party and links its open deadlines to it. |
-| Review reasons in the pane | The API gives the reason (`unclassified`, `invoice_without_data`, `dates_missing`, `party_unclear`, stage 1's `other_company`, `missing_file`, `no_text`, `damaged`, `xml`) | 2B: each one said in plain French in `fr.json`, with the form that answers it. |
+
+## The documents in the pane (BTP plan stage 2B, 2026-10-24)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| Opening the file of a document | A document in review shows the first 300 characters of its text, which says what most are | A scan whose text says nothing, or a person who wants the page: `GET /documents/:id/file` with the bytes, opened by the pane as the R6 files are. |
+| A deadline that is wrong or done | Listed until its date moves with a newer document; a dismissed one (stage 3) leaves the list | Stage 3's actions: « C'est fait » and « Ignorer » on a deadline, audited, with the watchers. |
+| Finding a document | Newest first, by stage or kind through the API; the pane shows the newest 50 and « Afficher plus » | A pilot has hundreds: a search by name or company, as « Retrouver une facture ». |
+| A document seen as it is read | « Actualiser » after a deposit | The pane asks again by itself while a deposited document is being read (a few seconds). |
+| The deadlines on a sheet (BTP plan §12 « registre visible dans Excel ») | The « Échéances » part of the pane, read from the API each time | A pilot who wants them in the workbook: a sheet written on demand, as the registry export, never kept in step by itself. |

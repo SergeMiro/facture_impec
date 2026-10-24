@@ -44,6 +44,7 @@ import {
 } from './connectors';
 import { createCreditNote, writeOff } from './credits';
 import type { ApiDeps } from './deps';
+import { DocumentsQuery, listDocuments, listObligations, ObligationsQuery } from './document-lists';
 import { ReviewBody, reviewDocument } from './document-pipeline';
 import {
   decideEdit,
@@ -381,7 +382,9 @@ export function createApp(deps: ApiDeps) {
     '/uploads/*',
     '/ingest',
     '/ingest/mail',
+    '/documents',
     '/documents/*',
+    '/obligations',
     '/checks',
     '/links/*',
     '/findings/*',
@@ -666,6 +669,16 @@ export function createApp(deps: ApiDeps) {
       },
       documents.some((d) => d.created) ? 201 : 200,
     );
+  });
+
+  // ── The documents and their deadlines in the pane (BTP stage 2B) ────────────────────────────────
+  api.get('/documents', async (c) =>
+    c.json(await listDocuments(deps.db, c.get('tenant'), parse(DocumentsQuery, c.req.query()))),
+  );
+
+  api.get('/obligations', async (c) => {
+    const q = parse(ObligationsQuery, c.req.query());
+    return c.json(await listObligations(deps.db, c.get('tenant'), q, deps.now()));
   });
 
   api.get('/documents/:id', async (c) =>

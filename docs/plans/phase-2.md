@@ -76,3 +76,14 @@ without data taken as said. Also:
   where a line starts, and the file's name is read apart from the text.
 - The date patterns grew two forms found on the golden documents: « du 1er janvier au 31 décembre
   2026 » (a start without its year) and « déclare recevoir les travaux le … ».
+
+2B (2026-10-24):
+
+- The two lists live in `apps/api/src/document-lists.ts`, not in `document-pipeline.ts`: reading
+  and settling stay apart.
+- Which date each kind needs, and which kinds need a company (`DEADLINE_DATE`, `STANDING_KINDS`),
+  moved from `@fi/agents` to `@fi/domain`: the pane's form and the settling ask for the same field
+  from one table.
+- « Le registre visible dans Excel » of BTP plan §12 is the « Échéances » part of the pane, not a
+  sheet the add-in writes: a sheet of deadlines would go stale between two syncs and fight the
+  company's own columns. A copy to a sheet, if a pilot asks for one, is `docs/DEFERRED.md` material.

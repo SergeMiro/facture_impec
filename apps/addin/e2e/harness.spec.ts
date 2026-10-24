@@ -17,7 +17,8 @@
 // browser: local (Chrome of this server; Browserbase cannot reach localhost).
 
 import { readFile } from 'node:fs/promises';
-import { computeInvoice, frDate, frMoney, InvoiceDraft, parisToday } from '@fi/core';
+import { writePdf } from '@fi/api/testing';
+import { addDays, computeInvoice, frDate, frMoney, InvoiceDraft, parisToday } from '@fi/core';
 import { bundledFonts } from '@fi/core/fonts';
 import { toFacturXPdf } from '@fi/core/pdf';
 import { xlsxOf } from '@fi/core/testing/xlsx';
@@ -749,7 +750,10 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
 
   await test.step('BTP: « Entreprise du bâtiment », then a sous-traitant charging VAT is flagged', async () => {
     await pane.getByRole('tab', { name: t('addin.nav.settings') }).click();
-    await pane.getByLabel(t('addin.settings.btp')).check();
+    // The switch moves once the server saved it: `check()` would read it back too early.
+    const btp = pane.getByLabel(t('addin.settings.btp'));
+    await btp.click();
+    await expect(btp).toBeChecked();
     await expect(pane.getByTestId('notice')).toContainText(t('addin.settings.saved'));
     await pane.getByRole('tab', { name: t('addin.nav.reception') }).click();
     // The disputed duplicate is still to decide: the switch triages it again.
@@ -757,13 +761,83 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
     const marked = twin.getByLabel(t('addin.reception.subcontractor'));
     await expect(marked).not.toBeChecked();
     await expect(twin.getByTestId('flag-subcontracting_vat')).toHaveCount(0);
-    await marked.check();
+    await marked.click();
+    await expect(marked).toBeChecked();
     await expect(pane.getByTestId('notice')).toContainText('est indiqué comme votre sous-traitant');
     await expect(twin.getByTestId('flag-subcontracting_vat')).toContainText(
       t('inbound.flag.subcontracting_vat').slice(0, 40),
     );
     await twin.scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath('btp-reception.png') });
+    expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+  });
+
+  await test.step('BTP stage 2: an attestation makes its deadline; a letter is said by a person', async () => {
+    await pane.getByRole('tab', { name: t('addin.nav.documents') }).click();
+    const today = parisToday();
+    const pdf = (...lines: string[]) =>
+      Buffer.from(writePdf([{ lines: lines.map((text) => ({ text })) }]));
+    const deposit = pane.getByTestId('deposit-input');
+    await deposit.setInputFiles({
+      name: 'attestation-urssaf.pdf',
+      mimeType: 'application/pdf',
+      buffer: pdf(
+        'ATTESTATION DE VIGILANCE',
+        'URSSAF de Bourgogne',
+        `Délivrée le ${frDate(addDays(today, -200))} à : Atelier Dupont SARL, SIREN 300000007`,
+        "L'entreprise est à jour de ses obligations de déclaration et de paiement.",
+      ),
+    });
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.documents.deposited', { file: 'attestation-urssaf.pdf' }),
+    );
+    await deposit.setInputFiles({
+      name: 'courrier.pdf',
+      mimeType: 'application/pdf',
+      buffer: pdf(
+        'Madame, Monsieur,',
+        'Suite à notre visite du chantier, voici le document signé.',
+      ),
+    });
+    // The workers read and sort both, one after the other; « Actualiser » shows what they made.
+    const toReview = pane.getByRole('tab', {
+      name: t('addin.documents.part.review', { count: 1 }),
+    });
+    await expect(async () => {
+      await pane.getByRole('button', { name: t('addin.documents.refresh') }).click();
+      await expect(pane.getByTestId('due-attestation_vigilance_renouvellement')).toBeVisible({
+        timeout: 1_000,
+      });
+      await expect(toReview).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 30_000 });
+    await expect(pane.getByTestId('due-attestation_vigilance_renouvellement')).toContainText(
+      t('addin.documents.overdue'),
+    );
+    await page.screenshot({ path: info.outputPath('documents-deadlines.png') });
+
+    await toReview.click();
+    const letter = pane.getByTestId('to-review').filter({ hasText: 'courrier.pdf' });
+    await expect(letter).toContainText(t('addin.documents.reason.unclassified'));
+    await expect(letter).toContainText('Madame, Monsieur,');
+    await letter.getByTestId('review-kind').selectOption('pv_reception');
+    await letter.getByTestId('review-date').fill(addDays(today, -30));
+    await page.screenshot({ path: info.outputPath('documents-review.png') });
+    await letter.getByRole('button', { name: t('addin.documents.form.save') }).click();
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.documents.reviewed', { file: 'courrier.pdf' }),
+    );
+
+    // The retenue is released a year after the réception: past ninety days, within the year.
+    await pane.getByRole('tab', { name: /^Échéances/ }).click();
+    await expect(pane.getByTestId('due-retenue_garantie_liberation')).toHaveCount(0);
+    await pane.getByRole('button', { name: t('addin.documents.showYear') }).click();
+    await expect(pane.getByTestId('due-retenue_garantie_liberation')).toBeVisible();
+    await page.screenshot({ path: info.outputPath('documents.png') });
+    await pane.getByRole('tab', { name: t('addin.documents.part.received') }).click();
+    for (const file of ['attestation-urssaf.pdf', 'courrier.pdf']) {
+      await expect(pane.getByTestId('received').filter({ hasText: file })).toBeVisible();
+    }
+    await page.screenshot({ path: info.outputPath('documents-received.png') });
     expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
   });
 });

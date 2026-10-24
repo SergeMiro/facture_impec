@@ -1,5 +1,5 @@
 // The task pane: banners on every screen (Mode test, offline, the last notice), then one screen.
-// No router: office.js breaks the history API (docs/OFFICE.md §8), and the pane has ten screens.
+// No router: office.js breaks the history API (docs/OFFICE.md §8), and the pane has eleven screens.
 import { t } from '@fi/shared';
 import {
   Button,
@@ -22,6 +22,7 @@ import { CustomersView } from './CustomersView';
 import { ControllerContext, useFi } from './context';
 import { Dashboard } from './Dashboard';
 import { Detection } from './Detection';
+import { DocumentsView } from './DocumentsView';
 import { InvoiceView } from './InvoiceView';
 import { Login } from './Login';
 import { ReceptionView } from './ReceptionView';
@@ -57,7 +58,7 @@ const useStyles = makeStyles({
   },
   brand: { display: 'flex', flexDirection: 'column' },
   center: { display: 'flex', justifyContent: 'center', padding: '48px 0' },
-  // Seven tabs are wider than a task pane: they wrap instead of scrolling the pane sideways.
+  // Eight tabs are wider than a task pane: they wrap instead of scrolling the pane sideways.
   tabs: { flexWrap: 'wrap' },
 });
 
@@ -182,6 +183,7 @@ function Pane({ host }: { host: 'excel' | 'sheets' }) {
               name === 'dashboard' ||
               name === 'detect' ||
               name === 'reception' ||
+              name === 'documents' ||
               name === 'customers' ||
               name === 'registry' ||
               name === 'checks' ||
@@ -195,6 +197,7 @@ function Pane({ host }: { host: 'excel' | 'sheets' }) {
           <Tab value="dashboard">{t('addin.nav.dashboard')}</Tab>
           <Tab value="detect">{t('addin.nav.columns')}</Tab>
           <Tab value="reception">{t('addin.nav.reception')}</Tab>
+          <Tab value="documents">{t('addin.nav.documents')}</Tab>
           <Tab value="customers">{t('addin.nav.customers')}</Tab>
           <Tab value="registry">{t('addin.nav.registry')}</Tab>
           <Tab value="checks">{t('addin.nav.checks')}</Tab>
@@ -232,6 +235,8 @@ function Screen() {
       return <InvoiceView />;
     case 'reception':
       return <ReceptionView />;
+    case 'documents':
+      return <DocumentsView />;
     case 'customers':
       return <CustomersView />;
     case 'registry':

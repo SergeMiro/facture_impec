@@ -23,6 +23,7 @@ export {
   ACTION_STATUSES,
   ActionKind,
   ActionStatus,
+  DEADLINE_DATE,
   DOCUMENT_KINDS,
   DOCUMENT_SOURCES,
   DOCUMENT_STAGES,
@@ -34,4 +35,5 @@ export {
   OBLIGATION_STATUSES,
   ObligationKind,
   ObligationStatus,
+  STANDING_KINDS,
 } from './kinds';
