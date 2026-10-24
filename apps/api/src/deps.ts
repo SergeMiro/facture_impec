@@ -100,6 +100,7 @@ export interface ApiDeps {
     ServerEnv,
     | 'FI_ENV'
     | 'ADMIN_TOKEN'
+    | 'METRICS_TOKEN'
     | 'API_PUBLIC_URL'
     | 'ADDIN_ORIGINS'
     | 'TRUST_PROXY_HEADER'

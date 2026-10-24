@@ -45,6 +45,7 @@ import { saveObligations } from './document-pipeline';
 import { ApiError } from './errors';
 import { type FileStore, postgresFiles } from './files';
 import { buyerSettings } from './invoices';
+import { metrics, readOf, secondsBetween } from './metrics';
 import { type Reading, readDocument } from './reading';
 
 /** Documents of one company waiting to be read or classified; past this, a new one waits (429). */
@@ -349,6 +350,14 @@ export async function runDocumentIngest(deps: DocumentDeps, documentId: string):
     });
     return true;
   });
+  if (moved) {
+    const source = { source: doc.source, read: readOf(outcome.extracted) };
+    const seconds = secondsBetween(doc.createdAt, deps.now());
+    metrics.documentRead.observe(source, seconds);
+    if (outcome.stage === 'needs_review') {
+      metrics.documentSettled.observe({ ...source, stage: outcome.stage }, seconds);
+    }
+  }
   if (moved && outcome.stage === 'classified') await deps.jobs.enqueueValidate(doc.id);
   if (moved && outcome.stage === 'ingested') await deps.jobs.enqueueClassify(doc.id);
 }
@@ -417,7 +426,7 @@ export async function runDocumentValidate(deps: DocumentDeps, documentId: string
         isTest: doc.isTest,
       })
     : [];
-  await deps.db.transaction(async (tx) => {
+  const done = await deps.db.transaction(async (tx) => {
     const [row] = await tx
       .update(documents)
       .set({
@@ -428,7 +437,7 @@ export async function runDocumentValidate(deps: DocumentDeps, documentId: string
       })
       .where(and(eq(documents.id, doc.id), eq(documents.stage, 'classified')))
       .returning({ id: documents.id });
-    if (!row) return;
+    if (!row) return false;
     const written = await saveObligations(tx, doc, deadlines, party?.id ?? null, deps.now());
     await audit(tx, {
       tenantId: doc.tenantId,
@@ -442,7 +451,14 @@ export async function runDocumentValidate(deps: DocumentDeps, documentId: string
         deadlines: written,
       },
     });
+    return true;
   });
+  if (done) {
+    metrics.documentSettled.observe(
+      { source: doc.source, read: readOf(doc.extracted), stage: 'done' },
+      secondsBetween(doc.createdAt, deps.now()),
+    );
+  }
 }
 
 /**

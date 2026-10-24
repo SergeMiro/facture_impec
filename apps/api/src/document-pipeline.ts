@@ -39,6 +39,7 @@ import { tenantAi } from './ai';
 import { type Principal, who } from './auth';
 import type { AiDeps } from './deps';
 import { ApiError } from './errors';
+import { metrics, readOf, secondsBetween } from './metrics';
 
 export interface ClassifyDeps {
   db: Db;
@@ -218,7 +219,7 @@ export async function runDocumentClassify(deps: ClassifyDeps, documentId: string
     classification: { label, confidence, source, degraded },
   });
 
-  await deps.db.transaction(async (tx) => {
+  const moved = await deps.db.transaction(async (tx) => {
     const [row] = await tx
       .update(documents)
       .set({ ...columns, updatedAt: deps.now() })
@@ -230,7 +231,7 @@ export async function runDocumentClassify(deps: ClassifyDeps, documentId: string
         ),
       )
       .returning({ id: documents.id });
-    if (!row) return;
+    if (!row) return false;
     const written = settled
       ? await writeSettled(tx, doc, settled, deps.now())
       : { deadlines: 0, confirm: false };
@@ -250,7 +251,14 @@ export async function runDocumentClassify(deps: ClassifyDeps, documentId: string
         ...written,
       },
     });
+    return true;
   });
+  if (moved) {
+    metrics.documentSettled.observe(
+      { source: doc.source, read: readOf(doc.extracted), stage: columns.stage },
+      secondsBetween(doc.createdAt, deps.now()),
+    );
+  }
 }
 
 // ── A person's answer ─────────────────────────────────────────────────────────────────────────────

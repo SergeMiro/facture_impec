@@ -16,6 +16,7 @@ import {
 import { parisToday } from '@fi/core';
 import { agentRuns, and, type Db, eq, gte, sql, type TenantRow } from '@fi/db';
 import type { AiDeps } from './deps';
+import { metrics } from './metrics';
 
 /** Midnight in Europe/Paris, as an instant: the daily budget starts there. */
 export function parisMidnight(now: Date): Date {
@@ -42,6 +43,10 @@ export class DbRunStore implements RunStore {
       startedAt: new Date(run.startedAt),
       finishedAt: new Date(run.finishedAt),
     });
+    const { agent, model } = run;
+    metrics.agentRuns.inc({ agent, status: run.status });
+    metrics.tokens.inc({ agent, model, direction: 'input' }, run.inputTokens);
+    metrics.tokens.inc({ agent, model, direction: 'output' }, run.outputTokens);
   }
 
   async tokensToday(tenantId: string): Promise<number> {

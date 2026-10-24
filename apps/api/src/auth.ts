@@ -18,6 +18,7 @@ import {
 import { createMiddleware } from 'hono/factory';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
+import { setLogTenant } from './log';
 
 export const API_KEY_PREFIX = 'fik_';
 export const SESSION_PREFIX = 'fis_';
@@ -57,6 +58,7 @@ export const tenantAuth = (deps: ApiDeps) =>
         );
       if (!found) throw new ApiError(401, 'unauthorized');
       c.set('tenant', found.tenant);
+      setLogTenant(found.tenant.id);
       c.set('principal', { kind: 'key' });
     } else if (token?.startsWith(SESSION_PREFIX)) {
       const [found] = await deps.db
@@ -74,6 +76,7 @@ export const tenantAuth = (deps: ApiDeps) =>
         );
       if (!found) throw new ApiError(401, 'session_expired');
       c.set('tenant', found.tenant);
+      setLogTenant(found.tenant.id);
       c.set('principal', {
         kind: 'session',
         sessionId: found.session.id,
@@ -91,13 +94,18 @@ export const tenantAuth = (deps: ApiDeps) =>
 export const isOwner = (principal: Principal) =>
   principal.kind === 'key' || principal.role === 'owner';
 
+/** Whether an `authorization` header carries this secret, compared in constant time. */
+export function sameSecret(header: string | undefined, expected: string): boolean {
+  const given = Buffer.from(bearer(header) ?? '');
+  const wanted = Buffer.from(expected);
+  return given.length === wanted.length && timingSafeEqual(given, wanted);
+}
+
 export const adminAuth = (deps: ApiDeps) =>
   createMiddleware(async (c, next) => {
     const expected = deps.env.ADMIN_TOKEN;
     if (!expected) throw new ApiError(503, 'admin_disabled');
-    const given = Buffer.from(bearer(c.req.header('authorization')) ?? '');
-    const wanted = Buffer.from(expected);
-    if (given.length !== wanted.length || !timingSafeEqual(given, wanted)) {
+    if (!sameSecret(c.req.header('authorization'), expected)) {
       throw new ApiError(403, 'admin_forbidden');
     }
     await next();

@@ -40,6 +40,7 @@ on a wrong combination (a live key outside prod, a test key in prod, a missing s
 | `STRIPE_SECRET_KEY` (restricted `rk_live_…` advised), `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICES_*`, `STRIPE_METER_EVENT`, `STRIPE_AUTOMATIC_TAX` | `docs/BILLING.md` §11 | without a key nobody is billed |
 | `AI_PROVIDER`, `AI_MODEL_AGENT`, `AI_API_KEY`, `AI_KEY_SEALING_KEY` (and for OpenRouter `AI_BASE_URL`, `AI_STRUCTURED_OUTPUTS`, `AI_REQUEST_BODY`) | `docs/AI_PROVIDERS.md` § Default for "included": prod Mistral, preprod a free OpenRouter model | without them the agents answer deterministically |
 | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `CONNECTOR_SEALING_KEY` | the owner's app registration (`docs/RUNBOOK.md` § OneDrive connector), whose SPA redirect URIs must include `brk-multihub://app.<domain>` and `https://app.<domain>/auth.html`; the sealing key random 32 bytes, kept outside the server | the OneDrive connector; without them it is not offered. `API_PUBLIC_URL` in https lets a personal OneDrive notify `/webhooks/microsoft` |
+| `METRICS_TOKEN` | random, ≥ 24 characters, not `ADMIN_TOKEN` | `GET /metrics` answers only with it (§ 7); without it the route does not exist |
 | `PDP_KEY_SEALING_KEY` | random 32 bytes, `openssl rand -base64 32`; keep a copy outside the server | seals the B2Brouter keys companies connect in Réglages (`docs/B2BROUTER.md` §12); without it the form is not shown. Changing it later makes the saved keys unreadable and stops those companies' real sends until they paste their key again |
 
 `DATABASE_URL`, `API_HOST` and `API_PORT` are set by compose and the image; the `MOCK_*` variables are
@@ -89,6 +90,56 @@ A domain and its DNS; the TLS proxy; the B2Brouter live and sandbox keys and the
 provider; the Stripe account (`docs/BILLING.md` §11); the published CGU, privacy page and processing
 agreement (`docs/RGPD.md`); where backups go.
 
+
+## 7. Observability (`--profile observability`)
+
+What the API measures and why: `docs/DECISIONS.md` D10. What to do when an alert comes:
+`docs/RUNBOOK.md` § Observability. The API writes one JSON line per event on stderr
+(`docker compose logs api`), each with `tenantId` and the request's or the job's ids.
+
+| Service | Image | What |
+|---|---|---|
+| Prometheus | `prom/prometheus:v3.15.0` | reads `api:4000/metrics` every 30 s with `METRICS_TOKEN`, keeps 30 days, evaluates `deploy/observability/alerts.yml` |
+| Alertmanager | `prom/alertmanager:v0.34.1` | mails the operator, again every 4 hours while a problem lasts, and once it is solved |
+| Grafana | `grafana/grafana:13.2.3` | opens on the « Facture Impec » dashboard (provisioned, read-only): requests, queues, documents, model use, against §11's budgets |
+
+All three listen on `127.0.0.1` only (9090, 9093, 3001): reach them through an SSH tunnel or the VPN,
+`ssh -L 3001:127.0.0.1:3001 <server>`, never through the public proxy.
+
+| In `deploy/.env` | Value | Why |
+|---|---|---|
+| `METRICS_TOKEN` | the API's (§ 2) | Prometheus gets it as a compose secret |
+| `GRAFANA_ADMIN_PASSWORD` | random, `openssl rand -hex 16` | Grafana's `admin`, as a secret |
+| `ALERT_SMTP_PASSWORD` | the password of the mailbox alerts are sent from | Alertmanager, as a secret |
+| `PROMETHEUS_PUBLISHED_PORT`, `ALERTMANAGER_PUBLISHED_PORT`, `GRAFANA_PUBLISHED_PORT` | 9090, 9093, 3001 by default | |
+
+```bash
+cd deploy
+cp observability/alertmanager.example.yml observability/alertmanager.yml   # SMTP server, from, to
+docker compose --profile observability up -d
+```
+
+`alertmanager.yml` is not committed (it names the operator's addresses) and holds no password. The
+three variables are needed before the profile starts: without `METRICS_TOKEN` Prometheus is refused
+(`ApiDown` fires), without `GRAFANA_ADMIN_PASSWORD` Grafana has no password. Without the profile,
+nothing changes. Check: Prometheus's « Targets » page shows `api` up, Grafana opens on the dashboard,
+and `docker compose logs alertmanager` shows no SMTP error once an alert has been sent.
+
+Tried on 2026-10-24 with a throwaway `deploy/.env`: the stack built and started with the profile,
+Prometheus read `/metrics` with the secret (`api` up) and loaded the 7 rules; a job marked failed by
+hand in `pgboss.job` made `JobFailedForGood` fire 40 s later and reach Alertmanager, which tried to
+mail it (to an example SMTP server, refused); Grafana refused `admin`/`admin`, took the secret
+password and opened the dashboard (`docs/evidence/btp7-grafana.png`). Then removed, volumes and image.
+
+The rules have their own tests, run with Docker (not part of `pnpm verify`):
+
+```bash
+docker run --rm -v "$PWD/deploy/observability":/w:ro -w /w --entrypoint promtool \
+  prom/prometheus:v3.15.0 test rules alerts.test.yml
+```
+
+`pnpm verify` checks that the rules and the dashboard name only metrics `/metrics` writes, and only
+routes the API has (`apps/api/src/observability.test.ts`).
 
 ## Google Sheets sidebar
 

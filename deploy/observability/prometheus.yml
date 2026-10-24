@@ -1,0 +1,19 @@
+# Prometheus for the pilot stack (docs/DEPLOY.md § 7, docs/DECISIONS.md D10): it reads the API's
+# /metrics with METRICS_TOKEN (a compose secret, from deploy/.env) and hands its alerts to Alertmanager.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 1m
+rule_files:
+  - /etc/prometheus/alerts.yml
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+scrape_configs:
+  - job_name: api
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/metrics_token
+    static_configs:
+      - targets: ['api:4000']

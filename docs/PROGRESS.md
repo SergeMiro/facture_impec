@@ -1761,3 +1761,32 @@ Evidence (2026-10-24):
 | The chantiers in « Documents » | `apps/api/src/document-lists.ts`: `GET /documents` and `GET /obligations` give `chantier {id, name}`; `erp-invoices.test.ts` › make each owed invoice…: F2026-0101 and S2026-07 with « Les Tilleuls », F2026-0104 without. `DocumentsView.tsx` « Chantier : … » on a deadline and a received document, `chantiersOf` and the « Chantier » filter (`erp.test.ts` › each chantier once, by name); the controller test reads both deadlines with their chantier. |
 | E2E | `apps/addin/e2e/harness.spec.ts` › step « BTP stage 4 »: in Réglages, `chantiers.csv` then `factures.csv` given, each followed to « Terminé », the avoir's row shown by « Voir les lignes »; « Mode test » turned off, « Échéances » shows 2 deadlines, the first « Chantier : Les Tilleuls », the filter « École Jean Macé » leaves one at 300,00 €; no horizontal scroll. Screenshots `erp.png`, `documents-chantier.png` (local Chrome; browser: local). |
 | Gate | `pnpm verify` green on 2026-10-24: api 364, connectors 13, add-in 119, agents 162 (evals included), core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 8, scripts 4; `pnpm boundaries`: 11 packages. The harness E2E passes (local Chrome; browser: local). |
+
+## BTP plan — stage 7A: what runs, measured (started 2026-10-24)
+
+`docs/plans/phase-7.md` › 7A, `docs/DECISIONS.md` D10. Criteria, written before the code:
+
+- **Logs**: every line the API writes is one JSON object with `time`, `level`, `msg` and `tenantId`
+  (`null` when no company is concerned); a request's lines carry its id (also sent back as
+  `x-request-id`), method and route, and its company once signed in; a job's lines carry its queue,
+  its id and the ids of its data. An unexpected error (a 500, a job that throws) is logged with them.
+  No personal data added to what was logged before.
+- **Metrics**: `GET /metrics` answers Prometheus text with `METRICS_TOKEN`, 401 with another, and
+  does not exist without the variable. Durations of requests by route (the route's pattern, never
+  an id), of jobs by queue and outcome, of a document from its arrival to read and to done, by
+  source; jobs waiting and failed in the last hour by queue; model tokens of the last 24 hours by
+  agent and model; the oldest ERP import still running; companies that decided a request in the
+  last 7 days.
+- **Alerts and dashboard**: the rules (a job failed in the last hour, an ERP import running for 2
+  hours, a p95 over §11's budget for 15 minutes) pass `promtool check` and their unit tests; they
+  name only metrics `/metrics` writes (a test); Prometheus scrapes a running API and Grafana shows
+  the dashboard (one manual run, recorded here).
+
+Evidence (2026-10-24):
+
+| Criterion | Evidence |
+|---|---|
+| Logs | `apps/api/src/observability.test.ts` › the log lines › carry the company of a signed-in request, its route and its id, when it fails (a 500 on `GET /obligations`: `level` error, `tenantId` the company, `route`, `requestId` = the `x-request-id` header, the stack); › always say which company, null when none; › GET /metrics › counts a job that failed for good… (its line: `queue`, `jobId`, `tenantId: null`, the Zod error); › warns of an attempt pg-boss retries and logs an error only for the last (`attempt` 1 warn, 2 error). `console.*` gone from `apps/api/src` but for the scenarios' command line; the context adds ids only, no name or e-mail. |
+| Metrics | same file, a real API with its pg-boss workers on PGlite: › answers Prometheus with its own token only, and does not exist without one (401 with a wrong one and with `ADMIN_TOKEN`, 404 without the variable); › answers on a database whose queues were never started; › times requests by route pattern, never by id (`/documents/:id`, `unmatched`; the id absent from the text); › counts a job that failed for good… (`fi_jobs_failed_last_hour`, `fi_job_duration_seconds{outcome="failed"}`, a line for every queue, none of pg-boss's own); › times a document from its arrival to read and to settled (a UBL golden through `POST /ingest`: `read="xml"`, `stage="done"`, `document.validate` ok); › says how long the oldest ERP import has been running (3 h). Deviation: tokens are a counter in the process (`docs/plans/phase-7.md`). |
+| Alerts and dashboard | `promtool check rules` (7 rules), `promtool check config`, `promtool test rules alerts.test.yml` SUCCESS (each alert fires when it should and not before; an expectation changed on purpose fails); › writes every metric the alerts and the dashboard read, on routes that exist. Manual run: `docs/DEPLOY.md` § 7 « Tried on 2026-10-24 », `docs/evidence/btp7-grafana.png` (local Chrome; browser: local). |
+| Gate | `pnpm verify` green on 2026-10-24: api 375, add-in 119, agents 162 (evals included), core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, connectors 13, domain 8, scripts 4. The harness E2E passes (local Chrome; browser: local). |

@@ -1,0 +1,69 @@
+# The alerts of BTP plan §11 (docs/DECISIONS.md D10). What to do for each: docs/RUNBOOK.md
+# § Observability. `promtool test rules alerts.test.yml` checks them (docs/DEPLOY.md § 7), and
+# apps/api/src/observability.test.ts checks they name only what /metrics writes.
+#
+# A budget is a p95 over its window for 15 minutes in a row: one slow request is not an alert.
+# Documents are few, so their p95 is taken over an hour.
+groups:
+  - name: facture-impec
+    rules:
+      - alert: ApiDown
+        expr: up{job="api"} == 0
+        for: 5m
+        annotations:
+          summary: Prometheus has not reached the API for 5 minutes.
+          runbook: docs/RUNBOOK.md § Observability, ApiDown
+
+      # pg-boss has no dead-letter queue: a job that used all its retries is `failed`.
+      - alert: JobFailedForGood
+        expr: max by (queue) (fi_jobs_failed_last_hour) > 0
+        annotations:
+          summary: '{{ $value }} job(s) of {{ $labels.queue }} failed for good in the last hour.'
+          runbook: docs/RUNBOOK.md § Observability, JobFailedForGood
+
+      # An export is given, not pulled: its lag is an import that does not end.
+      - alert: ErpImportStuck
+        expr: max by (connector) (fi_erp_import_running_seconds) > 7200
+        annotations:
+          summary: 'An import of {{ $labels.connector }} has been running for more than 2 hours.'
+          runbook: docs/RUNBOOK.md § Observability, ErpImportStuck
+
+      - alert: RouteOverBudget
+        expr: |
+          histogram_quantile(0.95, sum by (le, method, route) (rate(fi_http_request_duration_seconds_bucket{method="POST", route="/ingest"}[5m]))) > 0.3
+          or
+          histogram_quantile(0.95, sum by (le, method, route) (rate(fi_http_request_duration_seconds_bucket{method="GET", route=~"/actions|/obligations"}[5m]))) > 0.2
+          or
+          histogram_quantile(0.95, sum by (le, method, route) (rate(fi_http_request_duration_seconds_bucket{method="POST", route="/actions/:id/decide"}[5m]))) > 2
+        for: 15m
+        annotations:
+          summary: '{{ $labels.method }} {{ $labels.route }}: p95 {{ $value | humanizeDuration }}, over its budget.'
+          runbook: docs/RUNBOOK.md § Observability, RouteOverBudget
+
+      - alert: DocumentReadOverBudget
+        expr: |
+          histogram_quantile(0.95, sum by (le, read) (rate(fi_document_read_seconds_bucket{read=~"xml|text"}[1h]))) > 5
+          or
+          histogram_quantile(0.95, sum by (le, read) (rate(fi_document_read_seconds_bucket{read="ocr"}[1h]))) > 30
+        for: 15m
+        annotations:
+          summary: 'Documents read by {{ $labels.read }}: p95 {{ $value | humanizeDuration }} from arrival, over budget.'
+          runbook: docs/RUNBOOK.md § Observability, DocumentReadOverBudget
+
+      - alert: DocumentSettledOverBudget
+        expr: |
+          histogram_quantile(0.95, sum by (le, read) (rate(fi_document_settled_seconds_bucket{read="xml"}[1h]))) > 8
+          or
+          histogram_quantile(0.95, sum by (le, read) (rate(fi_document_settled_seconds_bucket{read=~"text|ocr"}[1h]))) > 25
+        for: 15m
+        annotations:
+          summary: 'Documents read by {{ $labels.read }}: p95 {{ $value | humanizeDuration }} to done or review, over budget.'
+          runbook: docs/RUNBOOK.md § Observability, DocumentSettledOverBudget
+
+      # The deadline watchers run in the sweep (src/workers.ts): 60 s for a company of 1 000 deadlines.
+      - alert: SweepOverBudget
+        expr: histogram_quantile(0.95, sum by (le) (rate(fi_job_duration_seconds_bucket{queue="pdp.sweep", outcome="ok"}[1h]))) > 60
+        for: 15m
+        annotations:
+          summary: 'The sweep (with the deadline watchers): p95 {{ $value | humanizeDuration }}, over 60 s.'
+          runbook: docs/RUNBOOK.md § Observability, SweepOverBudget

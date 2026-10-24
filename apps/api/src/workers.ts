@@ -63,6 +63,8 @@ import {
 } from './ingest';
 import { idempotencyKey } from './invoices';
 import { QUEUES } from './jobs';
+import { logLine, withLogContext } from './log';
+import { metrics } from './metrics';
 import { ADVISED, awaitingAdvice, runMonitor } from './monitor';
 import { runReportPayment } from './payments';
 import { adapterFor, awaitsGoLive, routeFor } from './platform';
@@ -480,6 +482,49 @@ async function pollOne(
   return stored;
 }
 
+/** The ids a job's data may carry, for its log lines (src/log.ts). */
+const JobIds = z.object({
+  tenantId: z.string().optional(),
+  documentId: z.string().optional(),
+  invoiceId: z.string().optional(),
+  actionId: z.string().optional(),
+});
+
+/**
+ * A queue's handler: the job runs with its ids and its attempt on every log line and its time in
+ * /metrics; a failure is logged with them, then thrown again for pg-boss to retry. Only the attempt
+ * pg-boss will not retry is an error; one it retries is a warning (pg-boss counts from 0, and fails
+ * the job for good once `retryCount` reaches `retryLimit`).
+ */
+function timed(queue: string, run: (data: unknown) => Promise<unknown>) {
+  return async ([job]: {
+    id: string;
+    data: unknown;
+    retryCount: number;
+    retryLimit?: number;
+  }[]) => {
+    if (!job) return;
+    const ids = JobIds.safeParse(job.data ?? {});
+    const { tenantId = null, ...rest } = ids.success ? ids.data : {};
+    const attempt = job.retryCount + 1;
+    const started = performance.now();
+    await withLogContext({ tenantId, queue, jobId: job.id, attempt, ...rest }, async () => {
+      try {
+        await run(job.data);
+        metrics.jobs.observe({ queue, outcome: 'ok' }, (performance.now() - started) / 1000);
+      } catch (e) {
+        metrics.jobs.observe({ queue, outcome: 'failed' }, (performance.now() - started) / 1000);
+        if (job.retryLimit === undefined || job.retryCount >= job.retryLimit) {
+          logLine('error', 'job failed', { error: e });
+        } else {
+          logLine('warn', 'job attempt failed', { error: e });
+        }
+        throw e;
+      }
+    });
+  };
+}
+
 export interface WorkerOptions {
   pollingIntervalSeconds?: number;
   sweepEverySeconds: number;
@@ -496,57 +541,89 @@ export async function startWorkers(
   deps: WorkerDeps,
   options: WorkerOptions,
 ): Promise<() => void> {
-  const polling = { pollingIntervalSeconds: options.pollingIntervalSeconds ?? 2 };
-  await boss.work(QUEUES.send, { ...polling, localConcurrency: 4 }, async ([job]) => {
-    if (job) await runSend(deps, SendJob.parse(job.data).invoiceId);
-  });
-  await boss.work(QUEUES.sync, { ...polling, localConcurrency: 4 }, async ([job]) => {
-    if (job) await runSync(deps, SyncJob.parse(job.data));
-  });
-  await boss.work(QUEUES.sweep, polling, async () => {
-    await runAutopilot(deps, options.log);
-    await runSweep(deps);
-    await runArchive(deps, options.log);
-    await runInboundPoll(deps, options.log);
-    await runUsageReport(deps, options.log);
-    await runVatChecks(deps, options.log);
-  });
-  await boss.work(QUEUES.monitor, { ...polling, localConcurrency: 2 }, async ([job]) => {
-    if (job) await runMonitor(deps, InvoiceJob.parse(job.data).invoiceId);
-  });
-  await boss.work(QUEUES.reportPayment, polling, async ([job]) => {
-    if (job) await runReportPayment(deps, InvoiceJob.parse(job.data).invoiceId);
-  });
-  await boss.work(QUEUES.registry, polling, async ([job]) => {
-    if (job) await checkNow(deps.db, RegistryJob.parse(job.data).tenantId, deps.now());
-  });
+  // With its metadata a job says how many retries it has left (`retryLimit`), for timed().
+  const polling = {
+    pollingIntervalSeconds: options.pollingIntervalSeconds ?? 2,
+    includeMetadata: true as const,
+  };
+  await boss.work(
+    QUEUES.send,
+    { ...polling, localConcurrency: 4 },
+    timed(QUEUES.send, (data) => runSend(deps, SendJob.parse(data).invoiceId)),
+  );
+  await boss.work(
+    QUEUES.sync,
+    { ...polling, localConcurrency: 4 },
+    timed(QUEUES.sync, (data) => runSync(deps, SyncJob.parse(data))),
+  );
+  await boss.work(
+    QUEUES.sweep,
+    polling,
+    timed(QUEUES.sweep, async () => {
+      await runAutopilot(deps, options.log);
+      await runSweep(deps);
+      await runArchive(deps, options.log);
+      await runInboundPoll(deps, options.log);
+      await runUsageReport(deps, options.log);
+      await runVatChecks(deps, options.log);
+    }),
+  );
+  await boss.work(
+    QUEUES.monitor,
+    { ...polling, localConcurrency: 2 },
+    timed(QUEUES.monitor, (data) => runMonitor(deps, InvoiceJob.parse(data).invoiceId)),
+  );
+  await boss.work(
+    QUEUES.reportPayment,
+    polling,
+    timed(QUEUES.reportPayment, (data) => runReportPayment(deps, InvoiceJob.parse(data).invoiceId)),
+  );
+  await boss.work(
+    QUEUES.registry,
+    polling,
+    timed(QUEUES.registry, (data) =>
+      checkNow(deps.db, RegistryJob.parse(data).tenantId, deps.now()),
+    ),
+  );
   // OCR takes the CPU: two documents at a time per process.
-  await boss.work(QUEUES.ingest, { ...polling, localConcurrency: 2 }, async ([job]) => {
-    if (job) await runDocumentIngest(deps, DocumentJob.parse(job.data).documentId);
-  });
-  await boss.work(QUEUES.validate, { ...polling, localConcurrency: 2 }, async ([job]) => {
-    if (job) await runDocumentValidate(deps, DocumentJob.parse(job.data).documentId);
-  });
+  await boss.work(
+    QUEUES.ingest,
+    { ...polling, localConcurrency: 2 },
+    timed(QUEUES.ingest, (data) => runDocumentIngest(deps, DocumentJob.parse(data).documentId)),
+  );
+  await boss.work(
+    QUEUES.validate,
+    { ...polling, localConcurrency: 2 },
+    timed(QUEUES.validate, (data) => runDocumentValidate(deps, DocumentJob.parse(data).documentId)),
+  );
   // Mostly waiting on a model: three at a time, under the orchestrator's own semaphores.
-  await boss.work(QUEUES.classify, { ...polling, localConcurrency: 3 }, async ([job]) => {
-    if (job) await runDocumentClassify(deps, DocumentJob.parse(job.data).documentId);
-  });
+  await boss.work(
+    QUEUES.classify,
+    { ...polling, localConcurrency: 3 },
+    timed(QUEUES.classify, (data) => runDocumentClassify(deps, DocumentJob.parse(data).documentId)),
+  );
   // A request a person approved (src/actions.ts): a failed mail throws, and the queue tries again.
-  await boss.work(QUEUES.action, { ...polling, localConcurrency: 2 }, async ([job]) => {
-    if (job) await runActionSend(deps, ActionJob.parse(job.data).actionId);
-  });
+  await boss.work(
+    QUEUES.action,
+    { ...polling, localConcurrency: 2 },
+    timed(QUEUES.action, (data) => runActionSend(deps, ActionJob.parse(data).actionId)),
+  );
   // An ERP's list (src/erp.ts): a fatal error is kept on its sync row, anything else is retried.
-  await boss.work(QUEUES.erp, polling, async ([job]) => {
-    if (job) {
-      const { tenantId, connector } = ErpJob.parse(job.data);
-      await runErpSync(deps, tenantId, connector);
-    }
-  });
-  await boss.work(QUEUES.connector, polling, async ([job]) => {
-    if (job) {
-      await checkConnection(deps, ConnectorJob.parse(job.data).connectionId, options.log);
-    }
-  });
+  await boss.work(
+    QUEUES.erp,
+    polling,
+    timed(QUEUES.erp, (data) => {
+      const { tenantId, connector } = ErpJob.parse(data);
+      return runErpSync(deps, tenantId, connector);
+    }),
+  );
+  await boss.work(
+    QUEUES.connector,
+    polling,
+    timed(QUEUES.connector, (data) =>
+      checkConnection(deps, ConnectorJob.parse(data).connectionId, options.log),
+    ),
+  );
   const tick = () =>
     boss
       .send(QUEUES.sweep, {}, { singletonSeconds: options.sweepEverySeconds })

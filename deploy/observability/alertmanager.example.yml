@@ -1,0 +1,21 @@
+# Copy to alertmanager.yml (not committed: it names the operator's addresses) and fill in the
+# addresses and the SMTP server. The password is not here: compose hands it over as a secret, from
+# ALERT_SMTP_PASSWORD in deploy/.env (docs/DEPLOY.md § 7).
+global:
+  smtp_smarthost: 'smtp.example.org:587'
+  smtp_from: 'alertes@example.org'
+  smtp_auth_username: 'alertes@example.org'
+  smtp_auth_password_file: /run/secrets/alert_smtp_password
+  smtp_require_tls: true
+route:
+  receiver: operator
+  group_by: [alertname]
+  group_wait: 30s
+  group_interval: 5m
+  # A problem still there is mailed again every 4 hours, until it is solved.
+  repeat_interval: 4h
+receivers:
+  - name: operator
+    email_configs:
+      - to: 'operateur@example.org'
+        send_resolved: true

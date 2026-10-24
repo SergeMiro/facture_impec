@@ -35,3 +35,6 @@ test-results/
 playwright-report/
 # Microsoft sign-in recorded for the Excel-on-the-web E2E
 apps/addin/e2e/.auth/
+
+# Alertmanager with the operator's addresses (deploy/observability/alertmanager.example.yml)
+deploy/observability/alertmanager.yml

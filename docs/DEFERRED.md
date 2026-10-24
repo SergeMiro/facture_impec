@@ -266,3 +266,12 @@ Each line says where it came from and what would bring it back.
 | How to export from each ERP | One generic sentence (`addin.erp.how`) | The first pilots' real menus (Batigest, EBP): a line per ERP, written from their screens (`docs/TODO.md`). |
 | Choosing the columns of an export | The import names a missing column in French | Already listed under stage 4A: a screen to map a column by hand when pilots' labels vary. |
 
+## What runs, measured (BTP plan stage 7A, 2026-10-24)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| Langfuse: each graph run a trace, its prompts and answers | `agent_runs` (agent, model, prompt hash, attempts, tokens, times) and `fi_llm_tokens_total`, `fi_agent_runs_total` | A prompt must be debugged on real traffic: Langfuse self-hosted (ClickHouse, Redis, an object store) with the companies' text pseudonymized and erased with them (`docs/DECISIONS.md` D10). |
+| OpenTelemetry traces across the API, the workers and the connectors | One process; each log line has the request's or the job's ids | The workers run apart from the API: OpenTelemetry (pg-boss 12 has its own hooks), `trace_id` in a job's data. |
+| Several API processes behind Prometheus | One target, `api:4000`; the counts in the process are that process's | A second API process: one scrape target per process (compose's DNS or service discovery), the dashboards summed over `instance`. |
+| Logs kept and searched | `docker compose logs`, 5 files of 10 MB, `grep` on the JSON fields | More than a few days to search, or several machines: a log store (Loki or the host's), with the same retention as personal data (`docs/RGPD.md`). |
+| Alerts by another channel than e-mail | Alertmanager mails the operator | The operator wants them on the phone: a Telegram or SMS receiver in `alertmanager.yml`. |

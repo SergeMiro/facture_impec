@@ -573,9 +573,14 @@ chase planned on the wrong day. Logged, fixed, does not reset the clock.
 
 ### Every morning
 
+First the alerts mailbox and the Grafana dashboard (`docs/DEPLOY.md` § 7, § Observability below):
+an alert of the night is either explained or a P1/P2. Then:
+
 ```bash
 curl -s -H "$AUTH" "$API/admin/tenants"                 # status, plan, live or not
-docker compose -f deploy/compose.yaml logs --since 24h api | grep -iE "error|failed" | tail -50
+# The API's errors of the day, one JSON line each (tenantId, route or queue, jobId, the stack). A job
+# is an error only once its retries are spent; a failed attempt it retried is a warning.
+docker compose -f deploy/compose.yaml logs --since 24h --no-log-prefix api | grep '"level":"error"' | tail -50
 docker compose -f deploy/compose.yaml exec -T postgres psql -U fi -d fi <<'SQL'
 -- Sends that did not reach the platform after an hour.
 select t.siren, i.number, i.is_test, s.status, s.attempts, s.last_error, s.updated_at
@@ -636,6 +641,61 @@ with the key's last four characters and the account. If a company's real sends s
 `pdp_not_configured` (« La connexion à votre plateforme… n'est pas encore configurée ») after a change
 of `PDP_KEY_SEALING_KEY`, the owner pastes the key again;
 « Revenir à notre connexion » is refused once the company is live (it can only replace the key).
+
+## Observability
+
+Prometheus, Alertmanager and Grafana run with `docker compose --profile observability` (`docs/DEPLOY.md`
+§ 7); the alerts are mailed to the operator. Each alert below says what it means and what to do. The
+API's log lines are JSON on stderr; the ones of one company, one job or one request:
+
+```bash
+LOGS="docker compose -f deploy/compose.yaml logs --since 2h --no-log-prefix api"
+$LOGS | grep '"tenantId":"<tenant id>"'
+$LOGS | grep '"jobId":"<job id>"'        # a job's lines: each attempt (warn), the last one's failure (error)
+$LOGS | grep '"requestId":"<id>"'        # the x-request-id header of an answer
+```
+
+**ApiDown** — Prometheus has not reached `/metrics` for 5 minutes. `docker compose ps`, then
+`docker compose logs --since 30m api`: a failed migration or a missing setting stops the API at start and
+says why. `curl -s localhost:4000/health`. If only Prometheus is refused (401), `METRICS_TOKEN` differs
+between the API and the secret: both come from `deploy/.env`, restart both. Nothing is lost while the
+API is down: jobs wait in Postgres, the platforms send their webhooks again.
+
+**JobFailedForGood** — a job used all its retries in the last hour (pg-boss `failed`, the « dlq »):
+
+```sql
+select id, name, data, output, completed_on from pgboss.job
+where state = 'failed' and completed_on > now() - interval '1 hour' order by completed_on;
+```
+
+`output` is the error; the job's log lines (`"jobId"`) say which company. Fix the cause first. Then
+the sweep (`src/workers.ts`) queues again a send that never finished (`invoice.send`), a payment
+report still pending (`invoice.report_payment`) and a document still `ingested` or `classified` after
+10 minutes; an approved request whose e-mail never left (`action.send`) goes back to a person in the
+pane as a draft to decide again (`send_unknown`, the watchers); an `erp.sync` import resumes when the person
+sends the same file again. For the other queues, the job's `data` says what was not done. A failure
+that comes back after the fix is a P1 or a P2 (§ Pilot).
+
+**ErpImportStuck** — an ERP export has been read for more than 2 hours (`fi_erp_import_running_seconds`,
+by list). The pane shows « en cours ». The `erp.sync` job's log lines say where it stopped; the same
+file sent again from the pane continues from its cursor (`docs/DECISIONS.md` D9). A file far beyond
+the pilot's sizes goes to `docs/DEFERRED.md` (imports over 10 minutes).
+
+**RouteOverBudget** — a route's p95 over §11's budget for 15 minutes: `POST /ingest` 0.3 s,
+`GET /actions` and `GET /obligations` 0.2 s, `POST /actions/:id/decide` 2 s. On the dashboard: is it
+one route or all (the database: `docker stats`, slow queries in `docker compose logs postgres`), one
+company with many rows (its `tenantId` in the slow requests' lines), or a burst of requests? Measure
+the same paths with `pnpm perf` on a copy of the data before changing code.
+
+**DocumentReadOverBudget**, **DocumentSettledOverBudget** — documents take longer than §11's budgets
+from their arrival: read in 5 s (30 s by OCR), settled in 8 s with e-invoice data, 25 s without. The
+dashboard's « Jobs waiting » says whether they wait in the queue (a backlog: many documents at once,
+the workers busy) or are slow to read or classify (OCR, the model provider: `fi_agent_runs_total` by
+status). A backlog empties by itself; a company sending more than 200 at once is told to wait (429).
+
+**SweepOverBudget** — the sweep, which runs the deadline watchers, takes more than 60 s (p95 of the
+hour). The sweep's log lines (`"queue":"pdp.sweep"`) and `pnpm perf` (the watchers on 1 000 deadlines)
+say which part.
 
 ## Legacy MVP
 

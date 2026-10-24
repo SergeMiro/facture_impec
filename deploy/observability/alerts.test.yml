@@ -1,0 +1,110 @@
+# promtool test rules alerts.test.yml (docs/DEPLOY.md § 7): each alert fires when it should and
+# stays quiet when it should not.
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{job="api", instance="api:4000"}'
+        values: '1 0x20'
+      - series: 'fi_jobs_failed_last_hour{job="api", instance="api:4000", queue="document.ingest"}'
+        values: '0 0 1x20'
+      - series: 'fi_jobs_failed_last_hour{job="api", instance="api:4000", queue="invoice.send"}'
+        values: '0x22'
+      - series: 'fi_erp_import_running_seconds{job="api", instance="api:4000", connector="export:chantiers"}'
+        values: '7000+60x20'
+      # GET /obligations: every request between 0.2 and 0.5 s, p95 0.485 s, over its 0.2 s.
+      - series: 'fi_http_request_duration_seconds_bucket{job="api", method="GET", route="/obligations", status="2xx", le="0.2"}'
+        values: '0x22'
+      - series: 'fi_http_request_duration_seconds_bucket{job="api", method="GET", route="/obligations", status="2xx", le="0.5"}'
+        values: '0+100x22'
+      - series: 'fi_http_request_duration_seconds_bucket{job="api", method="GET", route="/obligations", status="2xx", le="+Inf"}'
+        values: '0+100x22'
+      # GET /actions: every request under 0.05 s.
+      - series: 'fi_http_request_duration_seconds_bucket{job="api", method="GET", route="/actions", status="2xx", le="0.05"}'
+        values: '0+100x22'
+      - series: 'fi_http_request_duration_seconds_bucket{job="api", method="GET", route="/actions", status="2xx", le="0.2"}'
+        values: '0+100x22'
+      - series: 'fi_http_request_duration_seconds_bucket{job="api", method="GET", route="/actions", status="2xx", le="+Inf"}'
+        values: '0+100x22'
+      # A route without a budget is never an alert, however slow.
+      - series: 'fi_http_request_duration_seconds_bucket{job="api", method="POST", route="/admin/tenants", status="2xx", le="5"}'
+        values: '0x22'
+      - series: 'fi_http_request_duration_seconds_bucket{job="api", method="POST", route="/admin/tenants", status="2xx", le="+Inf"}'
+        values: '0+10x22'
+      # XML invoices settled between 8 and 15 s; text documents within 5 s.
+      - series: 'fi_document_settled_seconds_bucket{job="api", source="mail", read="xml", stage="done", le="8"}'
+        values: '0x22'
+      - series: 'fi_document_settled_seconds_bucket{job="api", source="mail", read="xml", stage="done", le="15"}'
+        values: '0+2x22'
+      - series: 'fi_document_settled_seconds_bucket{job="api", source="mail", read="xml", stage="done", le="+Inf"}'
+        values: '0+2x22'
+      - series: 'fi_document_settled_seconds_bucket{job="api", source="mail", read="text", stage="done", le="5"}'
+        values: '0+2x22'
+      - series: 'fi_document_settled_seconds_bucket{job="api", source="mail", read="text", stage="done", le="+Inf"}'
+        values: '0+2x22'
+      # Read by OCR within 25 s: under its 30 s.
+      - series: 'fi_document_read_seconds_bucket{job="api", source="mail", read="ocr", le="25"}'
+        values: '0+1x22'
+      - series: 'fi_document_read_seconds_bucket{job="api", source="mail", read="ocr", le="+Inf"}'
+        values: '0+1x22'
+      # The sweep within 15 s.
+      - series: 'fi_job_duration_seconds_bucket{job="api", queue="pdp.sweep", outcome="ok", le="15"}'
+        values: '0+1x22'
+      - series: 'fi_job_duration_seconds_bucket{job="api", queue="pdp.sweep", outcome="ok", le="+Inf"}'
+        values: '0+1x22'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: ApiDown
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: ApiDown
+        exp_alerts:
+          - exp_labels: { job: api, instance: 'api:4000' }
+            exp_annotations:
+              summary: Prometheus has not reached the API for 5 minutes.
+              runbook: docs/RUNBOOK.md § Observability, ApiDown
+      - eval_time: 1m
+        alertname: JobFailedForGood
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: JobFailedForGood
+        exp_alerts:
+          - exp_labels: { queue: document.ingest }
+            exp_annotations:
+              summary: 1 job(s) of document.ingest failed for good in the last hour.
+              runbook: docs/RUNBOOK.md § Observability, JobFailedForGood
+      - eval_time: 3m
+        alertname: ErpImportStuck
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: ErpImportStuck
+        exp_alerts:
+          - exp_labels: { connector: 'export:chantiers' }
+            exp_annotations:
+              summary: An import of export:chantiers has been running for more than 2 hours.
+              runbook: docs/RUNBOOK.md § Observability, ErpImportStuck
+      - eval_time: 10m
+        alertname: RouteOverBudget
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: RouteOverBudget
+        exp_alerts:
+          - exp_labels: { method: GET, route: /obligations }
+            exp_annotations:
+              summary: 'GET /obligations: p95 485ms, over its budget.'
+              runbook: docs/RUNBOOK.md § Observability, RouteOverBudget
+      - eval_time: 20m
+        alertname: DocumentSettledOverBudget
+        exp_alerts:
+          - exp_labels: { read: xml }
+            exp_annotations:
+              summary: 'Documents read by xml: p95 14.65s to done or review, over budget.'
+              runbook: docs/RUNBOOK.md § Observability, DocumentSettledOverBudget
+      - eval_time: 20m
+        alertname: DocumentReadOverBudget
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: SweepOverBudget
+        exp_alerts: []

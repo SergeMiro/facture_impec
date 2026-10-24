@@ -10,6 +10,7 @@ import { t } from '@fi/shared';
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { cors } from 'hono/cors';
+import { routePath } from 'hono/route';
 import { secureHeaders } from 'hono/secure-headers';
 import { z } from 'zod';
 import { actionLinkRoutes } from './action-links';
@@ -24,7 +25,7 @@ import {
 import { adminRoutes } from './admin';
 import { archivedPdf } from './archive';
 import { explainInvoice, invoicePdf, rehearseInvoice } from './assist';
-import { type TenantEnv, tenantAuth, who } from './auth';
+import { sameSecret, type TenantEnv, tenantAuth, who } from './auth';
 import { holdAutopilot } from './autopilot';
 import { billingPages, billingRoutes, handleStripeWebhook } from './billing';
 import { answerFinding, ChatBody, chatView } from './chat';
@@ -106,7 +107,9 @@ import {
   maxBody,
   RequestWindows,
 } from './limits';
+import { log, logLine, withLogContext } from './log';
 import { loginRoutes } from './login';
+import { metrics, renderMetrics } from './metrics';
 import { onboardingRoutes } from './onboarding';
 import { page } from './page';
 import {
@@ -197,6 +200,25 @@ const fileName = (row: { number: string | null; id: string }, ext: string) =>
 export function createApp(deps: ApiDeps) {
   const app = new Hono();
 
+  // Each request's id (sent back as `x-request-id`) and, once signed in, its company on every line
+  // it logs (src/log.ts); its time by route pattern, never an id, in /metrics (src/metrics.ts).
+  app.use('*', async (c, next) => {
+    const requestId = randomUUID();
+    const started = performance.now();
+    c.header('x-request-id', requestId);
+    await withLogContext({ tenantId: null, requestId, method: c.req.method }, () => next());
+    const matched = routePath(c, -1);
+    metrics.requests.observe(
+      {
+        method: c.req.method,
+        // Only middleware ends with `*`: no route answered.
+        route: matched.endsWith('*') ? 'unmatched' : matched,
+        status: `${Math.floor(c.res.status / 100)}xx`,
+      },
+      (performance.now() - started) / 1000,
+    );
+  });
+
   // The task pane runs on its own origin (ADDIN_ORIGINS); in dev, Vite proxies /api instead.
   app.use(
     '*',
@@ -263,7 +285,7 @@ export function createApp(deps: ApiDeps) {
       const e = new ApiError(400, 'invalid_request', undefined, z.prettifyError(err));
       return c.json(e.body, e.status);
     }
-    console.error(err);
+    logLine('error', 'request failed', { route: routePath(c, -1), error: err });
     const e = new ApiError(500, 'internal');
     return c.json(e.body, e.status);
   });
@@ -273,6 +295,18 @@ export function createApp(deps: ApiDeps) {
   });
 
   app.get('/health', (c) => c.json({ ok: true, service: 'api', env: deps.env.FI_ENV }));
+
+  // Prometheus' scrape (docs/DECISIONS.md D10): its own token, which reads counts and nothing else.
+  app.get('/metrics', async (c) => {
+    const expected = deps.env.METRICS_TOKEN;
+    if (!expected) throw new ApiError(404, 'route_not_found');
+    if (!sameSecret(c.req.header('authorization'), expected)) {
+      throw new ApiError(401, 'unauthorized');
+    }
+    return c.text(await renderMetrics(deps.db, deps.now()), 200, {
+      'content-type': 'text/plain; version=0.0.4; charset=utf-8',
+    });
+  });
 
   // ── Operator ──────────────────────────────────────────────────────────────────────────────────
   app.route('/admin', adminRoutes(deps));
@@ -347,7 +381,7 @@ export function createApp(deps: ApiDeps) {
       outcome.message ?? t(`google.page.${outcome.reason}`, { account: outcome.account ?? '' }),
     );
   };
-  const googleLog = (message: string) => console.warn(message);
+  const googleLog = log;
   app.get('/connectors/google/begin', (c) => {
     if (!deps.google) throw new ApiError(404, 'route_not_found');
     const begun = googleBegin(deps, c.req.query('ticket'));
@@ -573,7 +607,6 @@ export function createApp(deps: ApiDeps) {
   api.get('/registry', async (c) => c.json(await registryView(deps, c.get('tenant'))));
 
   // ── Files read without Excel: OneDrive (R4) ───────────────────────────────────────────────────
-  const log = (message: string) => console.warn(message);
   api.get('/connectors/microsoft', async (c) =>
     c.json(await connectorView(deps, c.get('tenant'), c.get('principal'))),
   );

@@ -23,6 +23,7 @@ import type { AiDeps, ApiDeps, Mailer, OwnPlatform, PdpRegistry, TestPlatform } 
 import { createGoogleClient, GOOGLE_HOSTS } from './google';
 import { bossJobs, createBoss, ensureQueues } from './jobs';
 import { type Listening, listen } from './listen';
+import { log as jsonLog } from './log';
 import { OutboxMailer, SmtpMailer } from './mail';
 import { createMicrosoftClient, MICROSOFT_HOSTS } from './microsoft';
 import { type Directory, RechercheEntreprises } from './sirene';
@@ -283,7 +284,7 @@ export function mailerFromEnv(
 
 export async function startApi(options: ApiOptions): Promise<RunningApi> {
   const { env } = options;
-  const log = options.log ?? ((message: string) => console.warn(message));
+  const log = options.log ?? jsonLog;
   const ownDatabase = !options.database;
   const database =
     options.database ??

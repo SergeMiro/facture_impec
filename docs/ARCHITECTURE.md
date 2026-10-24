@@ -1187,6 +1187,29 @@ payments row ─► deadline by saleDeadlineKey ─► open and fully paid? clos
 - **ERP data is real**: the « Documents » part follows the workbook's « Mode test »; with it on, the
   ERP section says where its deadlines show.
 
+## BTP back end, stage 7A: what runs, measured
+
+- **One JSON line per event** on stderr (`apps/api/src/log.ts`), with `tenantId` always (`null` when
+  no company is concerned). The ids come from an `AsyncLocalStorage` context: the first middleware
+  opens one per request (its id, sent back as `x-request-id`, and its method), sign-in adds the
+  company (`setLogTenant`), and each pg-boss handler is wrapped by `timed` in `workers.ts`, which
+  opens one per job (queue, job id, and the `tenantId`, `documentId`, `invoiceId`, `actionId` of its
+  data). The modules that take a `log(message)` callback keep it: the context fills the rest.
+- **`GET /metrics`** (`apps/api/src/metrics.ts`), Prometheus text without a client library, behind
+  its own token (`METRICS_TOKEN`, compared in constant time like `ADMIN_TOKEN`; no route without it).
+  What one process does is counted in it: requests by method, route pattern (`routePath` of Hono;
+  `unmatched` for a 404) and status class; jobs by queue and outcome; documents from arrival to read
+  and to settled, by source and how they were read; model calls and tokens (recorded with
+  `agent_runs`). What every process shares is read from Postgres at each scrape: jobs waiting,
+  running and failed in the last hour by queue (`pgboss.queue` and `pgboss.job`), the oldest ERP
+  import still running, the companies that decided a request in the last 7 days. The histograms'
+  buckets include every §11 budget as an edge.
+- **`deploy/observability/`**: Prometheus (its rules, with `promtool` unit tests), Alertmanager
+  (e-mail) and Grafana (a provisioned dashboard), started with the compose profile `observability`.
+  `apps/api/src/observability.test.ts` runs a real API with its workers on PGlite and checks the log
+  lines, the metrics, and that the rules and the dashboard name only metrics `/metrics` writes and
+  routes the API has.
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

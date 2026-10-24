@@ -55,6 +55,8 @@ export const ServerEnvSchema = z
     DATABASE_URL: optionalText(),
     PGLITE_DIR: z.string().default('.data/pglite'),
     ADMIN_TOKEN: optionalText(24),
+    /** Prometheus' scrape token for GET /metrics (docs/DECISIONS.md D10); unset, the route is off. */
+    METRICS_TOKEN: optionalText(24),
     API_WORKERS: flag(true),
     PDP_SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(1).default(300),
     MOCK_PDP_URL: z.url().default('http://localhost:4010'),

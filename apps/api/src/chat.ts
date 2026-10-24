@@ -36,6 +36,7 @@ import { findingView, placesOf } from './checks';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { EDITABLE } from './invoices';
+import { logLine } from './log';
 
 export const ChatBody = z.object({
   /** The finding the conversation is about. */
@@ -264,7 +265,9 @@ export async function answerFinding(
     onError: (error) => {
       // English and without the conversation: the provider's text may quote the prompt.
       const name = error instanceof Error ? error.name : 'error';
-      record('failed', none, `chat failed: ${name}`).catch((e) => console.error(e));
+      record('failed', none, `chat failed: ${name}`).catch((e) =>
+        logLine('error', 'chat run not recorded', { error: e }),
+      );
       return t('api.error.chat_failed');
     },
   });
