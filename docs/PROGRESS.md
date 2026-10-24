@@ -1363,3 +1363,29 @@ Supplier invoices keep their own screen, « Réception ». Criteria, written her
 | « Retrouver une facture » on the Tableau de bord | `apps/addin/src/controller.test.ts` › finds any invoice of the company from the Tableau de bord, and opens it (real API: by the end of its number, by stage « Payée », nothing found, « Plus de résultats » adding the next page, the fiche opened). `apps/addin/src/ui/timeline.test.ts` › shows a search result with its kind, customer, amount, date and Mode test. E2E: `apps/addin/e2e/harness.spec.ts` › … « Retrouver une facture: the rejected one, by a piece of its number » (« 101 » and « À reprendre »: one result, TEST-F2026-101, whose fiche opens « Rejetée par la plateforme »; screenshot `search.png`). |
 | Tests and docs | `docs/ARCHITECTURE.md` › Finding an invoice, `docs/DEFERRED.md` (row closed; § Finding an invoice: accents, amount or SIREN, the last search kept, supplier invoices), `docs/TODO.md` › Finding an invoice. With it, the answer to a correction of a sent invoice now says to click « Établir un avoir » on its fiche (`apps/api/src/edits.test.ts` › refuses on an invoice already sent: « Établir un avoir » on its fiche instead), and the DEFERRED rows on credit notes from a refusal or for a sent invoice are closed by §4. |
 | Gate | `pnpm verify` green on 2026-10-24 (tests with `--concurrency=1`): api 305, core 689 + oracle 276, agents 122, add-in 110, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 13. `pnpm test:e2e` green in local Chrome (browser: local): 4 passed, the live B2Brouter run skipped (no key). |
+
+## VIES on demand (started 2026-10-24)
+
+`docs/DEFERRED.md` rows « A VIES check right after a sync, or on demand » and « Showing VIES' name and
+address next to the customer » (§6). Today the sweep asks VIES within five minutes, only for invoices
+not yet sent with an intra-EU supply or a reverse charge, and the answer shows only as a timeline
+note. Criteria, written here before the work:
+
+- **The fiche shows the customer's number and VIES' answer**: an invoice whose customer has an EU
+  VAT number outside France shows it, with the last answer VIES gave about it for this company
+  (valid or not, the day, the consultation number) and the name and address VIES has for it, so a
+  valid number of another company can be seen; « Pas encore vérifié » when there is none.
+- **« Vérifier dans VIES »**: from that fiche, asks VIES now. An answer from today is not asked
+  again. The answer is kept as the sweep keeps it (proof, audit by the user, the open invoices that
+  name the number checked again, FF-VIES-01 on a number VIES says is not valid). VIES not answering,
+  or off on this server, says so and changes nothing; an invoice without such a number is refused.
+- Tests for each, docs (DEFERRED, ARCHITECTURE, TODO).
+
+### Evidence (2026-10-24)
+
+| Criterion | Evidence |
+|---|---|
+| The fiche shows the customer's number and VIES' answer | `apps/api/src/vies.test.ts` › shows the customer's number on the fiche, and asks VIES now on « Vérifier dans VIES », once a day (`vies: { vatId, answer: null }` before; after, valid, name, address, consultation number, today). A French customer: `vies` null (› says when VIES does not answer or is off…). `apps/addin/src/ui/timeline.test.ts` › says who VIES has at the number on one line, and who asked on « Vérifier dans VIES ». E2E: `apps/addin/e2e/harness.spec.ts` › … « VIES: a Luxembourg customer, « Vérifier dans VIES » from the fiche » (« Pas encore vérifié », then « Valide selon le service européen VIES (vérifié le …) » and « Enregistré à ce numéro : SOCIETE DE DEMONSTRATION 5245, 1 RUE DES EXEMPLES, 1000 EXEMPLEVILLE »; screenshot `vies.png`). |
+| « Vérifier dans VIES » | Same API test: VIES asked once, audit `vat.check` by `user`, a timeline note; asked again the same day by the user or the sweep, VIES is not asked; an invoice already sent can be checked. › warns at once on every open invoice naming a number VIES says is not valid (FF-VIES-01 on both). › says when VIES does not answer or is off, and refuses an invoice without an EU number (503 `vies_unavailable` with nothing kept, 503 `vies_off`, 400 `vat_not_vies`, another company's invoice 404). `apps/addin/src/controller.test.ts` › checks the customer's EU VAT number in VIES from the fiche, and says what VIES answered (real API and VIES' stand-in: valid → success notice, not valid → warning, busy → the calm error). `apps/api/src/vat-checks.ts` › `checkBuyerVat`, `POST /invoices/:id/vies`. |
+| Tests and docs | `docs/ARCHITECTURE.md` › §6 VIES (On demand), `docs/ONBOARDING.md` §5.2, `docs/DEFERRED.md` (on demand from the fiche and VIES' name and address: done; Clients and comparing the names stay), `docs/TODO.md` › VIES. |
+| Gate | `pnpm verify` green on 2026-10-24 (tests with `--concurrency=1`): api 308, core 689 + oracle 276, agents 122, add-in 112, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 13. `pnpm test:e2e` in local Chrome (browser: local): B2Brouter stand-in 2 passed, Google Sheets passed, Excel on the web skipped (no tenant); the harness passed after a locator fix (the result link is a Fluent button), with the VIES step and screenshot `vies.png`. |

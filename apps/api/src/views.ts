@@ -1,6 +1,6 @@
 // What the API returns. Internal columns (drafts, hashes of keys) stay inside.
 import type { Issue } from '@fi/core';
-import type { ChasePlanRow, InvoiceEventRow, InvoiceRow, TenantRow } from '@fi/db';
+import type { ChasePlanRow, InvoiceEventRow, InvoiceRow, TenantRow, VatCheckRow } from '@fi/db';
 import { t } from '@fi/shared';
 import type { findingView } from './checks';
 import { chaseView } from './collect';
@@ -101,6 +101,8 @@ export interface DetailData {
     of: CreditLink | null;
     by: (CreditLink & { status: string; statusLabel: string }) | null;
   };
+  /** The customer's EU number outside France and VIES' last answer on it (src/vat-checks.ts). */
+  vies?: { vatId: string; answer: VatCheckRow | null } | null;
 }
 
 interface CreditLink {
@@ -111,7 +113,7 @@ interface CreditLink {
 
 export function invoiceDetail(
   row: InvoiceRow,
-  { issues, events, plan, findings, credit }: DetailData,
+  { issues, events, plan, findings, credit, vies }: DetailData,
 ) {
   return {
     ...invoiceSummary(row),
@@ -122,5 +124,17 @@ export function invoiceDetail(
     chase: chaseView(plan),
     nextStep: nextStep(row, events),
     credit: credit ?? { of: null, by: null },
+    vies: vies ? { vatId: vies.vatId, answer: vies.answer && viesAnswerView(vies.answer) } : null,
+  };
+}
+
+/** One answer of VIES as the fiche shows it: what it said, when, with its proof. */
+export function viesAnswerView(row: VatCheckRow) {
+  return {
+    valid: row.valid,
+    name: row.name,
+    address: row.address,
+    requestIdentifier: row.requestIdentifier,
+    checkedOn: row.checkedOn,
   };
 }

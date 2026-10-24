@@ -878,6 +878,16 @@ sent, once a day per number, and keeps each answer in `vat_checks` with VIES' co
 the answer is part of the check key; core rule FF-VIES-01 warns when it says « not valid ». Core never
 calls the network. Details and decisions: `docs/ONBOARDING.md` §5.
 
+**On demand (2026-10-24).** The fiche of any invoice whose customer has an EU number outside France
+(core `viesNumber`) shows it with VIES' last answer for the company (`invoiceDetailData` → `vies`,
+read by `lastViesAnswer`): valid or not, the day, the consultation number, and the name and address
+VIES has at that number, so a valid number of another company can be seen. « Vérifier dans VIES »
+(`POST /invoices/:id/vies`, `checkBuyerVat`) asks now unless VIES answered today, and keeps the
+answer through the sweep's own `keep` with the user as actor: same proof, audit, timeline notes and
+re-check of the open invoices naming the number. It works on a sent invoice too (proof on the day);
+VIES not answering is a 503 `vies_unavailable`, a server without VIES `vies_off`, an invoice without
+such a number `vat_not_vies`.
+
 ## §4 After a send: credit notes and write-offs
 
 Once the platform has an invoice it is never edited nor cancelled again (`api.error.not_editable`,

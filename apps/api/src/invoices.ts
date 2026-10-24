@@ -50,7 +50,7 @@ import { ApiError, isUniqueViolation } from './errors';
 import { PartyBook } from './parties';
 import { awaitsGoLive, routeFor } from './platform';
 import { RULESET } from './ruleset';
-import { loadViesBook, type ViesBook } from './vies';
+import { lastViesAnswer, loadViesBook, type ViesBook } from './vies';
 
 export const EDITABLE: readonly InvoiceState[] = ['draft', 'needs_fix', 'validated'];
 const BEFORE_DEPOSIT: readonly InvoiceState[] = [
@@ -414,12 +414,18 @@ export async function invoiceDetailData(deps: ApiDeps, row: InvoiceRow) {
     .from(invoiceEvents)
     .where(eq(invoiceEvents.invoiceId, row.id))
     .orderBy(invoiceEvents.id);
+  // An EU customer's number outside France, with VIES' last answer on it (« Vérifier dans VIES »).
+  const number = row.direction === 'out' ? viesNumber(row.document.buyer.vatId) : null;
   return {
     issues: last?.issues ?? [],
     events,
     plan: await chasePlanOf(deps.db, row.id),
     findings: await invoiceFindings(deps.db, row.id),
     credit: await creditLinks(deps.db, row),
+    vies: number && {
+      vatId: number.vatId,
+      answer: await lastViesAnswer(deps.db, row.tenantId, number.vatId),
+    },
   };
 }
 

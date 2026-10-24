@@ -4,7 +4,7 @@
 // of the checks across documents turns « Envoyer » into « Envoyer quand même ». After the send,
 // « Établir un avoir » and « Abandonner la créance », each after a confirmation; a credit note and the
 // invoice it cancels link to each other.
-import { frDate, frMoney } from '@fi/core';
+import { frDate, frMoney, parisToday } from '@fi/core';
 import { isMessageKey, type MessageKey, t } from '@fi/shared';
 import {
   Badge,
@@ -54,6 +54,7 @@ const useStyles = makeStyles({
   checklist: { listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '4px' },
   ready: { color: tokens.colorPaletteGreenForeground1, fontWeight: tokens.fontWeightSemibold },
   muted: { color: tokens.colorNeutralForeground2 },
+  invalid: { color: tokens.colorPaletteRedForeground1 },
   xml: {
     maxHeight: '260px',
     overflow: 'auto',
@@ -199,6 +200,54 @@ export function eventText(e: InvoiceEvent): string {
     .join(' ');
 }
 
+/** Who VIES has at the number, on one line: its name, then its address (VIES breaks it in lines). */
+export function viesHolder(answer: { name: string | null; address: string | null }): string {
+  return [answer.name, answer.address?.trim().replace(/\s*\n\s*/g, ', ')]
+    .filter(Boolean)
+    .join(', ');
+}
+
+/**
+ * The customer's EU VAT number and VIES' last answer on it, with who VIES has at that number: a valid
+ * number of another company shows here. « Vérifier dans VIES » asks now, once a day.
+ */
+function ViesFacts({ vies }: { vies: NonNullable<InvoiceDetail['vies']> }) {
+  const styles = useStyles();
+  const [state, fi] = useFi();
+  const answer = vies.answer;
+  const holder = answer ? viesHolder(answer) : '';
+  return (
+    <div data-testid="invoice-vies">
+      <Text>{t('addin.invoice.buyerVat', { vatId: vies.vatId })}</Text>
+      <div>
+        <Caption1 className={answer?.valid === false ? styles.invalid : styles.muted}>
+          {!answer
+            ? t('addin.invoice.viesNever')
+            : t(answer.valid ? 'addin.invoice.viesValid' : 'addin.invoice.viesInvalid', {
+                date: frDate(answer.checkedOn),
+              })}
+          {answer?.requestIdentifier &&
+            ` ${t('addin.invoice.event.vatProof', { id: answer.requestIdentifier })}`}
+        </Caption1>
+      </div>
+      {holder && (
+        <Caption1 className={styles.muted}>{t('addin.invoice.viesHolder', { holder })}</Caption1>
+      )}
+      {answer?.checkedOn !== parisToday() && (
+        <div>
+          <Link
+            disabled={state.busy.includes('vies')}
+            onClick={() => void fi.checkVies()}
+            data-testid="vies-check"
+          >
+            {t('addin.invoice.viesCheck')}
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** The fiche opens on the chasing when there is something to do there. */
 const CHASE_FIRST = ['overdue', 'chasing'];
 
@@ -249,6 +298,7 @@ export function InvoiceView() {
             {t('addin.invoice.findCustomer')}
           </Link>
         )}
+        {d.vies && <ViesFacts vies={d.vies} />}
         {amount && <Text>{t('addin.invoice.amount', { amount })}</Text>}
         {d.dueDate && <Text>{t('addin.invoice.due', { date: frDate(d.dueDate) })}</Text>}
       </div>

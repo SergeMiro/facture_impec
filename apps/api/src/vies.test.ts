@@ -3,7 +3,7 @@
 // asks, keeps, writes on the timeline and checks again, and what the RGPD export and a deletion do.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { type InvoiceDraft, viesNumber } from '@fi/core';
+import { type InvoiceDraft, parisToday, viesNumber } from '@fi/core';
 import { and, auditEvents, type Database, eq, validationResults, vatChecks } from '@fi/db';
 import { VIES_CASES, viesStandIn } from '@fi/mock-pdp';
 import { REPO_ROOT } from '@fi/shared/env';
@@ -346,6 +346,106 @@ describe('the sweep asking VIES', () => {
     asked.length = 0;
     expect(await runVatChecks({ ...api.deps, vies: down })).toBe(0);
     expect(asked).toEqual(['down']);
+  });
+
+  // « Vérifier dans VIES » on an invoice's fiche.
+  type Fiche = {
+    issues: { ruleId: string }[];
+    vies: {
+      vatId: string;
+      answer: {
+        valid: boolean;
+        name: string | null;
+        address: string | null;
+        requestIdentifier: string | null;
+        checkedOn: string;
+      } | null;
+    } | null;
+  };
+  type ErrorBody = { error: { code: string } };
+  const checkNow = (apiKey: string, id: string, on = api) =>
+    on.request(`/invoices/${id}/vies`, { method: 'POST', token: apiKey });
+
+  it("shows the customer's number on the fiche, and asks VIES now on « Vérifier dans VIES », once a day", async () => {
+    const t = await newTenant(api.request, { vatId: 'FR88100000009' });
+    const id = await create(t.apiKey, euDraft(20, 'LU26375245'));
+    expect(((await detail(t.apiKey, id)) as unknown as Fiche).vies).toEqual({
+      vatId: 'LU26375245',
+      answer: null,
+    });
+    asked.length = 0;
+
+    const res = await checkNow(t.apiKey, id);
+    expect(res.status).toBe(200);
+    expect(asked).toEqual(['LU26375245']);
+    const fiche = (await res.json()) as Fiche;
+    expect(fiche.vies).toEqual({
+      vatId: 'LU26375245',
+      answer: {
+        valid: true,
+        name: 'SOCIETE DE DEMONSTRATION 5245',
+        address: '1 RUE DES EXEMPLES\n1000 EXEMPLEVILLE',
+        requestIdentifier: expect.stringMatching(/^WAPIDEMO/),
+        checkedOn: parisToday(),
+      },
+    });
+    const [logged] = await database.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.tenantId, t.id), eq(auditEvents.action, 'vat.check')));
+    expect(logged).toMatchObject({ actor: 'user', objectType: 'vat_check' });
+    expect(await notes(t.apiKey, id)).toEqual([
+      expect.objectContaining({ payload: expect.objectContaining({ valid: true }) }),
+    ]);
+
+    // Asked again the same day, by the user or the sweep: today's answer, VIES is not asked.
+    expect((await (await checkNow(t.apiKey, id)).json()) as Fiche).toEqual(fiche);
+    await sweep();
+    expect(asked.filter((n) => n === 'LU26375245')).toHaveLength(1);
+
+    // An invoice already sent can be checked too: proof of the number on the day.
+    const sent = await deliveredInvoice(api, t, euDraft(21, 'PT501964843'));
+    const later = (await (await checkNow(t.apiKey, sent.id)).json()) as Fiche;
+    expect(later.vies?.answer).toMatchObject({ valid: true });
+  });
+
+  it('warns at once on every open invoice naming a number VIES says is not valid', async () => {
+    const t = await newTenant(api.request, { vatId: 'FR88100000009' });
+    const id = await create(t.apiKey, euDraft(22, VIES_CASES.invalid));
+    const other = await create(t.apiKey, euDraft(23, VIES_CASES.invalid));
+    const fiche = (await (await checkNow(t.apiKey, id)).json()) as Fiche;
+    expect(fiche.vies?.answer).toMatchObject({ valid: false, name: null, address: null });
+    expect(fiche.issues.map((i) => i.ruleId)).toContain('FF-VIES-01');
+    expect((await detail(t.apiKey, other)).issues.map((i) => i.ruleId)).toContain('FF-VIES-01');
+  });
+
+  it('says when VIES does not answer or is off, and refuses an invoice without an EU number', async () => {
+    const t = await newTenant(api.request, { vatId: 'FR88100000009' });
+    const code = async (res: Response) => ((await res.json()) as ErrorBody).error.code;
+
+    const busy = await create(t.apiKey, euDraft(24, VIES_CASES.busy));
+    const res = await checkNow(t.apiKey, busy);
+    expect(res.status).toBe(503);
+    expect(await code(res)).toBe('vies_unavailable');
+    expect(((await detail(t.apiKey, busy)) as unknown as Fiche).vies?.answer).toBeNull();
+
+    const off = testApi(database, { mock: fakeAdapter() }, ADMIN_TOKEN, { vies: null });
+    const eu = await create(t.apiKey, euDraft(25, 'SK2020317068'));
+    const unasked = await checkNow(t.apiKey, eu, off);
+    expect(unasked.status).toBe(503);
+    expect(await code(unasked)).toBe('vies_off');
+
+    const french = await create(t.apiKey, draft(26));
+    expect(((await detail(t.apiKey, french)) as unknown as Fiche).vies).toBeNull();
+    const refused = await checkNow(t.apiKey, french);
+    expect(refused.status).toBe(400);
+    expect(await code(refused)).toBe('vat_not_vies');
+
+    const stranger = await newTenant(api.request, { vatId: 'FR88100000009' });
+    expect((await checkNow(stranger.apiKey, eu)).status).toBe(404);
+    expect(await database.db.select().from(vatChecks).where(eq(vatChecks.tenantId, t.id))).toEqual(
+      [],
+    );
   });
 
   it('exports the answers with the company, and a deletion erases them', async () => {

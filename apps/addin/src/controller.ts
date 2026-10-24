@@ -1252,6 +1252,25 @@ export class Controller {
       (d) => t('addin.chase.markedSent', { number: d.number ?? '' }),
     );
 
+  /**
+   * « Vérifier dans VIES »: the customer's number asked now; the fiche shows the answer. A number VIES
+   * says is not valid warns on the open invoices naming it: the sheet shows it after a sync.
+   */
+  checkVies = async (): Promise<void> => {
+    const id = this.#state.invoice?.detail.id;
+    if (!id) return;
+    const detail = await this.#act('vies', () => this.api.checkVies(id));
+    if (!detail || this.#state.invoice?.detail.id !== id) return;
+    this.#patchInvoice({ detail });
+    const vatId = detail.vies?.vatId ?? '';
+    if (detail.vies?.answer?.valid !== false) {
+      this.notify('success', t('addin.vies.valid', { vatId }));
+      return;
+    }
+    this.notify('warning', t('addin.vies.invalid', { vatId }));
+    void this.sync();
+  };
+
   /** « Annuler l'envoi automatique »: this invoice now waits for « Envoyer », even after a change. */
   cancelAutopilot = async (): Promise<void> => {
     const id = this.#state.invoice?.detail.id;

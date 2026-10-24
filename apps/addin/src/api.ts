@@ -641,6 +641,22 @@ export const InvoiceDetail = InvoiceSummary.extend({
         .nullable(),
     })
     .default({ of: null, by: null }),
+  /** The customer's EU VAT number outside France, and VIES' last answer on it (null: never asked). */
+  vies: z
+    .object({
+      vatId: z.string(),
+      answer: z
+        .object({
+          valid: z.boolean(),
+          name: z.string().nullable(),
+          address: z.string().nullable(),
+          requestIdentifier: z.string().nullable(),
+          checkedOn: z.string(),
+        })
+        .nullable(),
+    })
+    .nullable()
+    .default(null),
 });
 export type InvoiceDetail = z.infer<typeof InvoiceDetail>;
 
@@ -1146,6 +1162,8 @@ export class ApiClient {
     this.#json(InvoiceDetail, `/invoices/${id}/chase`, { method: 'POST' });
   markChaseSent = (id: string, offset: number) =>
     this.#json(InvoiceDetail, `/invoices/${id}/chase/steps/${offset}/sent`, { method: 'POST' });
+  /** « Vérifier dans VIES »: the customer's number asked now (not again the same day). */
+  checkVies = (id: string) => this.#json(InvoiceDetail, `/invoices/${id}/vies`, { method: 'POST' });
   report = () => this.#json(WeeklyReport, '/report');
   /** The XML as text, the PDF as bytes: the fiche shows them inline. */
   xml = async (id: string) => (await this.#send(`/invoices/${id}/xml`)).text();

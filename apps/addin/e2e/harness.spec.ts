@@ -12,11 +12,12 @@
 // E2E stack), everything else is the real API. Since R4 an order in a OneDrive file, picked through
 // Microsoft's stand-in, gives a finding once it changes there, the file never opened; since R5 the same
 // from Google Drive, picked in Google's window (its stand-in). R6: a supplier's Factur-X uploaded from
-// the pane gives the cost B2 compares a sale with.
+// the pane gives the cost B2 compares a sale with. §6: « Vérifier dans VIES » on a Luxembourg
+// customer's invoice, against VIES' stand-in.
 // browser: local (Chrome of this server; Browserbase cannot reach localhost).
 
 import { readFile } from 'node:fs/promises';
-import { computeInvoice, frMoney, InvoiceDraft } from '@fi/core';
+import { computeInvoice, frDate, frMoney, InvoiceDraft, parisToday } from '@fi/core';
 import { bundledFonts } from '@fi/core/fonts';
 import { toFacturXPdf } from '@fi/core/pdf';
 import { xlsxOf } from '@fi/core/testing/xlsx';
@@ -40,7 +41,7 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
   page,
   context,
 }, info) => {
-  await seedDemo({ api, adminToken: E2E.adminToken, account: `e2e-${Date.now()}` });
+  const seeded = await seedDemo({ api, adminToken: E2E.adminToken, account: `e2e-${Date.now()}` });
   // The workbook plays one opened from OneDrive: the Scout suggests « Fichiers OneDrive » once.
   await page.goto(
     `/harness.html?document=${encodeURIComponent('https://d.docs.live.net/4f1c0a2b9d/Documents/Factures.xlsx')}`,
@@ -675,5 +676,74 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
       await pane.getByRole('tab', { name: t('addin.nav.checks') }).click();
       await expect(loss).toHaveCount(0, { timeout: 2_000 });
     }).toPass({ timeout: 60_000 });
+  });
+
+  await test.step('VIES: a Luxembourg customer, « Vérifier dans VIES » from the fiche', async () => {
+    // An invoice the company made elsewhere (not in the sheet), found with « Retrouver une facture ».
+    const created = await fetch(`${api}/invoices`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${seeded.apiKey}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        draft: {
+          processType: 'S1',
+          number: 'F2026-900',
+          issueDate: parisToday(),
+          typeCode: '380',
+          currency: 'EUR',
+          seller: {
+            name: DEMO_SELLER.name,
+            legalId: { id: DEMO_SELLER.siren, scheme: '0002' },
+            vatId: DEMO_SELLER.vatId,
+            electronicAddress: { id: DEMO_SELLER.siren, scheme: '0225' },
+            address: { line1: '1 rue Haute', city: 'Dijon', postCode: '21000', country: 'FR' },
+          },
+          buyer: {
+            name: 'Atelier Moselle',
+            vatId: 'LU26375245',
+            address: {
+              line1: '2 rue de la Gare',
+              city: 'Luxembourg',
+              postCode: '1611',
+              country: 'LU',
+            },
+          },
+          lines: [
+            {
+              id: '1',
+              quantity: '1',
+              unitCode: 'C62',
+              price: { net: '300.00' },
+              vat: { category: 'S', rate: '20' },
+              item: { name: 'Abonnement logiciel' },
+              nature: 'services',
+            },
+          ],
+        },
+      }),
+    });
+    expect(created.status).toBe(201);
+    await pane.getByRole('tab', { name: t('addin.nav.dashboard') }).click();
+    const search = pane.getByTestId('invoice-search');
+    await search.getByTestId('search-text').fill('F2026-900');
+    await search.getByTestId('search-stage').selectOption('');
+    await search.getByRole('button', { name: t('addin.search.go') }).click();
+    await expect(search.getByTestId('search-result')).toHaveCount(1);
+    await search.getByRole('button', { name: 'F2026-900', exact: true }).click();
+
+    const vies = pane.getByTestId('invoice-vies');
+    await expect(vies).toContainText(t('addin.invoice.buyerVat', { vatId: 'LU26375245' }));
+    await expect(vies).toContainText(t('addin.invoice.viesNever'));
+    await vies.getByTestId('vies-check').click();
+    await expect(vies).toContainText(t('addin.invoice.viesValid', { date: frDate(parisToday()) }));
+    await expect(vies).toContainText(
+      t('addin.invoice.viesHolder', {
+        holder: 'SOCIETE DE DEMONSTRATION 5245, 1 RUE DES EXEMPLES, 1000 EXEMPLEVILLE',
+      }),
+    );
+    await expect(vies.getByTestId('vies-check')).toHaveCount(0);
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.vies.valid', { vatId: 'LU26375245' }),
+    );
+    await page.screenshot({ path: info.outputPath('vies.png') });
   });
 });

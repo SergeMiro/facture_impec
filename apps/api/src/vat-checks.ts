@@ -3,6 +3,7 @@
 // company a day, one question at a time. The answer is kept with VIES' consultation number as proof,
 // written on each invoice's timeline when it is new, and those invoices are checked again: a number
 // VIES says is not valid gives warning FF-VIES-01. VIES not answering changes nothing.
+// « Vérifier dans VIES » on an invoice's fiche asks the same question now (checkBuyerVat).
 import { parisToday, viesNumber } from '@fi/core';
 import {
   and,
@@ -10,6 +11,7 @@ import {
   type Db,
   desc,
   eq,
+  type InvoiceRow,
   inArray,
   invoiceEvents,
   invoices,
@@ -20,6 +22,7 @@ import {
   tenants,
   vatChecks,
 } from '@fi/db';
+import { ApiError } from './errors';
 import { EDITABLE, recheckBuyerVat } from './invoices';
 import { type Vies, type ViesAnswer, ViesUnavailable } from './vies';
 
@@ -94,8 +97,17 @@ async function due(db: Db, today: string): Promise<{ tenant: TenantRow; vatId: s
   });
 }
 
-/** Keeps one answer: the proof, its audit event, the timeline notes, the invoices checked again. */
-async function keep(deps: VatCheckDeps, tenant: TenantRow, vatId: string, answer: ViesAnswer) {
+/**
+ * Keeps one answer: the proof, its audit event, the timeline notes, the invoices checked again.
+ * `actor`: the sweep, or the user who clicked « Vérifier dans VIES ».
+ */
+async function keep(
+  deps: VatCheckDeps,
+  tenant: TenantRow,
+  vatId: string,
+  answer: ViesAnswer,
+  actor: 'agent:party' | 'user' = 'agent:party',
+) {
   const now = deps.now();
   const checkedOn = parisToday(now);
   await deps.db.transaction(async (tx) => {
@@ -117,7 +129,7 @@ async function keep(deps: VatCheckDeps, tenant: TenantRow, vatId: string, answer
     if (!row) return;
     await audit(tx, {
       tenantId: tenant.id,
-      actor: 'agent:party',
+      actor,
       action: 'vat.check',
       objectType: 'vat_check',
       objectId: row.id,
@@ -150,7 +162,7 @@ async function keep(deps: VatCheckDeps, tenant: TenantRow, vatId: string, answer
       news.map((invoiceId) => ({
         invoiceId,
         type: 'note' as const,
-        actor: 'agent:party',
+        actor,
         event: 'vat_check',
         at: now,
         payload: {
@@ -191,4 +203,39 @@ export async function runVatChecks(
     }
   }
   return kept;
+}
+
+/**
+ * « Vérifier dans VIES » on an invoice's fiche: asks VIES now about its customer's number, unless it
+ * answered today, and keeps the answer as the sweep does. The fiche then shows it.
+ */
+export async function checkBuyerVat(
+  deps: VatCheckDeps,
+  tenant: TenantRow,
+  invoice: InvoiceRow,
+): Promise<void> {
+  const number = invoice.direction === 'out' ? viesNumber(invoice.document.buyer.vatId) : null;
+  if (!number) throw new ApiError(400, 'vat_not_vies');
+  const [today] = await deps.db
+    .select({ id: vatChecks.id })
+    .from(vatChecks)
+    .where(
+      and(
+        eq(vatChecks.tenantId, tenant.id),
+        eq(vatChecks.vatId, number.vatId),
+        eq(vatChecks.checkedOn, parisToday(deps.now())),
+      ),
+    );
+  if (today) return;
+  if (!deps.vies) throw new ApiError(503, 'vies_off');
+  let answer: ViesAnswer;
+  try {
+    answer = await deps.vies.check(number, requesterOf(tenant));
+  } catch (e) {
+    if (e instanceof ViesUnavailable) {
+      throw new ApiError(503, 'vies_unavailable', undefined, e.code);
+    }
+    throw e;
+  }
+  await keep(deps, tenant, number.vatId, answer, 'user');
 }

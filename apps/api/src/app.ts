@@ -138,6 +138,7 @@ import {
   ownUpload,
   removeUpload,
 } from './uploads';
+import { checkBuyerVat } from './vat-checks';
 import { invoiceDetail, invoiceSummary, tenantView } from './views';
 import {
   assertTestMode,
@@ -851,6 +852,14 @@ export function createApp(deps: ApiDeps) {
     const id = uuid(c.req.param('id'));
     const offset = parse(z.coerce.number().int().min(-60).max(365), c.req.param('offset'));
     await markStepSent(deps, tenant, id, offset);
+    return c.json(await detailOf(tenant, id));
+  });
+
+  // « Vérifier dans VIES » (plan §6, src/vat-checks.ts): the customer's EU number, asked now.
+  api.post('/invoices/:id/vies', async (c) => {
+    const tenant = c.get('tenant');
+    const id = uuid(c.req.param('id'));
+    await checkBuyerVat(deps, tenant, await getInvoice(deps, tenant, id));
     return c.json(await detailOf(tenant, id));
   });
 

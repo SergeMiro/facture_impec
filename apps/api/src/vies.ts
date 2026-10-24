@@ -3,7 +3,7 @@
 // POST {VIES_URL}/check-vat-number, no key. A refusal comes back as HTTP 200 with
 // `actionSucceed: false` and an error code; a body it cannot read as HTTP 500 `VOW-ERR-1`.
 import type { ViesNumber, ViesVerdict } from '@fi/core';
-import { type DbOrTx, desc, eq, vatChecks } from '@fi/db';
+import { and, type DbOrTx, desc, eq, vatChecks } from '@fi/db';
 import { z } from 'zod';
 
 /** What VIES answered about one number. */
@@ -139,4 +139,15 @@ export async function loadViesBook(db: DbOrTx, tenantId: string): Promise<ViesBo
     .where(eq(vatChecks.tenantId, tenantId))
     .orderBy(vatChecks.vatId, desc(vatChecks.checkedAt));
   return new Map(rows.map((r) => [r.vatId, r]));
+}
+
+/** VIES' last answer on this number for the company, null when it was never asked (the fiche). */
+export async function lastViesAnswer(db: DbOrTx, tenantId: string, vatId: string) {
+  const [row] = await db
+    .select()
+    .from(vatChecks)
+    .where(and(eq(vatChecks.tenantId, tenantId), eq(vatChecks.vatId, vatId)))
+    .orderBy(desc(vatChecks.checkedOn), desc(vatChecks.checkedAt))
+    .limit(1);
+  return row ?? null;
 }

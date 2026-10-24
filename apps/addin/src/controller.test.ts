@@ -5,6 +5,7 @@ import {
   checkConnection,
   createGoogleClient,
   createMicrosoftClient,
+  draft,
   fakeAdapter,
   GOOGLE_SHEET_TYPE,
   GOOGLE_STAND_IN_APP,
@@ -27,8 +28,10 @@ import {
   testAi,
   testApi,
   testDatabase,
+  testVies,
   textResult,
   toolCallResult,
+  VIES_CASES,
   type WorkerDeps,
 } from '@fi/api/testing';
 import {
@@ -141,7 +144,7 @@ beforeAll(async () => {
     getStatus: async () => platformEvents,
     lookupRecipient: async ({ siren }) => ({ siren }),
   });
-  api = testApi(database, { mock: adapter });
+  api = testApi(database, { mock: adapter }, undefined, { vies: testVies() });
   const tenant = await newTenant(api.request, SELLER);
   apiKey = tenant.apiKey;
   account = tenant.account;
@@ -561,6 +564,50 @@ describe('a new user on the demo sheet', () => {
     expect(state().notice?.text).toBe(
       t('addin.autopilot.held', { number: state().invoice?.detail.number ?? '' }),
     );
+  });
+
+  it("checks the customer's EU VAT number in VIES from the fiche, and says what VIES answered", async () => {
+    const euInvoice = async (index: number, vatId: string) => {
+      const d = draft(index, (x) => {
+        x.buyer = {
+          ...x.buyer,
+          vatId,
+          address: { ...x.buyer.address, country: vatId.slice(0, 2) },
+        };
+      });
+      const res = await api.request('/invoices', {
+        method: 'POST',
+        token: apiKey,
+        body: { draft: d },
+      });
+      expect(res.status).toBe(201);
+      return ((await res.json()) as { id: string }).id;
+    };
+    await controller.openInvoice(await euInvoice(900, 'LU26375245'));
+    expect(state().invoice?.detail.vies).toEqual({ vatId: 'LU26375245', answer: null });
+    await controller.checkVies();
+    expect(state().invoice?.detail.vies?.answer).toMatchObject({
+      valid: true,
+      name: 'SOCIETE DE DEMONSTRATION 5245',
+      checkedOn: parisToday(),
+    });
+    expect(state().notice).toEqual({
+      tone: 'success',
+      text: t('addin.vies.valid', { vatId: 'LU26375245' }),
+    });
+
+    await controller.openInvoice(await euInvoice(901, VIES_CASES.invalid));
+    await controller.checkVies();
+    expect(state().invoice?.detail.vies?.answer).toMatchObject({ valid: false });
+    expect(state().notice).toEqual({
+      tone: 'warning',
+      text: t('addin.vies.invalid', { vatId: VIES_CASES.invalid }),
+    });
+
+    await controller.openInvoice(await euInvoice(902, VIES_CASES.busy));
+    await controller.checkVies();
+    expect(state().invoice?.detail.vies?.answer).toBeNull();
+    expect(state().notice).toEqual({ tone: 'error', text: t('api.error.vies_unavailable') });
   });
 
   it('cancels a sent invoice by a credit note from its fiche; the two fiches link to each other', async () => {

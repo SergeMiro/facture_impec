@@ -2,7 +2,7 @@
 import { type InvoiceDraft, parisHour, parisToday } from '@fi/core';
 import { bundledFonts } from '@fi/core/fonts';
 import { type Database, type OpenOptions, openDatabase } from '@fi/db';
-import { StripeStandIn, sireneStandIn } from '@fi/mock-pdp';
+import { StripeStandIn, sireneStandIn, viesStandIn } from '@fi/mock-pdp';
 import type { PdpAdapter } from '@fi/pdp-adapter';
 import { createAiDeps } from './ai';
 import { createApp } from './app';
@@ -13,6 +13,7 @@ import { OutboxMailer } from './mail';
 import { SCENARIO_SELLER, scenarioDraft } from './scenarios/invoice';
 import { RechercheEntreprises } from './sirene';
 import { StripeApi } from './stripe';
+import { ViesClient } from './vies';
 
 import { runSend, runSync, type WorkerDeps } from './workers';
 
@@ -28,6 +29,7 @@ export {
   MICROSOFT_STAND_IN_APP,
   MicrosoftStandIn,
   SIRENE_CASES,
+  VIES_CASES,
 } from '@fi/mock-pdp';
 // The task pane's tests move invoices as the workers would.
 export { runCollect } from './collect';
@@ -49,6 +51,9 @@ export const inProcess =
 /** The company directory, played by the stand-in of apps/mock-pdp (synthetic companies). */
 export const testDirectory = () =>
   new RechercheEntreprises('http://sirene.test', inProcess(sireneStandIn()));
+
+/** VIES, played by the stand-in of apps/mock-pdp (« Vérifier dans VIES » in the pane's tests). */
+export const testVies = () => new ViesClient('http://vies.test', inProcess(viesStandIn()));
 
 export const ADMIN_TOKEN = 'test-admin-token-0123456789abcdef';
 

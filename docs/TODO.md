@@ -133,6 +133,12 @@ Each closes with a call or two on the owner's sandbox key (`docs/RUNBOOK.md` § 
       `apps/api/src/vies.ts`.
 - [ ] From the prod server, watch the sweep's log for a week: VIES never answering `IP_BLOCKED` or
       `GLOBAL_MAX_CONCURRENT_REQ` to our traffic.
+- [ ] « Vérifier dans VIES » (2026-10-24): each click on a number VIES cannot answer asks again (once
+      today's answer exists, never). If users click in a loop during an outage, remember the failure
+      for a few minutes per number (DEFERRED § VIES, « Remembering that a member state is down »).
+- [ ] Look at the fiche with a real answer from a country that gives no name (Germany, Spain): only
+      « Valide selon le service européen VIES » shows; check users understand that VIES has no name to
+      give, not that the check failed.
 
 ## Credit notes (§4), built on 2026-10-24
 

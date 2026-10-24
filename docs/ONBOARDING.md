@@ -163,9 +163,11 @@ public numbers of large companies (Google Ireland among them). The owner's own n
   supply (K) or a reverse charge (AE): once a number per company per Paris day, at most 20 a sweep,
   one at a time, with the company's own VAT number as requester. French numbers and countries outside
   VIES are never sent (`viesNumber` in `packages/core/src/ids.ts`). No invoice waits for VIES.
+  Also on demand: « Vérifier dans VIES » on an invoice's fiche (any status, any VAT category) asks
+  the same question now, unless VIES answered today about that number for the company.
 - **What is kept.** Every answer, valid or not, with the name, address and consultation number VIES
   gives, in `vat_checks` (one row per number and day), an audit event `vat.check` (actor
-  `agent:party`), and a note on each invoice's timeline: once, then again only when VIES changes its
+  `agent:party`, or `user` on « Vérifier dans VIES »), and a note on each invoice's timeline: once, then again only when VIES changes its
   answer, not every day.
 - **What is said.** The last answer goes into the invoice's check (core `RuleContext.buyer.vat`, part
   of the check key): « not valid » gives the warning FF-VIES-01 on the customer's VAT number. A

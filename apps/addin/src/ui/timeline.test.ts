@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { centsOf } from './ChasePanel';
 import { resultLine } from './InvoiceSearch';
-import { eventText } from './InvoiceView';
+import { eventText, viesHolder } from './InvoiceView';
 
 const note = (payload: unknown, event = 'vat_check', actor = 'agent:party') => ({
   at: '2026-10-24T09:00:00.000Z',
@@ -22,6 +22,23 @@ describe('the invoice timeline', () => {
     );
     expect(eventText(note({ vatId: 'DE999999999', valid: false, requestIdentifier: null }))).toBe(
       "Numéro de TVA DE999999999 de votre client vérifié dans le service européen VIES : non valide · par l'assistant",
+    );
+  });
+
+  it('says who VIES has at the number on one line, and who asked on « Vérifier dans VIES »', () => {
+    expect(
+      viesHolder({
+        name: 'SOCIETE DE DEMONSTRATION 5245',
+        address: '1 RUE DES EXEMPLES\n1000 EXEMPLEVILLE\n',
+      }),
+    ).toBe('SOCIETE DE DEMONSTRATION 5245, 1 RUE DES EXEMPLES, 1000 EXEMPLEVILLE');
+    expect(viesHolder({ name: null, address: null })).toBe('');
+    expect(
+      eventText(
+        note({ vatId: 'LU26375245', valid: true, requestIdentifier: null }, 'vat_check', 'user'),
+      ),
+    ).toBe(
+      'Numéro de TVA LU26375245 de votre client vérifié dans le service européen VIES : valide · par vous',
     );
   });
 
