@@ -1,6 +1,6 @@
 // The operator's routes (Bearer ADMIN_TOKEN): list and create companies, set one's platform account and
-// switch it live in prod, give it a firm's brand or the pilot status, check its archive, and the local
-// outbox. Every change is audited as `admin`.
+// switch it live in prod, give it a firm's brand or the pilot status, replace its API key, check its
+// archive, and the local outbox. Every change is audited as `admin`.
 import { Address, isValidSiren } from '@fi/core';
 import {
   and,
@@ -44,6 +44,7 @@ const NewTenant = z.object({
 });
 
 const LiveBody = z.object({ live: z.boolean(), confirmSiren: z.string() });
+const NewKeyBody = z.object({ confirmSiren: z.string() });
 const BrandBody = z.object({ whiteLabel: WhiteLabel.nullable() });
 const BillingBody = z.object({ status: z.enum(['pilot', 'trial']) });
 const PlatformBody = z.object({ account: z.string().trim().min(1).max(100) });
@@ -181,6 +182,49 @@ export function adminRoutes(deps: ApiDeps) {
     return c.json(
       tenantView(await update(before, 'tenant.billing', { billingStatus: status, trialEndsAt })),
     );
+  });
+
+  /**
+   * A new API key for the company, every older one revoked at once: a key that leaked or was lost by
+   * the ERP or script that held it. The SIREN typed again, as for going live: whatever used the old
+   * key stops at its next call. The pane is not touched (it signs in with links).
+   */
+  admin.post('/tenants/:id/api-keys', async (c) => {
+    const { confirmSiren } = await body(c, NewKeyBody);
+    const tenant = await company(c.req.param('id'));
+    if (confirmSiren.replace(/\s/g, '') !== tenant.siren)
+      throw new ApiError(409, 'confirm_mismatch');
+    const apiKey = newApiKey();
+    const revoked = await deps.db.transaction(async (tx) => {
+      const old = await tx
+        .update(apiKeys)
+        .set({ revokedAt: deps.now() })
+        .where(and(eq(apiKeys.tenantId, tenant.id), isNull(apiKeys.revokedAt)))
+        .returning({ id: apiKeys.id });
+      for (const k of old) {
+        await audit(tx, {
+          tenantId: tenant.id,
+          actor: 'admin',
+          action: 'api_key.revoke',
+          objectType: 'api_key',
+          objectId: k.id,
+        });
+      }
+      const [key] = await tx
+        .insert(apiKeys)
+        .values({ tenantId: tenant.id, hash: sha256(apiKey), label: 'replaced' })
+        .returning({ id: apiKeys.id });
+      await audit(tx, {
+        tenantId: tenant.id,
+        actor: 'admin',
+        action: 'api_key.create',
+        objectType: 'api_key',
+        objectId: key?.id ?? '',
+      });
+      return old.length;
+    });
+    // Shown here once, as at creation.
+    return c.json({ tenant: tenantView(tenant), apiKey, revoked }, 201);
   });
 
   /**

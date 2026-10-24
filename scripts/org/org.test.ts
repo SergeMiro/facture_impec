@@ -26,6 +26,10 @@ async function org(...argv: string[]) {
 // A valid SIREN (Luhn), and a second one.
 const SIREN = '732829320';
 const OTHER = '552100554';
+/** The key `create` handed over. */
+let firstKey = '';
+const tenantStatus = async (key: string) =>
+  (await fetch(`${stack.apiUrl}/tenant`, { headers: { authorization: `Bearer ${key}` } })).status;
 
 describe('pnpm org', () => {
   it('creates a pilot company and hands its API key over once', async () => {
@@ -48,6 +52,7 @@ describe('pnpm org', () => {
     );
     const key = /shown this once.*: (\S+)$/m.exec(created.text)?.[1];
     expect(key).toBeTruthy();
+    firstKey = key ?? '';
     const me = await fetch(`${stack.apiUrl}/tenant`, {
       headers: { authorization: `Bearer ${key}` },
     });
@@ -76,6 +81,17 @@ describe('pnpm org', () => {
     // Once live, the account is fixed.
     expect((await org('platform', SIREN, 'acct-43')).text).toMatch(/409 .*tenant_live/);
     expect((await org('offline', SIREN, '--confirm', SIREN)).text).toMatch(/ test only /);
+  });
+
+  it('replaces the API key with the SIREN typed again: the old one stops', async () => {
+    expect((await org('key', SIREN)).text).toMatch(/key needs --confirm <SIREN>/);
+    expect((await org('key', SIREN, '--confirm', OTHER)).text).toMatch(/409 .*confirm_mismatch/);
+    expect(await tenantStatus(firstKey)).toBe(200);
+    const replaced = await org('key', SIREN, '--confirm', SIREN);
+    expect(replaced.code).toBe(0);
+    expect(replaced.text).toMatch(/^1 older key\(s\) revoked/m);
+    const key = /shown this once.*: (\S+)$/m.exec(replaced.text)?.[1] ?? '';
+    expect([await tenantStatus(firstKey), await tenantStatus(key)]).toEqual([401, 200]);
   });
 
   it('asks for the id when a SIREN has two companies, and takes it', async () => {

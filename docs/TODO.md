@@ -152,17 +152,21 @@ Each closes with a call or two on the owner's sandbox key (`docs/RUNBOOK.md` § 
       invoice become a credit note linked to it on B2Brouter (`is_credit_note`,
       `invoice_references`), and does it follow the same statuses? Then let the credit-note E2E run on
       the live sandbox (`apps/addin/e2e/b2brouter.spec.ts` skips it there).
-- [ ] **MonitorAgent prompt:** say in `packages/agents/prompts/monitor.md` that a refused invoice is
+- [x] **MonitorAgent prompt:** say in `packages/agents/prompts/monitor.md` that a refused invoice is
       fixed by a credit note and a new invoice, never resent under its number, then record the
       `monitor` eval again (`packages/agents/evals/recordings/`). Until then the pane shows its
       `fix_and_resend` on a refusal as « Corriger : un avoir, puis une nouvelle facture ».
+      Done 2026-10-24: recorded on llmfp, 12/13 (`docs/AI_PROVIDERS.md`); the Mistral recording
+      stays the owner's.
 
 ## Percentage discounts, built on 2026-10-24
 
-- [ ] **Mapping eval:** the MappingAgent now sees the field « Remise sur la ligne (en %) » in its
+- [x] **Mapping eval:** the MappingAgent now sees the field « Remise sur la ligne (en %) » in its
       field list; record `mapping` again (`packages/agents/evals/recordings/`) with a sheet holding a
       « Remise % » column, so the eval scores it. The guard puts a percentage column in the right
       field whatever the model says.
+      Done 2026-10-24: fixture `14-fraction-rates` has « Remise % », scored as a ninth point; llmfp
+      99.4 % on 161 points, the dictionary 91.9 % (`docs/AI_PROVIDERS.md`).
 
 ## Instalments, built on 2026-10-24
 
@@ -176,10 +180,11 @@ Each closes with a call or two on the owner's sandbox key (`docs/RUNBOOK.md` § 
 
 ## Finding an invoice, built on 2026-10-24
 
-- [ ] **Chat eval fixture:** `packages/agents/evals/chat.fixtures.ts` still quotes the old answer to a
+- [x] **Chat eval fixture:** `packages/agents/evals/chat.fixtures.ts` still quotes the old answer to a
       correction of a sent invoice (« établissez une facture rectificative ou un avoir… »); the API now
       says to click « Établir un avoir » on its fiche (`api.error.invoice_sent`). Update the fixture
       and record `chat` again, with the `monitor` and `mapping` recordings above.
+      Done 2026-10-24: the fixture answers with `t('api.error.invoice_sent')` itself; 5/5 on llmfp.
 - [ ] **Hosted database:** whether `unaccent` can be enabled there, before a pilot asks for searches
       that ignore accents (`docs/DEFERRED.md` › Finding an invoice).
 
@@ -277,8 +282,9 @@ Left from stage 7 for later (2026-10-24):
       in `docs/PROGRESS.md` › stage 7B are the VPS's, PGlite and a throwaway Postgres 17.
 - [ ] **`pnpm perf` with the model on** (the owner's production key): classify's time per document
       under load (`docs/DEFERRED.md` › Measured under load).
-- [ ] **A company's API key replaced or revoked** by the operator (`docs/DEFERRED.md` › A company
-      from the command line): before a pilot's ERP or script holds one.
+- [x] **A company's API key replaced or revoked** (done 2026-10-24): `pnpm org key <SIREN>
+      --confirm <SIREN>` gives a new key and revokes every older one, audited
+      (`operator.test`, `scripts/org/org.test.ts`; `docs/RUNBOOK.md` › Pilot).
 - [x] **The add-in tests' noise** (fixed 2026-10-24): `controller.test` logged « request failed »
       for `GET /invoices` after its database closed, a pane's timer firing late. The test now waits
       for the requests in flight and unplugs the network before closing the database.

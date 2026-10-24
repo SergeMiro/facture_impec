@@ -12,7 +12,8 @@ export const USAGE = `pnpm org <command>                FI_API_URL (default http
   pilot <SIREN|id> [--trial]                  never billed (or back to a fresh trial month)
   platform <SIREN|id> <account>               its account id at the platform, when it is not the SIREN
   live <SIREN|id> --confirm <SIREN>           real sends open (the platform must answer for the account)
-  offline <SIREN|id> --confirm <SIREN>        real sends closed again`;
+  offline <SIREN|id> --confirm <SIREN>        real sends closed again
+  key <SIREN|id> --confirm <SIREN>            a new API key, every older one revoked; prints it once`;
 
 export interface OrgIo {
   env: Record<string, string | undefined>;
@@ -168,6 +169,20 @@ async function run(argv: string[], io: OrgIo) {
         throw new OrgError(`${command} needs --confirm <SIREN>, the company's SIREN typed again.`);
       const body = { live: command === 'live', confirmSiren: values.confirm };
       io.out(line(await call<Tenant>('PUT', `/admin/tenants/${t.id}/live`, body)));
+      return;
+    }
+    case 'key': {
+      const t = await find(rest[0]);
+      if (!values.confirm)
+        throw new OrgError("key needs --confirm <SIREN>, the company's SIREN typed again.");
+      const { tenant, apiKey, revoked } = await call<{
+        tenant: Tenant;
+        apiKey: string;
+        revoked: number;
+      }>('POST', `/admin/tenants/${t.id}/api-keys`, { confirmSiren: values.confirm });
+      io.out(line(tenant));
+      io.out(`${revoked} older key(s) revoked: whatever used them stops at its next call.`);
+      io.out(`API key (shown this once, give it to the company and keep no copy): ${apiKey}`);
       return;
     }
     default:

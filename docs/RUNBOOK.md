@@ -619,6 +619,13 @@ It prints the company's API key once (for its ERP or a script; the pane signs in
 it over and keep no copy, only its hash is stored. A refusal prints the API's status and code
 (`400 … not a valid SIREN`, `409 pdp_not_configured`) and changes nothing.
 
+A key that leaked, or that the company lost, is replaced (every older key revoked at once, whatever
+used one stops at its next call; audit `api_key.revoke` and `api_key.create`):
+
+```bash
+pnpm org key <SIREN> --confirm <SIREN>       # prints the new key once, as create does
+```
+
 An accounting firm's brand, if a pilot comes through one (no `pnpm org` command for it yet):
 `curl -X PUT -H "authorization: Bearer $ADMIN_TOKEN" -H 'content-type: application/json' -d
 '{"whiteLabel":{"firmName":"…","accentColor":"#0f6cbd","full":false}}'

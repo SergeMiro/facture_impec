@@ -289,4 +289,4 @@ Each line says where it came from and what would bring it back.
 | What | Smallest version now | When to do the rest |
 |---|---|---|
 | A firm's brand and the archive check in `pnpm org` | Two curls in `docs/RUNBOOK.md` › Pilot | A firm brings several pilots, or the archive is checked more than monthly: `pnpm org brand`, `pnpm org archive`. |
-| A company's API key replaced or revoked | The key `pnpm org create` prints once; no route replaces it (the pane signs in with links, not the key) | A pilot's ERP or script uses the key and it leaks or is lost: `POST /admin/tenants/:id/api-keys` (a new key, the old ones revoked, audited) and `pnpm org key`. |
+| A company's API key replaced or revoked | Done 2026-10-24: `pnpm org key` (`POST /admin/tenants/:id/api-keys`), a new key and every older one revoked, the SIREN typed again, audited | A company holds several keys (one per ERP or script) and one is revoked alone: a label per key and `pnpm org keys`. |

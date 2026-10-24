@@ -230,6 +230,44 @@ describe('an accounting firm, pilots and trials', () => {
   });
 });
 
+describe("a company's API key", () => {
+  it('is replaced with the SIREN typed again: the old key stops at once, both steps audited', async () => {
+    const api = testApi(database, { mock: platform }, ADMIN_TOKEN, { now: () => clock });
+    const c = await newTenant(api.request);
+    const me = async (token: string) => (await api.request('/tenant', { token })).status;
+    const replace = (confirmSiren: string, token = ADMIN_TOKEN) =>
+      api.request(`/admin/tenants/${c.id}/api-keys`, {
+        method: 'POST',
+        token,
+        body: { confirmSiren },
+      });
+
+    expect((await replace('100000009', c.apiKey)).status).toBe(403);
+    expect(await errorCode(await replace('999999999'))).toBe('confirm_mismatch');
+    expect(await me(c.apiKey)).toBe(200);
+
+    const res = await replace('100 000 009');
+    expect(res.status).toBe(201);
+    const { apiKey, revoked } = (await res.json()) as { apiKey: string; revoked: number };
+    expect(revoked).toBe(1);
+    expect(await me(c.apiKey)).toBe(401);
+    expect(await me(apiKey)).toBe(200);
+    const events = await database.db
+      .select({ action: auditEvents.action, actor: auditEvents.actor })
+      .from(auditEvents)
+      .where(eq(auditEvents.tenantId, c.id));
+    expect(
+      events
+        .filter((e) => e.action.startsWith('api_key.'))
+        .sort((a, b) => a.action.localeCompare(b.action)),
+    ).toEqual([
+      { action: 'api_key.create', actor: 'admin' },
+      { action: 'api_key.create', actor: 'admin' },
+      { action: 'api_key.revoke', actor: 'admin' },
+    ]);
+  });
+});
+
 describe('limits', () => {
   it('counts a fixed minute per key', () => {
     let now = 0;
