@@ -62,7 +62,7 @@ import {
   runDocumentValidate,
 } from './ingest';
 import { idempotencyKey } from './invoices';
-import { QUEUES } from './jobs';
+import { QUEUES, type Wakeups } from './jobs';
 import { logLine, withLogContext } from './log';
 import { metrics } from './metrics';
 import { ADVISED, awaitingAdvice, runMonitor } from './monitor';
@@ -530,6 +530,8 @@ export interface WorkerOptions {
   sweepEverySeconds: number;
   /** How often chasing and the weekly report run (real seconds); default 5 minutes. */
   collectEverySeconds?: number;
+  /** The process's jobs wake these workers (src/jobs.ts); without it they only poll. */
+  wakeups?: Wakeups;
   log?: (message: string) => void;
 }
 
@@ -546,83 +548,63 @@ export async function startWorkers(
     pollingIntervalSeconds: options.pollingIntervalSeconds ?? 2,
     includeMetadata: true as const,
   };
-  await boss.work(
-    QUEUES.send,
-    { ...polling, localConcurrency: 4 },
-    timed(QUEUES.send, (data) => runSend(deps, SendJob.parse(data).invoiceId)),
+  // One registration per worker, so that each can be woken by its id: after a job it fetches again
+  // at once, and a job sent from this process wakes the queue's workers (Wakeups, src/jobs.ts).
+  const work = async (
+    queue: string,
+    concurrency: number,
+    run: (data: unknown) => Promise<unknown>,
+  ) => {
+    const handle = timed(queue, run);
+    for (let i = 0; i < concurrency; i++) {
+      let id: string | undefined;
+      id = await boss.work(queue, polling, async (jobs) => {
+        try {
+          await handle(jobs);
+        } finally {
+          if (id) boss.notifyWorker(id);
+        }
+      });
+      options.wakeups?.add(queue, id);
+    }
+  };
+  await work(QUEUES.send, 4, (data) => runSend(deps, SendJob.parse(data).invoiceId));
+  await work(QUEUES.sync, 4, (data) => runSync(deps, SyncJob.parse(data)));
+  await work(QUEUES.sweep, 1, async () => {
+    await runAutopilot(deps, options.log);
+    await runSweep(deps);
+    await runArchive(deps, options.log);
+    await runInboundPoll(deps, options.log);
+    await runUsageReport(deps, options.log);
+    await runVatChecks(deps, options.log);
+  });
+  await work(QUEUES.monitor, 2, (data) => runMonitor(deps, InvoiceJob.parse(data).invoiceId));
+  await work(QUEUES.reportPayment, 1, (data) =>
+    runReportPayment(deps, InvoiceJob.parse(data).invoiceId),
   );
-  await boss.work(
-    QUEUES.sync,
-    { ...polling, localConcurrency: 4 },
-    timed(QUEUES.sync, (data) => runSync(deps, SyncJob.parse(data))),
-  );
-  await boss.work(
-    QUEUES.sweep,
-    polling,
-    timed(QUEUES.sweep, async () => {
-      await runAutopilot(deps, options.log);
-      await runSweep(deps);
-      await runArchive(deps, options.log);
-      await runInboundPoll(deps, options.log);
-      await runUsageReport(deps, options.log);
-      await runVatChecks(deps, options.log);
-    }),
-  );
-  await boss.work(
-    QUEUES.monitor,
-    { ...polling, localConcurrency: 2 },
-    timed(QUEUES.monitor, (data) => runMonitor(deps, InvoiceJob.parse(data).invoiceId)),
-  );
-  await boss.work(
-    QUEUES.reportPayment,
-    polling,
-    timed(QUEUES.reportPayment, (data) => runReportPayment(deps, InvoiceJob.parse(data).invoiceId)),
-  );
-  await boss.work(
-    QUEUES.registry,
-    polling,
-    timed(QUEUES.registry, (data) =>
-      checkNow(deps.db, RegistryJob.parse(data).tenantId, deps.now()),
-    ),
+  await work(QUEUES.registry, 1, (data) =>
+    checkNow(deps.db, RegistryJob.parse(data).tenantId, deps.now()),
   );
   // OCR takes the CPU: two documents at a time per process.
-  await boss.work(
-    QUEUES.ingest,
-    { ...polling, localConcurrency: 2 },
-    timed(QUEUES.ingest, (data) => runDocumentIngest(deps, DocumentJob.parse(data).documentId)),
+  await work(QUEUES.ingest, 2, (data) =>
+    runDocumentIngest(deps, DocumentJob.parse(data).documentId),
   );
-  await boss.work(
-    QUEUES.validate,
-    { ...polling, localConcurrency: 2 },
-    timed(QUEUES.validate, (data) => runDocumentValidate(deps, DocumentJob.parse(data).documentId)),
+  await work(QUEUES.validate, 2, (data) =>
+    runDocumentValidate(deps, DocumentJob.parse(data).documentId),
   );
   // Mostly waiting on a model: three at a time, under the orchestrator's own semaphores.
-  await boss.work(
-    QUEUES.classify,
-    { ...polling, localConcurrency: 3 },
-    timed(QUEUES.classify, (data) => runDocumentClassify(deps, DocumentJob.parse(data).documentId)),
+  await work(QUEUES.classify, 3, (data) =>
+    runDocumentClassify(deps, DocumentJob.parse(data).documentId),
   );
   // A request a person approved (src/actions.ts): a failed mail throws, and the queue tries again.
-  await boss.work(
-    QUEUES.action,
-    { ...polling, localConcurrency: 2 },
-    timed(QUEUES.action, (data) => runActionSend(deps, ActionJob.parse(data).actionId)),
-  );
+  await work(QUEUES.action, 2, (data) => runActionSend(deps, ActionJob.parse(data).actionId));
   // An ERP's list (src/erp.ts): a fatal error is kept on its sync row, anything else is retried.
-  await boss.work(
-    QUEUES.erp,
-    polling,
-    timed(QUEUES.erp, (data) => {
-      const { tenantId, connector } = ErpJob.parse(data);
-      return runErpSync(deps, tenantId, connector);
-    }),
-  );
-  await boss.work(
-    QUEUES.connector,
-    polling,
-    timed(QUEUES.connector, (data) =>
-      checkConnection(deps, ConnectorJob.parse(data).connectionId, options.log),
-    ),
+  await work(QUEUES.erp, 1, (data) => {
+    const { tenantId, connector } = ErpJob.parse(data);
+    return runErpSync(deps, tenantId, connector);
+  });
+  await work(QUEUES.connector, 1, (data) =>
+    checkConnection(deps, ConnectorJob.parse(data).connectionId, options.log),
   );
   const tick = () =>
     boss

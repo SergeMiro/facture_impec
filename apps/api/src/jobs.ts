@@ -132,44 +132,47 @@ export async function ensureQueues(boss: PgBoss): Promise<void> {
 export const syncKey = (target: SyncTarget) =>
   `${target.provider}:${target.account}:${target.pdpRef}`;
 
-export function bossJobs(boss: PgBoss): Jobs {
+/**
+ * pg-boss waits its polling interval after every fetch, busy or not: two workers on a queue would
+ * take at most one job a second (measured by `pnpm perf`, docs/plans/phase-7.md). A job sent from
+ * this process wakes its queue's workers instead, and a worker that finishes a job wakes itself
+ * (src/workers.ts): they fetch until a fetch comes back empty, then poll again. A job sent from
+ * another process is still found by polling.
+ */
+export interface Wakeups {
+  add(queue: string, workerId: string): void;
+  wake(queue: string): void;
+}
+
+export function bossWakeups(boss: PgBoss): Wakeups {
+  const workers = new Map<string, string[]>();
   return {
-    async enqueueSend(invoiceId) {
-      await boss.send(QUEUES.send, { invoiceId }, { singletonKey: invoiceId });
+    add(queue, workerId) {
+      workers.set(queue, [...(workers.get(queue) ?? []), workerId]);
     },
-    async enqueueSync(target) {
-      await boss.send(QUEUES.sync, target, { singletonKey: syncKey(target) });
+    wake(queue) {
+      for (const id of workers.get(queue) ?? []) boss.notifyWorker(id);
     },
-    async enqueueMonitor(invoiceId) {
-      await boss.send(QUEUES.monitor, { invoiceId }, { singletonKey: invoiceId });
-    },
-    async enqueueReportPayment(invoiceId) {
-      await boss.send(QUEUES.reportPayment, { invoiceId }, { singletonKey: invoiceId });
-    },
-    async enqueueRegistry(tenantId) {
-      await boss.send(QUEUES.registry, { tenantId }, { singletonKey: tenantId });
-    },
-    async enqueueConnector(connectionId) {
-      await boss.send(QUEUES.connector, { connectionId }, { singletonKey: connectionId });
-    },
-    async enqueueIngest(documentId) {
-      await boss.send(QUEUES.ingest, { documentId }, { singletonKey: documentId });
-    },
-    async enqueueValidate(documentId) {
-      await boss.send(QUEUES.validate, { documentId }, { singletonKey: documentId });
-    },
-    async enqueueClassify(documentId) {
-      await boss.send(QUEUES.classify, { documentId }, { singletonKey: documentId });
-    },
-    async enqueueAction(actionId) {
-      await boss.send(QUEUES.action, { actionId }, { singletonKey: actionId });
-    },
-    async enqueueErp(tenantId, connector) {
-      await boss.send(
-        QUEUES.erp,
-        { tenantId, connector },
-        { singletonKey: `${tenantId}:${connector}` },
-      );
-    },
+  };
+}
+
+export function bossJobs(boss: PgBoss, wakeups?: Wakeups): Jobs {
+  const send = async (queue: string, data: object, singletonKey: string) => {
+    await boss.send(queue, data, { singletonKey });
+    wakeups?.wake(queue);
+  };
+  return {
+    enqueueSend: (invoiceId) => send(QUEUES.send, { invoiceId }, invoiceId),
+    enqueueSync: (target) => send(QUEUES.sync, target, syncKey(target)),
+    enqueueMonitor: (invoiceId) => send(QUEUES.monitor, { invoiceId }, invoiceId),
+    enqueueReportPayment: (invoiceId) => send(QUEUES.reportPayment, { invoiceId }, invoiceId),
+    enqueueRegistry: (tenantId) => send(QUEUES.registry, { tenantId }, tenantId),
+    enqueueConnector: (connectionId) => send(QUEUES.connector, { connectionId }, connectionId),
+    enqueueIngest: (documentId) => send(QUEUES.ingest, { documentId }, documentId),
+    enqueueValidate: (documentId) => send(QUEUES.validate, { documentId }, documentId),
+    enqueueClassify: (documentId) => send(QUEUES.classify, { documentId }, documentId),
+    enqueueAction: (actionId) => send(QUEUES.action, { actionId }, actionId),
+    enqueueErp: (tenantId, connector) =>
+      send(QUEUES.erp, { tenantId, connector }, `${tenantId}:${connector}`),
   };
 }

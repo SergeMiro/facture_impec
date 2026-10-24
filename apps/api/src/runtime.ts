@@ -21,7 +21,7 @@ import { type Billing, billingFromEnv } from './billing';
 import type { GoogleConnector, MicrosoftConnector } from './connectors';
 import type { AiDeps, ApiDeps, Mailer, OwnPlatform, PdpRegistry, TestPlatform } from './deps';
 import { createGoogleClient, GOOGLE_HOSTS } from './google';
-import { bossJobs, createBoss, ensureQueues } from './jobs';
+import { bossJobs, bossWakeups, createBoss, ensureQueues } from './jobs';
 import { type Listening, listen } from './listen';
 import { log as jsonLog } from './log';
 import { OutboxMailer, SmtpMailer } from './mail';
@@ -295,13 +295,14 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
   boss.on('error', (e) => log(`pg-boss: ${e.message}`));
   await boss.start();
   await ensureQueues(boss);
+  const wakeups = bossWakeups(boss);
 
   const now = options.now ?? (() => new Date());
   const pdp = options.pdp ?? pdpFromEnv(env);
   const deps: ApiDeps = {
     env,
     db: database.db,
-    jobs: bossJobs(boss),
+    jobs: bossJobs(boss, wakeups),
     pdp,
     test: options.test === undefined ? testPlatformFromEnv(env, pdp) : options.test,
     ai:
@@ -329,6 +330,7 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
   const stopSweep = env.API_WORKERS
     ? await startWorkers(boss, deps, {
         sweepEverySeconds: env.PDP_SYNC_INTERVAL_SECONDS,
+        wakeups,
         ...(options.pollingIntervalSeconds && {
           pollingIntervalSeconds: options.pollingIntervalSeconds,
         }),

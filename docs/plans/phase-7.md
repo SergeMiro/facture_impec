@@ -55,3 +55,28 @@ BTP plan §11 and §12 stage 7, adapted by `docs/DECISIONS.md` D10. Stages 5 and
   with its `attempt`; the one it will not (`retryCount` = `retryLimit`) is the `error` « job failed »:
   a platform's 503 that the second attempt gets past is not the operator's problem. The API's own
   tests drop the lines (`apps/api/src/test-setup.ts`; `FI_TEST_LOGS=1` shows them).
+
+7B:
+
+- **No k6 or autocannon**: the client is `fetch` in the API's own process (as `pnpm scenario`). The
+  paths are timed on the server's side where they can be (the database's clock for documents, the
+  send's `sent_at` for decisions), and a client's cost is far under the budgets. No Docker needed.
+- **The 1 000 documents are the golden set made unique** (a comment after their end, which every
+  reader skips), not a generator of their own: they are what stage 1 already proves is read right.
+  45 % e-invoices, 50 % text PDFs, 5 % scans; 4 a second by default (§11 gives no pace), to
+  companies of 100 (a company's backlog is 200, `src/ingest.ts`).
+- **« WASM validation »** is the rules of `@fi/core` (TypeScript, D2), on one invoice at a time in
+  the process, after a warm-up. **« decide → the graph continued »** is decide → the request sent
+  (`action.send` through the outbox mailer): the step that follows, the queue's wait included.
+- **Reads and decisions happen while the documents arrive**: a list is measured under load, as a
+  person would see it on a busy morning.
+- **A worker fetches again at once after a job** (found by the first full run): pg-boss waits its
+  polling interval (2 s) after every fetch, busy or not, so the two `document.ingest` workers read
+  at most one document a second and 4 a second piled up (read p95 606 s, 152 of 1 000 never
+  settled). Now a worker that finishes a job wakes itself, and a job sent from the process wakes
+  its queue's workers (`notifyWorker`, `src/jobs.ts`): they fetch until a fetch comes back empty,
+  then poll again. pg-boss's own answers do not fit: `burstWhenReadyExceeds` reads queue counts
+  cached for up to two minutes, `burstWhenBatchFull` needs batches, and LISTEN/NOTIFY wakes a
+  worker for a new job but not through a backlog, and wants a session connection (no transaction
+  pooler). A job sent from another process is still found by polling; LISTEN/NOTIFY is the step
+  for several processes (`docs/DEFERRED.md`).

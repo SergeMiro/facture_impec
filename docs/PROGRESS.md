@@ -1790,3 +1790,60 @@ Evidence (2026-10-24):
 | Metrics | same file, a real API with its pg-boss workers on PGlite: › answers Prometheus with its own token only, and does not exist without one (401 with a wrong one and with `ADMIN_TOKEN`, 404 without the variable); › answers on a database whose queues were never started; › times requests by route pattern, never by id (`/documents/:id`, `unmatched`; the id absent from the text); › counts a job that failed for good… (`fi_jobs_failed_last_hour`, `fi_job_duration_seconds{outcome="failed"}`, a line for every queue, none of pg-boss's own); › times a document from its arrival to read and to settled (a UBL golden through `POST /ingest`: `read="xml"`, `stage="done"`, `document.validate` ok); › says how long the oldest ERP import has been running (3 h). › times each task of the chasing timer, the deadline watchers among them (`fi_periodic_run_seconds{task}`, which `WatchersOverBudget` reads: the watchers run on that timer, not in `pdp.sweep` as the first version of this stage said). Deviation: tokens are a counter in the process (`docs/plans/phase-7.md`). |
 | Alerts and dashboard | `promtool check rules` (7 rules), `promtool check config`, `promtool test rules alerts.test.yml` SUCCESS (each alert fires when it should and not before; an expectation changed on purpose fails); › writes every metric the alerts and the dashboard read, on routes that exist. Manual run: `docs/DEPLOY.md` § 7 « Tried on 2026-10-24 », `docs/evidence/btp7-grafana.png` (local Chrome; browser: local). |
 | Gate | `pnpm verify` green on 2026-10-24: api 376, add-in 119, agents 162 (evals included), core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, connectors 13, domain 8, scripts 4. The harness E2E passes (local Chrome; browser: local). |
+
+## BTP plan — stage 7B: `pnpm perf` (started 2026-10-24)
+
+`docs/plans/phase-7.md` › 7B, `docs/DECISIONS.md` D10. Criteria, written before the code:
+
+- **The paths of §11**, each with its p50, p95 and max against its budget: `POST /ingest`'s answer
+  (0.3 s), a document read without OCR (5 s) and by OCR (30 s), one invoice checked by the rules
+  (20 ms), an invoice with its XML to done (8 s), a document without XML to done or review (25 s),
+  a decision to its request sent (2 s), the watchers on a company of 1 000 deadlines (60 s),
+  `GET /actions` and `GET /obligations` (0.2 s). PASS or FAIL each, and the exit code says it.
+- **What runs is what production runs**: the API, its workers polling every 2 s and its sweep every
+  5 minutes, in one process with the mock platform; the model off; PGlite in memory or a Postgres
+  given with `--database-url`. 1 000 documents by default, at a steady pace, each unique (no
+  duplicate shortcut), 45 % e-invoices, 50 % text PDFs, 5 % scans; the reads and the decisions happen
+  while they arrive.
+- **Nothing lost**: every document settles and every approved request is sent, or the run fails.
+- **Kept working**: a run of 20 in `pnpm test:scripts`; the numbers of a full run recorded here.
+
+Evidence (2026-10-24, the VPS: 8 vCPU AMD EPYC-Rome, 15 GB, Node 22.22, PGlite in memory, the
+machine shared with other work):
+
+- **The first full run failed**, and found a real fault: `POST /ingest` 41 ms, but a document read
+  without OCR p50 319 s, p95 606 s, OCR p95 602 s, and 152 of the 1 000 never settled in the
+  10 minutes allowed. pg-boss waits its polling interval (2 s) after every fetch, busy or not: the
+  two `document.ingest` workers read at most one document a second against 4 arriving. Fixed (a
+  worker fetches again after a job; a job sent from the process wakes its queue's workers:
+  `apps/api/src/jobs.ts` `bossWakeups`, `src/workers.ts`; deviation in `docs/plans/phase-7.md`).
+  `apps/api/src/wakeups.test.ts` (polling at 10 s, six documents settled within 8 s) fails without
+  the wake-ups and passes with them.
+- **`pnpm perf` after the fix: PASS in 258 s** (1 000 documents at 4 a second: 450 xml, 500 text,
+  50 OCR; 0 never settled; 100 requests drafted, 20 decided, 0 never sent):
+
+  | Path (budget) | n | p50 | p95 | max |
+  |---|---|---|---|---|
+  | `POST /ingest` → its answer (300 ms) | 1 000 | 42 ms | 75 ms | 164 ms |
+  | read without OCR (5 s) | 950 | 59 ms | 81 ms | 126 ms |
+  | read by OCR (30 s) | 50 | 1.85 s | 2.13 s | 2.24 s |
+  | one invoice checked by the rules (20 ms) | 1 000 | 0.38 ms | 0.59 ms | 2.32 ms |
+  | an invoice with its XML, to done (8 s) | 450 | 38 ms | 56 ms | 87 ms |
+  | a document without XML, to done or review (25 s) | 550 | 85 ms | 1.86 s | 2.25 s |
+  | decide → the request sent (2 s) | 20 | 69 ms | 153 ms | 178 ms |
+  | the watchers, 1 000 deadlines (60 s) | 1 | 295 ms | | |
+  | `GET /actions` (200 ms) | 50 | 66 ms | 96 ms | 134 ms |
+  | `GET /obligations` (200 ms) | 50 | 81 ms | 114 ms | 152 ms |
+
+  Before the fix decide → sent was p95 1.85 s, all of it the queue's poll; it is 153 ms now.
+- **The same run on Postgres 17** (`postgres:17.11-alpine` in Docker, `--database-url`, a pool of
+  connections as in production): **PASS in 256 s**, 0 never settled, 0 never sent. p95: ingest
+  29 ms, read without OCR 63 ms, OCR 2.30 s, rules 0.61 ms, XML to done 60 ms, without XML 1.94 s,
+  decide → sent 101 ms, watchers 321 ms, `GET /actions` 46 ms, `GET /obligations` 48 ms.
+- **Kept working**: `scripts/perf/perf.test.ts` (a run of 20, 11 s; 29 s before the fix) and
+  `percentile` in `pnpm test:scripts`.
+- **Gate**: `pnpm verify` green on 2026-10-24: api 377, add-in 119, agents 162 (evals included),
+  core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, connectors 13,
+  domain 8, scripts 6. The harness E2E passes (local Chrome; browser: local).
+- **Not measured yet**: the production host; the model on (classify waits on it, its own budget); several API processes (a job sent from one
+  is found by another's poll). In `docs/TODO.md` › BTP plan.

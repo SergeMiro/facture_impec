@@ -24,8 +24,10 @@ export interface StackOptions {
    * chasing days and the mails' dates are business time. Off, only the platform hurries.
    */
   businessClock?: boolean;
-  /** Real seconds between chasing runs; default 0.05 on the business clock. */
+  /** Real seconds between chasing runs; default 0.05 on the business clock, else the API's own. */
   collectEverySeconds?: number;
+  /** How often the workers look for jobs; default 0.5 s (production: 2 s). */
+  pollingIntervalSeconds?: number;
   /** A Postgres to use instead of PGlite in memory (the k6 load test, scripts/load). */
   databaseUrl?: string;
   log?: (message: string) => void;
@@ -80,6 +82,7 @@ export async function startStack(options: StackOptions = {}): Promise<Stack> {
   const database = await openDatabase(options.databaseUrl ? { url: options.databaseUrl } : {});
   const speed = env.MOCK_PDP_SPEED;
   const businessClock = options.businessClock === true;
+  const collectEverySeconds = options.collectEverySeconds ?? (businessClock ? 0.05 : undefined);
   let started: number | null = null;
   const now = () =>
     started === null ? new Date() : new Date(started + (Date.now() - started) * speed);
@@ -92,11 +95,9 @@ export async function startStack(options: StackOptions = {}): Promise<Stack> {
     },
     port: 0,
     database,
-    pollingIntervalSeconds: 0.5,
-    ...(businessClock && {
-      now,
-      collectEverySeconds: options.collectEverySeconds ?? 0.05,
-    }),
+    pollingIntervalSeconds: options.pollingIntervalSeconds ?? 0.5,
+    ...(businessClock && { now }),
+    ...(collectEverySeconds && { collectEverySeconds }),
     log,
   });
   if (options.webhooks !== false) {

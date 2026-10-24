@@ -275,3 +275,11 @@ Each line says where it came from and what would bring it back.
 | Several API processes behind Prometheus | One target, `api:4000`; the counts in the process are that process's | A second API process: one scrape target per process (compose's DNS or service discovery), the dashboards summed over `instance`. |
 | Logs kept and searched | `docker compose logs`, 5 files of 10 MB, `grep` on the JSON fields | More than a few days to search, or several machines: a log store (Loki or the host's), with the same retention as personal data (`docs/RGPD.md`). |
 | Alerts by another channel than e-mail | Alertmanager mails the operator | The operator wants them on the phone: a Telegram or SMS receiver in `alertmanager.yml`. |
+
+## Measured under load (BTP plan stage 7B, 2026-10-24)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| Waking workers in another process | A job sent from the process wakes its queue's workers there; a worker fetches again after each job (`bossWakeups`, `apps/api/src/jobs.ts`); another process finds the job at its next poll (2 s) | The workers run apart from the API: pg-boss's LISTEN/NOTIFY (`useListenNotify`, the queues' `notify`), on a session connection (not a transaction pooler). |
+| A load from outside the process | `fetch` in the API's process, the paths timed on the server's side | The API is hosted: the same paths from another machine (k6, as `pnpm load`), through the proxy and TLS, to see what the network adds. |
+| The model on during the run | Off: classify falls back to the rules; the run measures the pipeline, not a provider | The production model is chosen: a run with it on, classify's own time per document in the report (§11 gives the graph 25 s). |

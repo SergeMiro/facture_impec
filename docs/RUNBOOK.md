@@ -140,6 +140,39 @@ as at the platform and checks that the platform holds each number once. It print
 p95 per request (create, send) and the end-to-end throughput, then PASS or FAIL. Manual, not part of
 `pnpm verify`; the last numbers are in `docs/PROGRESS.md` M5. It needs Docker, nothing else.
 
+## Performance (`pnpm perf`)
+
+```bash
+pnpm perf                                  # 1 000 documents at 4 a second, about 5 min
+pnpm perf --documents 200 --rate 8         # a quicker run
+pnpm perf --database-url postgres://fi:fi@127.0.0.1:5432/perf   # a throwaway database: it is written to
+```
+
+BTP plan §11's latency budgets, each path's p50, p95 and max, PASS or FAIL, and the exit code says it
+(`apps/api/src/scenarios/perf.ts`). The API runs in the command's process as in production, but for
+the model (off) and the database (PGlite in memory unless `--database-url`): its workers look for
+jobs every 2 s (and at once after a job, or when the process sends one), the sweep runs every 5
+minutes. What it does:
+
+- the rules check 1 000 invoices one by one (the goldens; budget 20 ms each);
+- a company of 1 000 deadlines (each from its attestation, a tenth due within 30 days) is watched
+  once (60 s);
+- 1 000 documents of the golden set (`apps/api/scripts/golden`), each made unique, arrive through
+  `POST /ingest` at a steady pace, to companies of 100: 45 % e-invoices, 50 % text PDFs, 5 % scans.
+  Each is timed from its arrival to its read (5 s, 30 s by OCR) and to done or review (8 s with its
+  XML, 25 s without), on the database's clock (`documents.created_at`, the audit events);
+- meanwhile the deadline company lists its requests and deadlines (`GET /actions`,
+  `GET /obligations`, 0.2 s) and approves 20 requests, each timed until it is sent (2 s).
+
+A document that never settles or a request never sent fails the run. It needs poppler-utils and
+tesseract (the golden scans), as `pnpm test` does. Run it on an idle machine: weekly and before a
+release (§11); the last numbers are in `docs/PROGRESS.md` › stage 7B. Not part of `pnpm verify`; a
+run of 20 is (`scripts/perf/perf.test.ts`), for the script, not the budgets.
+
+A FAIL on the documents' paths with `POST /ingest` still fast is a queue that does not keep up: the
+dashboard's « Jobs waiting » climbs while « Job p95 by queue » stays low. Check that the workers
+still fetch again after a job (`apps/api/src/wakeups.test.ts`) before suspecting the readers.
+
 ## Accountant export check (Paheko)
 
 ```bash

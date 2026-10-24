@@ -261,6 +261,16 @@ Left from stage 2A for later (2026-10-24):
 - [ ] **Real documents**: the first pilot's attestations, Kbis, PV and contracts through the classifier
       and the date patterns, to see where they miss (dates by a model: `docs/DEFERRED.md`).
 
+Left from stage 7 for later (2026-10-24):
+
+- [ ] **`pnpm perf` on the production host**, once it is chosen, before the first pilot: the numbers
+      in `docs/PROGRESS.md` › stage 7B are the VPS's, PGlite and a throwaway Postgres 17.
+- [ ] **`pnpm perf` with the model on** (the owner's production key): classify's time per document
+      under load (`docs/DEFERRED.md` › Measured under load).
+- [ ] **The add-in tests' noise**: `controller.test` logs « request failed » for `GET /invoices`
+      after its database closed (a request still in flight at teardown). Harmless, but it hides a
+      real failure in the output: await the pane's last request before closing.
+
 ## Excel on the web E2E
 
 - [ ] A Microsoft account that can upload an add-in in Excel on the web, then
