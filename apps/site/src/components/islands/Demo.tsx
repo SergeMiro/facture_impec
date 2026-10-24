@@ -383,8 +383,8 @@ export default function Demo() {
             </tbody>
           </table>
           <p className="px-3 py-2.5 text-xs text-black/45">
-            Astuce : cliquez sur une ligne pour voir son historique. Facture Impec n’écrit que dans
-            la colonne FI_Statut.
+            Astuce : cliquez sur une ligne pour voir son historique. Les statuts reviennent dans
+            FI_Statut. Les corrections restent soumises à votre confirmation.
           </p>
         </div>
 

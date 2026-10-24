@@ -4,6 +4,13 @@
     "jsx": "react-jsx",
     "jsxImportSource": "react"
   },
-  "include": [".astro/types.d.ts", "src", "astro.config.mjs"],
+  "include": [
+    ".astro/types.d.ts",
+    "src",
+    "astro.config.mjs",
+    "scripts",
+    "e2e",
+    "playwright.config.ts"
+  ],
   "exclude": ["dist", ".vercel"]
 }

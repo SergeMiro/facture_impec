@@ -1,0 +1,24 @@
+{
+  "sourceSha256": "297aea4d86636c96123fb87de79dc03d979fa77786815b92dcf20a2d865af57a",
+  "browser": "local",
+  "variants": {
+    "landscape": {
+      "file": "product-landscape.mp4",
+      "sha256": "ad33b185dff1a1526a063decadc0cd362053c491def11dcc500236558c9561e6",
+      "width": 1280,
+      "height": 800,
+      "duration": 35.958333,
+      "codec": "h264",
+      "audio": false
+    },
+    "portrait": {
+      "file": "product-portrait.mp4",
+      "sha256": "5cb97a4fc880e296ea85148845862e5085653680423963764346179ecf67e7df",
+      "width": 960,
+      "height": 1200,
+      "duration": 36,
+      "codec": "h264",
+      "audio": false
+    }
+  }
+}

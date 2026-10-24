@@ -1135,3 +1135,33 @@ columns as owned, even when those columns were separated by user data. Acceptanc
 - `pnpm verify --concurrency=1` passed all ten tasks, with 102 add-in tests. `pnpm build` passed.
 - The final full browser run passed 3 scenarios, including Google Sheets and the existing Excel
   harness; real Excel web skipped without an account. browser: local.
+
+## Site — Automatic product demonstration (completed 2026-10-24)
+
+Owner request: a visitor immediately understands what the product does through an automatic video
+with animation, effects and transitions. Acceptance criteria before implementation:
+
+- Install an open source animation library and keep the animated source editable in the repo.
+- Show an autoplaying, muted demonstration in the first screen, with desktop/mobile layouts,
+  pause/replay, chapter navigation, readable French captions and a text transcript.
+- Explain the existing workflow: spreadsheet → an amount missing against an order → correction
+  confirmed by the person → Factur-X and explicit send → returned status → recorded payment.
+- Mark the demonstration and sample data clearly. No backend request, real send, fake customer claim
+  or promise of automatic payment collection is part of the demonstration.
+- Respect reduced motion and pause when the player is hidden. An autoplay refusal leaves a play
+  control available. The existing interactive demo remains reachable.
+- Produce browser-compatible video assets from the animated source, verify desktop/mobile playback
+  in local Chrome, and pass the repository gate and production build before committing and pushing.
+
+
+Acceptance evidence (2026-10-24):
+
+- Motion 14.6 (MIT) animates an editable six-scene film. Native MP4 playback keeps Motion out of the homepage bundle.
+- Landscape 1280×800 (1.31 MB) and portrait 960×1200 (1.66 MB) use silent H.264 with French VTT captions and posters.
+- `apps/site/e2e/demo.spec.ts`: 4 passed, browser: local. Desktop autoplay, chapters, scroll pause/resume, manual pause, reduced motion, mobile autoplay, no overflow, and failed-video fallback passed.
+- `apps/site/src/content/demo-film.test.ts`: source fingerprint, media hashes, encoding metadata and complete captions passed. Site unit suite: 13 passed.
+- `pnpm verify --concurrency=1` and `pnpm build` passed. Encoded frames were inspected at 7 s (desktop) and 15 s (portrait).
+- Preview deployed: https://facture-impec-site-fvmdzuv3z-sergemiros-projects.vercel.app.
+  Vercel reports READY. The authenticated CLI fetch returned HTTP 200. Preview access requires the owner’s Vercel login.
+- Production publication waits for publisher identity, address and contact email required by `RUNBOOK.md` § Marketing site. The owner was asked for these details.
+- Source, playback behavior and regeneration procedure: `docs/SITE_DEMO.md`.
