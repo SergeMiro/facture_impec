@@ -152,7 +152,8 @@ export class RechercheEntreprises implements Directory {
   }
 
   async #search(params: Record<string, string>): Promise<Result[]> {
-    const url = new URL('/search', this.baseUrl);
+    // Relative to the base's path: a stand-in or a proxy may serve the API under one (/sirene).
+    const url = new URL('search', this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     url.searchParams.set('minimal', 'true');
     url.searchParams.set('include', 'siege,tva');

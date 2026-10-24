@@ -572,7 +572,12 @@ function Issues({ open }: { open: OpenInvoice }) {
       )}
       {explained
         ? explained.explanations.map((x) => (
-            <Card key={`${x.ruleId}:${x.path}`} className={styles.card} data-testid="explanation">
+            // BR-FR-05/06 find one per mention, all on `notes`: their text tells them apart.
+            <Card
+              key={`${x.ruleId}:${x.path}:${x.message_fr}`}
+              className={styles.card}
+              data-testid="explanation"
+            >
               <span className={styles.heading}>
                 <Badge appearance="tint" color={x.severity === 'error' ? 'danger' : 'warning'}>
                   {x.severity === 'error' ? t('addin.invoice.issues') : t('addin.invoice.warnings')}
@@ -608,7 +613,7 @@ function Issues({ open }: { open: OpenInvoice }) {
             </Card>
           ))
         : issues.map((issue) => (
-            <Card key={`${issue.ruleId}:${issue.path}`} className={styles.card}>
+            <Card key={`${issue.ruleId}:${issue.path}:${issue.messageFr}`} className={styles.card}>
               <Text weight="semibold">{issue.messageFr}</Text>
               <Caption1 className={styles.muted}>{issue.fixHintFr}</Caption1>
             </Card>

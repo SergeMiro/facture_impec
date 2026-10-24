@@ -784,7 +784,7 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
       buffer: pdf(
         'ATTESTATION DE VIGILANCE',
         'URSSAF de Bourgogne',
-        `Délivrée le ${frDate(addDays(today, -200))} à : Atelier Dupont SARL, SIREN 300000007`,
+        `Délivrée le ${frDate(addDays(today, -200))} à : Plâtrerie Démo SARL, SIREN 300000007`,
         "L'entreprise est à jour de ses obligations de déclaration et de paiement.",
       ),
     });
@@ -800,6 +800,8 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
       ),
     });
     // The workers read and sort both, one after the other; « Actualiser » shows what they made.
+    // « À valider » opens first once something waits there: the deadlines are picked by hand.
+    await pane.getByRole('tab', { name: /^Échéances/ }).click();
     const toReview = pane.getByRole('tab', {
       name: t('addin.documents.part.review', { count: 1 }),
     });
@@ -838,6 +840,52 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
       await expect(pane.getByTestId('received').filter({ hasText: file })).toBeVisible();
     }
     await page.screenshot({ path: info.outputPath('documents-received.png') });
+    expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+  });
+
+  await test.step('BTP stage 3: the attestation’s company is added, its request edited and validated', async () => {
+    await pane.getByRole('tab', { name: /^À valider/ }).click();
+    const unknown = pane.getByTestId('action-confirmer_tiers');
+    await expect(unknown).toContainText('300000007');
+    await expect(unknown).toContainText('attestation-urssaf.pdf');
+    await unknown.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('approvals-confirm.png') });
+    await unknown.getByRole('button', { name: t('addin.actions.confirm.add') }).click();
+    await expect(pane.getByTestId('notice')).toContainText(t('addin.actions.added'));
+
+    // Its deadline is now the supplier's: the request is drafted at once, still without an address.
+    const request = pane.getByTestId('action-demande_attestation_vigilance');
+    await expect(request).toContainText(t('addin.actions.noRecipient'));
+    const send = request.getByRole('button', { name: t('addin.actions.send') });
+    await expect(send).toBeDisabled();
+    await request.getByRole('button', { name: t('addin.actions.showMessage') }).click();
+    // Six months after its issue the attestation is overdue, and the letter says so.
+    await expect(request.locator('pre')).toContainText('est arrivée à échéance le');
+    await request.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('approvals-request.png') });
+
+    await request.getByRole('button', { name: t('addin.actions.edit') }).click();
+    await request.getByTestId('action-to').fill('contact@platrerie-demo.test');
+    await request.getByRole('button', { name: t('addin.actions.form.save') }).click();
+    await expect(pane.getByTestId('notice')).toContainText(t('addin.actions.saved'));
+    await expect(request).toContainText(
+      t('addin.actions.to', { to: 'contact@platrerie-demo.test' }),
+    );
+    await request.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('approvals-edited.png') });
+    await send.click();
+    // Mode test is on: validated, and no e-mail leaves.
+    await expect(pane.getByTestId('notice')).toContainText(t('addin.actions.sentTest'));
+    await expect(request).toHaveCount(0);
+    await expect(pane.getByTestId('approvals')).toContainText(t('addin.actions.noneTest'));
+
+    // The new attestation came: « C'est fait » closes the deadline, which is no longer followed.
+    await pane.getByRole('tab', { name: /^Échéances/ }).click();
+    const due = pane.getByTestId('due-attestation_vigilance_renouvellement');
+    await due.getByRole('button', { name: t('addin.documents.done') }).click();
+    await expect(pane.getByTestId('notice')).toContainText(t('addin.documents.closed.done'));
+    await expect(due).toHaveCount(0);
+    await page.screenshot({ path: info.outputPath('approvals-closed.png') });
     expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
   });
 });

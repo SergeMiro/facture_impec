@@ -1599,3 +1599,31 @@ Evidence (2026-10-24):
 | A new company | › « Ajouter comme fournisseur » › adds the company from the directory and links its documents and deadlines (supplier `sirene`, verified; the document and the deadline linked; its request drafted at once, without an address; `edit` refused 422 `action_not_editable`); › refuses a company the directory says is closed (409 `supplier_closed`, the draft unchanged). |
 | Closed by a person | › withdraw a draft whose deadline moved, and « C'est fait » withdraws the next (`{ withdrawn: 1 }`, nothing drafted after, a second close 409 `obligation_closed`). |
 | Gate | `pnpm verify` green on 2026-10-24: api 349, add-in 114, agents 160 (evals included), core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 8, scripts 4. |
+
+## BTP plan — stage 3B: « À valider » in the pane (started 2026-10-24)
+
+`docs/plans/phase-3.md` › 3B. Criteria (from the plan's 3B table, written down with the work):
+
+- **Shown**: « À valider » is the first part of « Documents », and the one that opens when something
+  waits there. Each request says what it asks, of which company, for which deadline (its date, how
+  far), to whom (or that an address is missing), its subject, and its text on « Lire le message ».
+  « Mode test » shows the test ones only.
+- **Decided**: « Envoyer » approves the revision the pane showed (disabled without an address);
+  « Modifier » changes the address and the text; « Plus tard » puts it aside 1, 7 or 14 days;
+  « Ignorer » drops it. Each says in plain French what happened (Mode test: no e-mail leaves); a
+  revision the server moved on is refused with the API's French message and the list reloaded.
+- **A new company**: « Une entreprise inconnue » names the document and the SIREN; « Ajouter comme
+  fournisseur » adds it, and its request is there at once.
+- **Deadlines closed**: « C'est fait » and « Ignorer » on each deadline; its waiting requests go.
+- **In a browser**: the whole path in the harness, `browser: local`.
+
+Evidence (2026-10-24):
+
+| Criterion | Evidence |
+|---|---|
+| Shown | `apps/addin/src/ui/ActionsPart.tsx`, `DocumentsView.tsx` (the default part); `docs/evidence/btp3-confirm.png`, `btp3-request.png`. |
+| Decided | `apps/addin/src/controller.test.ts` › « À valider » (BTP stage 3B) › a new sous-traitant is added, its request written to, sent once; the deadline closed (approve without an address: `action_needs_recipient` in French; « Modifier » adds it, revision 1; the stale item refused with `action_revision_changed`; « Envoyer »: one e-mail, `Reply-To` the owner); `btp3-edited.png`. |
+| A new company | same test (`added`, the request listed with `to: null`); E2E below. |
+| Deadlines closed | same test (`closed.done`, no deadline left); `btp3-closed.png`. |
+| In a browser | `apps/addin/e2e/harness.spec.ts` › BTP stage 3: the attestation's company is added, its request edited and validated (browser: local, 43.6 s for the whole spec): the unknown company with its file and SIREN, « Ajouter comme fournisseur », the request without an address and « Envoyer » disabled, the letter « est arrivée à échéance », « Modifier » with an address, « Envoyer » in Mode test (`sentTest`, « Rien à valider en Mode test. »), « C'est fait ». |
+| Found on the way | The E2E API asked the real company directory (no `SIRENE_URL`): now the mock's stand-in. And `RechercheEntreprises` dropped the path of its base URL (`new URL('/search', base)`), so a directory served under a path never answered: fixed, `onboarding.test.ts` › the directory client › keeps the path of its base URL. The pane's issue cards had duplicate React keys for BR-FR-05/06 (one finding per mention on `notes`): the text is in the key. |

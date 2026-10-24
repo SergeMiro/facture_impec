@@ -1096,6 +1096,13 @@ pane ─► POST /obligations/:id/close (done | dismissed) ─► its drafts wit
   deadline still open and on the date the request was written for. `Reply-To`: the person who
   approved (else the company's first owner). Mode test: `sent` with `notSent`, no mail. Three failed
   tries: `failed`, `mail_failed`.
+- **The pane** (3B, `apps/addin/src/ui/ActionsPart.tsx`): « À valider » is the first part of
+  « Documents », opened first when something waits. A request shows its company, its deadline, the
+  recipient, the subject, the text on demand; « Envoyer » (`approve`, disabled without an address),
+  « Modifier » (`edit`: address and text), « Plus tard » (`snooze` 1, 7 or 14 days), « Ignorer »
+  (`reject`). Every decision carries the revision the pane showed; a refusal comes back in the API's
+  French and the list reloads. Each deadline has « C'est fait » / « Ignorer »
+  (`POST /obligations/:id/close`).
 
 ## Decision: port the Rust core to TypeScript, archive Rust
 

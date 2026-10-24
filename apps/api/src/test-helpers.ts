@@ -36,6 +36,7 @@ export {
 // The task pane's documents tests (BTP stage 2B) deposit text PDFs.
 export { writePdf } from '../scripts/golden/documents';
 // The task pane's tests move invoices as the workers would.
+export { runActionSend } from './actions';
 export { runCollect } from './collect';
 export { checkConnection, type GoogleConnector, type MicrosoftConnector } from './connectors';
 export { createGoogleClient } from './google';

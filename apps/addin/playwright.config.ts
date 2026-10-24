@@ -73,6 +73,8 @@ export default defineConfig({
         CONNECTOR_SEALING_KEY: E2E.sealingKey,
         // EU customers' VAT numbers through VIES' stand-in: the sweep never asks the real one.
         VIES_URL: `http://localhost:${E2E.mock}/vies`,
+        // The company directory's stand-in too: made-up companies, never the real register.
+        SIRENE_URL: `http://localhost:${E2E.mock}/sirene`,
         // No AI: the agents' deterministic answers, the same on every run.
         AI_PROVIDER: '',
       },

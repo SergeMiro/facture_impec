@@ -8,7 +8,14 @@ import {
   SheetMapping,
   SheetSnapshot,
 } from '@fi/core';
-import { DocumentKind, DocumentSource, DocumentStage, ObligationKind } from '@fi/domain';
+import {
+  ActionKind,
+  ActionStatus,
+  DocumentKind,
+  DocumentSource,
+  DocumentStage,
+  ObligationKind,
+} from '@fi/domain';
 import type { UIDataTypes, UIMessage } from 'ai';
 import { z } from 'zod';
 import type { PickedFile } from './microsoft/port';
@@ -936,6 +943,48 @@ export const Obligations = z.object({
   obligations: z.array(Obligation),
 });
 
+/** A request waiting for a person, as « À valider » lists it (BTP stage 3). */
+export const ActionItem = z.object({
+  id: z.string(),
+  kind: ActionKind,
+  status: ActionStatus,
+  /** What the person saw: an answer to an older revision is refused. */
+  revision: z.number().int(),
+  isTest: z.boolean(),
+  /** `send_unknown`: an interrupted send, back for a person to decide again. */
+  error: z.string().nullable(),
+  email: z
+    .object({
+      to: z.string().nullable(),
+      subject: z.string(),
+      body: z.string(),
+      notSent: z.boolean(),
+    })
+    .nullable(),
+  /** The company to confirm (`confirmer_tiers`). */
+  siren: z.string().nullable(),
+  party: z.object({ id: z.string(), name: z.string() }).nullable(),
+  obligation: z.object({ id: z.string(), kind: ObligationKind, dueOn: z.string() }).nullable(),
+  document: z
+    .object({ id: z.string(), name: z.string(), kind: DocumentKind.nullable() })
+    .nullable(),
+});
+export type ActionItem = z.infer<typeof ActionItem>;
+const ActionList = z.object({ actions: z.array(ActionItem) });
+const ObligationClosed = z.object({ id: z.string(), status: z.string(), withdrawn: z.number() });
+/** What a decision changed; the lists are loaded again after it. */
+const ActionDecided = z.object({
+  id: z.string(),
+  status: ActionStatus,
+  revision: z.number().int(),
+});
+
+/** « Envoyer », « Modifier », « Plus tard », « Ignorer » (`ApprovalDecision` without the channel). */
+export type ActionDecision =
+  | { decision: 'approve' | 'reject' }
+  | { decision: 'edit'; comment: string; to?: string }
+  | { decision: 'snooze'; snoozeUntil: string };
+
 /** A person's answer about a document in review. */
 export interface ReviewInput {
   kind: DocumentKind;
@@ -1318,6 +1367,16 @@ export class ApiClient {
   };
   obligations = (test: boolean, horizon: number) =>
     this.#json(Obligations, `/obligations?test=${test}&horizon=${horizon}`);
+  /** « À valider » (BTP stage 3): the drafts of the side « Mode test » shows. */
+  actions = (test: boolean) => this.#json(ActionList, `/actions?test=${test}`);
+  decideAction = (id: string, revision: number, decision: ActionDecision) =>
+    this.#json(ActionDecided, `/actions/${id}/decide`, {
+      method: 'POST',
+      body: { revision, ...decision },
+    });
+  /** « C'est fait » or « Ignorer » on a deadline. */
+  closeObligation = (id: string, status: 'done' | 'dismissed') =>
+    this.#json(ObligationClosed, `/obligations/${id}/close`, { method: 'POST', body: { status } });
   reviewDocument = (id: string, input: ReviewInput) =>
     this.#json(DocumentState, `/documents/${id}/review`, { method: 'POST', body: input });
   /** A file brought to the back end from the pane: its bytes as the body, as `/uploads`. */

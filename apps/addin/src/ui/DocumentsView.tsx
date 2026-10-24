@@ -1,6 +1,6 @@
-// « Documents » (BTP plan stage 2B, `docs/plans/phase-2.md`): the deadlines the company's documents
-// make, the documents a person must say something about, and every document received. In « Mode
-// test », the test ones.
+// « Documents » (BTP plan stage 2B, `docs/plans/phase-2.md`; stage 3B, `phase-3.md`): the requests
+// waiting for a person (« À valider »), the deadlines the company's documents make, the documents a
+// person must say something about, and every document received. In « Mode test », the test ones.
 import { frDate, frMoney, isValidSiren } from '@fi/core';
 import {
   DEADLINE_DATE,
@@ -30,7 +30,9 @@ import {
 import { useRef, useState } from 'react';
 import type { DocumentItem, Obligation, ReviewInput } from '../api';
 import { DOCUMENT_HORIZON, YEAR_HORIZON } from '../controller';
+import { ActionsPart } from './ActionsPart';
 import { parisDateTime, useFi } from './context';
+import { daysBetween, when } from './days';
 
 const useStyles = makeStyles({
   section: { display: 'flex', flexDirection: 'column', gap: '10px' },
@@ -76,11 +78,6 @@ const DATE_LABEL = {
   receptionOn: 'addin.documents.form.receptionOn',
 } as const;
 
-const DAY_MS = 86_400_000;
-/** Whole days from one ISO day to another. */
-const daysBetween = (from: string, to: string) =>
-  Math.round((Date.parse(to) - Date.parse(from)) / DAY_MS);
-
 const reasonText = (reason: string | null) =>
   reason && REASONS.has(reason)
     ? t(`addin.documents.reason.${reason as Reason}`)
@@ -99,18 +96,10 @@ const REASON_CODES = [
 type Reason = (typeof REASON_CODES)[number];
 const REASONS = new Set<string>(REASON_CODES);
 
-/** « dans 12 jours », « demain », « depuis hier »… next to the date. */
-function when(days: number): string {
-  if (days === 0) return t('addin.documents.dueToday');
-  if (days === 1) return t('addin.documents.dueTomorrow');
-  if (days === -1) return t('addin.documents.overdueYesterday');
-  return days > 0
-    ? t('addin.documents.dueIn', { count: days })
-    : t('addin.documents.overdueSince', { count: -days });
-}
-
 function Due({ item, today }: { item: Obligation; today: string }) {
   const styles = useStyles();
+  const [state, fi] = useFi();
+  const busy = state.busy.includes(`obligation:${item.id}`);
   const who =
     item.party?.name ?? (item.siren ? t('addin.documents.siren', { siren: item.siren }) : null);
   return (
@@ -135,6 +124,24 @@ function Due({ item, today }: { item: Obligation; today: string }) {
             ? t('addin.documents.from', { file: item.document.name })
             : t('addin.documents.fromInvoice')}
         </Caption1>
+        <span className={styles.line}>
+          <Button
+            size="small"
+            disabled={busy}
+            onClick={() => void fi.closeObligation(item.id, 'done')}
+          >
+            {t('addin.documents.done')}
+          </Button>
+          <Button
+            size="small"
+            appearance="subtle"
+            disabled={busy}
+            onClick={() => void fi.closeObligation(item.id, 'dismissed')}
+          >
+            {t('addin.documents.dismiss')}
+          </Button>
+          {busy && <Spinner size="tiny" />}
+        </span>
       </Card>
     </li>
   );
@@ -346,16 +353,18 @@ function ReceivedPart() {
   );
 }
 
-type Part = 'deadlines' | 'review' | 'received';
+type Part = 'approve' | 'deadlines' | 'review' | 'received';
 
 export function DocumentsView() {
   const styles = useStyles();
   const [state, fi] = useFi();
-  const [part, setPart] = useState<Part>('deadlines');
+  // Until the person picks a part: « À valider » when something waits, else « Échéances ».
+  const [picked, setPart] = useState<Part | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const pane = state.documents;
   if (!pane) return <Spinner label={t('addin.documents.loading')} />;
   const depositing = state.busy.includes('deposit');
+  const part = picked ?? (pane.actions.length > 0 ? 'approve' : 'deadlines');
 
   return (
     <div className={styles.section}>
@@ -394,6 +403,9 @@ export function DocumentsView() {
       </span>
 
       <TabList size="small" selectedValue={part} onTabSelect={(_, d) => setPart(d.value as Part)}>
+        <Tab value="approve">
+          {t('addin.documents.part.approve', { count: pane.actions.length })}
+        </Tab>
         <Tab value="deadlines">
           {t('addin.documents.part.deadlines', { count: pane.obligations.length })}
         </Tab>
@@ -401,6 +413,7 @@ export function DocumentsView() {
         <Tab value="received">{t('addin.documents.part.received')}</Tab>
       </TabList>
 
+      {part === 'approve' && <ActionsPart />}
       {part === 'deadlines' && <DeadlinesPart />}
       {part === 'review' && <ReviewPart />}
       {part === 'received' && <ReceivedPart />}

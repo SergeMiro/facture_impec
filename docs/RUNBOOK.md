@@ -297,7 +297,10 @@ server (:3100), so it runs next to `pnpm dev`, and drives the harness page in th
 `e2e/harness.spec.ts` is the M3 acceptance path: sign in by link, confirm the columns, fix the two
 errors from « Corriger dans la feuille », rehearse, « Prêt à envoyer », Mode test, send a test invoice,
 « Simuler un rejet PDP », then M6's Réception: three test supplier invoices (normal, duplicate, new
-IBAN), approval, dispute, export and the FEC downloaded. `e2e/b2brouter.spec.ts` is M4's: a test invoice goes through the B2Brouter
+IBAN), approval, dispute, export and the FEC downloaded; its later steps go on to the controls,
+the corrections, the connectors, VIES and the BTP documents (an attestation, its company added from
+« À valider », the request edited and validated in Mode test). VIES and the company directory are the
+mock's stand-ins (`/vies`, `/sirene`), never the real services. `e2e/b2brouter.spec.ts` is M4's: a test invoice goes through the B2Brouter
 adapter to the stand-in, the fiche is closed, and FI_Statut turns « Test · Acceptée par le client » by
 itself (about 30 s, the pane's first status check). The stack has a `test_` key, so B2Brouter's
 stand-in is the test platform for both. About a minute in all. It is not part of `pnpm verify` (it

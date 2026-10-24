@@ -8,11 +8,14 @@ import {
   isDocKind,
   kindFromName,
   type LayoutMapping,
+  parisToday,
   parseAddress,
   SheetMapping,
 } from '@fi/core';
 import { type MessageKey, t } from '@fi/shared';
 import {
+  type ActionDecision,
+  type ActionItem,
   type AiChoice,
   ApiClient,
   ApiFailure,
@@ -137,6 +140,25 @@ export const YEAR_HORIZON = 365;
 /** « Reçus » shows this many documents, then « Afficher plus ». */
 const DOCUMENT_PAGE = 50;
 
+/** What the pane says once a decision in « À valider » is saved. */
+function decidedText(item: ActionItem, decision: ActionDecision): string {
+  switch (decision.decision) {
+    case 'approve':
+      if (item.kind === 'confirmer_tiers') return t('addin.actions.added');
+      return item.isTest
+        ? t('addin.actions.sentTest')
+        : t('addin.actions.sent', { to: item.email?.to ?? '' });
+    case 'reject':
+      return t('addin.actions.ignored');
+    case 'edit':
+      return t('addin.actions.saved');
+    case 'snooze':
+      return t('addin.actions.snoozed', {
+        date: frDate(parisToday(new Date(decision.snoozeUntil))),
+      });
+  }
+}
+
 /** « Documents » (BTP stage 2B), on the side « Mode test » shows. */
 export interface DocumentsPane {
   test: boolean;
@@ -144,6 +166,8 @@ export interface DocumentsPane {
   today: string;
   horizon: number;
   obligations: Obligation[];
+  /** « À valider » (stage 3): the requests and the companies waiting for a person. */
+  actions: ActionItem[];
   review: DocumentItem[];
   reviewTotal: number;
   received: DocumentItem[];
@@ -1395,8 +1419,9 @@ export class Controller {
     const test = this.#state.testMode;
     const days = horizon ?? this.#state.documents?.horizon ?? DOCUMENT_HORIZON;
     const pane = await this.#act('documents', async () => {
-      const [due, review, received] = await Promise.all([
+      const [due, waiting, review, received] = await Promise.all([
         this.api.obligations(test, days),
+        this.api.actions(test),
         this.api.documents({ test, stage: 'needs_review', limit: 200 }),
         this.api.documents({ test, limit: DOCUMENT_PAGE }),
       ]);
@@ -1405,6 +1430,7 @@ export class Controller {
         today: due.today,
         horizon: due.horizon,
         obligations: due.obligations,
+        actions: waiting.actions,
         review: review.documents,
         reviewTotal: review.total,
         received: received.documents,
@@ -1440,6 +1466,29 @@ export class Controller {
     await this.loadDocuments();
     this.notify('success', t('addin.documents.reviewed', { file: done.name }));
     return true;
+  };
+
+  /**
+   * « Envoyer », « Modifier », « Plus tard », « Ignorer » and « Ajouter comme fournisseur » in « À
+   * valider ». The lists are loaded again either way: refused because the request changed, the pane
+   * shows its latest version.
+   */
+  decideAction = async (item: ActionItem, decision: ActionDecision): Promise<boolean> => {
+    const done = await this.#act(`action:${item.id}`, () =>
+      this.api.decideAction(item.id, item.revision, decision),
+    );
+    await this.loadDocuments();
+    if (!done) return false;
+    this.notify('success', decidedText(item, decision));
+    return true;
+  };
+
+  /** « C'est fait » or « Ignorer » on a deadline: closed, and its waiting requests withdrawn. */
+  closeObligation = async (id: string, status: 'done' | 'dismissed'): Promise<void> => {
+    const done = await this.#act(`obligation:${id}`, () => this.api.closeObligation(id, status));
+    if (!done) return;
+    await this.loadDocuments();
+    this.notify('success', t(`addin.documents.closed.${status}`));
   };
 
   /** « Déposer un document »: the file goes to the back end, which reads and sorts it. */

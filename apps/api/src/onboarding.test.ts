@@ -366,6 +366,18 @@ describe('the directory client', () => {
     expect(await directory.lookup('552081317')).toBeNull();
   });
 
+  it('keeps the path of its base URL, as the stand-in under /sirene has', async () => {
+    let asked = '';
+    const directory = new RechercheEntreprises('http://localhost:4010/sirene', (async (
+      url: string | URL | Request,
+    ) => {
+      asked = String(url);
+      return Response.json({ results: [], total_results: 0 });
+    }) as typeof fetch);
+    expect(await directory.lookup('552081317')).toBeNull();
+    expect(asked).toMatch(/^http:\/\/localhost:4010\/sirene\/search\?q=552081317&/);
+  });
+
   it('searches active companies by name, at most 25, narrowed by a post code (docs/ONBOARDING.md §1.4)', async () => {
     const asked: URL[] = [];
     const directory = new RechercheEntreprises(

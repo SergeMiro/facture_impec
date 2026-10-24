@@ -200,8 +200,9 @@ Stages (`docs/plans/phase-N.md` each):
       is in `docs/DEFERRED.md` › The documents in the pane.
 - [ ] **3 — watchers and approvals** (`docs/plans/phase-3.md`; 3A, the deadline watchers, the
       requests from `fr.json`, `GET /actions`, `POST /actions/:id/decide`, the queue `action.send`,
-      « Ajouter comme fournisseur », `POST /obligations/:id/close`: done 2026-10-24). Left: 3B « À
-      valider » in the pane, 3C the weekly e-mail's links; the Telegram bot waits for the owner (below);
+      « Ajouter comme fournisseur », `POST /obligations/:id/close`: done 2026-10-24; 3B « À valider »
+      in the pane, « C'est fait » on the deadlines: done 2026-10-24). Left: 3C the weekly e-mail's
+      links; the Telegram bot waits for the owner (below);
       invoices sent through Facture Impec keep CollectAgent's chasing, not duplicated.
 - [ ] **4 — connectors**: the frame and the ERP-export connector (D5); EBP SaaS paused (D3).
 - [ ] **5, 6** paused (D3). **7 — observability, performance, runbook, onboarding.**

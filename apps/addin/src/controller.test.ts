@@ -19,6 +19,7 @@ import {
   MicrosoftStandIn,
   mockModel,
   newTenant,
+  runActionSend,
   runCollect,
   runDocumentJobs,
   runSend,
@@ -41,6 +42,7 @@ import {
   columnIndex,
   columnLetters,
   computeInvoice,
+  frDate,
   frMoney,
   InvoiceDraft,
   parisToday,
@@ -1973,6 +1975,107 @@ describe('the documents and their deadlines (BTP stage 2B)', () => {
     expect(state().documents?.horizon).toBe(YEAR_HORIZON);
     await controller.loadDocuments();
     expect(state().documents?.horizon).toBe(YEAR_HORIZON);
+  });
+});
+
+describe('« À valider » (BTP stage 3B)', () => {
+  const SIREN = '999000813';
+  const SOUS_TRAITANT = '300000007';
+  const { controller, state } = pane(new FakeWorkbook({ [DEMO_SHEET]: demoSheet() }));
+  const OWNER_EMAIL = 'valider@entreprise-demo.test';
+
+  beforeAll(async () => {
+    const vatId = `FR${String((12 + 3 * (Number(SIREN) % 97)) % 97).padStart(2, '0')}${SIREN}`;
+    const key = (
+      await newTenant(api.request, { ...SELLER, siren: SIREN, vatId, ownerEmail: OWNER_EMAIL })
+    ).apiKey;
+    await controller.start();
+    await controller.signInWithKey(key);
+  });
+
+  it('a new sous-traitant is added, its request written to, sent once; the deadline closed', async () => {
+    controller.navigate({ name: 'documents' });
+    await until(() => state().documents !== null, 'the documents');
+    // Signed in with the key: real documents, real e-mails (Mode test has its own API test).
+    expect(state().testMode).toBe(false);
+    expect(state().documents?.actions).toEqual([]);
+    const today = parisToday();
+    const attestation = writePdf([
+      {
+        lines: [
+          { text: 'ATTESTATION DE VIGILANCE' },
+          { text: 'URSSAF de Bourgogne' },
+          { text: `Délivrée le ${frDate(addDays(today, -170))} à : SIREN ${SOUS_TRAITANT}` },
+          { text: "L'entreprise est à jour de ses obligations de déclaration et de paiement." },
+        ],
+      },
+    ]);
+    await controller.depositDocument(new Blob([new Uint8Array(attestation)]), 'urssaf.pdf');
+    await runDocumentJobs(api);
+    await controller.loadDocuments();
+
+    // A company nobody confirmed: asked first, its request comes once it is a supplier.
+    const [ask] = state().documents?.actions ?? [];
+    expect(ask).toMatchObject({
+      kind: 'confirmer_tiers',
+      siren: SOUS_TRAITANT,
+      document: { name: 'urssaf.pdf' },
+    });
+    if (!ask) throw new Error('nothing to confirm');
+    expect(await controller.decideAction(ask, { decision: 'approve' })).toBe(true);
+    expect(state().notice?.text).toBe(t('addin.actions.added'));
+    const [request] = state().documents?.actions ?? [];
+    expect(request).toMatchObject({
+      kind: 'demande_attestation_vigilance',
+      revision: 0,
+      email: { to: null },
+      obligation: { kind: 'attestation_vigilance_renouvellement' },
+    });
+    if (!request) throw new Error('no request');
+
+    // No address yet: refused in the API's words; « Modifier » adds it with the person's text.
+    expect(await controller.decideAction(request, { decision: 'approve' })).toBe(false);
+    expect(state().notice).toMatchObject({
+      tone: 'error',
+      text: t('api.error.action_needs_recipient'),
+    });
+    const text = `${request.email?.body ?? ''}\n\nP.-S. : merci de répondre avant vendredi.`;
+    expect(
+      await controller.decideAction(request, {
+        decision: 'edit',
+        comment: text,
+        to: 'contact@sous-traitant.test',
+      }),
+    ).toBe(true);
+    expect(state().notice?.text).toBe(t('addin.actions.saved'));
+    const [edited] = state().documents?.actions ?? [];
+    expect(edited).toMatchObject({
+      revision: 1,
+      email: { to: 'contact@sous-traitant.test', body: text },
+    });
+    if (!edited) throw new Error('no edited request');
+
+    // The list the person had is older than the request: refused, and the latest shown.
+    expect(await controller.decideAction(request, { decision: 'reject' })).toBe(false);
+    expect(state().notice?.text).toBe(t('api.error.action_revision_changed'));
+    expect(state().documents?.actions).toHaveLength(1);
+
+    expect(await controller.decideAction(edited, { decision: 'approve' })).toBe(true);
+    expect(state().notice?.text).toBe(
+      t('addin.actions.sent', { to: 'contact@sous-traitant.test' }),
+    );
+    expect(state().documents?.actions).toEqual([]);
+    const deps = { db: api.deps.db, mailer: api.mailer, now: () => new Date() };
+    for (const id of api.jobs.actions.splice(0)) await runActionSend(deps, id);
+    const mails = api.mailer.sent.filter((m) => m.to === 'contact@sous-traitant.test');
+    expect(mails.map((m) => [m.text, m.replyTo])).toEqual([[text, OWNER_EMAIL]]);
+
+    // « C'est fait »: the deadline leaves « Échéances ».
+    const [due] = state().documents?.obligations ?? [];
+    expect(due?.kind).toBe('attestation_vigilance_renouvellement');
+    await controller.closeObligation(due?.id ?? '', 'done');
+    expect(state().notice?.text).toBe(t('addin.documents.closed.done'));
+    expect(state().documents?.obligations).toEqual([]);
   });
 });
 
