@@ -35,7 +35,7 @@ sees the autoliquidation error before sending, not in a back end it does not use
 
 | What | Where |
 |---|---|
-| A raw e-mail (`.eml`) becomes one document per attachment, the sender and subject as hints (D3: the provider waits for the owner) | `apps/api/src/mail.ts`, dependency in `docs/DEPENDENCIES.md` |
+| A raw e-mail (`.eml`) becomes one document per attachment, the sender and subject as hints (D3: the provider waits for the owner) | `apps/api/src/ingest-mail.ts`, dependency in `docs/DEPENDENCIES.md` |
 
 ## Not in stage 1 (and where it went)
 
@@ -70,3 +70,36 @@ sees the autoliquidation error before sending, not in a back end it does not use
   supplier list, and that is where the question arises.
 - BTP-RG-* and BTP-SIT-* speak only where the caller gives the retenue and the situation; the sheet
   does not yet (`docs/DEFERRED.md` › BTP rules).
+
+**1B** (2026-10-24):
+
+- The golden documents' generator is `apps/api/scripts/golden/documents.ts`, not `scripts/golden/`:
+  the package boundaries refuse a test that reaches outside its package, and the generator needs
+  `@fi/core`'s Factur-X writer and goldens. It writes the PDFs by hand (Helvetica, WinAnsi) and
+  makes the scans and images with `pdftoppm`, so nothing binary is committed.
+- No pane screen for `POST /ingest` yet: the pane's « Fichiers importés » (R6) keeps reading
+  workbooks and invoices for the registry. Stage 2 gives the documents their screen, once they are
+  classified (`docs/DEFERRED.md`).
+- A document with text but no structured invoice stays `ingested`, its text in `extracted`, until
+  stage 2's classifier: `classified` would claim a kind nobody gave it. The worker reads it once:
+  `extracted` set is what « read » means.
+- The supplier or customer is found at validate (by SIREN, `party_id`), not at ingest: stage 2's
+  linking step proposes « confirmer_tiers » for one not known.
+- The drive and e-mail adapters: drive waits for a folder picker (`docs/TODO.md`), e-mail is 1C.
+- A web page (`<!DOCTYPE html` or `<html`) is refused at the door: it starts with a tag like XML, and
+  an e-mail's body saved as a file would otherwise go to review as broken XML.
+
+**1C** (2026-10-24):
+
+- `apps/api/src/ingest-mail.ts`, not `mail.ts`: `mail.ts` is the outgoing mailer (sign-in links,
+  reminders).
+- `POST /ingest/mail` takes a raw e-mail as its body (35 MB at most, the size mail servers take with
+  the base64): what a forwarding provider will call once the owner picks one (D3), and what a person
+  can use today with an e-mail saved as `.eml` from Outlook or Gmail.
+- A message forwarded as an attachment is opened, three levels deep at most: the invoice is inside.
+  An image the HTML shows by its Content-ID (a logo, a signature) is skipped, as are empty parts,
+  parts over 20 MB and anything the worker cannot read (a Word file); the answer lists them with the
+  reason. An e-mail with nothing to read is refused (422), nothing stored.
+- The backlog is checked once for the whole e-mail, so an e-mail is stored whole or not at all when
+  the company is busy. The `sourceRef` of its documents is its Message-ID, or `sha256:` of the e-mail
+  when it has none; its Date header is not trusted for `receivedAt` (the time it reached us is).

@@ -52,6 +52,12 @@ import type {
   TestPlatform,
 } from './deps';
 import { INJECTED_PREFIX, triagePending } from './inbound';
+import {
+  documentsBehind,
+  inboundDocuments,
+  runDocumentIngest,
+  runDocumentValidate,
+} from './ingest';
 import { idempotencyKey } from './invoices';
 import { QUEUES } from './jobs';
 import { ADVISED, awaitingAdvice, runMonitor } from './monitor';
@@ -91,6 +97,7 @@ const SendJob = z.object({ invoiceId: z.uuid() });
 const InvoiceJob = SendJob;
 const RegistryJob = z.object({ tenantId: z.uuid() });
 const ConnectorJob = z.object({ connectionId: z.uuid() });
+const DocumentJob = z.object({ documentId: z.uuid() });
 const SyncJob = z.object({
   provider: z.enum(PDP_PROVIDERS),
   account: z.string().min(1),
@@ -306,6 +313,7 @@ export async function runSweep(deps: WorkerDeps): Promise<{
   payments: number;
   registry: number;
   connectors: number;
+  documents: number;
 }> {
   const inFlight = await deps.db
     .select({
@@ -343,6 +351,10 @@ export async function runSweep(deps: WorkerDeps): Promise<{
   const due =
     deps.microsoft || deps.google ? await connectorsBehind(deps.db, deps.now(), deps) : [];
   for (const id of due) await deps.jobs.enqueueConnector(id);
+  // A document a worker left half-way (a crash, a deploy, a tool missing) is read again.
+  const stuck = await documentsBehind(deps.db, deps.now());
+  for (const id of stuck.read) await deps.jobs.enqueueIngest(id);
+  for (const id of stuck.validate) await deps.jobs.enqueueValidate(id);
   return {
     synced: inFlight.length,
     sends: unfinished.length,
@@ -350,6 +362,7 @@ export async function runSweep(deps: WorkerDeps): Promise<{
     payments: payments.length,
     registry: behind.length,
     connectors: due.length,
+    documents: stuck.read.length + stuck.validate.length,
   };
 }
 
@@ -396,6 +409,7 @@ export async function runInboundPoll(
     }
   }
   const triaged = await triagePending(deps, undefined, log);
+  await inboundDocuments(deps, log);
   return { stored, failed, triaged };
 }
 
@@ -495,6 +509,13 @@ export async function startWorkers(
   });
   await boss.work(QUEUES.registry, polling, async ([job]) => {
     if (job) await checkNow(deps.db, RegistryJob.parse(job.data).tenantId, deps.now());
+  });
+  // OCR takes the CPU: two documents at a time per process.
+  await boss.work(QUEUES.ingest, { ...polling, localConcurrency: 2 }, async ([job]) => {
+    if (job) await runDocumentIngest(deps, DocumentJob.parse(job.data).documentId);
+  });
+  await boss.work(QUEUES.validate, { ...polling, localConcurrency: 2 }, async ([job]) => {
+    if (job) await runDocumentValidate(deps, DocumentJob.parse(job.data).documentId);
   });
   await boss.work(QUEUES.connector, polling, async ([job]) => {
     if (job) {

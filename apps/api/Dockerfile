@@ -4,6 +4,10 @@
 # Internal packages ship TypeScript source run through tsx (CLAUDE.md): there is no build step.
 FROM node:22.23.3-bookworm-slim
 ENV CI=true
+# The ingest worker reads PDFs (pdftotext, pdftoppm) and scans (tesseract, French): src/reading.ts.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-fra \
+  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 RUN corepack enable
 COPY . .

@@ -19,6 +19,10 @@ export const QUEUES = {
   registry: 'registry.refresh',
   /** A connected account's picked files checked (src/connectors.ts). `stately` per connection. */
   connector: 'connector.check',
+  /** A document read (src/ingest.ts): its data, its text, or OCR. `exclusive` per document. */
+  ingest: 'document.ingest',
+  /** An invoice document checked by the rules (src/ingest.ts). `exclusive` per document. */
+  validate: 'document.validate',
 } as const;
 
 export function createBoss(database: Database): PgBoss {
@@ -77,6 +81,21 @@ export async function ensureQueues(boss: PgBoss): Promise<void> {
     retryBackoff: true,
     expireInSeconds: 600,
   });
+  // OCR of ten pages takes about twenty seconds; a missing tool is retried, then the sweep tries again.
+  await boss.createQueue(QUEUES.ingest, {
+    policy: 'exclusive',
+    retryLimit: 3,
+    retryDelay: 10,
+    retryBackoff: true,
+    expireInSeconds: 300,
+  });
+  await boss.createQueue(QUEUES.validate, {
+    policy: 'exclusive',
+    retryLimit: 3,
+    retryDelay: 5,
+    retryBackoff: true,
+    expireInSeconds: 60,
+  });
 }
 
 export const syncKey = (target: SyncTarget) =>
@@ -101,6 +120,12 @@ export function bossJobs(boss: PgBoss): Jobs {
     },
     async enqueueConnector(connectionId) {
       await boss.send(QUEUES.connector, { connectionId }, { singletonKey: connectionId });
+    },
+    async enqueueIngest(documentId) {
+      await boss.send(QUEUES.ingest, { documentId }, { singletonKey: documentId });
+    },
+    async enqueueValidate(documentId) {
+      await boss.send(QUEUES.validate, { documentId }, { singletonKey: documentId });
     },
   };
 }

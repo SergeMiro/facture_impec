@@ -1,8 +1,10 @@
 // HTTP API (plan §1): tenants, invoices, validation, platform webhooks, and the add-in's routes
 // (sign-in, sheet sync, settings, Mode test, supplier invoices, RGPD). Business rules live in the modules next to this
 // file and in @fi/core; this file reads requests (Zod) and shapes answers.
+import { randomUUID } from 'node:crypto';
 import { Address, InvoiceDraft, isIsoDate, LayoutMapping, SheetMapping, toCii } from '@fi/core';
 import { audit, CONNECTION_PROVIDERS, eq, PDP_PROVIDERS, type TenantRow, tenants } from '@fi/db';
+import { MAX_DOCUMENT_BYTES } from '@fi/domain';
 import { PdpRequestError } from '@fi/pdp-adapter';
 import { t } from '@fi/shared';
 import { Hono } from 'hono';
@@ -71,6 +73,8 @@ import {
   listInbound,
   TestInboundBody,
 } from './inbound';
+import { documentName, documentView, getDocument, IngestQuery, ingestFile } from './ingest';
+import { ingestMail, MAX_MAIL_BYTES } from './ingest-mail';
 import {
   cancelInvoice,
   createInvoice,
@@ -201,11 +205,17 @@ export function createApp(deps: ApiDeps) {
   const bigBody = maxBody(16 * MB);
   const body2Mb = maxBody(2 * MB);
   const smallBody = maxBody(256 * KB);
+  // A document up to 20 MB (@fi/domain MAX_DOCUMENT_BYTES): a scanned contract, a photo.
+  const ingestBody = maxBody(MAX_DOCUMENT_BYTES);
+  // An e-mail with its attachments in base64 (src/mail.ts).
+  const mailBody = maxBody(MAX_MAIL_BYTES);
   app.use('*', (c, next) => {
     const path = c.req.path;
     if (path.startsWith('/workbooks/') || path === '/detect' || path === '/uploads') {
       return bigBody(c, next);
     }
+    if (path === '/ingest') return ingestBody(c, next);
+    if (path === '/ingest/mail') return mailBody(c, next);
     if (/^\/(webhooks|auth|onboarding)\//.test(path)) return smallBody(c, next);
     return body2Mb(c, next);
   });
@@ -230,7 +240,7 @@ export function createApp(deps: ApiDeps) {
   });
 
   app.onError((err, c) => {
-    if (err instanceof ApiError) return c.json(err.body, err.status);
+    if (err instanceof ApiError) return c.json(err.body, err.status, err.headers);
     if (err instanceof z.ZodError) {
       const e = new ApiError(400, 'invalid_request', undefined, z.prettifyError(err));
       return c.json(e.body, e.status);
@@ -368,6 +378,9 @@ export function createApp(deps: ApiDeps) {
     '/connectors/*',
     '/uploads',
     '/uploads/*',
+    '/ingest',
+    '/ingest/mail',
+    '/documents/*',
     '/checks',
     '/links/*',
     '/findings/*',
@@ -612,6 +625,51 @@ export function createApp(deps: ApiDeps) {
     );
     return c.json(await removeSource(deps, tenant, fileId, c.req.param('sheet')));
   });
+
+  // ── Documents (BTP plan stage 1): one file, its bytes as the body, its name in `?name=` ─────────
+  api.post('/ingest', async (c) => {
+    const tenant = c.get('tenant');
+    const { test } = parse(IngestQuery, c.req.query());
+    const { document, created } = await ingestFile(
+      deps,
+      tenant,
+      {
+        source: 'excel',
+        sourceRef: `pane:${randomUUID()}`,
+        name: documentName(c.req.query('name')),
+        bytes: new Uint8Array(await c.req.arrayBuffer()),
+        isTest: test,
+        receivedAt: deps.now(),
+      },
+      { actor: c.get('principal').kind === 'session' ? 'user' : 'api', backpressure: true },
+    );
+    return c.json(documentView(document), created ? 201 : 200);
+  });
+
+  // A raw e-mail (.eml) as the body: one document per attachment, the sender and subject as hints.
+  api.post('/ingest/mail', async (c) => {
+    const { test } = parse(IngestQuery, c.req.query());
+    const { documents, skipped } = await ingestMail(
+      deps,
+      c.get('tenant'),
+      new Uint8Array(await c.req.arrayBuffer()),
+      { actor: c.get('principal').kind === 'session' ? 'user' : 'api', isTest: test },
+    );
+    return c.json(
+      {
+        documents: documents.map(({ document, created }) => ({
+          ...documentView(document),
+          created,
+        })),
+        skipped,
+      },
+      documents.some((d) => d.created) ? 201 : 200,
+    );
+  });
+
+  api.get('/documents/:id', async (c) =>
+    c.json(documentView(await getDocument(deps, c.get('tenant'), c.req.param('id')))),
+  );
 
   // ── Files uploaded from the pane (R6) ─────────────────────────────────────────────────────────
   api.get('/uploads', async (c) => c.json(await listUploads(deps, c.get('tenant'))));

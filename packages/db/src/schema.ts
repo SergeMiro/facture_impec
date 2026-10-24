@@ -551,6 +551,8 @@ export const inboundQueue = pgTable(
     decidedBy: text('decided_by'),
     disputeReason: text('dispute_reason'),
     exportId: uuid('export_id').references(() => inboundExports.id),
+    /** The same file as a document of the BTP back end (adapter `pdp`, apps/api/src/ingest.ts). */
+    documentId: uuid('document_id').references(() => documents.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

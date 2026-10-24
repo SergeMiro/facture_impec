@@ -413,6 +413,40 @@ A supplier invoice counts in B2 once the registry job ran (the worker, a few sec
 tests). A plain PDF is refused until the owner decides (`docs/TODO.md`). The files live in the
 `uploads` table; a workbook's bytes are there in base64, so the table grows with them.
 
+### Documents for the BTP back end (stage 1B)
+
+The worker reads PDFs with poppler (`pdfinfo`, `pdftotext`, `pdftoppm`) and scans with tesseract in
+French. On a developer machine:
+
+```bash
+sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-fra
+tesseract --list-langs        # must list fra
+```
+
+The API image installs them (`apps/api/Dockerfile`); check an image with
+`docker run --rm --entrypoint tesseract <image> --list-langs`. Without them, a document stays
+`ingested`: the job is retried, then the sweep tries again every few minutes, and nothing is lost.
+
+One file by hand (an API key of the company; the bytes as the body, the name in the query):
+
+```bash
+curl -X POST -H "authorization: Bearer $FI_KEY" --data-binary @attestation.pdf \
+  "http://localhost:4000/ingest?name=attestation.pdf"          # 201 with the document, 200 if known
+curl -H "authorization: Bearer $FI_KEY" http://localhost:4000/documents/<id>
+```
+
+An e-mail saved as `.eml` (Outlook: « Enregistrer sous »; Gmail: « Télécharger le message »): each
+attachment becomes a document, the answer lists the parts left aside and why.
+
+```bash
+curl -X POST -H "authorization: Bearer $FI_KEY" --data-binary @facture-dupont.eml \
+  "http://localhost:4000/ingest/mail"
+```
+
+`?test=true` keeps it in Mode test. 20 MB at most (35 MB for an e-mail); 429 with `Retry-After: 60` while 200 documents
+of the company wait to be read. The 50 golden documents and the p95: `apps/api/src/ingest.test.ts`
+(`apps/api/scripts/golden/documents.ts` makes them).
+
 ## Deployment
 
 The API image, the compose file and the settings of a hosted sandbox or prod: `docs/DEPLOY.md`. The

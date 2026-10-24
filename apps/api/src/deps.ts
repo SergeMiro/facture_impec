@@ -45,6 +45,10 @@ export interface Jobs {
   enqueueRegistry(tenantId: string): Promise<void>;
   /** Check a connected account's picked files (src/connectors.ts). */
   enqueueConnector(connectionId: string): Promise<void>;
+  /** Read a document just ingested (src/ingest.ts). */
+  enqueueIngest(documentId: string): Promise<void>;
+  /** Check an invoice document with the rules (src/ingest.ts). */
+  enqueueValidate(documentId: string): Promise<void>;
 }
 
 export interface AiDeps {

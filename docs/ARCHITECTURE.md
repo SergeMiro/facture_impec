@@ -973,6 +973,47 @@ company that is not a building firm never sees one.
   which an EN 16931 invoice does not carry as fields (annex A cas n°26: a note ABU); nothing gives
   them yet (`docs/DEFERRED.md`).
 
+## BTP back end, stage 1B: documents ingested, read and checked
+
+Every file the back end receives becomes one row of `documents` (stage 0's table) and its bytes one
+`blobs` row, through `storeDocument` (`apps/api/src/ingest.ts`); two queues then read and check it.
+
+- **At the door.** `POST /ingest` (the pane or a script with a company key; the bytes as the body,
+  the name in `?name=`, `?test=true` for Mode test) and the inbound poll (`inboundDocuments`, after
+  each `runInboundPoll`: every supplier invoice the platform delivered, source `pdp`,
+  `inbound_queue.document_id`). What the file is comes from its first bytes (`sniffMime`: PDF, JPEG,
+  PNG, TIFF, XML), never its name or a declared type; anything else is refused (415), as is an empty
+  file (422) or one over 20 MB (413). The SHA-256 makes one document per file, company and mode: a
+  second copy answers 200 with the first. A company with 200 documents not yet read waits (429,
+  `Retry-After: 60`); nothing is stored then. Each new document is audited `document.ingest`.
+- **FileStore** (`apps/api/src/files.ts`): `put` / `get` by `tenantId/sha256`, Postgres `blobs`
+  for now; S3 when the volume asks (`docs/DEFERRED.md`).
+- **`document.ingest`** (`runDocumentIngest`, `apps/api/src/reading.ts`): a Factur-X PDF gives its
+  XML; UBL and CII are parsed by `@fi/core`; a PDF's text comes from `pdftotext`; a PDF with fewer
+  than 20 letters is rendered (`pdftoppm`, 200 dpi, ten pages at most) and read by
+  `tesseract -l fra`; an image goes straight to tesseract. A structured invoice is sorted by its
+  bytes: the company's SIREN as seller makes it `facture_vente`, as buyer `facture_achat`, a credit
+  note `avoir`; any other company is `needs_review` (`other_company`). A document with text keeps it
+  (100 000 characters at most, with its page count and whether OCR read it) and stays `ingested`
+  for stage 2's classifier. Unreadable (`damaged`, `no_text`, `xml`) or missing bytes go to
+  `needs_review`. A missing tool or a timeout is retried, then the sweep tries again. Audited
+  `document.read`, once: a document already read is left alone.
+- **`document.validate`** (`runDocumentValidate`): an invoice document goes through the same
+  `validate()` as the sheet's invoices, with the same context: today, the seller's VAT on debits and
+  the customer's settings for a sale, and `btp` with the relationship marked for a building firm.
+  The findings are in `documents.validation`, the supplier or customer in `party_id`. Audited
+  `document.validate`.
+- **The sweep** (`documentsBehind`) queues again what a crash or a deploy left half-way: `ingested`
+  and not read, or `classified` and not checked, for more than ten minutes.
+- **The tools** are in the API image (`apps/api/Dockerfile`: poppler-utils, tesseract-ocr,
+  tesseract-ocr-fra). Two documents at a time per process: OCR takes the CPU.
+- **E-mail (stage 1C)** (`apps/api/src/ingest-mail.ts`, `POST /ingest/mail`): `postal-mime` opens a
+  raw e-mail; each attachment the worker can read becomes a document (source `mail`, `sourceRef` the
+  Message-ID), with the sender's address and the subject as hints. A forwarded message is opened
+  (three levels at most); a logo the HTML shows by Content-ID, an empty part, one over 20 MB or a
+  file the worker cannot read are listed as skipped. Which address receives the company's mail waits
+  for the owner (`docs/DECISIONS.md` D3); whatever brings the raw message calls `ingestMail`.
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

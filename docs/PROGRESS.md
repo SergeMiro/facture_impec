@@ -1444,3 +1444,51 @@ the work:
 | Sources, rules | `docs/research/BTP_RULES.md`; `packages/core/src/rules/btp.ts`; `packages/core/src/rules/btp.test.ts` (silent without context; AUTOLIQ-01 message; exactly 5 % of the TTC accepted, a cent more refused; SIT messages; first situation and unlinked chantier silent); `fixtures/invalid/btp.json` (9 cases) and golden 26 under `rules.test.ts`; oracle 278 (golden 26's XML against the official XSD and schematrons). |
 | What the company says | `apps/api/src/parties.test.ts` › calls VAT an error on an invoice to a donneur d'ordre, only for a building firm; `apps/api/src/inbound.test.ts` › BTP (the flag only once marked and BTP on, the other flags kept, 4 `inbound.retriage` audits; a new invoice of a marked supplier triaged with it; unknown or malformed SIREN 404); `packages/agents/src/inbound.test.ts` › for a building firm; `apps/addin/src/controller.test.ts` › lets a building firm mark a supplier as its sous-traitant. E2E step added to `apps/addin/e2e/harness.spec.ts` (BTP), not run yet. |
 | Gate | On 2026-10-24: biome ci, typecheck, boundaries (10 packages, no violation); tests api 313, core 707 + oracle 278, agents 124, add-in 113, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 7. The server was loaded by another session: one run timed out in API hooks, rerun green. |
+
+## BTP plan — stage 1B: documents ingested, read and checked (2026-10-24)
+
+`docs/plans/phase-1.md` › 1B. Criteria, written there before the work:
+
+- **At the door**: `POST /ingest` knows a file by its bytes (PDF, image, XML), refuses an empty one,
+  one over 20 MB or anything else, makes one document per file, company and mode (a second copy
+  answers with the first), keeps a test file apart, makes a company wait (429, `Retry-After`) while
+  200 of its documents are not read; each new document audited.
+- **Read**: a Factur-X PDF, a UBL or a CII gives its invoice, sorted as a sale, a purchase or a
+  credit note by the company's SIREN; a text PDF its text; a scan or an image its text through OCR in
+  French; an unreadable file goes to review with its reason; read once however often asked.
+- **Checked**: an invoice document goes through the same rules as the sheet's, BTP included with
+  what the company said of the supplier.
+- **Platform**: each supplier invoice the inbound poll stores is a document too.
+- **Measured**: 50 golden documents give what they must; p95 under 5 s without OCR and 30 s with
+  OCR on this server. The API image lists `fra` in `tesseract --list-langs`.
+
+### Evidence (2026-10-24)
+
+| Criterion | Evidence |
+|---|---|
+| The 50 goldens, p95 | `apps/api/src/ingest.test.ts` › the 50 golden documents (made by `apps/api/scripts/golden/documents.ts`: 10 Factur-X, 8 CII including a credit note, 6 UBL, 3 sales, an invoice of another company, an order in XML, 6 text PDFs, 4 scans (one of two pages), PNG, JPEG and TIFF images, a blank page, a cut PDF, 4 second copies, 2 refused). Kind, stage, review reason, format, no blocking finding on the invoices, OCR flag and the words each text must hold; one document and one `document.ingest` audit per file. p95 on this server, 2026-10-24: **118 ms without OCR (37 documents), 2 020 ms with OCR (7)**. |
+| At the door | same file › ingest at the door: the bytes, not the name; test and real apart; `GET /documents/:id` 404 for another company and a bad id; an empty name refused; 429 `ingest_busy` with `Retry-After: 60` past 200 waiting. |
+| Read once, checked, BTP | › the workers: one `document.read` audit when asked twice; the supplier marked sous-traitant gives BTP-AUTOLIQ-01 and the `party_id`; the sweep finds a document left half-way. |
+| Platform | › the workers: the inbound poll's invoice is a document (source `pdp`, `pdp-doc-1.xml`), linked from `inbound_queue.document_id` (migration 0023), queued to be read. |
+| API image | `docker build -f apps/api/Dockerfile .` (2026-10-24): `tesseract --list-langs` lists `eng`, `fra`, `osd`; poppler 22.12 in the image (24.02 on this server). The 13 golden text, scan and image documents read inside the image exactly as `ingest.test.ts` expects them (7 by OCR, 344–1 790 ms each). The image grows from 433 MB to 543 MB. |
+| Gate | `pnpm verify` 2026-10-24 with 1C: api 39 files / 325 tests, agents 124, core 707 + oracle 278, addin 113, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 7, scripts 4. |
+
+## BTP plan — stage 1C: e-mail without a provider (2026-10-24)
+
+`docs/plans/phase-1.md` › 1C. Criteria, written there before the work:
+
+- A raw e-mail (`.eml`) becomes one document per attachment it carries, with the sender's address
+  and the subject as hints; a forwarded message is opened; a signature's logo, an empty part or a
+  file the worker cannot read is skipped and said; an e-mail with nothing to read is refused with
+  nothing stored; the same attachments again are the same documents; the company's backlog holds the
+  whole e-mail back. The parser is a dependency, justified in `docs/DEPENDENCIES.md`.
+
+### Evidence (2026-10-24)
+
+| Criterion | Evidence |
+|---|---|
+| Attachments, hints, forwarded | `apps/api/src/ingest-mail.test.ts` › becomes one document per attachment: a supplier's e-mail with an RFC 2047 subject, an RFC 2231 file name (« facture n° 12.pdf »), a CII, a logo shown by Content-ID, a Word file and a forwarded attestation gives 3 documents (source `mail`, Message-ID, sender and subject as hints, queued to be read) and 2 skipped (`inline`, `unsupported`); the same e-mail again 200 with the same ids; `?test=true` apart. |
+| Refused, busy | › without a readable attachment, or empty (422 `mail_no_attachment`, `ingest_empty`, nothing stored); › waits, whole (429, nothing stored). |
+| No Message-ID, no sender | › without a Message-ID or a usable sender: `sha256:` reference, no hints, `piece-jointe-1.pdf`, an empty part skipped. |
+| Dependency | `postal-mime` 4.0.5 (2026-10-07, MIT-0, no dependencies), `docs/DEPENDENCIES.md`. |
+

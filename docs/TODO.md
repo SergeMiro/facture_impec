@@ -189,9 +189,9 @@ Stages (`docs/plans/phase-N.md` each):
 
 - [x] **0 — vocabulary, tables, boundaries** (`docs/plans/phase-0.md`).
 - [ ] **1 — ingest and validate** (1A, the BTP rules where invoices are already checked: done
-      2026-10-24): FileStore, `POST /ingest` (sha256 dedupe, backpressure), the ingest
-      worker (Factur-X XML, PDF text, OCR), BTP rules v1 with sources, adapters (pane upload, PDP
-      inbound, drive and e-mail stand-ins), 50 golden documents, a measured p95.
+      2026-10-24; 1B, FileStore, `POST /ingest`, the ingest and validate workers with OCR, the PDP
+      adapter, 50 golden documents and a measured p95: done 2026-10-24; 1C, raw e-mail (`.eml`):
+      done 2026-10-24). Left: drive folders watched (below), the e-mail provider (owner, D3).
 - [ ] **2 — documents pipeline**: classify (rules, then a model with its eval), extract, validate, link
       to company and chantier, derive deadlines; `GET /documents`, `GET /obligations`; the pane.
 - [ ] **3 — watchers and approvals**: the deadline watchers, actions with `POST /actions/:id/decide`,

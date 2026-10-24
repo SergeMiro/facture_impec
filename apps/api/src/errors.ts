@@ -13,6 +13,8 @@ export class ApiError extends Error {
     readonly params?: MessageParams,
     /** For developers (Zod paths…); never shown as the message. */
     readonly details?: string,
+    /** Sent with the answer, e.g. Retry-After on a 429. */
+    readonly headers?: Record<string, string>,
   ) {
     super(code);
     this.name = 'ApiError';
