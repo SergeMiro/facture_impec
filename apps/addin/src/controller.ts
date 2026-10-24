@@ -4,6 +4,7 @@ import {
   columnIndex,
   compareDecimal,
   frDate,
+  frMoney,
   isDocKind,
   kindFromName,
   type LayoutMapping,
@@ -16,6 +17,7 @@ import {
   ApiClient,
   ApiFailure,
   type BillingView,
+  balanceOf,
   type ChatMessage,
   type Checks,
   type ConnectedFile,
@@ -1176,12 +1178,22 @@ export class Controller {
     return true;
   }
 
-  /** « Encaissée », after the user confirmed it: chasing stops and the platform is told. */
-  recordPayment = async (paidOn?: string): Promise<void> => {
+  /**
+   * « Encaissée », after the user confirmed it: `amount` cents received (default: the balance). The
+   * balance paid, chasing stops; less, it goes on for the rest. The platform is told either way.
+   */
+  recordPayment = async (paidOn?: string, amount?: number): Promise<void> => {
+    const paidBefore = this.#state.invoice?.detail.amountPaid;
     const ok = await this.#chase(
       'payment',
-      (id) => this.api.recordPayment(id, paidOn),
-      (d) => t('addin.chase.paidDone', { number: d.number ?? '' }),
+      (id) => this.api.recordPayment(id, { paidOn, amount, paidBefore }),
+      (d) =>
+        d.status === 'paid'
+          ? t('addin.chase.paidDone', { number: d.number ?? '' })
+          : t('addin.chase.partDone', {
+              number: d.number ?? '',
+              left: frMoney(balanceOf(d), d.currency ?? 'EUR'),
+            }),
     );
     if (ok) void this.sync();
   };

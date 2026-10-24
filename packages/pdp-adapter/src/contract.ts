@@ -1,6 +1,7 @@
 // PdpAdapter conformance suite (plan §9 "Contract"). Every implementation runs it: the mock in
 // apps/mock-pdp tests, B2Brouter against its sandbox in M4. It checks what business code relies on,
 // not how a provider does it. Imports vitest, so it has its own entry point: @fi/pdp-adapter/contract.
+import { parseInvoiceXml } from '@fi/core';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { PDP_STATUSES, type PdpAdapter, PdpRequestError, type WebhookRequest } from './types';
 
@@ -29,10 +30,10 @@ export function pdpAdapterContract(name: string, setup: () => Promise<ContractHa
       h = await setup();
     });
 
-    const deposit = async () => {
+    const deposit = async (xml = h.validInvoice()) => {
       const result = await h.adapter.sendInvoice({
         account: h.account,
-        xml: h.validInvoice(),
+        xml,
         format: 'CII',
         idempotencyKey: key(),
       });
@@ -94,8 +95,11 @@ export function pdpAdapterContract(name: string, setup: () => Promise<ContractHa
     });
 
     it('records a payment reported by the seller', async () => {
-      const pdpRef = await deposit();
-      await h.adapter.reportPayment({ account: h.account, pdpRef, amount: 12_000 });
+      const xml = h.validInvoice();
+      const pdpRef = await deposit(xml);
+      // The whole amount due: what a partial payment does on a platform is not part of the contract.
+      const amount = parseInvoiceXml(xml).invoice.totals.payable ?? 0;
+      await h.adapter.reportPayment({ account: h.account, pdpRef, amount });
       const events = await h.adapter.getStatus({ account: h.account, pdpRef });
       expect(events.map((e) => e.status)).toContain('payment_received');
     });

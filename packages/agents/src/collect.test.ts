@@ -44,6 +44,20 @@ describe('CollectAgent drafts', () => {
     expect(draftChase(facts('firm')).body).toContain('L441-10');
   });
 
+  it('after an instalment, say what arrived and ask for the rest', () => {
+    for (const kind of CHASE_KINDS) {
+      const body = draftChase(facts(kind, { paid: 23_456 })).body;
+      expect(body).toContain(`Nous avons bien reçu un règlement de 234,56${NBSP}€`);
+      expect(body).toContain(`il reste 1${NBSP}000,00${NBSP}€ à régler`);
+      expect(body).not.toMatch(/\{\w+\}/);
+    }
+    // The formal notice demands the balance, not the invoice's total.
+    const notice = draftChase(facts('formal_notice', { paid: 23_456 })).body;
+    expect(notice).toContain(`régler la somme de 1${NBSP}000,00${NBSP}€`);
+    expect(draftChase(facts('formal_notice')).body).toContain(`régler la somme de 1${NBSP}234,56`);
+    expect(draftChase(facts('reminder')).body).not.toContain('bien reçu');
+  });
+
   it('mark a test invoice draft as a test', () => {
     expect(draftChase(facts('reminder', { isTest: true })).subject).toMatch(/^\[TEST\] /);
   });

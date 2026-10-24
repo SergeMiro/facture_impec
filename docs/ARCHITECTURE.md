@@ -208,7 +208,7 @@ sync / webhook ─► invoice delivered/accepted ─► chasing run (every 5 min
                                                    │ overdue at J+1, then each step from 9:00 Paris
                                                    ├─ Review: a draft on « Relancer » → user mails it, « Marquer comme envoyée »
                                                    └─ Autopilot (≤ ceiling): the agent mails courtesy/reminder/firm; formal notice: always a draft
-« Encaissée » ─► paid + plan ended ─► payment_reports ─► job: PdpAdapter.reportPayment (B2Brouter POST /payments)
+« Encaissée » (amount) ─► balance paid: paid + plan ended │ less: amount_paid grows, chased for the rest ─► payment_reports (one per payment) ─► job: PdpAdapter.reportPayment (B2Brouter POST /payments)
 rejection / refusal ─► monitor job ─► note « next step » on the timeline (rules by code; a model picks among 3 for a refusal)
 Monday 8:00 Paris ─► weekly report mailed to the owners; the same card on the Tableau de bord (GET /report)
 ```
@@ -220,7 +220,7 @@ Monday 8:00 Paris ─► weekly report mailed to the owners; the same card on th
 | `packages/agents/src/monitor.ts`, `prompts/monitor.md` | Next step after a rejection (rule ids read from the platform's answer, « fix and resend ») or a refusal (a model chooses among fix and resend / credit note / contact the customer and drafts the message, after pseudonymization; a draft with a wrong amount or an invented token falls back to the three options). |
 | `packages/agents/src/report.ts` | The week in at most 10 lines: four numbers, then at most three actions, formal notices first. Deterministic. |
 | `apps/api/src/collect.ts` | The chasing run: overdue, plan creation, the step of the day per invoice (invoice locked first, plan second), mail sending outside the transaction with a `sending` claim so a crash never sends twice; « Relancer » routes (prepare, mark as sent, promise). |
-| `apps/api/src/payments.ts` | « Encaissée »: paid, plan ended, a `payment_reports` row in the same transaction, then the report job (once; a refusal is `failed`, an outage is retried). |
+| `apps/api/src/payments.ts` | « Encaissée » with the amount received (default: the balance): the payment that settles the balance makes the invoice paid and ends its plan; a smaller one (an instalment) adds to `invoices.amount_paid` and a `payment_partial` note, and the chasing goes on for the rest. Each payment writes its `payment_reports` row in the same transaction, then the report job sends them oldest first (each once; a refusal is `failed`, an outage is retried). `paidBefore` (what the pane showed as received) refuses a second click instead of counting it twice. |
 | `apps/api/src/monitor.ts`, `report.ts` | The monitor job (queued after the send and sync commits, and by the sweep); the weekly mail (one claim per company and ISO week in `weekly_reports`) and `GET /report`. |
 | `apps/addin/src/ui/ChasePanel.tsx` | « Relancer » on the fiche: plan, draft (copy, open in the mail app), « Marquer comme envoyée », « Préparer une relance maintenant », « Promesse de paiement », « Encaissée »; the MonitorAgent's card. Réglages: autopilot with its ceiling; Tableau de bord: the weekly card. |
 | `scripts/load/` | The k6 batch test (`pnpm load`): the API and the mock platform in one process on a throwaway Postgres, k6 in Docker. |
@@ -242,7 +242,8 @@ B2Brouter adapter), `controller.test.ts` and `e2e/b2brouter.spec.ts` for the pan
 | A step missed while the server was down | Skipped, the latest due step acts | A customer must not receive three reminders in one morning. |
 | Sending a chase mail | Claim the step (`sending`, committed), send outside the transaction, then record; a claim older than 10 min becomes a draft « interrompu » | A crash between the mail and the commit must never lead to a second mail. |
 | Business clock in the scenario | The API's clock runs at the platform's speed only once the invoice is at the customer | The platform's latency would otherwise eat business days before the plan exists. |
-| Payment report | One `payment_reports` row per invoice written with the payment; the job retries only outages | « Encaissée » must reach the platform once; a lost answer at B2Brouter is still open (`docs/B2BROUTER.md` T21). |
+| Payment report | One `payment_reports` row per payment, written with it; the job retries only outages | « Encaissée » must reach the platform once; a lost answer at B2Brouter is still open (`docs/B2BROUTER.md` T21). Several rows per invoice since the instalments (migration `0020_partial_payments.sql`; T25). |
+| Instalments (2026-10-24) | `invoices.amount_paid` holds what was received; no new state: an invoice paid in part stays delivered, accepted, overdue or chased until the balance is paid | The platform's statuses have no « partly paid » (212 is « Encaissée »), and the chasing, the overdue sweep, the autopilot's ceiling and the weekly report only need the balance. A full credit note is refused on a partly paid invoice (it would cancel money received); « Abandonner la créance » gives up the balance. |
 
 ## What M6 added: receiving supplier invoices (Réception)
 

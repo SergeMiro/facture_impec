@@ -9,6 +9,7 @@ import {
   frDate,
   frMoney,
   parisToday,
+  parseAmount,
 } from '@fi/core';
 import { type MessageKey, t } from '@fi/shared';
 import {
@@ -29,7 +30,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { type ReactNode, useState } from 'react';
-import type { InvoiceDetail, NextStep } from '../api';
+import { balanceOf, type InvoiceDetail, type NextStep } from '../api';
 import { useFi } from './context';
 
 const useStyles = makeStyles({
@@ -218,25 +219,79 @@ function PaymentPromise({ promisedUntil }: { promisedUntil: string | null }) {
   );
 }
 
+/** Cents typed in euros (« 1 200,50 », « 300 € »); null when it is not a positive amount. */
+export function centsOf(text: string): number | null {
+  const cents = parseAmount(text.replace(/[\s\u00a0\u202f€]/g, '').replace(',', '.'));
+  return cents !== null && cents > 0 ? cents : null;
+}
+
+/** « 1200,50 » for 120 050 cents: what the amount field shows first. */
+const typed = (cents: number) => (cents / 100).toFixed(2).replace('.', ',');
+
+/** « Encaissée »: what arrived (the balance by default, less for an instalment) and when. */
 function Paid({ detail }: { detail: InvoiceDetail }) {
   const styles = useStyles();
   const [state, fi] = useFi();
   const [asking, setAsking] = useState(false);
   const [paidOn, setPaidOn] = useState(parisToday());
-  const amount = detail.payable !== null ? frMoney(detail.payable, detail.currency ?? 'EUR') : '';
+  const balance = balanceOf(detail);
+  const [received, setReceived] = useState(typed(balance));
+  const money = (cents: number) => frMoney(cents, detail.currency ?? 'EUR');
+  const number = detail.number ?? '';
+  // Nothing to pay (a zero invoice): « Encaissée » asks no amount.
+  const free = balance === 0;
+  const amount = free ? null : centsOf(received);
+  const valid = free || (amount !== null && amount <= balance);
+  const left = amount !== null && valid ? balance - amount : 0;
+  const owed = detail.amountPaid > 0 && (
+    <Caption1 data-testid="balance">
+      {t('addin.chase.balance', { paid: money(detail.amountPaid), balance: money(balance) })}
+    </Caption1>
+  );
   if (!asking) {
     return (
-      <div className={styles.actions}>
-        <Button appearance="primary" onClick={() => setAsking(true)}>
-          {t('addin.chase.paid')}
-        </Button>
-      </div>
+      <>
+        {owed}
+        <div className={styles.actions}>
+          <Button
+            appearance="primary"
+            onClick={() => {
+              setReceived(typed(balance));
+              setAsking(true);
+            }}
+          >
+            {t('addin.chase.paid')}
+          </Button>
+        </div>
+      </>
     );
   }
   return (
     <MessageBar intent="warning" layout="multiline" data-testid="confirm-paid">
       <MessageBarBody>
-        {t('addin.chase.confirmPaid', { number: detail.number ?? '', amount })}
+        {left > 0 && amount !== null
+          ? t('addin.chase.confirmPartial', { number, amount: money(amount), left: money(left) })
+          : t('addin.chase.confirmPaid', {
+              number,
+              amount: detail.payable !== null ? money(detail.payable) : '',
+            })}
+        {!free && (
+          <Field
+            label={t('addin.chase.amount')}
+            validationState={valid ? 'none' : 'error'}
+            validationMessage={
+              valid ? undefined : t('addin.chase.amountInvalid', { balance: money(balance) })
+            }
+          >
+            <Input
+              inputMode="decimal"
+              contentAfter="€"
+              value={received}
+              onChange={(_, d) => setReceived(d.value)}
+              data-testid="paid-amount"
+            />
+          </Field>
+        )}
         <Field label={t('addin.chase.paidOn')}>
           <Input
             type="date"
@@ -249,13 +304,13 @@ function Paid({ detail }: { detail: InvoiceDetail }) {
       <MessageBarActions>
         <Button
           appearance="primary"
-          disabled={state.busy.includes('payment') || !paidOn}
+          disabled={state.busy.includes('payment') || !paidOn || !valid}
           onClick={() => {
             setAsking(false);
-            void fi.recordPayment(paidOn);
+            void fi.recordPayment(paidOn, amount ?? undefined);
           }}
         >
-          {t('addin.chase.confirm')}
+          {t(left > 0 ? 'addin.chase.confirmPart' : 'addin.chase.confirm')}
         </Button>
         <Button onClick={() => setAsking(false)}>{t('addin.invoice.cancel')}</Button>
       </MessageBarActions>

@@ -42,7 +42,7 @@ Each line says where it came from and what would bring it back.
 | Sideload scripts tried on Windows and Mac | M3: written from Microsoft's guides, run on neither | First session on a Windows or Mac machine with Excel. |
 | Splitting the task pane bundle (781 kB minified, 222 kB gzipped, one chunk after M7) | M3: served from localhost, Vite warns above 500 kB; M7 kept one chunk | Pilots find the first load slow on their connection: lazy-load Réglages, Abonnement and the fiche's XML/PDF views. |
 | Chase drafts reworded by a model (tone, the customer's history) | M5: deterministic templates in `fr.json`; no model writes amounts, dates or legal text | A pilot customer finds the templates stiff; then a model rewrites only the wording around the code-written facts, with an eval. |
-| Partial payments and instalments | M5: « Encaissée » records the whole amount payable; the adapter and the stand-in already carry an amount | A customer is paid in instalments: a balance on the invoice, the plan chasing what is left. |
+| ~~Partial payments and instalments~~ — **done 2026-10-24** (`apps/api/src/payments.ts`: an amount per payment, the balance chased, one platform report per payment) | M5: « Encaissée » recorded the whole amount payable | — |
 | Credit notes generated from a refusal | M5: the MonitorAgent proposes « avoir » and drafts the message; the user issues the credit note in their own tool | The credit-note builder (type 381) from the original invoice, with the `credited` transition it ends in. |
 | Chasing again after a dispute is settled | M5: a refusal or a dispute pauses the plan, and the state machine has no way back from `refused_by_customer` to the chased states | The state machine gets a « litige réglé » transition back to `accepted`; the plan then resumes from the next step. Since §4 (2026-10-24) a refused invoice is settled by a credit note and a new invoice (AFNOR XP Z12-014 use case 5), which the new invoice's own plan chases: bring this back only if the platform lets a customer withdraw a refusal (`docs/B2BROUTER.md` T7, T8). |
 | Weekly report per person (opt-out, HTML) | M5: one plain-text mail to every owner of the company | An owner asks to stop it. |
@@ -169,3 +169,14 @@ Each line says where it came from and what would bring it back.
 | Public Google Workspace Marketplace listing | The reproducible bound-script package is installed manually in a spreadsheet. | The owner supplies the publisher account and hosted app/API addresses; complete Google's distribution review. |
 | ~~Connecting a new OneDrive account from Google Sheets~~ | **Implemented in R9** with the standard MSAL client and the existing popup relay. | Real-account consent and picker verification remain G5 in `docs/GOOGLE_SHEETS.md`. |
 | Google Sheets ranges above 5,000 used rows or 250,000 cells | The host refuses before reading the oversized range. | A pilot needs larger sheets: chunk reads with a stable revision check before syncing the combined snapshot. |
+
+## Instalments (2026-10-24)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| The weekly report's « encaissé cette semaine » counts instalments | It counts the invoices that became paid this week, at their full amount; an instalment shows only in the balance still owed | A pilot company reads its report against its bank: then sum the payments recorded in the week (`payment_reports`, or a payments ledger for invoices without a platform). |
+| What was received on the sheet | The status column says « Relance en cours » or « Échue » while a balance is left; the fiche shows what arrived and what is left | A pilot wants it in Excel: a « Reste à payer » column written back like the status. |
+| The MonitorAgent sees the balance | Its input is the invoice's amount payable | A refusal or a dispute on an invoice paid in part shows up: then pass the balance and record the eval again. |
+| Undoing a payment typed by mistake | A payment is final, as « Encaissée » was; the confirmation names the amount and what will be left | A user records the wrong amount: a correction that writes a negative payment report, if the platform accepts one (`docs/B2BROUTER.md` T25). |
+| A payment by the platform (212 from the customer's side) with an amount | The platform's `paid` makes the invoice paid whatever was recorded | B2Brouter tells partial payments apart (T25): then add the amount it reports to `amount_paid`. |
+

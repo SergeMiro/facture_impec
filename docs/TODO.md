@@ -105,7 +105,7 @@ Each closes with a call or two on the owner's sandbox key (`docs/RUNBOOK.md` § 
       T19 Schematron failure on import or on send · T20 the sandbox's path for a French invoice ·
       T21 a second `POST /payments` after a lost answer · T22 what `{account}` is, and whether it
       differs between sandbox and production · T23 a valid key on an account it cannot reach ·
-      T24 an imported credit note (381) and its invoice.
+      T24 an imported credit note (381) and its invoice · T25 several payments on one invoice.
 - [ ] With staging (`stag_` key and a ticket): T7 how « 213 Rejetée » shows; T14 inbound invoices.
 - [ ] With B2Brouter's support: T8 meaning of `allegedly_paid`, `closed`, `expired`…; T15 webhook
       retries, timeout and source addresses; T18 whether 212 (paid) is required.
@@ -157,6 +157,16 @@ Each closes with a call or two on the owner's sandbox key (`docs/RUNBOOK.md` § 
       field list; record `mapping` again (`packages/agents/evals/recordings/`) with a sheet holding a
       « Remise % » column, so the eval scores it. The guard puts a percentage column in the right
       field whatever the model says.
+
+## Instalments, built on 2026-10-24
+
+- [ ] **B2Brouter T25** (`docs/B2BROUTER.md` §11): several `POST /payments` with an `amount` on one
+      invoice: does B2Brouter add them up, and does the invoice reach `paid` (212) only once the sum
+      reaches its total? What does it do with a payment that would exceed the total? Until then each
+      instalment is reported with its amount, and the platform's `paid` is taken as it comes.
+- [ ] **Accountant:** the wording of the reminders after an instalment (« Nous avons bien reçu un
+      règlement de… ; il reste … à régler ») and of the formal notice, which now demands the balance.
+- [ ] **Weekly report:** count the instalments received in the week (`docs/DEFERRED.md` › Instalments).
 
 ## Excel on the web E2E
 

@@ -75,8 +75,8 @@ export function createApp(
   app.get('/invoices/:id/status', (c) => c.json(engine.status(account(c), c.req.param('id'))));
 
   app.post('/invoices/:id/payments', async (c) => {
-    parse(Payment, await json(c));
-    return c.json(engine.reportPayment(account(c), c.req.param('id')), 201);
+    const { amount } = parse(Payment, await json(c));
+    return c.json(engine.reportPayment(account(c), c.req.param('id'), amount), 201);
   });
 
   app.post('/scenarios/:id', async (c) =>

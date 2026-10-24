@@ -20,7 +20,10 @@ export interface ChaseFacts {
   dueDate: string;
   /** Europe/Paris, the day the step is acted on. */
   today: string;
+  /** The invoice's amount payable (BT-115). */
   payable: Cents;
+  /** What the customer paid so far (instalments); the letter asks for the rest. */
+  paid?: Cents;
   currency: string;
   /** The company that chases (the tenant's name). */
   seller: string;
@@ -30,9 +33,13 @@ export interface ChaseFacts {
 }
 
 export function draftChase(f: ChaseFacts): ChaseDraft {
+  const paid = f.paid ?? 0;
+  const owed = frMoney(Math.max(0, f.payable - paid), f.currency);
   const params = {
     number: f.number,
     amount: frMoney(f.payable, f.currency),
+    owed,
+    paidLine: paid > 0 ? t('chase.paidLine', { paid: frMoney(paid, f.currency), owed }) : '',
     issue: frDate(f.issueDate),
     due: frDate(f.dueDate),
     days: Math.max(0, daysBetween(f.dueDate, f.today)),

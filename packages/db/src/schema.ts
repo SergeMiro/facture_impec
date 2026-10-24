@@ -343,6 +343,8 @@ export const invoices = pgTable(
     currency: text('currency'),
     buyerName: text('buyer_name'),
     payable: cents('payable'),
+    /** What the user recorded as received so far (« Encaissée », src/payments.ts); the rest is due. */
+    amountPaid: cents('amount_paid').notNull().default(0),
     /** What the user sent; `document` is it after computeInvoice. */
     draft: jsonb('draft_json').$type<InvoiceDraft>().notNull(),
     document: jsonb('document_json').$type<Invoice>().notNull(),
@@ -587,29 +589,33 @@ export const chasePlans = pgTable(
 );
 
 /**
- * « Encaissée » (status 212) reported to the platform after the user recorded a payment. Written
- * before the platform is called; one per invoice, so the payment is reported once.
+ * « Encaissée » (status 212) reported to the platform after the user recorded a payment. One row per
+ * payment (an invoice paid in instalments has several), written before the platform is called, so
+ * each payment is reported once.
  */
-export const paymentReports = pgTable('payment_reports', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id')
-    .notNull()
-    .references(() => tenants.id),
-  invoiceId: uuid('invoice_id')
-    .notNull()
-    .unique()
-    .references(() => invoices.id),
-  provider: text('provider', { enum: PDP_PROVIDERS }).notNull(),
-  amount: cents('amount').notNull(),
-  paidOn: date('paid_on', { mode: 'string' }).notNull(),
-  status: text('status', { enum: ['pending', 'reported', 'failed'] })
-    .notNull()
-    .default('pending'),
-  attempts: integer('attempts').notNull().default(0),
-  lastError: text('last_error'),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const paymentReports = pgTable(
+  'payment_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    invoiceId: uuid('invoice_id')
+      .notNull()
+      .references(() => invoices.id),
+    provider: text('provider', { enum: PDP_PROVIDERS }).notNull(),
+    amount: cents('amount').notNull(),
+    paidOn: date('paid_on', { mode: 'string' }).notNull(),
+    status: text('status', { enum: ['pending', 'reported', 'failed'] })
+      .notNull()
+      .default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    lastError: text('last_error'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('payment_reports_invoice').on(t.invoiceId)],
+);
 
 /** One weekly report per company and ISO week (`2026-W43`), claimed before it is mailed. */
 export const weeklyReports = pgTable(

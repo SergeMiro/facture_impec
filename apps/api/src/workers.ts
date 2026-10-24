@@ -331,7 +331,7 @@ export async function runSweep(deps: WorkerDeps): Promise<{
   const advice = await awaitingAdvice(deps);
   for (const id of advice) await deps.jobs.enqueueMonitor(id);
   const payments = await deps.db
-    .select({ id: paymentReports.invoiceId })
+    .selectDistinct({ id: paymentReports.invoiceId })
     .from(paymentReports)
     .where(eq(paymentReports.status, 'pending'));
   for (const p of payments) await deps.jobs.enqueueReportPayment(p.id);

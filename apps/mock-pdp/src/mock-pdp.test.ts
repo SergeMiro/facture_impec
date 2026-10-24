@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createMockPdp } from './app';
 import { MAX_TIMEOUT_MS, ManualClock, systemClock } from './clock';
 import { WEBHOOK_RETRY_MS } from './engine';
-import { cii, draft, ubl } from './test-invoice';
+import { cii, draft, payableOf, ubl } from './test-invoice';
 
 const SECRET = 'mock-pdp-test-secret';
 const ACCOUNT = '100000009';
@@ -221,17 +221,19 @@ describe('lifecycle', () => {
     expect((await status(id)).events.map((e) => e.status)).toEqual(['deposited', 'accepted']);
   });
 
-  it('records a reported payment once, and refuses it on a refused invoice', async () => {
+  it('adds up the payments, is paid once they reach the amount due, refuses a refused invoice', async () => {
     const { send, status, call } = setup();
-    const pay = (id: string) =>
-      call(`/invoices/${id}/payments`, { method: 'POST', body: '{"amount":12000}' });
-    const { id } = (await (await send(cii(draft('F2026-0114')), 'k1')).json()) as { id: string };
-    expect((await pay(id)).status).toBe(201);
-    expect((await pay(id)).status).toBe(201);
-    expect((await status(id)).events.map((e) => e.status)).toEqual([
-      'deposited',
-      'payment_received',
-    ]);
+    const pay = (id: string, amount = 12_000) =>
+      call(`/invoices/${id}/payments`, { method: 'POST', body: JSON.stringify({ amount }) });
+    const invoice = draft('F2026-0114');
+    const due = payableOf(invoice);
+    const { id } = (await (await send(cii(invoice), 'k1')).json()) as { id: string };
+    const events = async () => (await status(id)).events.map((e) => e.status);
+    expect((await pay(id, 4_000)).status).toBe(201);
+    expect(await events()).toEqual(['deposited']);
+    expect((await pay(id, due - 4_000)).status).toBe(201);
+    expect((await pay(id, due)).status).toBe(201);
+    expect(await events()).toEqual(['deposited', 'payment_received']);
 
     const other = (await (await send(cii(draft('F2026-0115')), 'k2')).json()) as { id: string };
     await call(`/scenarios/${other.id}`, { method: 'POST', body: '{"status":"refused"}' });

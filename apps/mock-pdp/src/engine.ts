@@ -49,6 +49,9 @@ export const WEBHOOK_RETRY_MS = [500, 1_000, 2_000, 4_000, 8_000];
 interface Stored extends MockInvoice {
   idempotencyKey: string | undefined;
   issueDate: string;
+  /** Cents due (BT-115; unknown, any payment pays it) and received so far. */
+  payable: number | undefined;
+  paid: number;
   sellerSiren: string | undefined;
   timers: (() => void)[];
   /** Replaces the mock webhook for this invoice (the B2Brouter stand-in sends its own). */
@@ -185,6 +188,8 @@ export class MockPdpEngine {
       events: [],
       idempotencyKey,
       issueDate: parsed.issueDate ?? '',
+      payable: parsed.totals.payable,
+      paid: 0,
       sellerSiren: parsed.seller.legalId?.id,
       timers: [],
       notify: options.notify,
@@ -314,12 +319,18 @@ export class MockPdpEngine {
   }
 
   /** « Encaissée »: the seller reports the payment. Reporting it twice changes nothing. */
-  reportPayment(account: string, invoiceId: string): MockInvoice {
+  /** A payment of `amount` cents; undefined pays the invoice in full. */
+  reportPayment(account: string, invoiceId: string, amount?: number): MockInvoice {
     const invoice = this.#get(invoiceId, account);
     if (invoice.status === 'refused' || invoice.status === 'rejected') {
       throw new MockConflict(`invoice ${invoiceId} is ${invoice.status}`);
     }
-    if (invoice.status !== 'payment_received') this.#record(invoice, 'payment_received');
+    const due = invoice.payable ?? 0;
+    invoice.paid = amount === undefined ? due : invoice.paid + amount;
+    // Paid once the payments reach the amount due.
+    if (invoice.paid >= due && invoice.status !== 'payment_received') {
+      this.#record(invoice, 'payment_received');
+    }
     return this.status(account, invoiceId);
   }
 

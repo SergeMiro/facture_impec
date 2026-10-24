@@ -1299,3 +1299,38 @@ as percentages. Criteria, written here before the work:
 | The MappingAgent's answer is corrected | `packages/agents/src/mapping.test.ts` › puts a percentage discount in the percent field, and euros in the euros one (both directions, by `notAnAmount`); the `discountWarnings` warning is gone. The prompt is unchanged; the eval's recording with the new field is in `docs/TODO.md` › Percentage discounts. |
 | Tests and docs | `docs/DEFERRED.md` rows #12 and #81 closed (what is left: a percentage charge on a line, a whole-invoice discount column, percentages in Commandes / Achats), `docs/ARCHITECTURE.md` sheet row, `docs/TODO.md` › Percentage discounts. |
 | Gate | `pnpm verify` green on 2026-10-24 (tests with `--concurrency=1`): api 301, core 689 + oracle 276, agents 121, add-in 106, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 13. `pnpm test:e2e` green in local Chrome (browser: local): 4 passed, the live B2Brouter run skipped (no key). |
+
+## Partial payments (started 2026-10-24)
+
+`docs/DEFERRED.md` row « Partial payments and instalments » (M5): « Encaissée » recorded the whole
+amount payable at once, so a customer who pays in two instalments was either chased for money already
+received or marked paid too early. Criteria, written here before the work:
+
+- **A payment has an amount**: « Encaissée » asks how much arrived (the balance by default). Less than
+  the balance is a partial payment: the invoice stays where it is, its fiche shows what was received
+  and what is left, and its timeline says so. The payment that brings the balance to zero makes it
+  « Payée » and ends its chasing, as before. More than the balance, a date in the future or a second
+  click on a figure that changed meanwhile is refused with a plain message, and nothing is recorded.
+- **Each payment reaches the platform**: one report per payment, each sent once (`POST /payments` with
+  its amount), retried while the platform is down, as before. The B2Brouter stand-in and the mock add
+  up the payments and say « paid » only when the invoice is paid in full. What B2Brouter does with
+  several payments for one invoice is a `TODO(verify)` (`docs/B2BROUTER.md`).
+- **The chasing asks for what is left**: the reminders and the formal notice name the amount received
+  and ask for the balance; the autopilot's ceiling, the overdue sweep and the weekly report count the
+  balance, not the invoice's total.
+- **No full credit note on a partly paid invoice**: « Établir un avoir » explains that part of it is
+  paid (a partial credit note stays in `docs/DEFERRED.md`); « Abandonner la créance » gives up the
+  balance only.
+- **Audit, tests, docs**: every payment writes an audit event; API, agents, mock and add-in tests;
+  `docs/ARCHITECTURE.md`, `docs/DEFERRED.md`, `docs/TODO.md`, `docs/B2BROUTER.md` updated.
+
+### Evidence (2026-10-24)
+
+| Criterion | Evidence |
+|---|---|
+| A payment has an amount | `apps/api/src/collect.test.ts` › Encaissée › records instalments: chases the rest, then pays the invoice with the last one (40 % first: the invoice stays « chasing » with `amountPaid`, a `payment_partial` note with what is left; the same click again → 409 `payment_changed`; more than the balance → 400 `payment_too_much`, nothing recorded; the rest → `paid`, plan ended; audit `payment.partial` then `payment.record`). The earlier tests (whole amount by default, a date in the future refused) pass unchanged. Pane: `apps/addin/src/controller.test.ts` › chases the accepted invoice from its fiche… (an instalment of 10 € through the real API: still `accepted`, « il reste … à payer »; then the rest: `paid`, `amountPaid` = the amount payable); the « Montant reçu » field in `ChasePanel.tsx` (the balance by default; `centsOf` in `apps/addin/src/ui/timeline.test.ts` › reads the amount received as the user types it). Migration `0020_partial_payments.sql` (`invoices.amount_paid`; invoices already paid get their full amount). |
+| Each payment reaches the platform | Same API test: two `payment_reports` rows, reported oldest first with their own amounts, both `reported`. Stand-ins: `apps/mock-pdp/src/mock-pdp.test.ts` › adds up the payments, is paid once they reach the amount due, refuses a refused invoice; `b2brouter.test.ts` › records a payment for either an amount or the full invoice, not both; paid once in full. The contract reports the whole amount due (`packages/pdp-adapter/src/contract.ts`). `TODO(verify)` T25 in the B2Brouter adapter and `docs/B2BROUTER.md` §11. |
+| The chasing asks for what is left | `packages/agents/src/collect.test.ts` › after an instalment, say what arrived and ask for the rest (every kind; the formal notice demands the balance). API: the letter prepared by « Relancer » after an instalment names it and the balance (same API test); the overdue sweep, the plan, the autopilot's ceiling (`balanceOf`) and the weekly report's « en retard » and « à risque » count the balance (same test, `weekFacts`). |
+| No full credit note on a partly paid invoice | Same API test: « Établir un avoir » → 409 `credit_partly_paid`. `apps/api/src/credits.test.ts` › leaves an invoice paid in part meanwhile as it is: the credit note would cancel that money (`credit_note_not_applied` with what was paid; timeline text in `timeline.test.ts` › tells an instalment with what is left, and a credit note stopped by one), › write-off › gives up only what is left after an instalment. |
+| Audit, tests, docs | `payment.partial` / `payment.record` audit events (now written whether or not a platform holds the invoice). `docs/ARCHITECTURE.md` (M5 flow, `payments.ts`, decision « Instalments »), `docs/DEFERRED.md` (row closed; § Instalments: weekly « encaissé », a « Reste à payer » column, the MonitorAgent's input, undoing a payment, the platform's own partial payments), `docs/TODO.md` › Instalments (T25, accountant, weekly report), `docs/B2BROUTER.md` T25. |
+| Gate | `pnpm verify` green on 2026-10-24 (tests with `--concurrency=1`): api 304, core 689 + oracle 276, agents 122, add-in 108, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 13. `pnpm test:e2e` green in local Chrome (browser: local): 4 passed, the live B2Brouter run skipped (no key); `apps/addin/e2e/b2brouter.spec.ts` › … « Relancer, then Encaissée » now types an instalment of 10 € in « Montant reçu » (the fiche shows what is left), then pays the rest, and the sheet says « Payée ». |

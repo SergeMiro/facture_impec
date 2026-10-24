@@ -24,6 +24,7 @@ import {
 } from '@fluentui/react-components';
 import { useState } from 'react';
 import {
+  balanceOf,
   type InvoiceDetail,
   type InvoiceEvent,
   MONITOR_PROPOSALS,
@@ -98,6 +99,11 @@ const textOf = (payload: object, key: string): string => {
   return typeof value === 'string' ? value : '';
 };
 
+const centsIn = (payload: object, key: string): number => {
+  const value: unknown = (payload as Record<string, unknown>)[key];
+  return typeof value === 'number' ? value : 0;
+};
+
 export function eventText(e: InvoiceEvent): string {
   const payload = (typeof e.payload === 'object' && e.payload) || {};
   const simulated = 'simulated' in payload && payload.simulated === true;
@@ -147,9 +153,21 @@ export function eventText(e: InvoiceEvent): string {
   } else if (e.type === 'note' && e.event === 'credit_note_of') {
     text = t('addin.invoice.event.creditOf', { number: textOf(payload, 'number') });
   } else if (e.type === 'note' && e.event === 'credit_note_not_applied') {
-    text = t('addin.invoice.event.creditNotApplied', {
-      number: textOf(payload, 'number'),
-      status: statusLabel(textOf(payload, 'status')),
+    const paid = centsIn(payload, 'paid');
+    text =
+      paid > 0
+        ? t('addin.invoice.event.creditNotAppliedPaid', {
+            number: textOf(payload, 'number'),
+            paid: frMoney(paid, 'EUR'),
+          })
+        : t('addin.invoice.event.creditNotApplied', {
+            number: textOf(payload, 'number'),
+            status: statusLabel(textOf(payload, 'status')),
+          });
+  } else if (e.type === 'note' && e.event === 'payment_partial') {
+    text = t('addin.invoice.event.paymentPartial', {
+      amount: frMoney(centsIn(payload, 'amount'), 'EUR'),
+      left: frMoney(centsIn(payload, 'left'), 'EUR'),
     });
   } else if (e.type === 'note' && e.event === 'sent_despite_findings') {
     const found = 'findings' in payload && Array.isArray(payload.findings) ? payload.findings : [];
@@ -401,6 +419,8 @@ function AfterSend({ detail: d }: { detail: InvoiceDetail }) {
   const [asking, ask] = useState<'credit' | 'writeOff' | null>(null);
   const number = d.number ?? '';
   const amount = d.payable !== null ? frMoney(d.payable, d.currency ?? 'EUR') : '';
+  // Abandoned: what is left after the payments received.
+  const owed = frMoney(balanceOf(d), d.currency ?? 'EUR');
   const { of, by } = d.credit;
 
   if (of) {
@@ -462,7 +482,7 @@ function AfterSend({ detail: d }: { detail: InvoiceDetail }) {
       )}
       {asking === 'writeOff' && (
         <MessageBar intent="warning" layout="multiline" data-testid="confirm-write-off">
-          <MessageBarBody>{t('addin.writeOff.confirm', { number, amount })}</MessageBarBody>
+          <MessageBarBody>{t('addin.writeOff.confirm', { number, amount: owed })}</MessageBarBody>
           <MessageBarActions>
             <Button
               appearance="primary"

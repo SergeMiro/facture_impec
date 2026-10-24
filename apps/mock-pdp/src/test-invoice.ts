@@ -18,3 +18,6 @@ export function draft(number: string, change: (d: InvoiceDraft) => void = () => 
 
 export const cii = (d: InvoiceDraft) => toCii(computeInvoice(d));
 export const ubl = (d: InvoiceDraft) => toUbl(computeInvoice(d));
+
+/** Cents due on the invoice (BT-115). */
+export const payableOf = (d: InvoiceDraft) => computeInvoice(d).totals.payable ?? 0;

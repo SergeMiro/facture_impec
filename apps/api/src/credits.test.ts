@@ -296,6 +296,24 @@ describe('credit notes', () => {
       status: 'paid',
     });
   });
+
+  it('leaves an invoice paid in part meanwhile as it is: the credit note would cancel that money', async () => {
+    clock = new Date();
+    const t = await newTenant(request);
+    const { id } = await deliveredInvoice(api, t, draft(1));
+    const avoir = (await (await creditNote(t.apiKey, id)).json()) as Detail;
+    await request(`/invoices/${id}/payment`, {
+      method: 'POST',
+      token: t.apiKey,
+      body: { amount: 1_000 },
+    });
+    await sendCredit(t.apiKey, avoir.id);
+    expect(await status(id)).toBe('delivered');
+    expect((await notes(id, 'credit_note_not_applied'))[0]?.payload).toMatchObject({
+      number: avoir.number,
+      paid: 1_000,
+    });
+  });
 });
 
 describe('write-off', () => {
@@ -328,5 +346,33 @@ describe('write-off', () => {
     expect(
       (await request(`/invoices/${id}/write-off`, { method: 'POST', token: t.apiKey })).status,
     ).toBe(200);
+  });
+
+  it('gives up only what is left after an instalment', async () => {
+    clock = new Date();
+    const t = await newTenant(request);
+    const due = addDays(parisToday(), 10);
+    const { id } = await deliveredInvoice(
+      api,
+      t,
+      draft(1, (d) => {
+        d.dueDate = due;
+      }),
+    );
+    await request(`/invoices/${id}/payment`, {
+      method: 'POST',
+      token: t.apiKey,
+      body: { amount: 2_500 },
+    });
+    clock = paris(addDays(due, 1), 10);
+    await runCollect({ db: database.db, mailer: null, now: () => clock });
+    const res = await request(`/invoices/${id}/write-off`, { method: 'POST', token: t.apiKey });
+    const detail = (await res.json()) as Detail & { payable: number };
+    expect(detail.status).toBe('written_off');
+    const [given] = await database.db
+      .select({ payload: invoiceEvents.payload })
+      .from(invoiceEvents)
+      .where(and(eq(invoiceEvents.invoiceId, id), eq(invoiceEvents.toStatus, 'written_off')));
+    expect(given?.payload).toMatchObject({ amount: detail.payable - 2_500, paid: 2_500 });
   });
 });

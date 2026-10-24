@@ -26,7 +26,6 @@ import {
   chasePlans,
   type Db,
   eq,
-  gt,
   type InvoiceRow,
   inArray,
   invoiceEvents,
@@ -94,6 +93,13 @@ export async function endPlan(tx: Tx, invoiceId: string, now: Date): Promise<voi
     .where(eq(chasePlans.id, plan.id));
 }
 
+/** Something is left to pay after the payments received (« Encaissée » in part, src/payments.ts). */
+const owes = sql`${invoices.payable} > ${invoices.amountPaid}`;
+
+/** What is left to pay on the invoice. */
+export const balanceOf = (invoice: Pick<InvoiceRow, 'payable' | 'amountPaid'>) =>
+  Math.max(0, (invoice.payable ?? 0) - invoice.amountPaid);
+
 // ── The run ───────────────────────────────────────────────────────────────────────────────────────
 
 /** delivered/accepted, past the due date (Europe/Paris), something left to pay → overdue. */
@@ -107,7 +113,7 @@ async function markOverdue(deps: CollectDeps, now: Date, today: string): Promise
         eq(invoices.direction, 'out'),
         inArray(invoices.status, ['delivered', 'accepted']),
         lt(invoices.dueDate, today),
-        gt(invoices.payable, 0),
+        owes,
         isNull(tenants.deletedAt),
       ),
     );
@@ -144,7 +150,7 @@ async function createPlans(deps: CollectDeps): Promise<number> {
         eq(invoices.direction, 'out'),
         inArray(invoices.status, [...CHASED_STATES]),
         isNotNull(invoices.dueDate),
-        gt(invoices.payable, 0),
+        owes,
         isNull(chasePlans.id),
         isNull(tenants.deletedAt),
       ),
@@ -266,7 +272,7 @@ async function workPlan(
       const decision = autopilotDecision(
         step.kind,
         { mode: tenant.mode, maxAmount: tenant.autopilotMaxAmount, mailer: Boolean(deps.mailer) },
-        { payable: invoice.payable ?? 0, isTest: invoice.isTest, to: draft.to },
+        { payable: balanceOf(invoice), isTest: invoice.isTest, to: draft.to },
       );
       const done: ChaseStep = decision.send
         ? { ...step, status: 'sending', at, reason: null, draft }
@@ -327,6 +333,7 @@ export function chaseDraftFor(invoice: InvoiceRow, tenant: TenantRow, step: Chas
     dueDate: invoice.dueDate ?? step.date,
     today: parisToday(now),
     payable: invoice.payable ?? 0,
+    paid: invoice.amountPaid,
     currency: invoice.currency ?? 'EUR',
     seller: tenant.name,
     to: recipientOf(invoice),

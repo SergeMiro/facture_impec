@@ -2,7 +2,8 @@
 // comes back to FI_Statut without a click, the fiche closed. By default against B2Brouter's stand-in
 // in apps/mock-pdp (the real adapter, webhooks included); with FI_LIVE_B2BROUTER_* against the real
 // sandbox (docs/RUNBOOK.md § E2E), where the sweep brings the news. Then, on the stand-in, M5's
-// « Encaissée » from « Relancer » reports the payment and the sheet says it was paid.
+// « Encaissée » from « Relancer » (an instalment, then the rest) reports the payments and the sheet
+// says it was paid.
 // browser: local (Chrome of this server; Browserbase cannot reach localhost).
 import { type MessageKey, t } from '@fi/shared';
 import { expect, test } from '@playwright/test';
@@ -111,6 +112,18 @@ test('an invoice goes to B2Brouter and its status comes back to the sheet by its
     await pane.getByRole('button', { name: t('addin.invoice.chase') }).click();
     const panel = pane.getByTestId('chase-panel');
     await expect(panel.getByRole('heading', { name: t('addin.chase.title') })).toBeVisible();
+    // An instalment of 10 € first: still chased, the fiche shows what is left.
+    await panel.getByRole('button', { name: t('addin.chase.paid') }).click();
+    await panel.getByTestId('paid-amount').fill('10');
+    await panel
+      .getByTestId('confirm-paid')
+      .getByRole('button', { name: t('addin.chase.confirmPart') })
+      .click();
+    await expect(pane.getByTestId('notice')).toContainText(
+      t('addin.chase.partDone', { number: `TEST-${number}`, left: '' }).split(' :')[0] ?? '',
+    );
+    await expect(panel.getByTestId('balance')).toContainText('10,00');
+    // Then the rest, the amount the field proposes.
     await panel.getByRole('button', { name: t('addin.chase.paid') }).click();
     await panel
       .getByTestId('confirm-paid')

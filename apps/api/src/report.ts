@@ -31,22 +31,27 @@ import {
   users,
   weeklyReports,
 } from '@fi/db';
+import { balanceOf } from './collect';
 import type { ApiDeps } from './deps';
 
 type Deps = Pick<ApiDeps, 'db' | 'mailer' | 'now'>;
 
 const REPORT_HOUR = 8;
 
+/** The invoice's amount, or what is left to pay on it after the payments received (`owed`). */
+const AMOUNT = {
+  payable: sql<string>`coalesce(sum(${invoices.payable}), 0)`,
+  owed: sql<string>`coalesce(sum(${invoices.payable} - ${invoices.amountPaid}), 0)`,
+};
+
 async function tally(
   deps: Deps,
   tenantId: string,
   where: ReturnType<typeof and>,
+  amount: keyof typeof AMOUNT = 'payable',
 ): Promise<{ count: number; amount: number }> {
   const [row] = await deps.db
-    .select({
-      count: count(),
-      amount: sql<string>`coalesce(sum(${invoices.payable}), 0)`,
-    })
+    .select({ count: count(), amount: AMOUNT[amount] })
     .from(invoices)
     .where(
       and(
@@ -92,7 +97,12 @@ export async function weekFacts(deps: Deps, tenant: TenantRow, now: Date): Promi
         ),
       );
   const plans = await deps.db
-    .select({ steps: chasePlans.steps, number: invoices.number, payable: invoices.payable })
+    .select({
+      steps: chasePlans.steps,
+      number: invoices.number,
+      payable: invoices.payable,
+      amountPaid: invoices.amountPaid,
+    })
     .from(chasePlans)
     .innerJoin(invoices, eq(invoices.id, chasePlans.invoiceId))
     .where(
@@ -121,7 +131,7 @@ export async function weekFacts(deps: Deps, tenant: TenantRow, now: Date): Promi
     currency: 'EUR',
     sent: await reached(deps, tenant.id, 'deposited', since),
     paid: await reached(deps, tenant.id, 'paid', since),
-    overdue: await tally(deps, tenant.id, inArray(invoices.status, ['overdue', 'chasing'])),
+    overdue: await tally(deps, tenant.id, inArray(invoices.status, ['overdue', 'chasing']), 'owed'),
     notInvoiced: { count: short?.count ?? 0, amount: Number(short?.amount ?? 0) },
     atRisk: await tally(
       deps,
@@ -130,10 +140,11 @@ export async function weekFacts(deps: Deps, tenant: TenantRow, now: Date): Promi
         inArray(invoices.status, ['delivered', 'accepted']),
         between(invoices.dueDate, today, addDays(today, 7)),
       ),
+      'owed',
     ),
     formalNotices: plans
       .filter((p) => p.steps.some((s) => drafted(s) && s.kind === 'formal_notice'))
-      .map((p) => ({ number: p.number ?? '', payable: p.payable ?? 0 })),
+      .map((p) => ({ number: p.number ?? '', payable: balanceOf(p) })),
     refusals: (await ofTenant(['refused_by_customer'])).map((r) => r.number ?? r.id),
     toFix: (await ofTenant(['needs_fix', 'rejected_by_pdp'])).length,
     drafts: plans.reduce(

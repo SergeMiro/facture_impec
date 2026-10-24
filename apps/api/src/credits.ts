@@ -8,6 +8,7 @@
 import {
   CREDIT_NOTE_TYPE,
   creditNoteDraft,
+  frMoney,
   type InvoiceState,
   nextCreditNumber,
   parisToday,
@@ -51,6 +52,12 @@ function refusal(row: InvoiceRow): ApiError | null {
   if (row.status === 'sending') return new ApiError(409, 'credit_while_sending');
   if (row.status === 'rejected_by_pdp') return new ApiError(409, 'credit_rejected');
   if (row.status === 'paid') return new ApiError(409, 'credit_paid');
+  // A full credit note would cancel money already received (a partial one: docs/DEFERRED.md).
+  if (row.amountPaid > 0) {
+    return new ApiError(409, 'credit_partly_paid', {
+      paid: frMoney(row.amountPaid, row.currency ?? 'EUR'),
+    });
+  }
   if (!CREDITABLE.includes(row.status) || !row.number || !row.issueDate) {
     return new ApiError(409, 'not_creditable', { status: label(row.status) });
   }
@@ -155,7 +162,8 @@ export async function createCreditNote(
 
 /**
  * The platform has a credit note (src/workers.ts runSend, same transaction): the invoice it names is
- * cancelled by it. One paid meanwhile stays paid; its timeline says the credit note left.
+ * cancelled by it. One paid (in full or in part) meanwhile stays as it is; its timeline says the credit
+ * note left.
  * TODO(verify) docs/B2BROUTER.md T24: that B2Brouter takes an imported 381 as the credit note of the
  * invoice it names (BG-3), and gives it the statuses of an invoice.
  */
@@ -168,6 +176,18 @@ export async function creditOriginal(tx: Tx, creditNoteId: string, now: Date): P
   const original = await lockInvoice(tx, note.creditOf);
   if (!original) return;
   const payload = { creditNote: creditNoteId, number: note.number };
+  // Paid in part meanwhile: cancelling it all would cancel money received. It stays as it is.
+  if (original.amountPaid > 0) {
+    await tx.insert(invoiceEvents).values({
+      invoiceId: original.id,
+      type: 'note',
+      actor: 'system',
+      event: 'credit_note_not_applied',
+      at: now,
+      payload: { ...payload, status: original.status, paid: original.amountPaid },
+    });
+    return;
+  }
   if (original.status === 'refused_by_customer') {
     await applyTransition(tx, {
       invoiceId: original.id,
@@ -212,7 +232,8 @@ export async function writeOff(deps: ApiDeps, tenant: TenantRow, id: string): Pr
       invoiceId: id,
       event: 'write_off',
       actor: 'user',
-      payload: { amount: row.payable ?? 0 },
+      // What is given up: the balance, after the payments received.
+      payload: { amount: Math.max(0, (row.payable ?? 0) - row.amountPaid), paid: row.amountPaid },
       at: now,
     });
     await endPlan(tx, id, now);

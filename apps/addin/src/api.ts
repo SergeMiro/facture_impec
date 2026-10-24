@@ -540,6 +540,8 @@ const InvoiceSummary = z.object({
   currency: z.string().nullable(),
   buyerName: z.string().nullable(),
   payable: z.number().nullable(),
+  /** Cents received so far (« Encaissée », at once or in instalments). */
+  amountPaid: z.number().default(0),
   pdpRef: z.string().nullable(),
   isTest: z.boolean(),
   /** The customer of the fiche clients this invoice was matched to; null: none yet. */
@@ -580,6 +582,17 @@ export const NextStep = z.object({
   draft: ChaseDraft.nullable(),
 });
 export type NextStep = z.infer<typeof NextStep>;
+
+/** What is left to pay on an invoice, in cents. */
+export const balanceOf = (d: { payable: number | null; amountPaid: number }) =>
+  Math.max(0, (d.payable ?? 0) - d.amountPaid);
+
+export interface PaymentInput {
+  /** YYYY-MM-DD, Europe/Paris; default today. */
+  paidOn?: string | undefined;
+  amount?: number | undefined;
+  paidBefore?: number | undefined;
+}
 
 export const InvoiceDetail = InvoiceSummary.extend({
   issues: z.array(Issue),
@@ -1080,12 +1093,12 @@ export class ApiClient {
     });
   scenario = (id: string, scenario: Scenario) =>
     this.#json(InvoiceDetail, `/invoices/${id}/scenario`, { method: 'POST', body: { scenario } });
-  /** « Encaissée »: the customer paid; chasing stops and the platform is told. */
-  recordPayment = (id: string, paidOn?: string) =>
-    this.#json(InvoiceDetail, `/invoices/${id}/payment`, {
-      method: 'POST',
-      body: paidOn ? { paidOn } : {},
-    });
+  /**
+   * « Encaissée »: the customer paid `amount` cents (default: what is left). The balance paid, chasing
+   * stops; the platform is told either way. `paidBefore` is what the pane showed as received.
+   */
+  recordPayment = (id: string, payment: PaymentInput = {}) =>
+    this.#json(InvoiceDetail, `/invoices/${id}/payment`, { method: 'POST', body: payment });
   /** « Établir un avoir »: the credit note's fiche, the same one when asked again. */
   creditNote = (id: string) =>
     this.#json(InvoiceDetail, `/invoices/${id}/credit-note`, { method: 'POST' });

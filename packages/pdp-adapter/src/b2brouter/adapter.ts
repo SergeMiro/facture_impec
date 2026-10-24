@@ -347,6 +347,8 @@ export function createB2BrouterAdapter(options: B2BrouterAdapterOptions): PdpAda
       // POST /payments, not mark_as: its `amount` is the CDV 206 partial approval (OpenAPI 2026-06-26).
       // TODO(verify): docs/B2BROUTER.md §11 T21 — no idempotency key: a retry after a lost answer may
       // record the payment twice.
+      // TODO(verify): docs/B2BROUTER.md §11 T25 — an instalment is sent with its own amount; whether
+      // B2Brouter adds them up and reaches 212 only at the total is not documented.
       const body: B2bPaymentRequest = {
         payment: { invoice_id: Number(pdpRef), amount: amount / 100 },
       };

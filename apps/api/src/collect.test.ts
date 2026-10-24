@@ -1,14 +1,24 @@
 // Chasing (plan §6 CollectAgent, §11 M5): the overdue run, the plan of each invoice, the step of the
 // day as a draft or, in Autopilot, an e-mail, and what the user does on « Relancer ». The business
 // clock is moved by hand; every invoice is the golden one, delivered through a scripted platform.
-import { addDays, type ChaseStep, parisToday } from '@fi/core';
+import { addDays, type ChaseStep, frMoney, parisToday } from '@fi/core';
 import type { Database } from '@fi/db';
-import { asc, auditEvents, chasePlans, eq, invoiceEvents, invoices, paymentReports } from '@fi/db';
+import {
+  asc,
+  auditEvents,
+  chasePlans,
+  eq,
+  invoiceEvents,
+  invoices,
+  paymentReports,
+  tenants,
+} from '@fi/db';
 import { PdpUnavailableError } from '@fi/pdp-adapter';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runCollect, SENDING_STALE_MS } from './collect';
 import type { Mailer } from './deps';
 import { runReportPayment } from './payments';
+import { weekFacts } from './report';
 import {
   deliveredInvoice,
   draft,
@@ -429,6 +439,83 @@ describe('Encaissée', () => {
       .from(paymentReports)
       .where(eq(paymentReports.invoiceId, id));
     expect(report).toMatchObject({ status: 'reported', attempts: 2, lastError: null });
+  });
+
+  it('records instalments: chases the rest, then pays the invoice with the last one', async () => {
+    const t = await newTenant(request);
+    const d = due();
+    const id = await delivered(t, d, 'acompte@client.test');
+    clock = paris(addDays(d, 3), 10);
+    await collect();
+    const payable = (await invoice(id)).payable ?? 0;
+    const part = Math.round(payable * 0.4);
+    const pay = (body: object) =>
+      request(`/invoices/${id}/payment`, { method: 'POST', token: t.apiKey, body });
+    const code = async (res: Response) =>
+      ((await res.json()) as { error: { code: string } }).error.code;
+
+    const first = await pay({ amount: part, paidBefore: 0 });
+    expect(first.status).toBe(200);
+    expect(await first.json()).toMatchObject({ status: 'chasing', amountPaid: part });
+    // The same click again: the figure it saw changed, nothing is counted twice.
+    const twice = await pay({ amount: part, paidBefore: 0 });
+    expect(twice.status).toBe(409);
+    expect(await code(twice)).toBe('payment_changed');
+    const tooMuch = await pay({ amount: payable - part + 1, paidBefore: part });
+    expect(tooMuch.status).toBe(400);
+    expect(await code(tooMuch)).toBe('payment_too_much');
+    expect((await invoice(id)).amountPaid).toBe(part);
+    expect((await timeline(id)).filter((e) => e.event === 'payment_partial')).toMatchObject([
+      { type: 'note', actor: 'user', payload: { amount: part, paid: part, left: payable - part } },
+    ]);
+
+    // Still chased, for the rest: the letter says what arrived and asks for the balance.
+    expect((await plan(id)).steps.some((s) => s.status === 'pending')).toBe(true);
+    clock = paris(addDays(d, 4), 7);
+    const prepared = await request(`/invoices/${id}/chase`, { method: 'POST', token: t.apiKey });
+    const steps = ((await prepared.json()) as { chase: { steps: ChaseStep[] } }).chase.steps;
+    const letter = steps.find((s) => s.reason === 'manual')?.draft?.body ?? '';
+    expect(letter).toContain(`Nous avons bien reçu un règlement de ${frMoney(part, 'EUR')}`);
+    expect(letter).toContain(`il reste ${frMoney(payable - part, 'EUR')} à régler`);
+    // A full credit note would cancel the money received: refused, plainly.
+    const credit = await request(`/invoices/${id}/credit-note`, {
+      method: 'POST',
+      token: t.apiKey,
+    });
+    expect(credit.status).toBe(409);
+    expect(await code(credit)).toBe('credit_partly_paid');
+    // The week's report counts what is still owed.
+    const [company] = await database.db.select().from(tenants).where(eq(tenants.id, t.id));
+    if (!company) throw new Error('no tenant');
+    expect((await weekFacts(api.deps, company, clock)).overdue.amount).toBe(payable - part);
+
+    // The rest: paid, chasing ends.
+    const last = await pay({ paidBefore: part });
+    expect(await last.json()).toMatchObject({ status: 'paid', amountPaid: payable });
+    expect((await plan(id)).steps.some((s) => s.status === 'pending')).toBe(false);
+    const actions = await database.db
+      .select({ action: auditEvents.action })
+      .from(auditEvents)
+      .where(eq(auditEvents.objectId, id));
+    expect(actions.map((a) => a.action)).toEqual(
+      expect.arrayContaining(['payment.partial', 'payment.record']),
+    );
+
+    // Two payments, two reports, oldest first.
+    const calls: { amount: number }[] = [];
+    const adapter = fakeAdapter({
+      reportPayment: async (input) => {
+        calls.push(input);
+      },
+    });
+    await runReportPayment(worker(adapter), id);
+    await runReportPayment(worker(adapter), id);
+    expect(calls.map((c) => c.amount)).toEqual([part, payable - part]);
+    const reports = await database.db
+      .select()
+      .from(paymentReports)
+      .where(eq(paymentReports.invoiceId, id));
+    expect(reports.map((r) => r.status)).toEqual(['reported', 'reported']);
   });
 
   it('marks a payment report the platform refuses as failed, without retrying', async () => {

@@ -51,6 +51,8 @@ export function invoiceSummary(row: InvoiceRow) {
     buyerName: row.buyerName,
     /** Cents. */
     payable: row.payable,
+    /** Cents received so far (« Encaissée », in instalments or at once). */
+    amountPaid: row.amountPaid,
     fingerprint: row.fingerprint,
     pdpRef: row.pdpRef,
     isTest: row.isTest,

@@ -152,7 +152,7 @@ describe('B2Brouter stand-in', () => {
     expect(await (await call(`/invoices/${id}/as/original`)).text()).toBe(xml);
   });
 
-  it('records a payment for either an amount or the full invoice, not both', async () => {
+  it('records a payment for either an amount or the full invoice, not both; paid once in full', async () => {
     const { call, engine, imported } = setup();
     const id = await imported('B2B-8');
     await call(`/invoices/send_invoice/${id}`, { method: 'POST' });
@@ -163,7 +163,10 @@ describe('B2Brouter stand-in', () => {
         headers: { 'content-type': 'application/json' },
       });
     expect((await pay({ invoice_id: id, amount: 120, full: true })).status).toBe(422);
-    expect((await pay({ invoice_id: id, amount: 120 })).status).toBe(201);
+    // An instalment in euros, then the rest.
+    expect((await pay({ invoice_id: id, amount: 40 })).status).toBe(201);
+    expect(engine.list(ACCOUNT, 'B2B-8')[0]?.status).not.toBe('payment_received');
+    expect((await pay({ invoice_id: id, full: true })).status).toBe(201);
     expect(engine.list(ACCOUNT, 'B2B-8')[0]?.status).toBe('payment_received');
   });
 

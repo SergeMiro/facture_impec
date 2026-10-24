@@ -234,7 +234,9 @@ export class B2BrouterStandIn {
         throw error(422, 'parameter_conflict', 'Send either amount or full');
       }
       const draft = this.#draft(id, c.req.param('account'));
-      if (draft.engineId) this.#engine.reportPayment(draft.account, draft.engineId);
+      // `amount` in euros (§3.1); `full` pays what is left.
+      const cents = amount === undefined ? undefined : Math.round(amount * 100);
+      if (draft.engineId) this.#engine.reportPayment(draft.account, draft.engineId, cents);
       return c.json({ payment: { id: ++this.#seq.request, invoice_id: id, amount } }, 201);
     });
 

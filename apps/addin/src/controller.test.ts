@@ -404,8 +404,19 @@ describe('a new user on the demo sheet', () => {
     expect(await controller.promisePayment(null)).toBe(true);
     expect(state().invoice?.detail.chase?.promisedUntil).toBeNull();
 
+    // An instalment first: still chased, for the rest.
+    const payable = state().invoice?.detail.payable ?? 0;
+    await controller.recordPayment(undefined, 1_000);
+    expect(state().invoice?.detail).toMatchObject({ status: 'accepted', amountPaid: 1_000 });
+    expect(state().notice?.text).toBe(
+      t('addin.chase.partDone', {
+        number: row(2)?.number ?? '',
+        left: frMoney(payable - 1_000, 'EUR'),
+      }),
+    );
     await controller.recordPayment();
     expect(state().invoice?.detail.status).toBe('paid');
+    expect(state().invoice?.detail.amountPaid).toBe(payable);
     expect(state().notice?.text).toBe(t('addin.chase.paidDone', { number: row(2)?.number ?? '' }));
     await until(
       () => book.cell(DEMO_SHEET, 'M2')?.text?.includes(t('invoice.status.paid')) ?? false,

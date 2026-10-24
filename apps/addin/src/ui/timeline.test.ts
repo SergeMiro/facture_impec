@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { centsOf } from './ChasePanel';
 import { eventText } from './InvoiceView';
 
 const note = (payload: unknown, event = 'vat_check', actor = 'agent:party') => ({
@@ -21,6 +22,30 @@ describe('the invoice timeline', () => {
     expect(eventText(note({ vatId: 'DE999999999', valid: false, requestIdentifier: null }))).toBe(
       "Numéro de TVA DE999999999 de votre client vérifié dans le service européen VIES : non valide · par l'assistant",
     );
+  });
+
+  it('tells an instalment with what is left, and a credit note stopped by one', () => {
+    const part = note(
+      { paidOn: '2026-10-24', amount: 40_000, paid: 40_000, left: 80_000 },
+      'payment_partial',
+      'user',
+    );
+    expect(eventText(part)).toBe(
+      'Paiement reçu : 400,00\u00a0€. Reste à payer : 800,00\u00a0€ · par vous',
+    );
+    const stopped = note(
+      { number: 'AV2026-0001', status: 'chasing', paid: 40_000 },
+      'credit_note_not_applied',
+      'system',
+    );
+    expect(eventText(stopped)).toContain('votre client en avait déjà payé 400,00\u00a0€');
+  });
+
+  it('reads the amount received as the user types it', () => {
+    expect(centsOf('1 200,50')).toBe(120_050);
+    expect(centsOf('300 €')).toBe(30_000);
+    expect(centsOf('12.5')).toBe(1_250);
+    for (const bad of ['', '0', '-5', '12,345', 'dix']) expect(centsOf(bad)).toBeNull();
   });
 
   it('names the credit note on its invoice, and the invoice on its credit note', () => {
