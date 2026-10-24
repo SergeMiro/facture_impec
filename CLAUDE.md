@@ -9,7 +9,10 @@ like "plan §7" refer to it. Where this file and the plan disagree, the plan win
 ## Where things are
 
 - Single working copy on the VPS: `/home/sergiy_prod/facture_impec` (not under `~/workspaces`, which is auto-cleaned).
-- Layout: `apps/{addin,api,mock-pdp,site}`, `packages/{core,agents,pdp-adapter,db,shared}`, `fixtures/`, `docs/`, `scripts/`.
+- Layout: `apps/{addin,api,mock-pdp,site}`, `packages/{core,agents,pdp-adapter,db,shared,domain}`, `fixtures/`, `docs/`, `scripts/`.
+- The owner's second plan, the BTP back end (agents, deadlines, approvals, ERP connectors), is
+  followed stage by stage: `docs/DECISIONS.md` maps it onto this repository, `docs/plans/phase-N.md`
+  holds each stage. A deviation from it is written in DECISIONS before the code.
 - `apps/site` is the marketing site (Astro + Vercel, green brand). Its copy lives in `apps/site/src/content/`;
   rule 6 below is about product UI. Never put unverified claims, fake testimonials or customer counts on it.
 - `apps/addin` has two hosts: Office.js (`taskpane.html`) and a bound Google Sheets sidebar
@@ -24,7 +27,7 @@ like "plan §7" refer to it. Where this file and the plan disagree, the plan win
 ```bash
 pnpm install          # Node 22, pnpm 11 (corepack)
 pnpm dev              # api :4000, mock-pdp :4010, add-in :3000, site :4321
-pnpm verify           # biome ci + typecheck + tests — the gate before every commit
+pnpm verify           # biome ci + typecheck + package boundaries + tests — the gate before every commit
 pnpm format           # biome check --write
 pnpm test:e2e         # add-in E2E in local Chrome, own ports (docs/RUNBOOK.md § E2E); not part of verify
 pnpm scenario [--provider b2brouter] all   # plan §9 scenarios, in-process; through the B2Brouter adapter

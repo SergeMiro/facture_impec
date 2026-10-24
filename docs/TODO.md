@@ -183,6 +183,49 @@ Each closes with a call or two on the owner's sandbox key (`docs/RUNBOOK.md` § 
 - [ ] **Hosted database:** whether `unaccent` can be enabled there, before a pilot asks for searches
       that ignore accents (`docs/DEFERRED.md` › Finding an invoice).
 
+## BTP plan (`docs/DECISIONS.md`), started 2026-10-24
+
+Stages (`docs/plans/phase-N.md` each):
+
+- [x] **0 — vocabulary, tables, boundaries** (`docs/plans/phase-0.md`).
+- [ ] **1 — ingest and validate**: FileStore, `POST /ingest` (sha256 dedupe, backpressure), the ingest
+      worker (Factur-X XML, PDF text, OCR), BTP rules v1 with sources, adapters (pane upload, PDP
+      inbound, drive and e-mail stand-ins), 50 golden documents, a measured p95.
+- [ ] **2 — documents pipeline**: classify (rules, then a model with its eval), extract, validate, link
+      to company and chantier, derive deadlines; `GET /documents`, `GET /obligations`; the pane.
+- [ ] **3 — watchers and approvals**: the deadline watchers, actions with `POST /actions/:id/decide`,
+      « À valider » in the pane, the e-mail digest with signed links, the Telegram bot; the invoice
+      deadlines joined to the existing chasing (CollectAgent), not duplicated.
+- [ ] **4 — connectors**: the frame and the ERP-export connector (D5); EBP SaaS paused (D3).
+- [ ] **5, 6** paused (D3). **7 — observability, performance, runbook, onboarding.**
+
+Owner questions (BTP plan §13 and what stage 0 found):
+
+- [ ] **The first pilots' platform** (Sage, EBP, B2Brouter, another): which PDP adapter comes first.
+      B2Brouter's received invoices are already polled (M4) and become documents at stage 1.
+- [ ] **EBP SaaS**: a developer account and a test company with BTP data (stage 4).
+- [ ] **Batigest**: a pilot's machine for `probe` (stage 5).
+- [ ] **Excel on the web or desktop only**: the add-in runs in both already; the plan's question about a
+      WebSocket does not arise (the pane asks the API).
+- [ ] **Letters**: the pilots' current chasing and « demande d'attestation » letters, or ours.
+- [ ] **A model's cost per company**: today a daily token cap per company (`AI_DAILY_TOKENS`,
+      `tenantDailyTokens`; reached, the AI waits for the next day and the rules keep working). A
+      monthly cap in euros instead, and what the company sees when it is reached?
+- [ ] **Reading invoices without XML**: the BTP plan reads a PDF's text or OCR and extracts with a
+      model, which answers « Plain PDF invoices (R6) » above with « build it ». Still the owner's:
+      the supplier's names are what the model must read, so pseudonymizing hides the answer
+      (`docs/RGPD.md` › AI assistance); a model without training on the data, under contract?
+- [ ] **Mail ingestion** (D3): a forwarding address (an inbound e-mail provider, a monthly cost) or
+      Gmail / Outlook OAuth (`gmail.readonly` is a restricted scope: Google's paid assessment).
+- [ ] **Telegram**: the bot's token and name (stage 3); BotFather, in the owner's account.
+- [ ] **Sending actions' e-mails**: the sender domain (SPF, DKIM), with the SMTP of the pilot.
+- [ ] **Files' storage**: an object store (S3, encryption at rest, region) when hosting is chosen; the
+      bytes stay in Postgres (`blobs`) until then.
+- [ ] **How long non-invoice documents stay** (BTP plan §13 RGPD: a retention per company): an
+      attestation or a contrat de travail after the sous-traitant or employee left. Today: until the
+      account is deleted.
+- [ ] **Row-level security per company** (D1): deployment hardening, with the hosting.
+
 ## Excel on the web E2E
 
 - [ ] A Microsoft account that can upload an add-in in Excel on the web, then

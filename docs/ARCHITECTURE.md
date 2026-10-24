@@ -916,6 +916,38 @@ Once the platform has an invoice it is never edited nor cancelled again (`api.er
   « un avoir, puis une nouvelle facture », and the MonitorAgent's `fix_and_resend` on a refusal is shown
   under that name until its prompt says it (`docs/TODO.md`).
 
+## BTP back end, stage 0: vocabulary, tables, boundaries
+
+The owner's BTP plan (`docs/DECISIONS.md`) turns the API into a back end for building-trade SMEs:
+every document that arrives is stored, read, checked by rules, linked to its company and chantier;
+its deadlines are watched; what must be sent waits for a person's approval. Stage 0 lays what every
+later stage stands on (`docs/plans/phase-0.md`); nothing of the product's behaviour changes yet.
+
+- **`@fi/domain`** (`packages/domain`): the shared vocabulary, Zod only, importing nothing of the
+  monorepo. The closed lists (`DOCUMENT_KINDS`, `DOCUMENT_SOURCES`, `DOCUMENT_STAGES`,
+  `OBLIGATION_KINDS`, `ACTION_KINDS`, `ACTION_STATUSES`), `DocumentEnvelope` (what an adapter hands
+  to the ingest queue: the file already stored, by key and SHA-256, never its bytes),
+  `ApprovalDecision` (a person's answer to an action, with the `revision` they saw) and the two
+  worker errors (`RetryableError`, `FatalError`).
+- **Tables** (`packages/db/drizzle/0021_btp_foundations.sql`): `documents` (one row per file, company
+  and mode: `sha256` unique), `blobs` (the FileStore's first driver: bytes in Postgres under the
+  document's `storage_key`), `chantiers`, `obligations` (only from a document or an invoice: a check
+  constraint; `key` makes deriving it again idempotent), `actions` (`key` per step served, `revision`
+  for stale answers), `connector_syncs`; on `parties`: `subcontractor`, `siret`, `erp_ref`. Postgres
+  keeps each closed list as a check constraint, so a new kind is a migration. A deleted company or
+  chantier is forgotten by what pointed to it (`on delete set null`).
+- **RGPD**: the export gives the new tables (files without their bytes); a deletion keeps only the
+  real invoices received, with their bytes, without what the e-mail said of the sender
+  (`docs/RGPD.md`).
+- **Package boundaries** (`scripts/boundaries`): `pnpm boundaries`, inside `pnpm verify`, reads every
+  import of production code and fails on a workspace package the rule does not allow, an outside
+  package of the wrong layer (no database, queue or HTTP server below the API; model providers only
+  in `@fi/agents`), a `node:` module in browser code (`@fi/core` and `@fi/domain` `src`, the add-in),
+  a file of another package by relative path, or a workspace package missing from the importer's
+  `package.json` (the API image installs the declared ones only). Tests and their helpers are exempt
+  from the layers, not from declaring what they import. `scripts/boundaries/check.test.ts` shows each
+  failure on a fixture tree and the repository passing.
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

@@ -5,11 +5,17 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Database, openDatabase, rows } from './client';
 import { hashOf, stableJson } from './hash';
 import {
+  actions,
   auditEvents,
+  blobs,
+  chantiers,
+  documents,
   inboundQueue,
   invoiceArchive,
   invoiceEvents,
   invoices,
+  obligations,
+  parties,
   tenants,
 } from './schema';
 import { applyInboundTransition, applyTransition } from './transition';
@@ -52,17 +58,22 @@ describe('migrations', () => {
       sql`select table_name from information_schema.tables where table_schema = 'public' order by 1`,
     );
     expect(tables.map((r) => r.table_name)).toEqual([
+      'actions',
       'agent_runs',
       'api_keys',
       'audit_events',
       'billing_usage',
+      'blobs',
+      'chantiers',
       'chase_plans',
       'chats',
       'check_state',
       'connected_files',
       'connections',
+      'connector_syncs',
       'doc_lines',
       'docs',
+      'documents',
       'edits',
       'findings',
       'inbound_exports',
@@ -75,6 +86,7 @@ describe('migrations', () => {
       'layout_profiles',
       'links',
       'magic_links',
+      'obligations',
       'parties',
       'payment_reports',
       'pdp_submissions',
@@ -249,6 +261,157 @@ describe('invoices.status', () => {
     const note = { invoiceId: inv.id, type: 'pdp_event' as const, actor: 'pdp', pdpEventId: 'e1' };
     await db().insert(invoiceEvents).values(note);
     await expect(db().insert(invoiceEvents).values(note)).rejects.toThrow();
+  });
+});
+
+describe('BTP tables (docs/DECISIONS.md D2)', () => {
+  const sha = (c: string) => c.repeat(64);
+  const file = (tenantId: string, sha256: string, isTest = false) => ({
+    tenantId,
+    source: 'mail' as const,
+    sourceRef: '<m1@example.fr>',
+    name: 'attestation.pdf',
+    mime: 'application/pdf',
+    size: 3,
+    sha256,
+    storageKey: `${tenantId}/${sha256}`,
+    isTest,
+    receivedAt: new Date('2026-10-24T08:00:00Z'),
+  });
+
+  it('keeps bytes as they were, and one document per file, company and mode', async () => {
+    const t = await tenant();
+    const bytes = new Uint8Array([0x25, 0x50, 0x00, 0xff]);
+    await db()
+      .insert(blobs)
+      .values({
+        key: `${t.id}/${sha('a')}`,
+        tenantId: t.id,
+        sha256: sha('a'),
+        size: 4,
+        mime: 'application/pdf',
+        bytes,
+      });
+    const [blob] = await db().select().from(blobs).where(eq(blobs.tenantId, t.id));
+    expect([...(blob?.bytes ?? [])]).toEqual([...bytes]);
+    const [doc] = await db()
+      .insert(documents)
+      .values(file(t.id, sha('a')))
+      .returning();
+    expect(doc).toMatchObject({ stage: 'ingested', kind: null, hints: {} });
+    await expect(
+      db()
+        .insert(documents)
+        .values(file(t.id, sha('a'))),
+    ).rejects.toThrow();
+    await db()
+      .insert(documents)
+      .values(file(t.id, sha('a'), true));
+    await db()
+      .insert(documents)
+      .values(file((await tenant()).id, sha('a')));
+  });
+
+  it('refuses a kind, a stage or a status outside its list, and a retenue over 5 %', async () => {
+    const t = await tenant();
+    const refused = (name: string) => (e: unknown) => message(e).includes(name);
+    await expect(
+      db()
+        .insert(documents)
+        .values({ ...file(t.id, sha('b')), kind: 'facture' as 'avoir' }),
+    ).rejects.toSatisfy(refused('documents_kind'));
+    await expect(
+      db()
+        .insert(documents)
+        .values({ ...file(t.id, sha('b')), stage: 'lost' as 'done' }),
+    ).rejects.toSatisfy(refused('documents_stage'));
+    await expect(
+      db().insert(chantiers).values({ tenantId: t.id, name: 'Les Tilleuls', retenueBps: 600 }),
+    ).rejects.toSatisfy(refused('chantiers_retenue'));
+    const [doc] = await db()
+      .insert(documents)
+      .values(file(t.id, sha('b')))
+      .returning();
+    await expect(
+      db()
+        .insert(actions)
+        .values({
+          tenantId: t.id,
+          kind: 'relance_facture',
+          key: 'k',
+          payload: {},
+          isTest: false,
+          status: 'done' as 'sent',
+        }),
+    ).rejects.toSatisfy(refused('actions_status'));
+    await db().insert(actions).values({
+      tenantId: t.id,
+      kind: 'confirmer_tiers',
+      key: 'k',
+      payload: {},
+      isTest: false,
+      documentId: doc?.id,
+    });
+  });
+
+  it('derives an obligation only from a document or an invoice, once per key', async () => {
+    const t = await tenant();
+    const [doc] = await db()
+      .insert(documents)
+      .values(file(t.id, sha('c')))
+      .returning();
+    const due = {
+      tenantId: t.id,
+      kind: 'attestation_vigilance_renouvellement' as const,
+      dueOn: '2027-04-24',
+      isTest: false,
+    };
+    await expect(
+      db()
+        .insert(obligations)
+        .values({ ...due, key: 'a' }),
+    ).rejects.toSatisfy((e: unknown) => message(e).includes('obligations_source'));
+    await db()
+      .insert(obligations)
+      .values({ ...due, key: 'a', sourceDocumentId: doc?.id });
+    await expect(
+      db()
+        .insert(obligations)
+        .values({ ...due, key: 'a', sourceDocumentId: doc?.id }),
+    ).rejects.toThrow();
+    const sent = await invoice(t.id, 'F-9');
+    await db()
+      .insert(obligations)
+      .values({ ...due, kind: 'facture_echeance', key: 'b', invoiceId: sent.id, amount: 120_000 });
+  });
+
+  it('forgets a deleted company or chantier on what pointed to it', async () => {
+    const t = await tenant();
+    const [sub] = await db()
+      .insert(parties)
+      .values({
+        tenantId: t.id,
+        kind: 'supplier',
+        legalName: 'Plâtrerie Dumas',
+        siren: '200000009',
+        subcontractor: true,
+      })
+      .returning();
+    const [site] = await db()
+      .insert(chantiers)
+      .values({ tenantId: t.id, name: 'Les Tilleuls', customerId: sub?.id })
+      .returning();
+    const [doc] = await db()
+      .insert(documents)
+      .values({ ...file(t.id, sha('d')), partyId: sub?.id, chantierId: site?.id })
+      .returning();
+    await db().delete(chantiers).where(eq(chantiers.tenantId, t.id));
+    await db().delete(parties).where(eq(parties.tenantId, t.id));
+    const [after] = await db()
+      .select()
+      .from(documents)
+      .where(eq(documents.id, doc?.id ?? ''));
+    expect(after).toMatchObject({ partyId: null, chantierId: null });
   });
 });
 

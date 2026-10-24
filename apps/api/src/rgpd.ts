@@ -2,7 +2,9 @@
 // delete. Invoices that reached a platform stay (10 years, Code de commerce L123-22), received ones
 // too (they are the company's purchase records) with their accountant exports, and so does the
 // append-only audit log, which holds hashes and ids, never names or e-mails.
+
 import {
+  actions,
   agentRuns,
   and,
   apiKeys,
@@ -10,14 +12,18 @@ import {
   audit,
   auditEvents,
   billingUsage,
+  blobs,
+  chantiers,
   chasePlans,
   chats,
   checkState,
   connectedFiles,
   connections,
+  connectorSyncs,
   type Db,
   docLines,
   docs,
+  documents,
   edits,
   eq,
   findings,
@@ -33,6 +39,8 @@ import {
   links,
   lt,
   magicLinks,
+  notInArray,
+  obligations,
   or,
   parties,
   paymentReports,
@@ -51,6 +59,7 @@ import {
   vatChecks,
   weeklyReports,
 } from '@fi/db';
+import { INVOICE_KINDS } from '@fi/domain';
 import { z } from 'zod';
 import { archiveRegister } from './archive';
 import { isOwner, type Principal } from './auth';
@@ -93,7 +102,7 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     customers,
     archive,
     articles,
-    documents,
+    registryDocs,
     lines,
     profiles,
     sheets,
@@ -108,6 +117,11 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     synonyms,
     uploaded,
     viesAnswers,
+    sites,
+    files,
+    deadlines,
+    proposed,
+    syncs,
   ] = await Promise.all([
     db.select().from(users).where(eq(users.tenantId, tenant.id)).orderBy(asc(users.createdAt)),
     db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenant.id)),
@@ -203,6 +217,27 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       .from(vatChecks)
       .where(eq(vatChecks.tenantId, tenant.id))
       .orderBy(asc(vatChecks.checkedAt), asc(vatChecks.vatId)),
+    db
+      .select()
+      .from(chantiers)
+      .where(eq(chantiers.tenantId, tenant.id))
+      .orderBy(asc(chantiers.createdAt)),
+    db
+      .select()
+      .from(documents)
+      .where(eq(documents.tenantId, tenant.id))
+      .orderBy(asc(documents.receivedAt), asc(documents.id)),
+    db
+      .select()
+      .from(obligations)
+      .where(eq(obligations.tenantId, tenant.id))
+      .orderBy(asc(obligations.dueOn), asc(obligations.id)),
+    db
+      .select()
+      .from(actions)
+      .where(eq(actions.tenantId, tenant.id))
+      .orderBy(asc(actions.createdAt), asc(actions.id)),
+    db.select().from(connectorSyncs).where(eq(connectorSyncs.tenantId, tenant.id)),
   ]);
   const sheetOf = new Map(sheets.map((s) => [s.id, s.sheet]));
   const itemKeys = new Map(articles.map((a) => [a.id, a.key]));
@@ -335,15 +370,21 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       reportedAt: u.reportedAt?.toISOString() ?? null,
     })),
     accountantExports: sent.map((e) => ({ ...exportView(e), fec: e.fec, csv: e.csv })),
-    customers: customers.filter((p) => p.kind === 'customer').map(partyView),
-    /** The suppliers of received invoices, as their invoices name them (R3). */
+    customers: customers
+      .filter((p) => p.kind === 'customer')
+      .map((p) => ({ ...partyView(p), siret: p.siret, erpRef: p.erpRef })),
+    /** The suppliers of received invoices, as their invoices name them (R3), sous-traitants marked. */
     suppliers: customers
       .filter((p) => p.kind === 'supplier')
       .map((p) => ({
+        id: p.id,
         legalName: p.legalName,
         siren: p.siren,
+        siret: p.siret,
         address: p.address,
         source: p.source,
+        subcontractor: p.subcontractor,
+        erpRef: p.erpRef,
         createdAt: p.createdAt.toISOString(),
       })),
     /** What VIES answered on the customers' VAT numbers, with its consultation numbers (§6). */
@@ -359,12 +400,85 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     /** The ten-year register; the documents themselves are the invoices above and their XML. */
     archive,
     /**
+     * The BTP back end (docs/DECISIONS.md D2): the building sites, every file received (what was read
+     * from it, never its bytes, like `uploads`), the deadlines watched, the actions proposed with who
+     * decided them, and where each ERP connector stopped. Companies by `id` in customers and suppliers.
+     */
+    chantiers: sites.map((c) => ({
+      id: c.id,
+      name: c.name,
+      erpRef: c.erpRef,
+      customerId: c.customerId,
+      status: c.status,
+      address: c.address,
+      receptionOn: c.receptionOn,
+      reservesLiftedOn: c.reservesLiftedOn,
+      retenueBps: c.retenueBps,
+      createdAt: c.createdAt.toISOString(),
+    })),
+    documents: files.map((d) => ({
+      id: d.id,
+      source: d.source,
+      sourceRef: d.sourceRef,
+      name: d.name,
+      mime: d.mime,
+      size: d.size,
+      sha256: d.sha256,
+      kind: d.kind,
+      stage: d.stage,
+      reviewReason: d.reviewReason,
+      partyId: d.partyId,
+      chantierId: d.chantierId,
+      hints: d.hints,
+      extracted: d.extracted,
+      validation: d.validation,
+      isTest: d.isTest,
+      receivedAt: d.receivedAt.toISOString(),
+    })),
+    obligations: deadlines.map((o) => ({
+      id: o.id,
+      kind: o.kind,
+      status: o.status,
+      dueOn: o.dueOn,
+      partyId: o.partyId,
+      chantierId: o.chantierId,
+      documentId: o.sourceDocumentId,
+      invoiceId: o.invoiceId,
+      amount: o.amount,
+      lastRemindedAt: o.lastRemindedAt?.toISOString() ?? null,
+      closedAt: o.closedAt?.toISOString() ?? null,
+      isTest: o.isTest,
+    })),
+    actions: proposed.map((a) => ({
+      id: a.id,
+      kind: a.kind,
+      status: a.status,
+      obligationId: a.obligationId,
+      documentId: a.documentId,
+      partyId: a.partyId,
+      payload: a.payload,
+      decidedBy: a.decidedBy,
+      decidedAt: a.decidedAt?.toISOString() ?? null,
+      channel: a.channel,
+      comment: a.comment,
+      sentAt: a.sentAt?.toISOString() ?? null,
+      error: a.error,
+      isTest: a.isTest,
+      createdAt: a.createdAt.toISOString(),
+    })),
+    connectorSyncs: syncs.map((c) => ({
+      connector: c.connector,
+      cursor: c.cursor,
+      lastOkAt: c.lastOkAt?.toISOString() ?? null,
+      lastError: c.lastError,
+    })),
+    /**
      * The invoices above, the received ones and the documents of the included sheets, line by line,
      * with the article of each line.
      */
     registry: {
       items: articles.map((a) => ({ key: a.key, name: a.name })),
-      documents: documents.map((d) => ({
+      documents: registryDocs.map((d) => ({
         id: d.id,
         direction: d.direction,
         kind: d.kind,
@@ -536,6 +650,35 @@ export async function deleteTenant(
     await tx.delete(connections).where(eq(connections.tenantId, tenant.id));
     // The files uploaded from the pane (R6), their bytes with them.
     await tx.delete(uploads).where(eq(uploads.tenantId, tenant.id));
+    // BTP back end: the actions quote people and the deadlines serve an account that is gone; so do
+    // the connectors' cursors. Of the files received, only real invoices stay (the company's purchase
+    // and sales records), without what their e-mail said of the sender; attestations, contracts and
+    // lists of employees go, their bytes with them. The building sites go: an address can be a home.
+    await tx.delete(actions).where(eq(actions.tenantId, tenant.id));
+    await tx.delete(obligations).where(eq(obligations.tenantId, tenant.id));
+    await tx.delete(connectorSyncs).where(eq(connectorSyncs.tenantId, tenant.id));
+    await tx
+      .delete(documents)
+      .where(
+        and(
+          eq(documents.tenantId, tenant.id),
+          or(
+            eq(documents.isTest, true),
+            isNull(documents.kind),
+            notInArray(documents.kind, [...INVOICE_KINDS]),
+          ),
+        ),
+      );
+    await tx.update(documents).set({ hints: {} }).where(eq(documents.tenantId, tenant.id));
+    await tx
+      .delete(blobs)
+      .where(
+        and(
+          eq(blobs.tenantId, tenant.id),
+          sql`${blobs.key} not in (select ${documents.storageKey} from ${documents} where ${documents.tenantId} = ${tenant.id})`,
+        ),
+      );
+    await tx.delete(chantiers).where(eq(chantiers.tenantId, tenant.id));
     // Chasing drafts quote the customer: no plan outlives the deletion, and the advice notes kept
     // on transmitted invoices lose their drafted reply.
     await tx.delete(chasePlans).where(eq(chasePlans.tenantId, tenant.id));

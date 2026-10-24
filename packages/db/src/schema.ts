@@ -27,13 +27,26 @@ import {
   LINK_STATUSES,
   STATES,
 } from '@fi/core';
+import {
+  ACTION_KINDS,
+  ACTION_STATUSES,
+  APPROVAL_CHANNELS,
+  DOCUMENT_KINDS,
+  DOCUMENT_SOURCES,
+  DOCUMENT_STAGES,
+  type EnvelopeHints,
+  OBLIGATION_KINDS,
+  OBLIGATION_STATUSES,
+} from '@fi/domain';
 import { BILLING_INTERVALS, BILLING_STATUSES, PLANS, type Plan, type WhiteLabel } from '@fi/shared';
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
   bigint,
   bigserial,
   boolean,
+  check,
+  customType,
   date,
   index,
   integer,
@@ -49,6 +62,13 @@ const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull(
 const updatedAt = () => timestamp('updated_at', { withTimezone: true }).notNull().defaultNow();
 /** Amounts are integer cents (CLAUDE.md rule 4). */
 const cents = (name: string) => bigint(name, { mode: 'number' });
+/** Raw bytes: pg gives a Buffer, PGlite a Uint8Array, both are Uint8Array. */
+const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
+  dataType: () => 'bytea',
+});
+/** A closed list Postgres keeps too (BTP plan §4): a value outside it is refused by the database. */
+const oneOf = (column: AnyPgColumn, values: readonly string[]): SQL =>
+  sql`${column} in (${sql.raw(values.map((v) => `'${v}'`).join(', '))})`;
 
 /**
  * Where an invoice can sit. `b2brouter_test` is B2Brouter's sandbox seen from prod, where « Mode test »
@@ -309,6 +329,15 @@ export const parties = pgTable(
       .default('sirene'),
     /** When the directory confirmed it; null for a supplier nobody looked up. */
     verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    /**
+     * A supplier that is the company's sous-traitant (docs/DECISIONS.md D2): its URSSAF attestation is
+     * watched (C. trav. D8222-5) and its invoices carry no VAT (CGI art. 283, 2 nonies).
+     */
+    subcontractor: boolean('subcontractor').notNull().default(false),
+    /** The establishment the company deals with, when known; SIREN stays the key. */
+    siret: text('siret'),
+    /** The ERP's own id of this company (BTP plan §9), once a connector read it. */
+    erpRef: text('erp_ref'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -1253,6 +1282,223 @@ export const vatChecks = pgTable(
   (t) => [uniqueIndex('vat_checks_day').on(t.tenantId, t.vatId, t.checkedOn)],
 );
 
+// The BTP back end (docs/DECISIONS.md D2): every file that arrives, the building sites, the deadlines
+// watched and the actions waiting for a person.
+
+/**
+ * The bytes of the files the back end received, while they live in Postgres (docs/DECISIONS.md D1:
+ * the first driver of the FileStore). Rows point here only through `storage_key`, so moving the bytes
+ * to an object store is a copy, not a change of model.
+ */
+export const blobs = pgTable(
+  'blobs',
+  {
+    key: text('key').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    sha256: text('sha256').notNull(),
+    size: integer('size').notNull(),
+    mime: text('mime').notNull(),
+    bytes: bytea('bytes').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('blobs_tenant').on(t.tenantId)],
+);
+
+export const CHANTIER_STATUSES = ['open', 'closed'] as const;
+
+/** A building site (BTP plan §4 `chantier`): where situations, retenues and sous-traitants belong. */
+export const chantiers = pgTable(
+  'chantiers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    name: text('name').notNull(),
+    /** The ERP's own id (BTP plan §9), or the code the company gives it in its sheets. */
+    erpRef: text('erp_ref'),
+    /** The maître d'ouvrage or the general contractor the company works for. */
+    customerId: uuid('customer_id').references(() => parties.id, { onDelete: 'set null' }),
+    status: text('status', { enum: CHANTIER_STATUSES }).notNull().default('open'),
+    address: jsonb('address_json').$type<Address>(),
+    /** The réception (PV): the retenue de garantie is released a year after it (loi 71-584, art. 2). */
+    receptionOn: date('reception_on', { mode: 'string' }),
+    /** When the reserves noted at the réception were lifted. */
+    reservesLiftedOn: date('reserves_lifted_on', { mode: 'string' }),
+    /** The retenue de garantie in basis points: 500 = 5 %, the most loi 71-584 art. 1 allows. */
+    retenueBps: integer('retenue_bps'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('chantiers_erp_ref').on(t.tenantId, t.erpRef),
+    index('chantiers_tenant').on(t.tenantId, t.status),
+    check('chantiers_status', oneOf(t.status, CHANTIER_STATUSES)),
+    check('chantiers_retenue', sql`${t.retenueBps} between 0 and 500`),
+  ],
+);
+
+/**
+ * Every file that arrived (BTP plan §4 `document`), whatever it is: an invoice, an attestation, a
+ * contract. The same file twice, from the mail and from the drive, is one row (`sha256` per company
+ * and mode). Its bytes are in the FileStore under `storage_key`. An invoice among them is also
+ * projected into the registry `docs`, which the checks across documents read.
+ */
+export const documents = pgTable(
+  'documents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    source: text('source', { enum: DOCUMENT_SOURCES }).notNull(),
+    /** The source's own id (a message, a drive item, a PDP document, an upload). */
+    sourceRef: text('source_ref').notNull(),
+    name: text('name').notNull(),
+    mime: text('mime').notNull(),
+    size: integer('size').notNull(),
+    sha256: text('sha256').notNull(),
+    storageKey: text('storage_key').notNull(),
+    /** Null until classified. */
+    kind: text('kind', { enum: DOCUMENT_KINDS }),
+    stage: text('stage', { enum: DOCUMENT_STAGES }).notNull().default('ingested'),
+    /** Why a person must say what it is (stage `needs_review`), as a code the pane words. */
+    reviewReason: text('review_reason'),
+    partyId: uuid('party_id').references(() => parties.id, { onDelete: 'set null' }),
+    chantierId: uuid('chantier_id').references(() => chantiers.id, { onDelete: 'set null' }),
+    /** What the source said of it (sender, subject, folder), read before any model. */
+    hints: jsonb('hints_json').$type<EnvelopeHints>().notNull().default({}),
+    /** What was read from it, by kind (stage 2 of the BTP plan gives each kind its schema). */
+    extracted: jsonb('extracted_json').$type<Record<string, unknown>>(),
+    /** What the rules found on it (an invoice: @fi/core rules, BTP rules included). */
+    validation: jsonb('validation_json').$type<Issue[]>(),
+    isTest: boolean('is_test').notNull(),
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('documents_sha256').on(t.tenantId, t.isTest, t.sha256),
+    index('documents_party').on(t.tenantId, t.partyId, t.kind),
+    index('documents_stage').on(t.tenantId, t.stage, t.receivedAt),
+    check('documents_source', oneOf(t.source, DOCUMENT_SOURCES)),
+    check('documents_kind', oneOf(t.kind, DOCUMENT_KINDS)),
+    check('documents_stage', oneOf(t.stage, DOCUMENT_STAGES)),
+  ],
+);
+
+/**
+ * A deadline the back end watches (BTP plan §4 `obligation`). It comes only from a document or an
+ * invoice, never from a model's guess (one of the two is required). Deriving it again from the same
+ * source finds the same row by `key`.
+ */
+export const obligations = pgTable(
+  'obligations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    kind: text('kind', { enum: OBLIGATION_KINDS }).notNull(),
+    status: text('status', { enum: OBLIGATION_STATUSES }).notNull().default('open'),
+    /** The Paris day it falls due. */
+    dueOn: date('due_on', { mode: 'string' }).notNull(),
+    /** What makes it one, e.g. `attestation_vigilance_renouvellement:<party id>`. */
+    key: text('key').notNull(),
+    partyId: uuid('party_id').references(() => parties.id, { onDelete: 'set null' }),
+    chantierId: uuid('chantier_id').references(() => chantiers.id, { onDelete: 'set null' }),
+    sourceDocumentId: uuid('source_document_id').references(() => documents.id, {
+      onDelete: 'cascade',
+    }),
+    invoiceId: uuid('invoice_id').references(() => invoices.id, { onDelete: 'cascade' }),
+    /** What is at stake, when it is money: the retenue to release, the invoice left to pay. */
+    amount: cents('amount'),
+    lastRemindedAt: timestamp('last_reminded_at', { withTimezone: true }),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    isTest: boolean('is_test').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('obligations_key').on(t.tenantId, t.key),
+    index('obligations_tenant').on(t.tenantId, t.status, t.dueOn),
+    /** The watchers' scan, across companies: what is open and due before a day. */
+    index('obligations_due').on(t.status, t.dueOn),
+    check('obligations_kind', oneOf(t.kind, OBLIGATION_KINDS)),
+    check('obligations_status', oneOf(t.status, OBLIGATION_STATUSES)),
+    check(
+      'obligations_source',
+      sql`${t.sourceDocumentId} is not null or ${t.invoiceId} is not null`,
+    ),
+  ],
+);
+
+/**
+ * What the back end proposes to do and waits for a person to approve (BTP plan §4 `action`). Its
+ * status moves only through a decision (`POST /actions/:id/decide`) and its sender's result; every
+ * decision raises `revision`, and an answer to an older revision is refused.
+ */
+export const actions = pgTable(
+  'actions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    kind: text('kind', { enum: ACTION_KINDS }).notNull(),
+    status: text('status', { enum: ACTION_STATUSES }).notNull().default('draft'),
+    /** One action per step of what it serves, e.g. `relance_facture:<invoice id>:J+8`. */
+    key: text('key').notNull(),
+    obligationId: uuid('obligation_id').references(() => obligations.id, { onDelete: 'set null' }),
+    documentId: uuid('document_id').references(() => documents.id, { onDelete: 'set null' }),
+    partyId: uuid('party_id').references(() => parties.id, { onDelete: 'set null' }),
+    /** What it will send, and to whom; its schema goes with its kind. */
+    payload: jsonb('payload_json').$type<Record<string, unknown>>().notNull(),
+    revision: integer('revision').notNull().default(0),
+    snoozeUntil: timestamp('snooze_until', { withTimezone: true }),
+    decidedBy: text('decided_by'),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    channel: text('channel', { enum: APPROVAL_CHANNELS }),
+    comment: text('comment'),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    /** Why it failed, as a code the pane words. */
+    error: text('error'),
+    isTest: boolean('is_test').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('actions_key').on(t.tenantId, t.key),
+    index('actions_tenant').on(t.tenantId, t.status, t.createdAt),
+    check('actions_kind', oneOf(t.kind, ACTION_KINDS)),
+    check('actions_status', oneOf(t.status, ACTION_STATUSES)),
+    check('actions_channel', oneOf(t.channel, APPROVAL_CHANNELS)),
+  ],
+);
+
+/** Where a connector stopped reading an ERP (BTP plan §9 `connector_sync`). */
+export const connectorSyncs = pgTable(
+  'connector_syncs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    connector: text('connector').notNull(),
+    /** The connector's own cursor: the next run starts there. */
+    cursor: jsonb('cursor_json').$type<Record<string, unknown>>(),
+    lastRunAt: timestamp('last_run_at', { withTimezone: true }),
+    lastOkAt: timestamp('last_ok_at', { withTimezone: true }),
+    /** The last failure, as a code; null once a run succeeds. */
+    lastError: text('last_error'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('connector_syncs_connector').on(t.tenantId, t.connector)],
+);
+
 /** Stripe events already applied: an endpoint may receive the same event twice (docs/BILLING.md). */
 export const stripeEvents = pgTable('stripe_events', {
   id: text('id').primaryKey(),
@@ -1288,3 +1534,9 @@ export type ConnectedFileRow = typeof connectedFiles.$inferSelect;
 export type RuleExceptionRow = typeof ruleExceptions.$inferSelect;
 export type ItemSynonymRow = typeof itemSynonyms.$inferSelect;
 export type VatCheckRow = typeof vatChecks.$inferSelect;
+export type BlobRow = typeof blobs.$inferSelect;
+export type ChantierRow = typeof chantiers.$inferSelect;
+export type DocumentRow = typeof documents.$inferSelect;
+export type ObligationRow = typeof obligations.$inferSelect;
+export type ActionRow = typeof actions.$inferSelect;
+export type ConnectorSyncRow = typeof connectorSyncs.$inferSelect;

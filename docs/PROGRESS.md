@@ -1389,3 +1389,34 @@ note. Criteria, written here before the work:
 | « Vérifier dans VIES » | Same API test: VIES asked once, audit `vat.check` by `user`, a timeline note; asked again the same day by the user or the sweep, VIES is not asked; an invoice already sent can be checked. › warns at once on every open invoice naming a number VIES says is not valid (FF-VIES-01 on both). › says when VIES does not answer or is off, and refuses an invoice without an EU number (503 `vies_unavailable` with nothing kept, 503 `vies_off`, 400 `vat_not_vies`, another company's invoice 404). `apps/addin/src/controller.test.ts` › checks the customer's EU VAT number in VIES from the fiche, and says what VIES answered (real API and VIES' stand-in: valid → success notice, not valid → warning, busy → the calm error). `apps/api/src/vat-checks.ts` › `checkBuyerVat`, `POST /invoices/:id/vies`. |
 | Tests and docs | `docs/ARCHITECTURE.md` › §6 VIES (On demand), `docs/ONBOARDING.md` §5.2, `docs/DEFERRED.md` (on demand from the fiche and VIES' name and address: done; Clients and comparing the names stay), `docs/TODO.md` › VIES. |
 | Gate | `pnpm verify` green on 2026-10-24 (tests with `--concurrency=1`): api 308, core 689 + oracle 276, agents 122, add-in 112, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 13. `pnpm test:e2e` in local Chrome (browser: local): B2Brouter stand-in 2 passed, Google Sheets passed, Excel on the web skipped (no tenant); the harness passed after a locator fix (the result link is a Fluent button), with the VIES step and screenshot `vies.png`. |
+
+## BTP plan — stage 0: vocabulary, tables, boundaries (started 2026-10-24)
+
+The owner's BTP plan (`docs/DECISIONS.md`, `docs/plans/phase-0.md`). Criteria, written here before
+the work:
+
+- **`@fi/domain`**: the closed lists of BTP plan §4, `DocumentEnvelope` (§5) and `ApprovalDecision`
+  (§10) as Zod schemas, the two worker errors; it imports nothing of the monorepo; its tests show what
+  each schema refuses.
+- **Tables**: `documents`, `blobs`, `chantiers`, `obligations`, `actions`, `connector_syncs`, and on
+  `parties` `subcontractor`, `siret`, `erp_ref`, in one migration that applies on PGlite and on
+  Postgres 17. The database refuses a value outside each closed list, a deadline without a document
+  or an invoice, a second document for the same file, company and mode, a retenue over 5 %.
+- **RGPD**: the export gives the new tables, never the bytes; a deletion keeps only the real invoices
+  received with their bytes, and nothing else of the new tables.
+- **Boundaries**: `pnpm boundaries` in `pnpm verify` fails on each forbidden import (its test shows
+  each on a fixture tree) and passes on the repository.
+- **Nothing else changes**: the existing tests pass unchanged; the API image builds with the new
+  package.
+- Docs: DECISIONS (D1–D6), ARCHITECTURE, RGPD, TODO (BTP plan), CLAUDE.md.
+
+### Evidence (2026-10-24)
+
+| Criterion | Evidence |
+|---|---|
+| `@fi/domain` | `packages/domain/src/domain.test.ts` › DocumentEnvelope (an e-mail attachment, the hints defaulting to none; the XML of a Factur-X and an ERP row kept; refused: an upper-case or short SHA-256, size 0 or over 20 MB, an executable, an unknown source, a French date, a tenant that is not a uuid, an empty XML, a format with the other's payload, a malformed sender), › ApprovalDecision (approve, reject with a trimmed note, edit, snooze; refused: an edit without text, a snooze without a date, a date on anything else, `timeout`, a `system` channel, a negative revision, a note over 2 000 characters), › kinds, › errors. Its imports: `zod` only, checked by `pnpm boundaries`. |
+| Tables | `packages/db/src/db.test.ts` › migrations (the six new tables) and › BTP tables: bytes kept as they were; one document per file, company and mode; `documents_kind`, `documents_stage`, `actions_status`, `chantiers_retenue` refuse; `obligations_source` refuses a deadline from nothing, one per key; a deleted company or chantier set to null on the document. `packages/db/drizzle/0021_btp_foundations.sql`. Postgres 17.11 (the compose image, in Docker): the migrations applied twice without error, bytes back as they were, `documents_kind` refusing. |
+| RGPD | `apps/api/src/documents.test.ts` › exports the chantiers, the files without their bytes, the deadlines and the actions (suppliers with `subcontractor` and `siret`); › keeps on deletion only the real invoices received, with their bytes and without the e-mail (attestation, test file and unclassified file gone with their bytes; chantiers, deadlines, actions, cursors gone; another company untouched). `apps/api/src/rgpd.ts`, `docs/RGPD.md`. |
+| Boundaries | `scripts/boundaries/check.test.ts` › importsOf (every form, with its line, none in a comment), › checkBoundaries (a forbidden outside package, a Node module in browser code, a path into another package, a workspace package the rule refuses, one not declared, one that does not exist, an outside package not allowed, a package without a rule; tests and scripts exempt), › the repository keeps its package boundaries. Root `package.json` `boundaries`, `test:scripts`, `verify`. The first run found the add-in importing `ai` (the chat client of R8, allowed: the rule forbids the providers `@ai-sdk/*` there). |
+| Nothing else changes | `pnpm verify` green on 2026-10-24 (tests with `--concurrency=1`): boundaries 10 packages without violation; api 310 (308 before, + the 2 RGPD tests), core 689 + oracle 276, agents 122, add-in 112, mock-pdp 68, pdp-adapter 41, db 14 (10 before), shared 17, site 13, domain 7, scripts 4. `docker build -f apps/api/Dockerfile .` succeeds (433 MB); inside the image `@fi/db` and `@fi/domain` load under tsx. |
+

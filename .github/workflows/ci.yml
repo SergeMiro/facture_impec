@@ -10,7 +10,7 @@ on:
 
 jobs:
   verify:
-    name: lint + typecheck + test
+    name: lint + typecheck + boundaries + test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
