@@ -42,16 +42,16 @@ export default function Pricing({ plans }: { plans: Plan[] }) {
         </fieldset>
       </div>
 
-      <ul className="mt-12 grid items-start gap-6 lg:grid-cols-3">
+      <ul className="pricing-grid mt-12 grid items-stretch gap-6 lg:grid-cols-3">
         {plans.map((plan) => {
           const amount = yearly ? plan.yearlyPerMonth : plan.monthly;
           const dark = plan.highlight === true;
           return (
             <li
               key={plan.id}
-              className={`relative flex flex-col rounded-[1.5rem] p-7 sm:p-8 ${
+              className={`pricing-card relative flex flex-col rounded-[1.5rem] p-7 sm:p-8 ${
                 dark
-                  ? 'bg-leaf-950 text-white shadow-[0_30px_60px_-25px_rgb(5_36_26/0.7)] ring-1 ring-leaf-400/30 lg:-mt-4 lg:pb-12'
+                  ? 'bg-leaf-950 text-white shadow-[0_30px_60px_-25px_rgb(5_36_26/0.7)] ring-1 ring-leaf-400/30'
                   : 'card'
               }`}
             >
@@ -61,7 +61,9 @@ export default function Pricing({ plans }: { plans: Plan[] }) {
                 </span>
               )}
               <h3 className={`text-2xl ${dark ? 'text-white' : 'text-leaf-950'}`}>{plan.name}</h3>
-              <p className={`mt-1.5 text-sm ${dark ? 'text-leaf-100/70' : 'text-muted'}`}>
+              <p
+                className={`pricing-pitch mt-1.5 text-sm ${dark ? 'text-leaf-100/70' : 'text-muted'}`}
+              >
                 {plan.pitch}
               </p>
               <p className="mt-6 flex items-baseline gap-1.5">
@@ -74,7 +76,9 @@ export default function Pricing({ plans }: { plans: Plan[] }) {
                   HT {plan.unit}
                 </span>
               </p>
-              <p className={`mt-1 h-5 text-xs ${dark ? 'text-leaf-200/70' : 'text-muted'}`}>
+              <p
+                className={`pricing-note mt-1 min-h-5 text-xs ${dark ? 'text-leaf-200/70' : 'text-muted'}`}
+              >
                 {[plan.priceNote, yearly ? 'facturé annuellement' : 'sans engagement']
                   .filter(Boolean)
                   .join(' · ')}

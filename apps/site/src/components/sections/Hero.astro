@@ -5,7 +5,7 @@ import { Icon } from '../Icon';
 import AutoDemoVideo from '../islands/AutoDemoVideo';
 ---
 
-<section class="relative isolate overflow-hidden bg-leaf-950 pt-22 pb-20 text-white sm:pt-36 sm:pb-28">
+<section class="site-hero relative isolate overflow-hidden bg-leaf-950 pt-22 pb-20 text-white sm:pt-36 sm:pb-28">
   <div class="grain absolute inset-0 -z-10 opacity-70"></div>
   <div
     class="absolute inset-0 -z-20"
@@ -21,16 +21,17 @@ import AutoDemoVideo from '../islands/AutoDemoVideo';
     <rect width="100%" height="100%" fill="url(#hero-grid)"></rect>
   </svg>
 
-  <div class="container-page grid items-center gap-7 sm:gap-12 lg:grid-cols-[0.78fr_1.22fr]">
-    <div class="animate-rise">
+  <div class="hero-layout container-page grid items-center gap-7 sm:gap-12 lg:grid-cols-[0.78fr_1.22fr]">
+    <div class="hero-copy animate-rise">
       <a
         href="#reforme"
-        class="hidden sm:inline-flex items-center gap-2 rounded-full bg-white/8 py-1.5 pr-3 pl-1.5 text-xs font-medium text-leaf-100 ring-1 ring-white/15 transition hover:bg-white/12"
+        class="hero-deadline hidden sm:inline-flex items-center gap-2 rounded-full bg-white/8 py-1.5 pr-3 pl-1.5 text-xs font-medium text-leaf-100 ring-1 ring-white/15 transition hover:bg-white/12"
       >
         <span class="rounded-full bg-gold/90 px-2 py-0.5 text-[0.7rem] font-semibold text-leaf-950">Réforme</span>
-        Émission obligatoire pour les TPE/PME le {deadlines.emission.label}
+        TPE / PME · {deadlines.emission.label}
         <span class="countdown hidden font-semibold text-white sm:inline" data-target={deadlines.emission.date}></span>
       </a>
+      <p class="hero-kicker">Votre tableur. Votre nouvel assistant.</p>
       <h1 class="mt-2 text-[2.05rem] leading-[1.05] font-medium sm:mt-6 sm:text-6xl lg:text-[3.55rem]">
         {demoFilm.heroTitle} <span class="italic text-leaf-300">{demoFilm.heroEmphasis}</span>
       </h1>
@@ -38,7 +39,7 @@ import AutoDemoVideo from '../islands/AutoDemoVideo';
         {demoFilm.heroDescription}
       </p>
       <p class="mt-4 text-sm leading-relaxed text-leaf-50/80 sm:hidden">{demoFilm.heroMobileDescription}</p>
-      <div class="mt-9 hidden gap-3 sm:flex sm:flex-row">
+      <div class="hero-actions mt-9 hidden gap-3 sm:flex sm:flex-row">
         <a href="#essai" class="btn btn-primary !px-6 !py-3.5 text-base">
           Essai gratuit {trialDays} jours <Icon name="arrowRight" size={18} />
         </a>
@@ -53,7 +54,7 @@ import AutoDemoVideo from '../islands/AutoDemoVideo';
       </ul>
     </div>
 
-    <div class="relative min-w-0">
+    <div class="hero-player relative min-w-0">
       <div class="absolute -inset-6 -z-10 rounded-[2rem] bg-leaf-400/20 blur-3xl"></div>
       <AutoDemoVideo client:load />
     </div>

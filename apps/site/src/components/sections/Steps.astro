@@ -4,7 +4,7 @@ import { Icon, type IconName } from '../Icon';
 const steps: { icon: IconName; title: string; text: string }[] = [
   {
     icon: 'sheet',
-    title: 'Vous facturez dans Excel',
+    title: 'Vous gardez votre tableur',
     text: 'Comme aujourd’hui, avec votre modèle. Facture Impec reconnaît vos colonnes tout seul.',
   },
   {
@@ -29,13 +29,13 @@ const steps: { icon: IconName; title: string; text: string }[] = [
   <div class="container-page">
     <div class="mx-auto max-w-2xl text-center">
       <p class="eyebrow justify-center">Fonctionnement</p>
-      <h2 class="mt-4 text-4xl font-medium text-leaf-950 sm:text-5xl">Quatre étapes. Toutes dans Excel.</h2>
+      <h2 class="mt-4 text-4xl font-medium text-leaf-950 sm:text-5xl">Quatre étapes. Un seul tableur.</h2>
       <p class="mt-5 text-lg text-muted">
         Vous gardez vos outils. Facture Impec fait le travail de conformité, et vous laisse décider à
         chaque étape qui compte.
       </p>
     </div>
-    <ol class="mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+    <ol class="steps-grid mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
       {
         steps.map((s, i) => (
           <li class="card group relative p-7 transition duration-300 hover:-translate-y-1 hover:shadow-lift">

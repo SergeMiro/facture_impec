@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import '../styles/site.css';
 import Footer from '../components/Footer.astro';
 import Nav from '../components/Nav.astro';
 
@@ -33,6 +34,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body class="min-h-dvh" data-nav-light={navLight ? 'true' : undefined}>
+    <a class="skip-link" href="#contenu">Aller au contenu</a>
     {!bare && <Nav />}
     <main id="contenu">
       <slot />

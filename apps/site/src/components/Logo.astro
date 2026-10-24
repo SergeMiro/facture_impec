@@ -4,18 +4,19 @@ interface Props {
   class?: string;
 }
 const { tone = 'dark', class: className } = Astro.props;
+const gradientId = `fi-logo-${crypto.randomUUID()}`;
 const text = tone === 'light' ? 'text-white' : 'text-leaf-950';
 ---
 
 <span class:list={['inline-flex items-center gap-2.5', className]}>
   <svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true">
     <defs>
-      <linearGradient id="fi-logo-g" x1="0" y1="0" x2="1" y2="1">
+      <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" stop-color="#47b582" />
         <stop offset="1" stop-color="#126343" />
       </linearGradient>
     </defs>
-    <rect width="40" height="40" rx="11" fill="url(#fi-logo-g)" />
+    <rect width="40" height="40" rx="11" fill={`url(#${gradientId})`} />
     <path d="M12 9.5h11.5l5 5V30a1.5 1.5 0 0 1-1.5 1.5H12A1.5 1.5 0 0 1 10.5 30V11A1.5 1.5 0 0 1 12 9.5z" fill="white" fill-opacity=".16" stroke="white" stroke-opacity=".55" stroke-width="1.2"></path>
     <path d="M23.5 9.5v5h5" fill="none" stroke="white" stroke-opacity=".55" stroke-width="1.2"></path>
     <path d="m14.5 21.5 3.8 3.8 7.4-8.3" fill="none" stroke="white" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path>

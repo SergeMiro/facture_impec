@@ -15,7 +15,7 @@ const links = [
   class="fixed inset-x-0 top-0 z-50 transition-[background-color,box-shadow,backdrop-filter] duration-300"
   data-scrolled="false"
 >
-  <div class="container-page flex h-16 items-center justify-between gap-4">
+  <div class="nav-inner container-page flex h-16 items-center justify-between gap-4">
     <a href="/" aria-label="Facture Impec, accueil" class="nav-logo">
       <span class="nav-logo-light"><Logo tone="light" /></span>
       <span class="nav-logo-dark"><Logo tone="dark" /></span>
@@ -107,10 +107,19 @@ const links = [
     panel?.classList.toggle('hidden', !open);
     if (nav) nav.dataset.open = String(open);
   });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || toggle?.getAttribute('aria-expanded') !== 'true') return;
+    panel?.classList.add('hidden');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', 'Ouvrir le menu');
+    if (nav) nav.dataset.open = 'false';
+    toggle.focus();
+  });
   panel?.querySelectorAll('a').forEach((a) =>
     a.addEventListener('click', () => {
       panel.classList.add('hidden');
       toggle?.setAttribute('aria-expanded', 'false');
+      toggle?.setAttribute('aria-label', 'Ouvrir le menu');
       if (nav) nav.dataset.open = 'false';
     }),
   );

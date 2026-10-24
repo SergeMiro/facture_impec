@@ -1165,3 +1165,27 @@ Acceptance evidence (2026-10-24):
   Vercel reports READY. The authenticated CLI fetch returned HTTP 200. Preview access requires the owner’s Vercel login.
 - Production publication waits for publisher identity, address and contact email required by `RUNBOOK.md` § Marketing site. The owner was asked for these details.
 - Source, playback behavior and regeneration procedure: `docs/SITE_DEMO.md`.
+
+
+## Site — Visual refinement (completed 2026-10-24)
+
+Acceptance criteria before implementation:
+
+- Give the homepage, presentation and legal pages a consistent typography, spacing and alignment system.
+- Refine navigation, section layouts, cards, pricing, forms and footer without changing prices or product promises.
+- Keep the automatic video and interactive demo usable, including reduced motion.
+- Check all public pages on phone, tablet and desktop in local Chrome; fix overflow and navigation issues.
+- Pass the repository verification gate and build, then commit and push to dev.
+
+Acceptance evidence (2026-10-24):
+
+- A separate marketing stylesheet sets the typography, page gutters, section spacing, card treatments and button contrast. The recorded film source and assets are unchanged.
+- Pricing cards share their top and bottom alignment. Step cards, FAQ rows, provider headings and the trial form adapt to narrow screens.
+- The presentation has a compact phone toolbar and readable slide spacing. Legal pages have a return link, a clear header and separated text sections.
+- Fixed the 320 px provider-panel overflow and duplicate SVG gradient IDs that hid logos on light backgrounds.
+- Keyboard users can skip navigation and close the mobile menu with Escape; focus returns to the menu button.
+- Local Chrome checked four pages at 320, 390, 768, 1024 and 1440 px: all 20 page/viewport checks passed without horizontal overflow. browser: local.
+- Browser interaction checks passed for the mobile menu, Escape focus, monthly/annual pricing, FAQ expansion and interactive invoice validation.
+- `pnpm --filter @fi/site test:e2e`: 4 passed. Automatic video playback, chapters, pause/replay, reduced motion, phone playback and error fallback remain working. browser: local.
+- `pnpm verify --concurrency=1` passed all ten tasks. `pnpm build` passed both builds.
+- Preview: https://facture-impec-site-2fxarc9jc-sergemiros-projects.vercel.app (Vercel login required). Production still waits for publisher identity, address and contact email, as required by `RUNBOOK.md`.
