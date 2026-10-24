@@ -2,6 +2,7 @@
 // case, a correction asked on an invoice already sent, and one asked where no single cell corrects
 // the finding. The fixture plays the pane: each proposeFix or undoEdit gets the answer the person's
 // click and the checks would give.
+import { t } from '@fi/shared';
 import {
   convertToModelMessages,
   type LanguageModelMiddleware,
@@ -147,8 +148,12 @@ export const CHAT_FIXTURES: ChatFixture[] = [
         answer: {
           status: 'refused',
           editId: null,
-          message:
-            'La facture F-2026-042 du 15/09/2026 est déjà envoyée : elle ne se modifie plus. Pour les 100,00 € qui manquent, établissez une facture rectificative ou un avoir qui cite son numéro et sa date.',
+          // What the API answers (api.error.invoice_sent).
+          message: t('api.error.invoice_sent', {
+            number: 'F-2026-042',
+            date: '15/09/2026',
+            amount: '100,00 €',
+          }),
         },
         says: ['avoir'],
       },

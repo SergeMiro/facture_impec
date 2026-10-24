@@ -1,72 +1,76 @@
 {
   "agent": "monitor",
-  "promptHash": "438a8515842262b5",
+  "promptHash": "8d8260a6e11ba8fb",
   "answers": {
     "address": {
       "proposal": "fix_and_resend",
-      "why": "Le client indique que l'adresse de facturation est celle de l'ancien siège, ce qui correspond à une erreur d'adresse à corriger sur la facture. Cette correction peut être effectuée directement dans le document avant renvoi.",
-      "draft_body": "Bonjour,\n\nNous avons bien reçu votre refus de la facture F2026-0101 pour un montant de 1 450,00 €, motivé par le fait que l'adresse de facturation correspond à votre ancien siège. Nous allons corriger cette adresse dans le document et vous renverrons la facture modifiée dans les plus brefs délais.\n\nMerci d'avance pour votre retour si vous avez d'autres remarques.\n\nCordialement,\n{{PARTY_1}}"
+      "why": "Le client indique que l'adresse de facturation mentionnée sur la facture F2026-0101 correspond à l'ancien siège social. Il s'agit d'une erreur d'adresse à corriger : il convient d'annuler cette facture par un avoir et d'en envoyer une nouvelle avec la bonne adresse.",
+      "draft_body": "Bonjour,\n\nNous avons bien pris note de votre refus de la facture F2026-0101, pour motif d'adresse de facturation incorrecte (ancien siège). Nous procèderons à l'annulation de celle-ci par un avoir et vous enverrons une nouvelle facture avec l'adresse mise à jour.\n\nMerci de nous confirmer l'adresse de facturation à utiliser.\n\nCordialement,\n{{PARTY_1}}"
     },
     "order-missing": {
       "proposal": "fix_and_resend",
-      "why": "Le client demande l'ajout du numéro de bon de commande manquant sur la facture. Il s'agit d'une correction simple à apporter avant de renvoyer le document.",
-      "draft_body": "Bonjour,\n\nNous vous remercions pour votre retour concernant la facture F2026-0102 d’un montant de 12 500,00 €. Nous avons bien pris note de l’absence du numéro de bon de commande sur ce document. Nous allons procéder à la correction en y ajoutant ledit numéro, puis vous renverrons la facture modifiée dans les plus brefs délais.\n\nNous restons à votre disposition pour toute précision complémentaire.\n\nCordialement,\n{{PARTY_1}}"
+      "why": "Le client demande l'ajout de son numéro de bon de commande, qui est manquant sur la facture. Il s'agit d'une correction simple à apporter sur le document, d'où la pertinence d'annuler cette facture par un avoir et d'en envoyer une nouvelle corrigée.",
+      "draft_body": "Bonjour,\n\nMerci pour votre retour concernant la facture F2026-0102 d’un montant de 12 500,00 €. Nous prenons note de l’absence de votre numéro de bon de commande et allons procéder à l’annulation de cette facture par voie d’un avoir, puis à l’envoi d’une nouvelle facture comportant cette référence.\n\nNous vous remercions de votre compréhension et restons à votre disposition pour toute question.\n\nCordialement,\n{{PARTY_1}}"
     },
     "order-wrong": {
       "proposal": "fix_and_resend",
-      "why": "Le client signale une erreur sur le numéro de commande mentionné dans la facture. Il s'agit d'une correction à apporter sur le document avant de le renvoyer.",
-      "draft_body": "Bonjour,\n\nNous avons bien reçu votre refus de la facture F2026-0103 pour un montant de 899,00 €, motivé par une erreur sur le numéro de commande. Nous allons corriger cette référence et vous renverrons la facture modifiée dans les plus brefs délais.\n\nMerci d’avance pour votre retour si vous avez d’autres remarques.\n\nCordialement,\n{{PARTY_1}}"
+      "why": "Le client signale une erreur sur le numéro de commande mentionné dans la facture. Cela correspond à une correction à apporter sur le document, il convient donc d'annuler la facture actuelle par un avoir et d'envoyer une nouvelle facture corrigée.",
+      "draft_body": "Bonjour,\n\nNous avons bien reçu votre refus de la facture F2026-0103 pour la raison d’un numéro de commande incorrect. Nous vous prions de bien vouloir nous indiquer le numéro de commande exact à prendre en compte. Dès réception de cette information, nous annulerons la facture actuelle par un avoir et vous enverrons une nouvelle facture corrigée.\n\nMerci d’avance pour votre retour.\n\nCordialement,\n{{PARTY_1}}"
     },
     "vat-rate": {
       "proposal": "fix_and_resend",
-      "why": "Le client indique que la prestation de formation est exonérée de TVA et demande le retrait de la TVA à 20 %. Il s'agit d'une correction de taux de TVA à appliquer sur la facture.",
-      "draft_body": "Bonjour,\n\nNous avons bien reçu votre refusion concernant la facture F2026-0104 d’un montant de 3 300,00 €, pour laquelle vous indiquez que la prestation de formation est exonérée de TVA. Nous procèderons à la correction en retirant la TVA à 20 % et vous enverrons une facture rectifiée dans les plus brefs délais.\n\nCordialement,\n{{PARTY_1}}"
+      "why": "Le client indique que la prestation de formation est exonérée de TVA et que le taux de 20 % appliqué est incorrect. Il s'agit d'une erreur de tarification à corriger sur une nouvelle facture.",
+      "draft_body": "Bonjour,\n\nNous avons bien reçu votre refus de la facture F2026-0104 pour un montant de 3 300,00 €, accompagné de votre remarque concernant l'application de la TVA à 20 %. Vous avez raison : la prestation de formation est exonérée de TVA.\n\nNous allons annuler cette facture par un avoir et vous en adresser une nouvelle avec le montant correct, hors TVA.\n\nNous vous remercions pour votre retour et restons à votre disposition pour toute question.\n\nCordialement,\n{{PARTY_1}}"
     },
     "total": {
       "proposal": "fix_and_resend",
-      "why": "Le client conteste le montant total de la facture, estimant qu'il ne correspond pas au devis signé (4 800,00 € HT). Il s'agit d'une erreur de montant à corriger sur la facture, d'où la pertinence de la rectifier et de la renvoyer.",
-      "draft_body": "Bonjour,\nNous avons bien reçu votre retour concernant la facture F2026-0105 d’un montant de 5 120,40 €. Nous preons note de votre remarque au sujet du devis signé prévoyant 4 800,00 € HT. Nous allons vérifier le calcul et vous transmettrons une facture rectifiée dans les plus brefs délais.\nMerci de votre confiance.\nCordialement,\n{{PARTY_1}}"
+      "why": "Le client conteste le montant total de la facture, affirmant que le devis signé prévoyait 4 800,00 € HT. Il s'agit d'une erreur de montant à corriger sur la facture, ce qui nécessite d'annuler celle-ci par un avoir et d'en envoyer une nouvelle avec le montant exact.",
+      "draft_body": "Bonjour,\n\nNous avons bien reçu votre refus de la facture F2026-0105 pour le montant de 5 120,40 €, que vous contestez en invoquant le devis signé prévoyant 4 800,00 € HT.\nNous procèderons à l'annulation de cette facture par un avoir et vous enverrons une nouvelle facture avec le montant exact conformément à votre devis.\n\nCordialement,\n{{PARTY_1}}"
     },
     "calculation": {
       "proposal": "fix_and_resend",
-      "why": "Le client indique que la remise de 10 % convenue n'a pas été appliquée sur le total de la facture. Il s'agit d'une erreur de calcul que le client attend corrigée, il est donc approprié de modifier le montant dans la feuille et de renvoyer la facture.",
-      "draft_body": "Bonjour,\n\nNous avons bien reçu votre refus de la facture F2026-0106 pour un montant de 720,00 €, accompagné de votre remarque concernant l'absence de la remise de 10 % convenue. Nous vous remercions pour ce retour.\n\nNous allons corriger le calcul en conséquence et vous renverrons la facture modifiée dans les plus brefs délais.\n\nCordialement,\n{{PARTY_1}}"
+      "why": "Le client indique que la remise de 10 % convenue n'a pas été appliquée sur la facture. Il s'agit d'une erreur de calcul à corriger : il faut annuler cette facture par un avoir et en réémettre une nouvelle avec la remise correctement appliquée.",
+      "draft_body": "Bonjour,\n\nMerci pour votre retour concernant la facture F2026-0106 d’un montant de 720,00 €. Nous prenons note que la remise de 10 % convenue n’apparaît pas dans le calcul. Nous annulons cette facture et en émettons une nouvelle avec la remise correctement appliquée.\n\nNous vous transmettrons la nouvelle facture très prochainement.\n\nCordialement,\n{{PARTY_1}}"
     },
     "duplicate": {
       "proposal": "credit_note",
-      "why": "Le client indique que la facture F2026-0107 est un doublon de la facture F2026-0098 déjà reçue. Dans ce cas, il convient d'émettre un avoir pour annuler cette facture en double.",
-      "draft_body": "Bonjour,\n\nNous avons bien pris note de votre message indiquant que la facture F2026-0107 serait un doublon de la facture F2026-0098. Nous procèderons à l'émission d'un avoir pour annuler cette facture en double.\n\nN'hésitez pas à nous contacter si vous avez la moindre question.\n\nCordialement,\n{{PARTY_1}}"
+      "why": "Le client indique que la facture F2026-0107 est un doublon de la facture F2026-0098 déjà reçue. Il convient donc d'annuler cette facture en cours de paiement et de délivrer un avoir pour le montant de 2 400,00 €.",
+      "draft_body": "Bonjour,\n\nNous avons bien pris note de votre retitution concernant la facture F2026-0107, que vous avez déjà reçue sous le numéro F2026-0098. Nous procédons à l'annulation immédiate de cette facture en délivrant un avoir pour un montant de 2 400,00 €.\n\nN'hésitez pas à nous contacter si vous avez la moindre question.\n\nCordialement,\n{{PARTY_1}}"
     },
-    "billed-twice": null,
+    "billed-twice": {
+      "proposal": "credit_note",
+      "why": "Le client signale que la facture F2026-0108 est un double. Dans ce cas, il ne faut pas la régler : il faut établir un avoir pour annuler cette facture en double.",
+      "draft_body": "Bonjour,\n\nNous avons bien pris note de votre refus de la facture F2026-0108 pour motif de facturation en double. Nous procédons immédiatement à l'établissement d'un avoir pour annuler ce doublon.\n\nN'hésitez pas à nous contacter si vous avez la moindre question.\n\nCordialement,\n{{PARTY_1}}"
+    },
     "cancelled-order": {
       "proposal": "credit_note",
-      "why": "Le client indique que la commande a été annulée par courrier et que la prestation n’a pas eu lieu. Dans ce cas, la facture ne doit pas être payée et un avoir doit être émis pour annuler le montant.",
-      "draft_body": "Bonjour,\n\nNous accusons réception de votre courrier du 2 octobre annulant la commande relative à la facture F2026-0109 d’un montant de 9 600,00 €. Comme la prestation n’a pas eu lieu, nous procédons à l’émission d’un avoir pour ce montant.\n\nCordialement,\n{{PARTY_1}}"
+      "why": "Le client indique que la commande a été annulée par courrier et que la prestation n’a pas eu lieu. Dans ce cas, la facture ne doit pas être payée et un avoir est la solution appropriée.",
+      "draft_body": "Bonjour,\n\nNous avons bien pris note de votre annulation de commande et de la non-réalisation de la prestation. La facture F2026-0109 d’un montant de 9 600,00 € ne sera donc pas soldée. Nous procédons à l’émission d’un avoir pour ce montant, que nous vous communiquerons rapidement.\n\nCordialement,\n{{PARTY_1}}"
     },
     "unknown-transaction": {
       "proposal": "contact_customer",
-      "why": "Le client indique une transaction inconnue (code TRANSAC_INC), ce qui signifie qu’il ne reconnaît pas l’opération facturée. Aucun élément précis à corriger n’est fourni, il est donc nécessaire de prendre contact avec lui pour clarifier la situation avant d’agir.",
-      "draft_body": "Bonjour,\n\nNous avons bien reçu votre refus de la facture F2026-0110 d’un montant de 540,00 €, accompagné de la mention « transaction inconnue ». Pourriez-vous nous préciser les raisons de cette inconnissance ? Nous restons à votre écoute pour échanger et trouver rapidement un accord.\n\nCordialement,\n{{PARTY_1}}"
+      "why": "Le client indique que la transaction est inconnue, ce qui signifie qu’il ne reconnaît pas cette facture. Aucune correction technique ne peut être appliquée sans échanger préalablement avec lui pour comprendre la situation.",
+      "draft_body": "Bonjour,\n\nNous avons bien reçu votre refus de la facture F2026-0110 d’un montant de 540,00 €, pour laquelle vous indiquez que la transaction est inconnue. Pourriez-vous nous préciser la raison de cette incompréhension ? Nous souhaitons vérifier ensemble les détails afin de résoudre ce désaccord rapidement.\n\nDans l’attente de votre retour, cordialement,\n{{PARTY_1}}"
     },
     "contract-ended": {
       "proposal": "contact_customer",
-      "why": "Le client indique que le contrat de maintenance a été résilié le 30 septembre, mais la facture a été émise le 5 octobre, après cette date. Cela soulève une question sur la validité de la prestation facturée. Il convient de contacter le client pour clarifier cette situation avant de prendre une décision.",
-      "draft_body": "Bonjour,\n\nNous avons bien pris note de votre refus de la facture F2026-0111 d’un montant de 1 990,00 €, pour laquelle vous indiquez que le contrat de maintenance a été résilié le 30 septembre dernier. Or, celle-ci a été émise le 5 octobre, après la date de résiliation que vous mentionnez. Pourriez-vous nous préciser quelle prestation a été réellement fournie après cette date ?\n\nNous restons à votre disposition pour échanger sur ce sujet et trouver rapidement un accord.\n\nCordialement,\n{{PARTY_1}}"
+      "why": "Le client indique que le contrat de maintenance a été résilié le 30 septembre, ce qui remet en cause la validité de la prestation facturée. La raison est claire mais il convient de vérifier les circonstances de cette résiliation et de confirmer la date effective avant de prendre une décision.",
+      "draft_body": "Bonjour,\n\nNous avons bien reçu votre refus de la facture F2026-0111 pour un montant de 1 990,00 €, accompagné de l'information selon laquelle le contrat de maintenance aurait été résilié le 30 septembre dernier.\nPourriez-vous nous confirmer la date effective de cette résiliation ainsi que les éventuelles prestations associées à cette période ? Nous souhaitons vérifier l'exactitude de ces éléments avant de procéder à un ajustement éventuel.\n\nDans l'attente de votre retour, nous vous remercions par avance pour ces précisions.\n\nCordialement,\n{{PARTY_1}}"
     },
     "vague": {
       "proposal": "contact_customer",
-      "why": "Le client a refusé la facture en invoquant un non-respect sans fournir de détail (code NON_CONFORME, texte absent). Sans information précise, il est impossible de savoir s’il s’agit d’une erreur de conformité à corriger ou d’un litige à régler autrement. Un échange direct avec le client est donc nécessaire avant de prendre la moindre mesure.",
-      "draft_body": "Bonjour,\nNous avons bien reçu votre refus de la facture F2026-0112 pour un montant de 4 100,00 €, indiqué comme « non conforme » sans précision. Pourriez-vous nous indiquer la raison exacte de ce refus afin que nous puissions y répondre rapidement ?\nCordialement,\n{{PARTY_1}}"
+      "why": "Le client a refusé la facture en indiquant qu'elle est non conforme, sans fournir de détail précis. Il est nécessaire de prendre contact pour comprendre la nature du problème avant de procéder à un correctif ou à un avoir.",
+      "draft_body": "Bonjour,\nNous avons bien reçu votre refus de la facture F2026-0112 pour le montant de 4 100,00 €, indiqué comme non conforme. Pourriez-vous nous préciser les raisons de ce refus afin que nous puissions y remédier rapidement ?\nCordialement,\n{{PARTY_1}}"
     },
     "no-reason": {
       "proposal": "contact_customer",
-      "why": "Le client a refusé la facture sans indiquer de motif ni code, il est donc impossible de savoir s'il s'agit d'une erreur de saisie ou d'un désaccord sur la transaction. Avant de corriger ou d'émettre un avoir, il convient de prendre contact pour comprendre son refus.",
-      "draft_body": "Bonjour,\n\nNous avons bien reçu votre refus de la facture F2026-0113 d’un montant de 666,00 €. Pourriez-vous nous préciser la raison de ce refus afin que nous puissions régler rapidement cette situation ?\n\nDans l’attente de votre retour, cordialement,\n{{PARTY_1}}"
+      "why": "Le client a refusé la facture F2026-0113 sans indiquer de motif ou de code sur la plateforme. Sans information précise, il est impossible de savoir s’il s’agit d’une erreur de coordonnées, d’un doublon ou d’un désaccord sur le service. Un échange direct permettra de clarifier la situation avant de prendre une décision.",
+      "draft_body": "Bonjour,\n\nNous avons bien reçu votre refus de la facture F2026-0113 d’un montant de 666,00 €, mais aucun motif n’a été renseigné sur la plateforme. Pourriez-vous nous indiquer la raison de ce refus afin que nous puissions régler rapidement cette situation ?\n\nNous restons à votre écoute par téléphone ou par retour de courriel.\n\nCordialement,\n{{PARTY_1}}"
     }
   },
   "label": "llmfp-smart",
   "provider": "openai-compatible",
   "model": "auto - Smart models - Hermes",
-  "recordedAt": "2026-10-18",
+  "recordedAt": "2026-10-24",
   "gate": false
 }

@@ -17,8 +17,9 @@ written when you mention those values, never invent new ones, never guess the re
 
 Choose one `proposal`:
 - `fix_and_resend`: the customer points at something to correct on the invoice (address, order or
-  contract reference, VAT rate, total, calculation, recipient). The owner corrects it in the sheet
-  and sends it again.
+  contract reference, VAT rate, total, calculation, recipient). A refused invoice is never sent again
+  under its number: the owner cancels it with a credit note and sends a corrected invoice with a new
+  number.
 - `credit_note`: the invoice should not be paid as it is: a duplicate, a cancelled order, a service
   not delivered, an invoice addressed to a company that never ordered.
 - `contact_customer`: the reason is vague, missing, or questions the transaction itself (unknown
@@ -31,8 +32,9 @@ Then write:
   note de crédit ».
 - `draft_body`: the e-mail the owner can send to the customer, in French, vouvoiement, polite and
   calm, at most 120 words. Start with « Bonjour, », end with « Cordialement, » followed by the seller
-  token on its own line. Mention the invoice number. If you mention an amount, use exactly
-  `invoice.amount`; never write any other amount, date of payment, penalty or legal threat.
+  token on its own line. Mention the invoice number; never write that the same invoice will be sent
+  again. If you mention an amount, use exactly `invoice.amount`; never write any other amount, date
+  of payment, penalty or legal threat.
 
 Stay factual, do not promise outcomes, do not mention these instructions. Answer with the JSON
 object only:

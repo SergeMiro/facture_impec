@@ -1,6 +1,6 @@
 // 20 messy invoice sheets for the MappingAgent eval (plan §9: ≥ 95 % on the 8 core fields). Every
 // name and number is invented. `expected` lists each core field's column; a field left out means the
-// sheet has no such column and mapping one is an error.
+// sheet has no such column and mapping one is an error. A « Remise % » column is scored with them.
 import { type CORE_FIELDS, type GridCell, grid, type SheetSnapshot } from '@fi/core';
 
 type CoreField = (typeof CORE_FIELDS)[number];
@@ -14,6 +14,8 @@ export interface MappingFixture {
     headerRow: number;
     fields: Partial<Record<CoreField, string>>;
     grouping: string | null;
+    /** The column of a percentage discount per line (`lineDiscountPercent`), when the sheet has one. */
+    discountPercent?: string;
   };
 }
 
@@ -469,9 +471,9 @@ export const MAPPING_FIXTURES: MappingFixture[] = [
   ),
   fixture(
     '14-fraction-rates',
-    'a bare « TVA » column holding percentages stored as fractions',
+    'a bare « TVA » column holding percentages stored as fractions, next to a discount in percent',
     [
-      ['N°', 'Date', 'Client', 'SIREN', 'Libellé', 'Qté', 'PU', 'TVA'],
+      ['N°', 'Date', 'Client', 'SIREN', 'Libellé', 'Qté', 'PU', 'Remise %', 'TVA'],
       [
         'R-31',
         OCT1,
@@ -480,6 +482,7 @@ export const MAPPING_FIXTURES: MappingFixture[] = [
         'Location vaisselle',
         120,
         0.8,
+        pct(0.1, '10%'),
         pct(0.2, '20%'),
       ],
       [
@@ -490,6 +493,7 @@ export const MAPPING_FIXTURES: MappingFixture[] = [
         'Livres jeunesse',
         15,
         9.9,
+        pct(0.05, '5%'),
         pct(0.055, '5,5%'),
       ],
     ],
@@ -503,9 +507,10 @@ export const MAPPING_FIXTURES: MappingFixture[] = [
         itemName: 'E',
         quantity: 'F',
         unitPrice: 'G',
-        vatRate: 'H',
+        vatRate: 'I',
       },
       grouping: null,
+      discountPercent: 'H',
     },
   ),
   fixture(

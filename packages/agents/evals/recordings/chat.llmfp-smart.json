@@ -7,7 +7,7 @@
         "content": [
           {
             "type": "text",
-            "text": "La commande C-118 dit que la chaise coûte 40 € l'unité. La facture F-2026-042 dit 30 € l'unité. Donc la facture est 10 € de moins par chaise. Pour 10 chaises, il manque 100,00 €."
+            "text": "La commande C-118 dit que la chaise coûte 40 € l'unité. La facture F-2026-042 dit 30 € l'unité. Donc la facture est 10 € trop basse pour chaque chaise. Avec 10 chaises, il manque 100,00 €."
           }
         ],
         "finishReason": {
@@ -17,20 +17,20 @@
         "usage": {
           "inputTokens": {
             "total": 1621,
-            "noCache": 1461,
-            "cacheRead": 160
+            "noCache": 1621,
+            "cacheRead": 0
           },
           "outputTokens": {
-            "total": 84,
-            "text": 84,
+            "total": 87,
+            "text": 87,
             "reasoning": 0
           },
           "raw": {
             "prompt_tokens": 1621,
-            "completion_tokens": 84,
-            "total_tokens": 1705,
+            "completion_tokens": 87,
+            "total_tokens": 1708,
             "prompt_tokens_details": {
-              "cached_tokens": 160,
+              "cached_tokens": 0,
               "cache_write_tokens": 0,
               "audio_tokens": 0,
               "video_tokens": 0
@@ -55,7 +55,7 @@
         "content": [
           {
             "type": "tool-call",
-            "toolCallId": "chatcmpl-tool-e51f4714b8844f2193bcab4a9b090f95",
+            "toolCallId": "chatcmpl-tool-a05f7f96ab8c4a34889d29d3cbacd70e",
             "toolName": "proposeFix",
             "input": "{}"
           }
@@ -66,9 +66,9 @@
         },
         "usage": {
           "inputTokens": {
-            "total": 1729,
-            "noCache": 1569,
-            "cacheRead": 160
+            "total": 1732,
+            "noCache": 1732,
+            "cacheRead": 0
           },
           "outputTokens": {
             "total": 6,
@@ -76,107 +76,9 @@
             "reasoning": 0
           },
           "raw": {
-            "prompt_tokens": 1729,
+            "prompt_tokens": 1732,
             "completion_tokens": 6,
-            "total_tokens": 1735,
-            "prompt_tokens_details": {
-              "cached_tokens": 160,
-              "cache_write_tokens": 0,
-              "audio_tokens": 0,
-              "video_tokens": 0
-            },
-            "completion_tokens_details": {
-              "reasoning_tokens": 0,
-              "image_tokens": 0,
-              "audio_tokens": 0
-            },
-            "cost": 0,
-            "is_byok": false,
-            "cost_details": {
-              "upstream_inference_cost": 0,
-              "upstream_inference_prompt_cost": 0,
-              "upstream_inference_completions_cost": 0
-            }
-          }
-        },
-        "warnings": []
-      },
-      {
-        "content": [
-          {
-            "type": "text",
-            "text": "C'est corrigé. La facture F-2026-042 est passée de 30 € à 40 € l'unité, comme le demande la commande C-118."
-          }
-        ],
-        "finishReason": {
-          "unified": "stop",
-          "raw": "stop"
-        },
-        "usage": {
-          "inputTokens": {
-            "total": 1798,
-            "noCache": 70,
-            "cacheRead": 1728
-          },
-          "outputTokens": {
-            "total": 50,
-            "text": 50,
-            "reasoning": 0
-          },
-          "raw": {
-            "prompt_tokens": 1798,
-            "completion_tokens": 50,
-            "total_tokens": 1848,
-            "prompt_tokens_details": {
-              "cached_tokens": 1728,
-              "cache_write_tokens": 0,
-              "audio_tokens": 0,
-              "video_tokens": 0
-            },
-            "completion_tokens_details": {
-              "reasoning_tokens": 0,
-              "image_tokens": 0,
-              "audio_tokens": 0
-            },
-            "cost": 0,
-            "is_byok": false,
-            "cost_details": {
-              "upstream_inference_cost": 0,
-              "upstream_inference_prompt_cost": 0,
-              "upstream_inference_completions_cost": 0
-            }
-          }
-        },
-        "warnings": []
-      },
-      {
-        "content": [
-          {
-            "type": "tool-call",
-            "toolCallId": "chatcmpl-tool-325449a758a44b81bca2ccc496f6cbf0",
-            "toolName": "undoEdit",
-            "input": "{\"editId\": \"e1d2c3b4-a5f6-4788-9a0b-1c2d3e4f5a6b\"}"
-          }
-        ],
-        "finishReason": {
-          "unified": "tool-calls",
-          "raw": "tool_calls"
-        },
-        "usage": {
-          "inputTokens": {
-            "total": 1868,
-            "noCache": 1868,
-            "cacheRead": 0
-          },
-          "outputTokens": {
-            "total": 56,
-            "text": 56,
-            "reasoning": 0
-          },
-          "raw": {
-            "prompt_tokens": 1868,
-            "completion_tokens": 56,
-            "total_tokens": 1924,
+            "total_tokens": 1738,
             "prompt_tokens_details": {
               "cached_tokens": 0,
               "cache_write_tokens": 0,
@@ -203,7 +105,7 @@
         "content": [
           {
             "type": "text",
-            "text": "La correction est annulée. La facture F-2026-042 est de retour à 30 € l'unité."
+            "text": "C'est corrigé. Le prix de la chaise sur la facture F-2026-042 est passé de 30 € à 40 €, comme dans la commande C-118."
           }
         ],
         "finishReason": {
@@ -212,21 +114,119 @@
         },
         "usage": {
           "inputTokens": {
-            "total": 1984,
-            "noCache": 64,
-            "cacheRead": 1920
+            "total": 1801,
+            "noCache": 1801,
+            "cacheRead": 0
           },
           "outputTokens": {
-            "total": 35,
-            "text": 35,
+            "total": 52,
+            "text": 52,
             "reasoning": 0
           },
           "raw": {
-            "prompt_tokens": 1984,
-            "completion_tokens": 35,
-            "total_tokens": 2019,
+            "prompt_tokens": 1801,
+            "completion_tokens": 52,
+            "total_tokens": 1853,
             "prompt_tokens_details": {
-              "cached_tokens": 1920,
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            },
+            "cost": 0,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 0,
+              "upstream_inference_prompt_cost": 0,
+              "upstream_inference_completions_cost": 0
+            }
+          }
+        },
+        "warnings": []
+      },
+      {
+        "content": [
+          {
+            "type": "tool-call",
+            "toolCallId": "chatcmpl-tool-3d7e67a488244368930fb100d9624214",
+            "toolName": "undoEdit",
+            "input": "{\"editId\": \"e1d2c3b4-a5f6-4788-9a0b-1c2d3e4f5a6b\"}"
+          }
+        ],
+        "finishReason": {
+          "unified": "tool-calls",
+          "raw": "tool_calls"
+        },
+        "usage": {
+          "inputTokens": {
+            "total": 1873,
+            "noCache": 1873,
+            "cacheRead": 0
+          },
+          "outputTokens": {
+            "total": 56,
+            "text": 56,
+            "reasoning": 0
+          },
+          "raw": {
+            "prompt_tokens": 1873,
+            "completion_tokens": 56,
+            "total_tokens": 1929,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            },
+            "cost": 0,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 0,
+              "upstream_inference_prompt_cost": 0,
+              "upstream_inference_completions_cost": 0
+            }
+          }
+        },
+        "warnings": []
+      },
+      {
+        "content": [
+          {
+            "type": "text",
+            "text": "La correction est annulée. La facture F-2026-042 est de retour à 30 € l'unité pour la chaise."
+          }
+        ],
+        "finishReason": {
+          "unified": "stop",
+          "raw": "stop"
+        },
+        "usage": {
+          "inputTokens": {
+            "total": 1989,
+            "noCache": 1989,
+            "cacheRead": 0
+          },
+          "outputTokens": {
+            "total": 39,
+            "text": 39,
+            "reasoning": 0
+          },
+          "raw": {
+            "prompt_tokens": 1989,
+            "completion_tokens": 39,
+            "total_tokens": 2028,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
               "cache_write_tokens": 0,
               "audio_tokens": 0,
               "video_tokens": 0
@@ -253,7 +253,7 @@
         "content": [
           {
             "type": "tool-call",
-            "toolCallId": "chatcmpl-tool-f851ec6ebd9849b8847aebc0c7d1f64c",
+            "toolCallId": "chatcmpl-tool-8e74334f0ab041deb2c63819aa5c2d43",
             "toolName": "proposeFix",
             "input": "{}"
           }
@@ -303,7 +303,7 @@
         "content": [
           {
             "type": "text",
-            "text": "La facture F-2026-042 du 15/09/2026 est déjà envoyée : elle ne se modifie plus. Pour les 100,00 € qui manquent, établissez une facture rectificative ou un avoir qui cite son numéro et sa date."
+            "text": "La facture F-2026-042 du 15/09/2026 est déjà envoyée : elle ne se modifie plus et reste telle quelle. Pour corriger les 100,00 € en cause, ouvrez sa fiche et cliquez sur « Établir un avoir » : l'avoir l'annule en entier. Envoyez ensuite une nouvelle facture corrigée, avec un nouveau numéro."
           }
         ],
         "finishReason": {
@@ -312,21 +312,21 @@
         },
         "usage": {
           "inputTokens": {
-            "total": 1728,
-            "noCache": 1568,
-            "cacheRead": 160
+            "total": 1762,
+            "noCache": 450,
+            "cacheRead": 1312
           },
           "outputTokens": {
-            "total": 78,
-            "text": 78,
+            "total": 112,
+            "text": 112,
             "reasoning": 0
           },
           "raw": {
-            "prompt_tokens": 1728,
-            "completion_tokens": 78,
-            "total_tokens": 1806,
+            "prompt_tokens": 1762,
+            "completion_tokens": 112,
+            "total_tokens": 1874,
             "prompt_tokens_details": {
-              "cached_tokens": 160,
+              "cached_tokens": 1312,
               "cache_write_tokens": 0,
               "audio_tokens": 0,
               "video_tokens": 0
@@ -353,7 +353,7 @@
         "content": [
           {
             "type": "text",
-            "text": "La facture F-2026-050 n’est pas encore envoyée, mais aucune correction automatique n’est disponible : la commande C-999 n’existe pas dans vos documents.\n\nIl faut que vous modifiez vous-même la référence de la commande dans la cellule Factures!F7.  \nQuel numéro de commande réel souhaitez-vous y mettre ?"
+            "text": "La facture F-2026-050 n’est pas encore envoyée, mais le contrôle ne peut pas la corriger automatiquement : il n’a pas de valeur de remplacement pour la cellule F7.\n\nLe numéro de commande indiqué est **C-999**, mais aucune de vos feuilles ne contient de commande avec ce numéro. Pour corriger, il faut que vous-même remplaciez **C-999** dans la cellule **F7** de l’onglet **Factures** par le numéro d’une commande qui existe réellement dans vos documents.\n\nPouvez-vous vérifier ce numéro et le corriger manuellement ?"
           }
         ],
         "finishReason": {
@@ -363,20 +363,20 @@
         "usage": {
           "inputTokens": {
             "total": 1500,
-            "noCache": 1340,
-            "cacheRead": 160
+            "noCache": 1500,
+            "cacheRead": 0
           },
           "outputTokens": {
-            "total": 104,
-            "text": 104,
+            "total": 171,
+            "text": 171,
             "reasoning": 0
           },
           "raw": {
             "prompt_tokens": 1500,
-            "completion_tokens": 104,
-            "total_tokens": 1604,
+            "completion_tokens": 171,
+            "total_tokens": 1671,
             "prompt_tokens_details": {
-              "cached_tokens": 160,
+              "cached_tokens": 0,
               "cache_write_tokens": 0,
               "audio_tokens": 0,
               "video_tokens": 0
@@ -402,6 +402,6 @@
   "label": "llmfp-smart",
   "provider": "openai-compatible",
   "model": "auto - Smart models - Hermes",
-  "recordedAt": "2026-10-21",
+  "recordedAt": "2026-10-24",
   "gate": true
 }

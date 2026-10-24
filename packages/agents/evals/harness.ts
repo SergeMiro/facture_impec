@@ -42,16 +42,24 @@ export interface MappingScore {
   groupingOk: boolean;
 }
 
-/** Core fields mapped to the expected column, a field the sheet lacks counting as right when left out. */
+/**
+ * Core fields mapped to the expected column, a field the sheet lacks counting as right when left out;
+ * a sheet with a « Remise % » column scores it too.
+ */
 export function scoreMapping(f: MappingFixture, m: SheetMapping): MappingScore {
   const misses = CORE_FIELDS.filter(
     (field) => (m.mapping[field]?.column ?? null) !== (f.expected.fields[field] ?? null),
   ).map(
     (field) => `${field}: ${m.mapping[field]?.column ?? '—'} ≠ ${f.expected.fields[field] ?? '—'}`,
   );
+  const discount = f.expected.discountPercent;
+  const found = m.mapping.lineDiscountPercent?.column;
+  if (discount && found !== discount)
+    misses.push(`lineDiscountPercent: ${found ?? '—'} ≠ ${discount}`);
+  const total = CORE_FIELDS.length + (discount ? 1 : 0);
   return {
-    correct: CORE_FIELDS.length - misses.length,
-    total: CORE_FIELDS.length,
+    correct: total - misses.length,
+    total,
     misses,
     headerOk: m.headerRow === f.expected.headerRow,
     groupingOk: (m.grouping?.by ?? null) === f.expected.grouping,

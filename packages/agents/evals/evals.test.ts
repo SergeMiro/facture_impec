@@ -34,9 +34,10 @@ const replayModel = (answer: unknown) =>
     : mockModel(textResult(JSON.stringify(answer)));
 
 describe('MappingAgent eval fixtures', () => {
-  it('are 20 sheets with expectations for the 8 core fields', () => {
+  it('are 20 sheets with expectations for the 8 core fields, one with a « Remise % » column', () => {
     expect(MAPPING_FIXTURES).toHaveLength(20);
     expect(new Set(MAPPING_FIXTURES.map((f) => f.name)).size).toBe(20);
+    expect(MAPPING_FIXTURES.filter((f) => f.expected.discountPercent)).toHaveLength(1);
   });
 
   it('header dictionary alone (the fallback): score kept as the baseline', () => {

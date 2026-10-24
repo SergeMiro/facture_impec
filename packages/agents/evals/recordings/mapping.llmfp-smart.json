@@ -141,12 +141,56 @@
         }
       ],
       "groupingColumn": null,
-      "warnings": [
-        "Le numéro SIREN du client est associé avec une confiance de 0,85 ; veuillez vérifier.",
-        "Certaines colonnes attendues (par exemple, Total TTC, Montant HT de la ligne) sont absentes."
-      ]
+      "warnings": []
     },
     "04-abbreviations": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "E",
+          "confidence": 0.9
+        },
+        {
+          "field": "quantity",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "H",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": []
+    },
+    "05-multiline-blank-number": {
       "headerRow": 1,
       "mapping": [
         {
@@ -190,10 +234,11 @@
           "confidence": 0.95
         }
       ],
-      "groupingColumn": null,
-      "warnings": []
+      "groupingColumn": "A",
+      "warnings": [
+        "Certaines informations client (adresse, code postal, ville, pays, e‑mail, TVA client) ne figurent pas dans les colonnes affichées."
+      ]
     },
-    "05-multiline-blank-number": null,
     "06-multiline-repeated-number": {
       "headerRow": 1,
       "mapping": [
@@ -239,7 +284,7 @@
         }
       ],
       "groupingColumn": "C",
-      "warnings": ["Colonnes manquantes : montant HT de la ligne, total TTC, adresse, email, etc."]
+      "warnings": []
     },
     "07-two-row-header": {
       "headerRow": 2,
@@ -288,7 +333,53 @@
       "groupingColumn": null,
       "warnings": []
     },
-    "08-extra-columns": null,
+    "08-extra-columns": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "H",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "I",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "K",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "L",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": []
+    },
     "09-vat-amount-and-rate": {
       "headerRow": 1,
       "mapping": [
@@ -340,7 +431,8 @@
       ],
       "groupingColumn": null,
       "warnings": [
-        "Colonne I “TVA” contient des montants de TVA mais n'est pas mappée ; vérifier si elle devrait être utilisée pour un champ de TVA dedicacé ou pour le montant HT de la ligne."
+        "Colonne I (TVA) contient des montants de TVA en euros, non mappée à un champ.",
+        "Champ lineNet (montant HT de la ligne) absent du tableau."
       ]
     },
     "10-net-and-ttc": {
@@ -486,7 +578,7 @@
           "confidence": 0.95
         }
       ],
-      "groupingColumn": "A",
+      "groupingColumn": null,
       "warnings": []
     },
     "13-reordered-with-gap": {
@@ -575,8 +667,13 @@
           "confidence": 0.95
         },
         {
-          "field": "vatRate",
+          "field": "lineDiscountPercent",
           "column": "H",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "I",
           "confidence": 0.95
         }
       ],
@@ -619,6 +716,105 @@
         {
           "field": "unitPrice",
           "column": "H",
+          "confidence": 0.9
+        },
+        {
+          "field": "vatRate",
+          "column": "I",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": ["La colonne A (Réf client) n'est pas mappée, à vérifier."]
+    },
+    "16-item-code-and-label": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "B",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemRef",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "F",
+          "confidence": 0.85
+        },
+        {
+          "field": "quantity",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "H",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "I",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": "A",
+      "warnings": []
+    },
+    "17-line-number-column": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "H",
           "confidence": 0.95
         },
         {
@@ -628,14 +824,65 @@
         }
       ],
       "groupingColumn": null,
-      "warnings": [
-        "Le montant HT de la ligne (lineNet) et le total TTC (totalInclVat) sont absents et doivent être calculés.",
-        "Adresse, e-mail et autres informations du client sont manquantes."
-      ]
+      "warnings": []
     },
-    "16-item-code-and-label": null,
-    "17-line-number-column": null,
-    "18-many-dates": null,
+    "18-many-dates": {
+      "headerRow": 1,
+      "mapping": [
+        {
+          "field": "number",
+          "column": "A",
+          "confidence": 0.95
+        },
+        {
+          "field": "issueDate",
+          "column": "C",
+          "confidence": 0.95
+        },
+        {
+          "field": "dueDate",
+          "column": "D",
+          "confidence": 0.95
+        },
+        {
+          "field": "deliveryDate",
+          "column": "E",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerName",
+          "column": "F",
+          "confidence": 0.95
+        },
+        {
+          "field": "buyerSiren",
+          "column": "G",
+          "confidence": 0.95
+        },
+        {
+          "field": "itemName",
+          "column": "H",
+          "confidence": 0.95
+        },
+        {
+          "field": "quantity",
+          "column": "I",
+          "confidence": 0.95
+        },
+        {
+          "field": "unitPrice",
+          "column": "J",
+          "confidence": 0.95
+        },
+        {
+          "field": "vatRate",
+          "column": "K",
+          "confidence": 0.95
+        }
+      ],
+      "groupingColumn": null,
+      "warnings": []
+    },
     "19-totals-and-blank-rows": {
       "headerRow": 2,
       "mapping": [
@@ -685,23 +932,8 @@
           "confidence": 0.95
         }
       ],
-      "groupingColumn": "A",
-      "warnings": [
-        "Colonne manquante : Date d'échéance",
-        "Colonne manquante : Total TTC",
-        "Colonne manquante : N° de TVA du client",
-        "Colonne manquante : Adresse du client",
-        "Colonne manquante : E-mail du client",
-        "Colonne manquante : Code postal du client",
-        "Colonne manquante : Ville du client",
-        "Colonne manquante : Pays du client",
-        "Colonne manquante : N° de bon de commande",
-        "Colonne manquante : Conditions de paiement",
-        "Colonne manquante : Devise",
-        "Colonne manquante : Unité",
-        "Colonne manquante : Catégorie de TVA",
-        "Colonne manquante : Bien ou service"
-      ]
+      "groupingColumn": null,
+      "warnings": []
     },
     "20-conversational-headers": {
       "headerRow": 1,
@@ -714,7 +946,7 @@
         {
           "field": "issueDate",
           "column": "B",
-          "confidence": 0.95
+          "confidence": 0.9
         },
         {
           "field": "buyerName",
@@ -724,7 +956,7 @@
         {
           "field": "buyerSiren",
           "column": "D",
-          "confidence": 0.85
+          "confidence": 0.95
         },
         {
           "field": "itemName",
@@ -748,12 +980,14 @@
         }
       ],
       "groupingColumn": null,
-      "warnings": []
+      "warnings": [
+        "L'indice de confiance du hint pour la colonne A (Réf) indique itemRef, mais les valeurs FA-2026-0012 et FA-2026-0013 correspondent au numéro de facture, pas à une référence d'article."
+      ]
     }
   },
   "label": "llmfp-smart",
   "provider": "openai-compatible",
   "model": "auto - Smart models - Hermes",
-  "recordedAt": "2026-10-18",
+  "recordedAt": "2026-10-24",
   "gate": false
 }

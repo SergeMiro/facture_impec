@@ -121,13 +121,16 @@ from $0.035 / $0.011 per million tokens in and out (fp4) or $0.112 / $0.336 (fp8
 
 ### Eval results so far
 
-MappingAgent, 20 messy sheets of `evals/mapping.fixtures.ts`, the 8 core fields (gate: ≥ 95 %).
+MappingAgent, 20 messy sheets of `evals/mapping.fixtures.ts`, the 8 core fields, and since 2026-10-24
+the « Remise % » column of the one sheet that has it (161 points; gate: ≥ 95 %).
 Recorded with `pnpm --filter @fi/agents eval:record` on synthetic data only; replayed by `pnpm verify`.
 
 | Date | Provider / model | Core fields | Notes |
 |---|---|---|---|
 | 2026-10-18 | none (dictionary only, `detectMapping`) | 91.3 % | the floor every agent answer must beat |
 | 2026-10-18 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 98.1 % | 15/20 answered by the model, 5 fell back to the dictionary after 3 retries (free routing has no JSON schema mode); `mapping.llmfp-smart.json`, not a gate |
+| 2026-10-24 | none (dictionary only), with « Remise % » | 91.9 % (148/161) | the floor again, on the new points |
+| 2026-10-24 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 99.4 % (160/161) | « Remise % » found; `17-line-number-column` took the line number for the invoice number; `mapping.llmfp-smart.json`, not a gate |
 
 MonitorAgent, 13 customer refusals of `evals/monitor.fixtures.ts` (the proposal among fix and resend /
 credit note / contact the customer; gate when one is set: ≥ 85 %, and never a wrong amount in a draft):
@@ -135,6 +138,7 @@ credit note / contact the customer; gate when one is set: ≥ 85 %, and never a 
 | Date | Provider / model | Right proposal | Notes |
 |---|---|---|---|
 | 2026-10-18 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 11/13 (85 %) | `total`: the draft was refused by the guardrail and fell back to the three options; `billed-twice`: no proposal; `monitor.llmfp-smart.json`, not a gate |
+| 2026-10-24 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 12/13 (92 %) | the prompt now says a refused invoice is cancelled by a credit note and replaced, never sent again under its number; the drafts say so. `total`: the right proposal, but the draft quoted the customer's 4 800,00 € HT and the guardrail refused it (the person gets the three options); `monitor.llmfp-smart.json`, not a gate |
 
 LayoutAgent (R1), 20 sheets of `evals/layout.fixtures.ts` (five orders, delivery notes, purchases and
 price lists), the kind and 7 key fields (number, date, other party, reference, designation, quantity,
@@ -154,6 +158,7 @@ the 300/400 conversation whole and ≥ 80 % of all turns.
 | Date | Provider / model | Right turns | Notes |
 |---|---|---|---|
 | 2026-10-21 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 5/5 | `chat.llmfp-smart.json`, `gate: true` until a Mistral recording replaces it: it holds the code path (tools, cards, re-hydrated amounts) to real answers; it says nothing of the production model |
+| 2026-10-24 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 5/5 | the sent invoice now gets the API's own answer (`api.error.invoice_sent`: « Établir un avoir » on its fiche); same file, same gate |
 
 ClassifyAgent (BTP plan stage 2), 45 synthetic French documents of `evals/classify.fixtures.ts` over
 the 14 labels (scans, foreign and look-alike documents among them). The patterns answer first; the
