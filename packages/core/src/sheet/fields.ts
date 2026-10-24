@@ -27,6 +27,7 @@ export const INVOICE_FIELDS = [
   'unitPrice',
   'lineNet',
   'lineDiscount',
+  'lineDiscountPercent',
   'vatRate',
   'vatCategory',
   'nature',

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { computeGolden, golden } from '../test/fixtures';
 import { computeInvoice, documentTotals, lineNetAmount, vatBreakdown } from './compute';
 import { EN16931_SPECIFICATION, type Line } from './model';
+import { validate } from './rules';
+import { toCii } from './xml';
 
 const line = (over: Partial<Line> = {}): Line => ({
   quantity: '1',
@@ -123,6 +125,59 @@ describe('computeInvoice', () => {
     expect(computeGolden(golden('16-foreign-currency')).totals.taxTotalAccountingCurrency).toBe(
       36800,
     );
+  });
+
+  it('computes a line discount given as a percentage of the line, rounded to the cent', () => {
+    const g = golden('01-services-standard-rate');
+    const draft = structuredClone(g.draft) as { lines: Record<string, unknown>[] };
+    const first = draft.lines[0];
+    if (!first) throw new Error('no line');
+    first.quantity = '3';
+    first.price = { net: '45.50' };
+    first.allowances = [{ percentage: '7.5', reasonCode: '95', reason: 'Remise' }];
+    const invoice = computeInvoice(draft as never);
+    // 3 × 45,50 = 136,50 ; 7,5 % = 10,2375 → 10,24.
+    expect(invoice.lines[0]?.allowances).toEqual([
+      { percentage: '7.5', baseAmount: 13650, amount: 1024, reasonCode: '95', reason: 'Remise' },
+    ]);
+    expect(invoice.lines[0]?.netAmount).toBe(12626);
+    const cii = toCii(invoice);
+    expect(cii).toContain('<ram:CalculationPercent>7.5</ram:CalculationPercent>');
+    expect(cii).toContain('<ram:BasisAmount>136.50</ram:BasisAmount>');
+    const errors = validate(invoice, { today: '2026-10-24' }).filter((i) => i.severity === 'error');
+    expect(errors.map((i) => i.ruleId)).not.toContain('BR-41');
+  });
+
+  it('keeps an amount typed with its percentage, and leaves a malformed percentage to the rules', () => {
+    const lineWith = (allowance: Record<string, unknown>) =>
+      computeInvoice({
+        ...structuredClone(golden('01-services-standard-rate').draft),
+        lines: [{ ...line(), quantity: '2', price: { net: '100' }, allowances: [allowance] }],
+      } as never).lines[0];
+    expect(lineWith({ amount: 1500, percentage: '10' })?.netAmount).toBe(18500);
+    const bad = lineWith({ percentage: 'dix' });
+    expect(bad?.allowances[0]?.amount).toBeUndefined();
+    expect(bad?.netAmount).toBe(20000);
+  });
+
+  it('takes a document discount from the lines of its VAT category and rate', () => {
+    const invoice = computeInvoice({
+      ...structuredClone(golden('01-services-standard-rate').draft),
+      lines: [
+        { ...line(), quantity: '1', price: { net: '200' }, vat: { category: 'S', rate: '20' } },
+        { ...line(), quantity: '1', price: { net: '50' }, vat: { category: 'S', rate: '5.5' } },
+      ],
+      allowances: [
+        { percentage: '5', vatCategory: 'S', vatRate: '20.00', reason: 'Remise' },
+        { percentage: '10', baseAmount: 3000, vatCategory: 'S', vatRate: '5.5', reason: 'Remise' },
+      ],
+    } as never);
+    expect(invoice.allowances.map((a) => [a.baseAmount, a.amount])).toEqual([
+      [20000, 1000],
+      [3000, 300],
+    ]);
+    expect(invoice.totals).toMatchObject({ lineTotal: 25000, allowanceTotal: 1300 });
+    expect(invoice.vatBreakdown.map((b) => b.taxableAmount)).toEqual([19000, 4700]);
   });
 
   it('rejects a draft that does not have the model shape', () => {

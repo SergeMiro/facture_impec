@@ -15,10 +15,20 @@ import {
   type SellerProfile,
   type SheetMapping,
 } from './fields';
-import { amountOf, dateOf, decimalOf, identifierOf, natureOf, rateOf, textOf } from './values';
+import {
+  amountOf,
+  dateOf,
+  decimalFromText,
+  decimalOf,
+  identifierOf,
+  natureOf,
+  percentValueOf,
+  rateOf,
+  textOf,
+} from './values';
 
 export interface SheetProblem {
-  code: 'group_conflict' | 'line_total_mismatch' | 'total_mismatch' | 'discount_percent';
+  code: 'group_conflict' | 'line_total_mismatch' | 'total_mismatch';
   cell: string;
   messageFr: string;
   /** When the contradiction is a mistake a check names (A1–A3, R2): kept with the invoice. */
@@ -138,6 +148,7 @@ const READERS: Readonly<Record<InvoiceField, (cell: RawCell | undefined) => stri
   unitPrice: decimalOf,
   lineNet: decimalOf,
   lineDiscount: amountOf,
+  lineDiscountPercent: percentValueOf,
   vatRate: rateOf,
   vatCategory: (c) => textOf(c)?.toUpperCase(),
   nature: natureOf,
@@ -174,9 +185,21 @@ const LINE_PATHS: Partial<Record<InvoiceField, string>> = {
   vatCategory: 'vat.category',
   nature: 'nature',
   lineDiscount: 'allowances[0]',
+  lineDiscountPercent: 'allowances[0]',
 };
 
 const PROCESS_TYPE = { goods: 'B1', services: 'S1', mixed: 'M1' } as const;
+
+/**
+ * The line before a discount of `percent` %, from the total after it: net × 100 / (100 − percent),
+ * to the cent. The discount is then the difference, so the sheet's total stays exact.
+ */
+function grossBefore(netCents: number, percent: string): number {
+  const [int = '', frac = ''] = percent.split('.');
+  const scale = 10n ** BigInt(frac.length);
+  const p = BigInt(int + frac);
+  return Number(divRound(BigInt(netCents) * 100n * scale, 100n * scale - p));
+}
 
 /** a ÷ b on decimal text, rounded to 4 decimals; undefined when b is zero or not a decimal. */
 function divideDecimal(a: string, b: string): string | undefined {
@@ -355,34 +378,53 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
     let price = read(row, 'unitPrice');
     const net = read(row, 'lineNet');
     const netCell = at('lineNet');
-    // A discount in euros (BT-136), typed 50 or -50: 50 € off. Anything else stays a discount
-    // without an amount, so BR-41 stops the invoice on that cell instead of dropping it.
-    const discount = read(row, 'lineDiscount');
-    const discountCents =
-      discount !== undefined && isDecimal(discount) ? roundToCents(discount) : null;
-    const off = Math.abs(discountCents ?? 0);
-    const unreadable = discount !== undefined && discountCents === null;
-    const allowances: AllowanceCharge[] = [];
-    if (unreadable || off > 0) {
-      allowances.push({
-        ...(discountCents !== null && { amount: off }),
-        reasonCode: '95',
-        reason: t('invoice.default.discountReason'),
-      });
-      if (discount?.endsWith('%')) {
-        problems.push({
-          code: 'discount_percent',
-          cell: at('lineDiscount') ?? '',
-          messageFr: t('sheet.problem.discount_percent', { value: discount }),
-        });
-      }
-    }
+    // A discount in euros (BT-136), typed 50 or -50: 50 € off; or a percentage (BT-138) from the
+    // « Remise % » column, or typed « 10 % » in the euros one, taken off the line's gross amount.
+    // Anything else stays a discount without an amount, so BR-41 stops the invoice on that cell
+    // instead of dropping it.
+    const discountText = read(row, 'lineDiscount');
+    const euros = discountText?.endsWith('%') ? undefined : discountText;
+    const percentText =
+      read(row, 'lineDiscountPercent') ??
+      (discountText?.endsWith('%')
+        ? (decimalFromText(discountText.slice(0, -1)) ?? discountText)
+        : undefined);
+    const discountCents = euros !== undefined && isDecimal(euros) ? roundToCents(euros) : null;
+    const percent =
+      percentText !== undefined && isDecimal(percentText) ? percentText.replace(/^-/, '') : null;
+    const unreadable =
+      (euros !== undefined && discountCents === null) ||
+      (percentText !== undefined && percent === null);
+    let off = Math.abs(discountCents ?? 0);
+    /** A percentage turned into euros here: only when the sheet gives the total, not the price. */
+    let fromTotal: { amount: number; baseAmount: number } | null = null;
     if (price === undefined && net !== undefined) {
       // The line total is after the discount: the price is what it was before.
       const netCents = isDecimal(net) ? roundToCents(net) : null;
+      if (off === 0 && percent !== null && netCents !== null && Number(percent) < 100) {
+        const baseAmount = grossBefore(netCents, percent);
+        off = baseAmount - netCents;
+        if (off > 0) fromTotal = { amount: off, baseAmount };
+      }
       const gross = off > 0 && netCents !== null ? formatAmount(netCents + off) : net;
       price = quantity === undefined ? gross : (divideDecimal(gross, quantity) ?? gross);
       if (netCell) cells[`lines[${i}].price.net`] = netCell;
+    } else if (off === 0 && percent !== null && price !== undefined) {
+      const gross = lineAmount(quantity ?? '1', price);
+      off = gross === null ? 0 : (percentOf(gross, percent) ?? 0);
+    }
+    const allowances: AllowanceCharge[] = [];
+    if (unreadable || off > 0) {
+      allowances.push({
+        ...(discountCents !== null && { amount: Math.abs(discountCents) }),
+        ...(percentText !== undefined && { percentage: percent ?? percentText }),
+        ...fromTotal,
+        reasonCode: '95',
+        reason: t('invoice.default.discountReason'),
+      });
+    }
+    if (fromTotal) {
+      // Nothing to compare: the total is the sheet's, and the price follows from it.
     } else if (
       // A discount that is not an amount is already stopped on its own cell.
       !unreadable &&
@@ -401,7 +443,7 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
           amount,
           off,
           typed,
-          discount,
+          discount: euros,
           rate: read(row, 'vatRate'),
           formula: ctx.formula(row, 'lineNet'),
           params: { ...values, invoice: number ?? t('check.noNumber'), cell: netCell },

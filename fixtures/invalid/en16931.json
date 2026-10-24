@@ -153,7 +153,8 @@
     {
       "rule": "BR-31",
       "base": "14-document-allowance-charge",
-      "unset": ["allowances[0].amount"]
+      "why": "no amount and no percentage to compute it from",
+      "unset": ["allowances[0].amount", "allowances[0].percentage"]
     },
     {
       "rule": "BR-32",

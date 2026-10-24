@@ -1266,3 +1266,36 @@ credit note, then a new invoice with a new number. Criteria, written here before
 | A refusal says the right way | The fiche of a refused or disputed invoice says « un avoir, puis une nouvelle facture » (`addin.credit.refused`); `monitor.refusal.open` reworded (`packages/agents/src/monitor.test.ts` › says how a refusal is answered…); the MonitorAgent's `fix_and_resend` on a refusal is shown as « Corriger : un avoir, puis une nouvelle facture » (`apps/addin/src/ui/timeline.test.ts` › never advises resending a refused invoice under its number). The prompt and its eval: `docs/TODO.md` › Credit notes. |
 | Audit, tests, docs | `credits.test.ts` › prepares the full credit note… (audit `invoice.create` on the credit note, `invoice.credit_note` by `system` on the invoice; `credit_of` in the creation's audited state). The weekly report leaves credit notes out of its counts (same test, `weekFacts`). `docs/ARCHITECTURE.md` › §4 After a send, `docs/STATE_MACHINE.md` regenerated (`credit_note` by user or system), `docs/DEFERRED.md` › After a send, `docs/TODO.md` › Credit notes (quota, accountant, T24, monitor prompt), `docs/B2BROUTER.md` T24. Migration `0019_credit_notes.sql`. |
 | Gate | `pnpm verify` green on 2026-10-24 (tests with `--concurrency=1`): api 301, core 685 + oracle 276, agents 121, add-in 106, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 13. `pnpm test:e2e` green in local Chrome (browser: local): 4 passed, the live B2Brouter run skipped (no key). |
+
+## Percentage discounts (started 2026-10-24)
+
+`docs/DEFERRED.md` rows « Allowances and charges given only as a percentage » (M1) and « Percentage
+discounts per line » (R0): a sheet's « Remise 10 % » was left out with a warning, or stopped by BR-41
+on its cell, and the user had to type the discount in euros. French small businesses write discounts
+as percentages. Criteria, written here before the work:
+
+- **Core computes a percentage**: an allowance or charge with a percentage (BT-94 / BT-138) and no
+  amount gets its amount, rounded to the cent, from its base (BT-93 / BT-137): the one given, else the
+  line's gross amount (quantity × price) for a line, else the net amount of the lines in its VAT
+  category and rate for the whole invoice. The base and the percentage are kept, so the XML carries
+  BT-137 / BT-138 (or BT-93 / BT-94). An amount typed with its percentage stays as typed.
+- **A « Remise % » column is read**: a new sheet field « Remise sur la ligne (en %) », found from its
+  header (« Remise % », « % remise », « Taux de remise ») or a discount column holding percentages;
+  `10`, `10 %` and an Excel percent cell (0.1) all read as 10 %. The line total in the sheet is checked
+  against the price less that discount, as for a discount in euros. A total-only line (no unit price)
+  with a percentage keeps the sheet's total exact.
+- **The MappingAgent's answer is corrected, not dropped**: a percentage column it maps to the euros
+  field goes to the percentage field, by rule; no more « remise en pourcentage » warning.
+- **Tests and docs**: core, sheet and mapping tests; `docs/DEFERRED.md` rows closed, the rest
+  (percentage charges from a sheet, a whole-invoice discount column) logged; the mapping eval's
+  recording noted in `docs/TODO.md` for the new field.
+
+### Evidence (2026-10-24)
+
+| Criterion | Evidence |
+|---|---|
+| Core computes a percentage | `packages/core/src/compute.test.ts` › computes a line discount given as a percentage of the line, rounded to the cent (7.5 % of 136,50 € → 10,24 €, net 126,26 €; the CII carries `CalculationPercent` and `BasisAmount`; no BR-41), › keeps an amount typed with its percentage, and leaves a malformed percentage to the rules (`dix` gets no amount, so BR-41 still speaks), › takes a document discount from the lines of its VAT category and rate (10 % on the 20 % lines only). `computeInvoice` resolves amounts before the VAT breakdown and the totals (`withAmount`, `documentBase`). The invalid fixture of BR-31 now removes the percentage too (an allowance with a percentage is no longer missing its amount). |
+| A « Remise % » column is read | `packages/core/src/sheet/sheet.test.ts` › reads a « Remise % » column: 10, 10 % and an Excel percent cell (nets 126,26 / 90 / 190 / 90 €; a line total that disagrees is named on its cell; total-only lines keep the sheet's total: 90 € and 33,33 € with their base 100 € and 37,03 €), › maps the article reference, a discount in euros and a discount in percent (« Remise % » → `lineDiscountPercent`), › reads the article reference and the discount of each line (`10 %` in the euros column is a percentage now; `cinq` stays BR-41 on its cell). Field « Remise sur la ligne (en %) » in `fields.ts` and `fr.json`. |
+| The MappingAgent's answer is corrected | `packages/agents/src/mapping.test.ts` › puts a percentage discount in the percent field, and euros in the euros one (both directions, by `notAnAmount`); the `discountWarnings` warning is gone. The prompt is unchanged; the eval's recording with the new field is in `docs/TODO.md` › Percentage discounts. |
+| Tests and docs | `docs/DEFERRED.md` rows #12 and #81 closed (what is left: a percentage charge on a line, a whole-invoice discount column, percentages in Commandes / Achats), `docs/ARCHITECTURE.md` sheet row, `docs/TODO.md` › Percentage discounts. |
+| Gate | `pnpm verify` green on 2026-10-24 (tests with `--concurrency=1`): api 301, core 689 + oracle 276, agents 121, add-in 106, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 13. `pnpm test:e2e` green in local Chrome (browser: local): 4 passed, the live B2Brouter run skipped (no key). |

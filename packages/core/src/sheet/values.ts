@@ -55,6 +55,20 @@ export function amountOf(cell: RawCell | undefined): string | undefined {
   return decimalOf(cell);
 }
 
+/**
+ * A percentage in percent ("10", "7.5"): an Excel percent cell holds 0.1 for 10 %, a number typed
+ * in a « Remise % » column is the percentage itself, text may end with « % ».
+ */
+export function percentValueOf(cell: RawCell | undefined): string | undefined {
+  if (!cell) return undefined;
+  if (typeof cell.value === 'number') {
+    return numberText(isPercentFormat(cell) ? cell.value * 100 : cell.value) ?? textOf(cell);
+  }
+  const text = textOf(cell);
+  if (text === undefined) return undefined;
+  return decimalFromText(text.replace('%', '')) ?? text;
+}
+
 /** A VAT rate in percent ("20", "5.5"). Excel percent cells hold 0.2 for 20 %. */
 export function rateOf(cell: RawCell | undefined): string | undefined {
   if (!cell) return undefined;

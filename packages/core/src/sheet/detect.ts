@@ -325,6 +325,26 @@ export const SYNONYMS: Readonly<Record<InvoiceField, Synonyms>> = {
         hasWords(normalizeHeader(header), w),
       ),
   },
+  lineDiscountPercent: {
+    exact: [
+      'remise %',
+      '% remise',
+      'remise en %',
+      'remise en pourcentage',
+      'taux de remise',
+      'taux remise',
+      'pourcentage de remise',
+      'pourcentage remise',
+      'rabais %',
+      'discount %',
+    ],
+    // A discount column counts only when it is a percentage, by its header or its values (below).
+    contains: ['remise', 'rabais', 'reduction', 'discount'],
+    never: (header) =>
+      ['apres', 'total', 'net', 'ttc', 'prix', 'p u', 'pu', 'montant'].some((w) =>
+        hasWords(normalizeHeader(header), w),
+      ),
+  },
   vatRate: {
     exact: [
       'taux tva',
@@ -419,37 +439,12 @@ function holdsPercents(values: readonly RawCell[]): boolean {
   return filled.length > 0 && percents.length / filled.length >= 0.5;
 }
 
-const DISCOUNT_WORDS = ['remise', 'rabais', 'reduction', 'discount'];
-
 /**
- * A discount the field cannot take: a percentage, by its header or its values. Left unmapped, it
- * would be dropped without a word, so the user is told to give it in euros (docs/DEFERRED.md).
+ * A percentage by its header or most of its values: the discount goes to `lineDiscountPercent`,
+ * never to the euros `lineDiscount` takes.
  */
-export function percentDiscount(header: string, values: readonly RawCell[]): boolean {
-  const h = normalizeHeader(header);
-  if (!DISCOUNT_WORDS.some((w) => hasWords(h, w))) return false;
-  return notAnAmount(header, values);
-}
-
-/** A percentage by its header or most of its values: never the amount `lineDiscount` takes. */
 export const notAnAmount = (header: string, values: readonly RawCell[]) =>
   percentHeader(header) || holdsPercents(values);
-
-/** One warning per percentage discount column the mapping leaves out. */
-export function discountWarnings(
-  snapshot: SheetSnapshot,
-  headerRow: number,
-  mapping: SheetMapping['mapping'],
-): string[] {
-  const used = new Set(Object.values(mapping).map((m) => m?.column));
-  const header = snapshot.rows.find((r) => r.row === headerRow);
-  const below = snapshot.rows.filter((r) => r.row > headerRow).slice(0, SAMPLE_ROWS);
-  const values = (col: string) => below.flatMap((r) => r.cells.filter((c) => c.col === col));
-  return (header?.cells ?? [])
-    .filter((c) => !used.has(c.col) && typeof c.value === 'string')
-    .filter((c) => percentDiscount(String(c.value), values(c.col)))
-    .map((c) => t('sheet.warning.discountPercent', { column: c.col }));
-}
 
 /** SIREN has 9 digits, SIRET 14: a « SIREN/SIRET » column goes where most of its values fit. */
 function sirenOrSiret(values: readonly RawCell[]): 'buyerSiren' | 'buyerSiret' {
@@ -477,6 +472,7 @@ export function detectMapping(snapshot: SheetSnapshot): SheetMapping {
       const bare = ['tva', 'vat', 'taux'].includes(normalizeHeader(text)) || confidence < 0.85;
       if (field === 'vatRate' && bare && !holdsRates(columnValues(cell.col))) continue;
       if (field === 'lineDiscount' && holdsPercents(columnValues(cell.col))) continue;
+      if (field === 'lineDiscountPercent' && !notAnAmount(text, columnValues(cell.col))) continue;
       if (field === 'buyerSiren' || field === 'buyerSiret') {
         const h = normalizeHeader(text);
         if (hasWords(h, 'siren') && hasWords(h, 'siret')) {
@@ -507,7 +503,7 @@ export function detectMapping(snapshot: SheetSnapshot): SheetMapping {
     headerRow,
     mapping,
     grouping: detectGrouping(snapshot, headerRow, mapping.number?.column),
-    warnings: [...missingFieldWarnings(mapping), ...discountWarnings(snapshot, headerRow, mapping)],
+    warnings: missingFieldWarnings(mapping),
     source: 'heuristic',
   };
 }

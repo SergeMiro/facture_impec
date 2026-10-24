@@ -6,7 +6,6 @@ import {
   ColumnLetters,
   detectGrouping,
   detectMapping,
-  discountWarnings,
   type FieldMapping,
   headerScore,
   INVOICE_FIELDS,
@@ -163,13 +162,15 @@ export function guardMapping(
       if (!ok) notes.push(t('mapping.warning.sirenDropped', { column: m.column }));
       return ok;
     })
-    .filter((m) => {
-      // A percentage is not the amount BT-136 takes: a rule decides that, not the model.
-      if (m.field !== 'lineDiscount') return true;
+    .map((m) => {
+      // Euros or a percentage: a rule decides which discount field the column is, not the model.
+      if (m.field !== 'lineDiscount' && m.field !== 'lineDiscountPercent') return m;
       const header = headerText(snapshot, headerRow, m.column);
-      const ok = !notAnAmount(header, columnBelow(snapshot, headerRow, m.column));
-      if (!ok) notes.push(t('sheet.warning.discountPercent', { column: m.column }));
-      return ok;
+      const percent = notAnAmount(header, columnBelow(snapshot, headerRow, m.column));
+      return {
+        ...m,
+        field: percent ? ('lineDiscountPercent' as const) : ('lineDiscount' as const),
+      };
     })
     .sort((a, b) => b.confidence - a.confidence);
 
@@ -203,14 +204,7 @@ export function guardMapping(
     headerRow,
     mapping,
     grouping,
-    warnings: [
-      ...new Set([
-        ...missingFieldWarnings(mapping),
-        ...notes,
-        ...discountWarnings(snapshot, headerRow, mapping),
-        ...own,
-      ]),
-    ],
+    warnings: [...new Set([...missingFieldWarnings(mapping), ...notes, ...own])],
     source: 'agent',
   };
 }

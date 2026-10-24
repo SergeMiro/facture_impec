@@ -251,7 +251,7 @@ describe('detectMapping (dictionary)', () => {
     expect(m.mapping.buyerSiren).toBeUndefined();
   });
 
-  it('maps the article reference and a discount in euros, never a percentage', () => {
+  it('maps the article reference, a discount in euros and a discount in percent', () => {
     const sheet = grid('S', [
       [
         'N° facture',
@@ -266,11 +266,12 @@ describe('detectMapping (dictionary)', () => {
       ['F1', 'C01', 'VIS-6', 'Vis inox', 10, 8.4, 4, { v: 0.1, t: '10%', f: '0%' }],
     ]);
     const m = detectMapping(sheet).mapping;
-    expect([m.itemRef?.column, m.itemName?.column, m.lineDiscount?.column]).toEqual([
-      'C',
-      'D',
-      'G',
-    ]);
+    expect([
+      m.itemRef?.column,
+      m.itemName?.column,
+      m.lineDiscount?.column,
+      m.lineDiscountPercent?.column,
+    ]).toEqual(['C', 'D', 'G', 'H']);
     // A reference of something else, a rate, or what is left after the discount.
     for (const [header, field] of [
       ['Réf client', 'itemRef'],
@@ -280,21 +281,20 @@ describe('detectMapping (dictionary)', () => {
       ['Total après remise', 'lineDiscount'],
       ['Prix remisé', 'lineDiscount'],
       ['Net remisé', 'lineDiscount'],
+      ['Total après remise', 'lineDiscountPercent'],
+      ['Montant remise', 'lineDiscountPercent'],
     ] as const)
       expect(headerScore(header, field), header).toBe(0);
-    // « Remise » over percentages is a rate, whatever its header says.
+    for (const header of ['Remise %', 'Remise (%)', '% remise', 'Taux de remise'])
+      expect(headerScore(header, 'lineDiscountPercent'), header).toBe(0.95);
+    // « Remise » over percentages is a percentage, whatever its header says; over euros, an amount.
     const rates = grid('S', [
       ['N° facture', 'Désignation', 'Remise'],
       ['F1', 'Vis inox', { v: 0.1, t: '10%', f: '0%' }],
     ]);
+    expect(detectMapping(rates).mapping).toMatchObject({ lineDiscountPercent: { column: 'C' } });
     expect(detectMapping(rates).mapping.lineDiscount).toBeUndefined();
-    // Left out, it is not dropped without a word.
-    expect(detectMapping(rates).warnings.filter((w) => w.includes('pourcentage'))).toEqual([
-      expect.stringContaining('La colonne C donne une remise en pourcentage'),
-    ]);
-    expect(detectMapping(sheet).warnings.filter((w) => w.includes('pourcentage'))).toEqual([
-      expect.stringContaining('La colonne H'),
-    ]);
+    expect(detectMapping(sheet).warnings.filter((w) => w.includes('pourcentage'))).toEqual([]);
   });
 
   it('groups multi-line invoices: repeated numbers, or blanks under merged cells', () => {
@@ -519,9 +519,10 @@ describe('readSheet', () => {
       ['F2', 'Pose', null, 2, 50, -10, 95, 20],
       ['F3', 'Pose', null, 1, 50, null, 50, 20],
       ['F4', 'Pose', null, 1, 50, { v: 0.1, t: '10%', f: '0%' }, 45, 20],
+      ['F5', 'Pose', null, 1, 50, 'cinq', 45, 20],
     ]);
     const { invoices } = readSheet(sheet, detectMapping(sheet), SELLER);
-    const [f1, f2, f3, f4] = invoices;
+    const [f1, f2, f3, f4, f5] = invoices;
     expect(lines(f1)[0]).toMatchObject({
       item: { name: 'Vis inox', sellerId: 'vis-6' },
       allowances: [{ amount: 400, reasonCode: '95', reason: 'Remise' }],
@@ -537,11 +538,20 @@ describe('readSheet', () => {
     expect(f2?.problems.map((p) => [p.code, p.cell])).toEqual([['line_total_mismatch', 'S!G3']]);
     expect(f2?.problems[0]?.messageFr).toContain('remise (90,00');
     expect(lines(f3)[0]?.allowances).toEqual([]);
-    // 10 % is not 0,10 €: the discount stays without an amount, and BR-41 stops it on its cell.
-    expect(f4?.problems.map((p) => [p.code, p.cell])).toEqual([['discount_percent', 'S!F5']]);
-    expect(lines(f4)[0]?.allowances).toEqual([{ reasonCode: '95', reason: 'Remise' }]);
-    const br41 = errors(one(f4).draft).find((i) => i.ruleId === 'BR-41');
-    expect(br41 && cellForPath(one(f4).cells, br41.path)).toBe('S!F5');
+    // « 10 % » in the euros column is a percentage: 10 % of 50 €, as the sheet's 45 says.
+    expect(f4?.problems).toEqual([]);
+    expect(lines(f4)[0]?.allowances).toEqual([
+      { percentage: '10', reasonCode: '95', reason: 'Remise' },
+    ]);
+    expect(computeInvoice(one(f4).draft).lines[0]?.allowances[0]).toMatchObject({
+      amount: 500,
+      baseAmount: 5_000,
+    });
+    expect(errors(one(f4).draft).some((i) => i.ruleId === 'BR-41')).toBe(false);
+    // A discount that is no number stays without an amount, and BR-41 stops it on its cell.
+    expect(lines(f5)[0]?.allowances).toEqual([{ reasonCode: '95', reason: 'Remise' }]);
+    const br41 = errors(one(f5).draft).find((i) => i.ruleId === 'BR-41');
+    expect(br41 && cellForPath(one(f5).cells, br41.path)).toBe('S!F6');
     expect(errors(one(f1).draft).some((i) => i.ruleId === 'BR-41')).toBe(false);
 
     // Without a unit price, the line total is after the discount: the price is what it was before.
@@ -552,6 +562,49 @@ describe('readSheet', () => {
     const [only] = readSheet(net, detectMapping(net), SELLER).invoices;
     expect(lines(only)[0]?.price.net).toBe('50');
     expect(computeInvoice(one(only).draft).lines[0]?.netAmount).toBe(9_000);
+  });
+
+  it('reads a « Remise % » column: 10, 10 % and an Excel percent cell', () => {
+    const sheet = grid('S', [
+      ['N° facture', 'Désignation', 'Qté', 'PU HT', 'Remise %', 'Montant HT', 'Taux TVA'],
+      ['F1', 'Pose', 3, 45.5, 7.5, 126.26, 20],
+      ['F2', 'Pose', 2, 50, '10 %', 90, 20],
+      ['F3', 'Pose', 1, 200, { v: 0.05, t: '5%', f: '0%' }, 190, 20],
+      ['F4', 'Pose', 1, 100, 10, 95, 20],
+    ]);
+    const mapping = detectMapping(sheet);
+    expect(mapping.mapping.lineDiscountPercent?.column).toBe('E');
+    expect(mapping.mapping.lineDiscount).toBeUndefined();
+    const { invoices } = readSheet(sheet, mapping, SELLER);
+    const net = (i: (typeof invoices)[number] | undefined) =>
+      computeInvoice(one(i).draft).lines[0]?.netAmount;
+    // 3 × 45,50 = 136,50 ; 7,5 % = 10,24 (rounded) ; 126,26 as the sheet says.
+    expect(invoices.map((i) => lines(i)[0]?.allowances?.[0]?.percentage)).toEqual([
+      '7.5',
+      '10',
+      '5',
+      '10',
+    ]);
+    expect(invoices.map(net)).toEqual([12_626, 9_000, 19_000, 9_000]);
+    expect(invoices.slice(0, 3).flatMap((i) => i.problems)).toEqual([]);
+    expect(invoices[3]?.problems.map((p) => [p.code, p.cell])).toEqual([
+      ['line_total_mismatch', 'S!F5'],
+    ]);
+    expect(invoices[0]?.cells['lines[0].allowances[0]']).toBe('S!E2');
+
+    // Without a unit price, the sheet's total stays exact: the discount is what makes it up.
+    const totals = grid('S', [
+      ['N° facture', 'Désignation', 'Qté', 'Remise %', 'Montant HT', 'Taux TVA'],
+      ['F1', 'Pose', 2, 10, 90, 20],
+      ['F2', 'Pose', 1, 10, 33.33, 20],
+    ]);
+    const [t1, t2] = readSheet(totals, detectMapping(totals), SELLER).invoices;
+    expect(lines(t1)[0]).toMatchObject({
+      price: { net: '50' },
+      allowances: [{ amount: 1_000, percentage: '10', baseAmount: 10_000 }],
+    });
+    expect(lines(t2)[0]?.allowances?.[0]).toMatchObject({ amount: 370, baseAmount: 3_703 });
+    expect([t1, t2].map(net)).toEqual([9_000, 3_333]);
   });
 
   it('names a TTC amount, a discount taken twice and a percentage typed as euros (A1, A3)', () => {

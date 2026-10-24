@@ -4,7 +4,6 @@ export * from './cells';
 export {
   detectGrouping,
   detectMapping,
-  discountWarnings,
   headerScore,
   isTotalRow,
   missingFieldWarnings,

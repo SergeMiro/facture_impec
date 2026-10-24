@@ -151,6 +151,13 @@ Each closes with a call or two on the owner's sandbox key (`docs/RUNBOOK.md` § 
       `monitor` eval again (`packages/agents/evals/recordings/`). Until then the pane shows its
       `fix_and_resend` on a refusal as « Corriger : un avoir, puis une nouvelle facture ».
 
+## Percentage discounts, built on 2026-10-24
+
+- [ ] **Mapping eval:** the MappingAgent now sees the field « Remise sur la ligne (en %) » in its
+      field list; record `mapping` again (`packages/agents/evals/recordings/`) with a sheet holding a
+      « Remise % » column, so the eval scores it. The guard puts a percentage column in the right
+      field whatever the model says.
+
 ## Excel on the web E2E
 
 - [ ] A Microsoft account that can upload an add-in in Excel on the web, then
