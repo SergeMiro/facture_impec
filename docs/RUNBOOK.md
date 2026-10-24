@@ -447,6 +447,24 @@ curl -X POST -H "authorization: Bearer $FI_KEY" --data-binary @facture-dupont.em
 of the company wait to be read. The 50 golden documents and the p95: `apps/api/src/ingest.test.ts`
 (`apps/api/scripts/golden/documents.ts` makes them).
 
+### What each document is (stage 2A)
+
+A read text document goes to the queue `document.classify`; `GET /documents/<id>` then shows its
+`kind`, its `stage` (`done`, or `needs_review` with `reviewReason`) and what was read. The model is
+asked only when the patterns cannot say; with `AI_PROVIDER` empty the patterns alone answer and the
+rest waits in review. A document in review, answered by hand (the kind, and the date or the SIREN
+asked for):
+
+```bash
+curl -X POST -H "authorization: Bearer $FI_KEY" -H 'content-type: application/json' \
+  -d '{"kind":"attestation_vigilance","issuedOn":"2026-10-01","siren":"552100554"}' \
+  http://localhost:4000/documents/<id>/review     # 200; 422 names the field still missing
+```
+
+Deadlines are rows of `obligations`, one per `key`; `select kind, key, due_on, status from
+obligations where tenant_id = '<id>' order by due_on` shows a company's. Recording the classifier's
+eval through llmfp: `docs/AI_PROVIDERS.md` (`pnpm --filter @fi/agents eval:record classify`).
+
 ## Deployment
 
 The API image, the compose file and the settings of a hosted sandbox or prod: `docs/DEPLOY.md`. The

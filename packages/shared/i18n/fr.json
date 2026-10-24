@@ -132,6 +132,8 @@
   "api.error.mail_no_attachment": "Cet e-mail ne contient aucune pièce jointe lisible (PDF, image ou facture électronique). Rien n'a été enregistré. Envoyez plutôt le document lui-même.",
   "api.error.ingest_busy": "Vos documents précédents sont encore en cours de lecture. Rien n'a été perdu : renvoyez ce fichier dans une minute.",
   "api.error.document_not_found": "Ce document n'existe pas ou n'appartient pas à votre entreprise.",
+  "api.error.document_not_in_review": "Ce document n'attend plus de vérification : il a déjà été classé. Rien n'a été modifié. Rechargez la liste pour voir ce qu'il est devenu.",
+  "api.error.document_review_incomplete": "Il manque une information pour enregistrer ce document : la date ou l'entreprise demandée. Rien n'a été modifié. Complétez le champ indiqué, puis enregistrez à nouveau.",
   "api.error.party_missing": "Ce client n'est plus dans votre fiche clients. Rien n'a été modifié. Actualisez la liste de vos clients.",
   "api.error.pdp_key_disabled": "L'utilisation de votre propre clé de plateforme n'est pas disponible sur ce serveur. Rien n'a été enregistré. Vos factures continuent de partir par notre connexion.",
   "api.error.pdp_key_unsupported": "Votre plateforme de facturation ne prend pas de clé personnelle ici. Rien n'a été enregistré. Vos factures continuent de partir par notre connexion.",

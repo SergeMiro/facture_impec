@@ -3,6 +3,12 @@
 import { detectLayout, detectMapping } from '@fi/core';
 import { describe, expect, it } from 'vitest';
 import { CHAT_PROMPT_HASH } from '../src/chat';
+import {
+  CLASSIFY_LABELS,
+  CLASSIFY_PROMPT_HASH,
+  classifyByRules,
+  classifyDocument,
+} from '../src/classify';
 import { EXPLAIN_PROMPT_HASH, explainIssues } from '../src/explain';
 import { LAYOUT_PROMPT_HASH, proposeLayout } from '../src/layout';
 import { MAPPING_PROMPT_HASH, proposeMapping } from '../src/mapping';
@@ -15,6 +21,7 @@ import {
   textResult,
 } from '../src/test-model';
 import { CHAT_FIXTURES, playChat, type TurnScore } from './chat.fixtures';
+import { CLASSIFY_FIXTURES } from './classify.fixtures';
 import { EXPLAIN_FIXTURES } from './explain.fixtures';
 import { loadRecordings, ratio, scoreLayout, scoreMapping } from './harness';
 import { LAYOUT_FIXTURES } from './layout.fixtures';
@@ -222,6 +229,54 @@ describe('ChatAgent eval fixtures', () => {
         const main = scores.filter((s) => s.fixture === '300-400');
         expect(main.filter((s) => !s.ok)).toEqual([]);
         expect(scores.filter((s) => s.ok).length / scores.length).toBeGreaterThanOrEqual(0.8);
+      });
+    });
+  }
+});
+
+describe('ClassifyAgent eval fixtures', () => {
+  it('are 45 documents, every kind at least twice, scans and foreign ones among them', () => {
+    expect(CLASSIFY_FIXTURES).toHaveLength(45);
+    expect(new Set(CLASSIFY_FIXTURES.map((f) => f.name)).size).toBe(45);
+    for (const label of CLASSIFY_LABELS) {
+      expect(
+        CLASSIFY_FIXTURES.filter((f) => f.expected === label).length,
+        label,
+      ).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('the patterns alone: never a wrong kind, and at least the floor recorded in AI_PROVIDERS.md', () => {
+    const answered = CLASSIFY_FIXTURES.map((f) => ({ f, r: classifyByRules(f.doc) })).filter(
+      ({ r }) => r !== null,
+    );
+    // A wrong title (0.95) would skip the model: the patterns may say nothing, never the wrong kind.
+    expect(answered.filter(({ f, r }) => r?.label !== f.expected).map(({ f }) => f.name)).toEqual(
+      [],
+    );
+    expect(answered.length).toBeGreaterThanOrEqual(31);
+  });
+
+  for (const rec of loadRecordings('classify')) {
+    describe(`recording ${rec.label} (${rec.provider} / ${rec.model})`, () => {
+      it('was made with the current prompt', () => {
+        expect(rec.promptHash, 'prompts/classify.md or its schema changed: re-record').toBe(
+          CLASSIFY_PROMPT_HASH,
+        );
+      });
+
+      it(`gives the right kind ${rec.gate ? '≥ 95 %' : '(not gating)'}, rules then model`, async () => {
+        let right = 0;
+        for (const f of CLASSIFY_FIXTURES) {
+          const { orchestrator } = testOrchestrator({ retries: 0 });
+          const r = await classifyDocument(f.doc, {
+            tenantId: 't',
+            orchestrator,
+            ai: handleFor(replayModel(rec.answers[f.name] ?? null), false),
+          });
+          if (r.label === f.expected) right++;
+        }
+        if (rec.gate) expect(right / CLASSIFY_FIXTURES.length).toBeGreaterThanOrEqual(0.95);
       });
     });
   }

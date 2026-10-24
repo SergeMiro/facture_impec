@@ -1014,6 +1014,42 @@ Every file the back end receives becomes one row of `documents` (stage 0's table
   file the worker cannot read are listed as skipped. Which address receives the company's mail waits
   for the owner (`docs/DECISIONS.md` D3); whatever brings the raw message calls `ingestMail`.
 
+## BTP back end, stage 2A: what each document is, and the deadlines it makes
+
+A text document stage 1 read (`ingested`, its text in `extracted`) goes through the queue
+`document.classify` (`runDocumentClassify`, `apps/api/src/document-pipeline.ts`), queued by the read
+job; a structured invoice ends in `document.validate`. `docs/DECISIONS.md` D7 holds the choices.
+
+- **Its kind** (`classifyDocument`, `packages/agents/src/classify.ts`): patterns first. A title at the
+  start of a line of the first 600 characters, or in the file's name, answers at 0.95 and the model
+  is not asked; a body pattern matching one kind alone answers at 0.75. Otherwise the model of role
+  `classify` reads the first 2 000 characters, pseudonymized (SIRENs, e-mails, the company's and its
+  parties' names replaced), and answers a label and a confidence (`prompts/classify.md`); under 0.7
+  the document goes to a person (`unclassified`). A malformed answer is not asked again; a provider
+  error is retried by the orchestrator. Without an answer the body pattern is used, if any. With the
+  AI off, the patterns alone. Fourteen labels: the 15 kinds, an invoice's side told afterwards by its
+  SIRENs (`kindOf`).
+- **Its dates and companies** (`readFields`, `document-fields.ts`): the issue date, the validity (a
+  period or its end) and the réception date after their labels; the SIRENs named (a SIREN, a SIRET,
+  a French VAT number), each with a valid check digit.
+- **Whose it is and its deadlines** (`settleDocument`, `obligations.ts`, pure): a party of the company
+  first, then the one other SIREN, then the company itself; several unknown ones are unclear
+  (`party_unclear`). `deriveObligations` gives D7's table: an attestation de vigilance or a Kbis six
+  months after issue, an insurance at its end (décennale and RC apart), the retenue a year after the
+  réception, a sale invoice at its due date with what is left to pay. Each deadline has a key unique
+  per company (`kind:siren[:…]`, a PV by its document, `test:` in Mode test).
+- **One transaction** per document: its kind, stage and reason, the deadlines (`saveObligations`: an
+  upsert on the key that moves the date only forward, keeps a dismissed one dismissed and reminds
+  again), one `confirmer_tiers` action per unknown company whose standing a document proves, and the
+  audit `document.classify`. The update is guarded by the stage: the job run twice writes once.
+- **A structured invoice** (`runDocumentValidate`, `ingest.ts`): checked, linked, its deadline
+  derived (a sale), `done`, in the same way.
+- **A person** (`POST /documents/:id/review`, `reviewDocument`): a document in review gets its kind,
+  dates and SIREN; the same derivation runs; a field still missing is named (422); an invoice is taken
+  as said, without a deadline until invoices without XML are read.
+- **The sweep** requeues a document read but not classified for ten minutes; the backlog (429 at
+  200) counts every document `ingested`, read or not. Three classify jobs at a time per process.
+
 ## Decision: port the Rust core to TypeScript, archive Rust
 
 The plan (§1) keeps the Rust/WASM core only if it compiles, has tests, **and** covers more rules than

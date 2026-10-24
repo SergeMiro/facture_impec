@@ -155,6 +155,21 @@ the 300/400 conversation whole and ≥ 80 % of all turns.
 |---|---|---|---|
 | 2026-10-21 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 5/5 | `chat.llmfp-smart.json`, `gate: true` until a Mistral recording replaces it: it holds the code path (tools, cards, re-hydrated amounts) to real answers; it says nothing of the production model |
 
+ClassifyAgent (BTP plan stage 2), 45 synthetic French documents of `evals/classify.fixtures.ts` over
+the 14 labels (scans, foreign and look-alike documents among them). The patterns answer first; the
+model only when they are unsure. Gate: rules then model ≥ 95 %; the patterns alone are never wrong
+(a title skips the model).
+
+| Date | Provider / model | Right kind | Notes |
+|---|---|---|---|
+| 2026-10-24 | none (patterns only, `classifyByRules`) | 31/45 answered, 0 wrong | the floor asserted by the eval; the 14 others go to the model |
+| 2026-10-24 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | model alone 45/45; rules then model 45/45 | `classify.llmfp-smart.json`, `gate: true` for the code path, as ChatAgent's. Latency through llmfp on this server: p50 2.5 s, p95 5.6 s, max 14 s on the 20 documents the patterns left to the model (rules alone: 0 ms) |
+
+**Output cap and reasoning models (2026-10-24).** The first recording scored 29/45: with
+`maxOutputTokens: 200` a reasoning model in the free pool spent the budget thinking, and 6 of the first
+20 answers came back cut (`finishReason: length`, read as malformed). The answer is twenty tokens; the
+cap is 2 000 so the thinking fits. Any agent with a small structured answer needs the same headroom.
+
 Not recorded yet: Mistral and Claude (need a paid key: owner), and ExplainAgent against a live model
 (its guardrail tests run on scripted answers).
 

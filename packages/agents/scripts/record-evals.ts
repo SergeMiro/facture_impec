@@ -3,12 +3,13 @@
 //
 //   EVAL_PROVIDER=openai-compatible EVAL_BASE_URL=http://127.0.0.1:47821/v1 EVAL_API_KEY=… \
 //   EVAL_MODEL='auto - Smart models - Hermes' EVAL_LABEL=llmfp-smart \
-//   pnpm --filter @fi/agents eval:record [mapping|layout|explain|monitor|chat]
+//   pnpm --filter @fi/agents eval:record [mapping|layout|explain|monitor|chat|classify]
 //
 // EVAL_GATE=true marks the recording as the one the plan's thresholds apply to. EVAL_STRUCTURED=true
 // and EVAL_REQUEST_BODY='{"provider":{…}}' as for AI_STRUCTURED_OUTPUTS and AI_REQUEST_BODY.
 
 import { CHAT_FIXTURES, playChat, recording, type TurnScore } from '../evals/chat.fixtures';
+import { CLASSIFY_FIXTURES } from '../evals/classify.fixtures';
 import { EXPLAIN_FIXTURES } from '../evals/explain.fixtures';
 import { type Recording, ratio, saveRecording, scoreLayout, scoreMapping } from '../evals/harness';
 import { LAYOUT_FIXTURES } from '../evals/layout.fixtures';
@@ -16,6 +17,13 @@ import { MAPPING_FIXTURES } from '../evals/mapping.fixtures';
 import { MONITOR_FIXTURES } from '../evals/monitor.fixtures';
 import { aiHandle } from '../src/ai';
 import { CHAT_PROMPT_HASH } from '../src/chat';
+import {
+  askModel,
+  CLASSIFY_PROMPT_HASH,
+  classifyByRules,
+  MODEL_SURE,
+  RULE_SURE,
+} from '../src/classify';
 import { EXPLAIN_PROMPT_HASH, explainIssues } from '../src/explain';
 import { LAYOUT_PROMPT_HASH, proposeLayout } from '../src/layout';
 import { MAPPING_PROMPT_HASH, proposeMapping } from '../src/mapping';
@@ -186,5 +194,37 @@ if (which === 'all' || which === 'chat') {
   const file = saveRecording({ agent: 'chat', promptHash: CHAT_PROMPT_HASH, answers, ...base });
   console.log(
     `chat: ${scores.filter((s) => s.ok).length}/${scores.length} turns right → ${file.pathname}`,
+  );
+}
+
+if (which === 'all' || which === 'classify') {
+  // The model is asked on every document, even those the patterns take: a recording then still
+  // holds when a pattern changes, and the model's own score is known.
+  const answers: Recording['answers'] = {};
+  let alone = 0;
+  let whole = 0;
+  for (const f of CLASSIFY_FIXTURES) {
+    const out = await askModel(f.doc, { tenantId: 'eval', orchestrator, ai });
+    answers[f.name] = out.ok ? out.output : null;
+    const model = out.ok && out.output.confidence >= MODEL_SURE ? out.output.kind : null;
+    // As classifyDocument: a sure pattern, else the model, else (no answer) a body pattern.
+    const rule = classifyByRules(f.doc);
+    const label =
+      rule && rule.confidence >= RULE_SURE ? rule.label : out.ok ? model : (rule?.label ?? null);
+    if (model === f.expected) alone++;
+    if (label === f.expected) whole++;
+    console.log(
+      `${f.name}: ${out.ok ? `${out.output.kind} ${out.output.confidence}` : out.reason} (expected ${f.expected})`,
+    );
+  }
+  const file = saveRecording({
+    agent: 'classify',
+    promptHash: CLASSIFY_PROMPT_HASH,
+    answers,
+    ...base,
+    model: settings.models.classify,
+  });
+  console.log(
+    `classify: model alone ${alone}/${CLASSIFY_FIXTURES.length}, rules then model ${whole}/${CLASSIFY_FIXTURES.length} → ${file.pathname}`,
   );
 }

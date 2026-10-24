@@ -44,6 +44,7 @@ import {
 } from './connectors';
 import { createCreditNote, writeOff } from './credits';
 import type { ApiDeps } from './deps';
+import { ReviewBody, reviewDocument } from './document-pipeline';
 import {
   decideEdit,
   EditDecision,
@@ -670,6 +671,14 @@ export function createApp(deps: ApiDeps) {
   api.get('/documents/:id', async (c) =>
     c.json(documentView(await getDocument(deps, c.get('tenant'), c.req.param('id')))),
   );
+
+  // A person says what a document in review is, and the dates or the company its text lacked.
+  api.post('/documents/:id/review', async (c) => {
+    const input = await body(c, ReviewBody);
+    const tenant = c.get('tenant');
+    const doc = await getDocument(deps, tenant, c.req.param('id'));
+    return c.json(documentView(await reviewDocument(deps, tenant, c.get('principal'), doc, input)));
+  });
 
   // ── Files uploaded from the pane (R6) ─────────────────────────────────────────────────────────
   api.get('/uploads', async (c) => c.json(await listUploads(deps, c.get('tenant'))));

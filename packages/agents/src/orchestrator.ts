@@ -15,6 +15,8 @@ export const PHASES = {
   monitor: 'monitor',
   /** The pane's chat (R8): recorded here, but it does not take the background's slots. */
   chat: 'chat',
+  /** What a received document is (BTP plan §7 `llmClassify`). */
+  classify: 'classify',
 } as const;
 export type Phase = keyof typeof PHASES;
 export type AgentName = (typeof PHASES)[Phase];
@@ -66,6 +68,8 @@ export interface RunRequest<T> {
   estimatedTokens: number;
   call: (signal: AbortSignal) => Promise<{ output: T; usage: Usage }>;
   signal?: AbortSignal;
+  /** Narrows what is tried again: the BTP pipelines send a malformed answer to review instead. */
+  retryOn?: (error: unknown) => boolean;
 }
 
 export type RunOutcome<T> =
@@ -212,7 +216,12 @@ export class Orchestrator {
             await finish('skipped', 'ai_off', { attempts });
             return { ok: false, reason: 'ai_off' };
           }
-          if (attempts > this.#retries || !retryable(error) || req.signal?.aborted) {
+          if (
+            attempts > this.#retries ||
+            !retryable(error) ||
+            (req.retryOn && !req.retryOn(error)) ||
+            req.signal?.aborted
+          ) {
             await finish('failed', 'error', { attempts, ...used, error: message(error) });
             return { ok: false, reason: 'error' };
           }

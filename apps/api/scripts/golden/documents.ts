@@ -239,7 +239,7 @@ const textPdf = (key: keyof typeof TEXTS) => writePdf([{ lines: TEXTS[key] }]);
 const goldenXml = (name: string, syntax: 'cii' | 'ubl') =>
   new Uint8Array(readFileSync(new URL(`golden/${name}.${syntax}.xml`, FIXTURES)));
 
-const purchase = { kind: 'facture_achat', stage: 'validated' } as const;
+const purchase = { kind: 'facture_achat', stage: 'done' } as const;
 
 export async function goldenDocuments(): Promise<GoldenDocument[]> {
   const fonts = bundledFonts();
@@ -286,7 +286,7 @@ export async function goldenDocuments(): Promise<GoldenDocument[]> {
   }
   doc('cii-10', 'avoir-F2026-0040.xml', goldenXml('10-credit-note', 'cii'), {
     kind: 'avoir',
-    stage: 'validated',
+    stage: 'done',
     format: 'cii',
   });
   for (const g of [
@@ -306,7 +306,7 @@ export async function goldenDocuments(): Promise<GoldenDocument[]> {
     goldenXml('01-services-standard-rate', 'cii'),
     {
       kind: 'facture_vente',
-      stage: 'validated',
+      stage: 'done',
       format: 'cii',
     },
     'seller',
@@ -317,7 +317,7 @@ export async function goldenDocuments(): Promise<GoldenDocument[]> {
     goldenXml('07-export-outside-eu', 'ubl'),
     {
       kind: 'facture_vente',
-      stage: 'validated',
+      stage: 'done',
       format: 'ubl',
     },
     'seller',
@@ -328,7 +328,7 @@ export async function goldenDocuments(): Promise<GoldenDocument[]> {
     goldenXml('10-credit-note', 'ubl'),
     {
       kind: 'avoir',
-      stage: 'validated',
+      stage: 'done',
       format: 'ubl',
     },
     'seller',
@@ -352,42 +352,48 @@ export async function goldenDocuments(): Promise<GoldenDocument[]> {
     },
   );
 
-  // Text PDFs: read, waiting for stage 2's classifier.
+  // Text PDFs: read, then classified by their title (stage 2, the AI off). A standing document
+  // of an unknown company is done, its deadline made; an invoice without its data waits (D7).
   const texts = {
-    attestation: ['ATTESTATION DE VIGILANCE', 'Durand'],
-    kbis: ['EXTRAIT KBIS', '552 100 554'],
-    devis: ['DEVIS', 'D-2026-014'],
-    reception: ['RÉCEPTION', 'réserves'],
-    facture: ['FACTURE', 'F-2026-311'],
-    assurance: ['DÉCENNALE', 'Mutuelle'],
+    attestation: {
+      kind: 'attestation_vigilance',
+      stage: 'done',
+      text: ['ATTESTATION DE VIGILANCE', 'Durand'],
+    },
+    kbis: { kind: 'kbis', stage: 'done', text: ['EXTRAIT KBIS', '552 100 554'] },
+    devis: { kind: 'devis', stage: 'done', text: ['DEVIS', 'D-2026-014'] },
+    reception: { kind: 'pv_reception', stage: 'done', text: ['RÉCEPTION', 'réserves'] },
+    facture: {
+      kind: 'facture_achat',
+      stage: 'needs_review',
+      reviewReason: 'invoice_without_data',
+      text: ['FACTURE', 'F-2026-311'],
+    },
+    assurance: {
+      kind: 'attestation_assurance_decennale',
+      stage: 'done',
+      text: ['DÉCENNALE', 'Mutuelle'],
+    },
   } as const;
-  const pdfs = new Map<string, Uint8Array>();
-  for (const [key, words] of Object.entries(texts) as [keyof typeof texts, readonly string[]][]) {
-    const bytes = textPdf(key);
-    pdfs.set(key, bytes);
-    doc(`text-${key}`, `${key}.pdf`, bytes, {
-      kind: null,
-      stage: 'ingested',
-      ocr: false,
-      text: words,
-    });
+  for (const [key, e] of Object.entries(texts) as [keyof typeof texts, GoldenExpectation][]) {
+    doc(`text-${key}`, `${key}.pdf`, textPdf(key), { ...e, ocr: false });
   }
   // Scans: a PDF with only a picture of the page.
   doc('scan-attestation', 'scan-attestation.pdf', scanOf(textPdf('attestation')), {
-    kind: null,
-    stage: 'ingested',
+    kind: 'attestation_vigilance',
+    stage: 'done',
     ocr: true,
     text: ['ATTESTATION DE VIGILANCE'],
   });
   doc('scan-devis', 'scan001.pdf', scanOf(textPdf('devis')), {
-    kind: null,
-    stage: 'ingested',
+    kind: 'devis',
+    stage: 'done',
     ocr: true,
     text: ['DEVIS', 'Démolition'],
   });
   doc('scan-reception', 'PV.pdf', scanOf(textPdf('reception')), {
-    kind: null,
-    stage: 'ingested',
+    kind: 'pv_reception',
+    stage: 'done',
     ocr: true,
     text: ['RÉCEPTION', 'retenue de garantie'],
   });
@@ -398,24 +404,29 @@ export async function goldenDocuments(): Promise<GoldenDocument[]> {
       { jpeg: render(textPdf('contrat'), 'jpeg') },
       { jpeg: render(writePdf([{ lines: TEXTS.contratSuite }]), 'jpeg') },
     ]),
-    { kind: null, stage: 'ingested', ocr: true, text: ['SOUS-TRAITANCE', 'Paiement direct'] },
+    {
+      kind: 'contrat_sous_traitance',
+      stage: 'done',
+      ocr: true,
+      text: ['SOUS-TRAITANCE', 'Paiement direct'],
+    },
   );
   // Photos and faxes.
   doc('image-png', 'IMG_2041.png', render(textPdf('kbis'), 'png'), {
-    kind: null,
-    stage: 'ingested',
+    kind: 'kbis',
+    stage: 'done',
     ocr: true,
     text: ['KBIS'],
   });
   doc('image-jpeg', 'photo.jpg', render(writePdf([{ lines: TEXTS.livraison }]), 'jpeg'), {
-    kind: null,
-    stage: 'ingested',
+    kind: 'autre',
+    stage: 'done',
     ocr: true,
     text: ['BON DE LIVRAISON', 'BL-8841'],
   });
   doc('image-tiff', 'fax.tif', render(textPdf('assurance'), 'tiff'), {
-    kind: null,
-    stage: 'ingested',
+    kind: 'attestation_assurance_decennale',
+    stage: 'done',
     ocr: true,
     text: ['ASSURANCE'],
   });

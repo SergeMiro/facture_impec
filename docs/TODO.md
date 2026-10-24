@@ -192,8 +192,10 @@ Stages (`docs/plans/phase-N.md` each):
       2026-10-24; 1B, FileStore, `POST /ingest`, the ingest and validate workers with OCR, the PDP
       adapter, 50 golden documents and a measured p95: done 2026-10-24; 1C, raw e-mail (`.eml`):
       done 2026-10-24). Left: drive folders watched (below), the e-mail provider (owner, D3).
-- [ ] **2 — documents pipeline**: classify (rules, then a model with its eval), extract, validate, link
-      to company and chantier, derive deadlines; `GET /documents`, `GET /obligations`; the pane.
+- [ ] **2 — documents pipeline** (`docs/plans/phase-2.md`; 2A, classify with its eval, dates and
+      SIRENs read, the company linked, deadlines derived, `POST /documents/:id/review`: done
+      2026-10-24). Left: 2B, `GET /documents`, `GET /obligations` and the pane's « Documents » and
+      « Échéances ». Extraction of invoices waits for the owner (below); chantiers come with stage 4.
 - [ ] **3 — watchers and approvals**: the deadline watchers, actions with `POST /actions/:id/decide`,
       « À valider » in the pane, the e-mail digest with signed links, the Telegram bot; the invoice
       deadlines joined to the existing chasing (CollectAgent), not duplicated.
@@ -238,6 +240,16 @@ Left from stage 1 for later (2026-10-24):
       before a line of code; today the R4/R5 connections read the files a person picks.
 - [ ] **Retenue and situation columns on the sheet** (`docs/DEFERRED.md` › BTP rules): needed before
       BTP-RG-* and BTP-SIT-* speak on the company's own invoices.
+
+Left from stage 2A for later (2026-10-24):
+
+- [ ] **Légifrance, read in a browser**: C. trav. D8222-5 (the attestation de vigilance and the
+      extrait K / K bis asked again every six months), the base of the two renewals
+      (`packages/agents/src/obligations.ts`, `TODO(verify)`).
+- [ ] **ClassifyAgent on the production model**: record `classify` with Mistral once the owner's key
+      is there (`pnpm --filter @fi/agents eval:record classify`, `EVAL_GATE=true`), as the other agents.
+- [ ] **Real documents**: the first pilot's attestations, Kbis, PV and contracts through the classifier
+      and the date patterns, to see where they miss (dates by a model: `docs/DEFERRED.md`).
 
 ## Excel on the web E2E
 

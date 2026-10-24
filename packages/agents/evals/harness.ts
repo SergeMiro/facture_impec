@@ -8,7 +8,7 @@ import type { MappingFixture } from './mapping.fixtures';
 export const RECORDINGS = new URL('./recordings/', import.meta.url);
 
 export const Recording = z.object({
-  agent: z.enum(['mapping', 'layout', 'explain', 'monitor', 'chat']),
+  agent: z.enum(['mapping', 'layout', 'explain', 'monitor', 'chat', 'classify']),
   label: z.string(),
   provider: z.string(),
   model: z.string(),

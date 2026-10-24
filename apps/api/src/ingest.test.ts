@@ -1,6 +1,7 @@
 import { type Invoice, toCii } from '@fi/core';
 import { computeGolden, golden } from '@fi/core/testing';
 import {
+  actions,
   and,
   auditEvents,
   type Database,
@@ -8,6 +9,7 @@ import {
   documents,
   eq,
   inboundQueue,
+  obligations,
   parties,
   tenants,
 } from '@fi/db';
@@ -17,6 +19,7 @@ import {
   type GoldenDocument,
   goldenDocuments,
 } from '../scripts/golden/documents';
+import { type ClassifyDeps, runDocumentClassify } from './document-pipeline';
 import {
   type DocumentDeps,
   documentsBehind,
@@ -38,13 +41,14 @@ import { runInboundPoll } from './workers';
 let database: Database;
 let api: ReturnType<typeof testApi>;
 const jobs = recordedJobs();
-let worker: DocumentDeps;
+let worker: DocumentDeps & ClassifyDeps;
 let set: GoldenDocument[];
 
 beforeAll(async () => {
   database = await testDatabase();
   api = testApi(database, { mock: fakeAdapter() });
-  worker = { db: database.db, jobs, now: () => new Date() };
+  // The AI off: the classifier's patterns alone (its model has its own eval).
+  worker = { db: database.db, jobs, ai: testAi(database), now: () => new Date() };
   set = await goldenDocuments();
 }, 60_000);
 afterAll(async () => {
@@ -67,10 +71,18 @@ async function company(as: keyof typeof GOLDEN_COMPANIES) {
   return { ...tenant, send };
 }
 
-/** What the two queues do with a document, run here in place of pg-boss. */
+/** How long the classifier took on each text (the AI off: its patterns). */
+const classified: number[] = [];
+
+/** What the three queues do with a document, run here in place of pg-boss. */
 async function work(id: string) {
   await runDocumentIngest(worker, id);
   if (jobs.validations.includes(id)) await runDocumentValidate(worker, id);
+  if (jobs.classifies.includes(id)) {
+    const started = performance.now();
+    await runDocumentClassify(worker, id);
+    classified.push(performance.now() - started);
+  }
 }
 
 const row = async (id: string): Promise<DocumentRow | undefined> =>
@@ -135,6 +147,9 @@ describe('the 50 golden documents', () => {
     );
     expect(p95(timings.text)).toBeLessThan(5_000);
     expect(p95(timings.ocr)).toBeLessThan(30_000);
+    // Stage 2's job on the same texts, its patterns alone: read, linked, derived, written.
+    console.info(`classify p95: ${Math.round(p95(classified))} ms (${classified.length})`);
+    expect(p95(classified)).toBeLessThan(1_000);
 
     // One document per file, company and mode; the second copies wrote nothing.
     const buyer = await database.db
@@ -152,6 +167,41 @@ describe('the 50 golden documents', () => {
         ),
       );
     expect(audited).toHaveLength(buyer.length);
+
+    // The deadlines the documents made, once each: the scanned attestation, Kbis and insurance
+    // repeat their text twins; each PV is its own réception until chantiers link them (stage 4).
+    const deadlines = async (tenantId: string) =>
+      (
+        await database.db
+          .select({ kind: obligations.kind, dueOn: obligations.dueOn, key: obligations.key })
+          .from(obligations)
+          .where(eq(obligations.tenantId, tenantId))
+      )
+        .map((o) => `${o.dueOn} ${o.kind} ${o.key.replace(/:[0-9a-f-]{36}$/, ':<document>')}`)
+        .sort();
+    expect(await deadlines(companies.buyer.id)).toEqual([
+      '2026-12-31 assurance_expiration assurance_expiration:552100554:decennale',
+      '2027-04-01 attestation_vigilance_renouvellement attestation_vigilance_renouvellement:552100554',
+      '2027-04-02 kbis_renouvellement kbis_renouvellement:552100554',
+      '2027-10-15 retenue_garantie_liberation retenue_garantie_liberation:<document>',
+      '2027-10-15 retenue_garantie_liberation retenue_garantie_liberation:<document>',
+    ]);
+    const sale = computeGolden(golden('01-services-standard-rate'));
+    const exportSale = computeGolden(golden('07-export-outside-eu'));
+    expect(await deadlines(companies.seller.id)).toEqual(
+      [sale, exportSale]
+        .map(
+          (i) =>
+            `${i.dueDate} facture_echeance facture_echeance:${GOLDEN_COMPANIES.seller.siren}:${i.number}`,
+        )
+        .sort(),
+    );
+    // Maçonnerie Durand is no party of the company: one question, however many of its documents.
+    const asked = await database.db
+      .select({ key: actions.key, kind: actions.kind })
+      .from(actions)
+      .where(eq(actions.tenantId, companies.buyer.id));
+    expect(asked).toEqual([{ key: 'confirmer_tiers:552100554', kind: 'confirmer_tiers' }]);
   }, 300_000);
 });
 
@@ -227,7 +277,7 @@ describe('the workers', () => {
       .from(auditEvents)
       .where(and(eq(auditEvents.objectId, sent.body.id), eq(auditEvents.action, 'document.read')));
     expect(read).toHaveLength(1);
-    expect((await row(sent.body.id))?.stage).toBe('validated');
+    expect((await row(sent.body.id))?.stage).toBe('done');
   });
 
   it('give the BTP rules what the company said of the supplier', async () => {

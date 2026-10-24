@@ -1,7 +1,16 @@
 // One structured call to a model. The orchestrator owns retries, so the SDK's own are off.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { generateText, type LanguageModel, Output, stepCountIs, type ToolSet } from 'ai';
+import {
+  generateText,
+  JSONParseError,
+  type LanguageModel,
+  NoObjectGeneratedError,
+  Output,
+  stepCountIs,
+  type ToolSet,
+  TypeValidationError,
+} from 'ai';
 import { z } from 'zod';
 
 export interface Usage {
@@ -49,6 +58,13 @@ export async function callStructured<S extends z.ZodType>(
     },
   };
 }
+
+/** The model answered, but not in the schema: asking again rarely helps (BTP plan §7). */
+export const malformed = (error: unknown): boolean =>
+  error instanceof z.ZodError ||
+  NoObjectGeneratedError.isInstance(error) ||
+  JSONParseError.isInstance(error) ||
+  TypeValidationError.isInstance(error);
 
 const PROMPTS = new URL('../prompts/', import.meta.url);
 

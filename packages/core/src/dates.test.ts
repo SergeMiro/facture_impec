@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDays,
+  addMonths,
   daysBetween,
   fromCiiDate,
   isIsoDate,
@@ -40,6 +41,14 @@ describe('dates', () => {
     expect(addDays('2026-12-30', 3)).toBe('2027-01-02');
     expect(addDays('2026-03-27', 3)).toBe('2026-03-30');
     expect(addDays('2026-11-01', -3)).toBe('2026-10-29');
+  });
+
+  it('adds calendar months, a day past the end of the month becoming its last day', () => {
+    expect(addMonths('2026-03-12', 6)).toBe('2026-09-12');
+    expect(addMonths('2026-08-31', 6)).toBe('2027-02-28');
+    expect(addMonths('2027-08-31', 6)).toBe('2028-02-29');
+    expect(addMonths('2026-10-24', 12)).toBe('2027-10-24');
+    expect(addMonths('2026-01-31', -2)).toBe('2025-11-30');
   });
 
   it('names the ISO week, whose year is the year of its Thursday', () => {

@@ -51,6 +51,7 @@ import type {
   SyncTarget,
   TestPlatform,
 } from './deps';
+import { runDocumentClassify } from './document-pipeline';
 import { INJECTED_PREFIX, triagePending } from './inbound';
 import {
   documentsBehind,
@@ -354,6 +355,7 @@ export async function runSweep(deps: WorkerDeps): Promise<{
   // A document a worker left half-way (a crash, a deploy, a tool missing) is read again.
   const stuck = await documentsBehind(deps.db, deps.now());
   for (const id of stuck.read) await deps.jobs.enqueueIngest(id);
+  for (const id of stuck.classify) await deps.jobs.enqueueClassify(id);
   for (const id of stuck.validate) await deps.jobs.enqueueValidate(id);
   return {
     synced: inFlight.length,
@@ -362,7 +364,7 @@ export async function runSweep(deps: WorkerDeps): Promise<{
     payments: payments.length,
     registry: behind.length,
     connectors: due.length,
-    documents: stuck.read.length + stuck.validate.length,
+    documents: stuck.read.length + stuck.classify.length + stuck.validate.length,
   };
 }
 
@@ -516,6 +518,10 @@ export async function startWorkers(
   });
   await boss.work(QUEUES.validate, { ...polling, localConcurrency: 2 }, async ([job]) => {
     if (job) await runDocumentValidate(deps, DocumentJob.parse(job.data).documentId);
+  });
+  // Mostly waiting on a model: three at a time, under the orchestrator's own semaphores.
+  await boss.work(QUEUES.classify, { ...polling, localConcurrency: 3 }, async ([job]) => {
+    if (job) await runDocumentClassify(deps, DocumentJob.parse(job.data).documentId);
   });
   await boss.work(QUEUES.connector, polling, async ([job]) => {
     if (job) {

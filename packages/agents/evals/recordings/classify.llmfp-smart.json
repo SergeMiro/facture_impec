@@ -1,0 +1,191 @@
+{
+  "agent": "classify",
+  "promptHash": "ffe02cd3e088dfaa",
+  "answers": {
+    "facture-titled": {
+      "kind": "facture",
+      "confidence": 0.99
+    },
+    "facture-ocr": {
+      "kind": "facture",
+      "confidence": 0.98
+    },
+    "facture-doit": {
+      "kind": "facture",
+      "confidence": 0.95
+    },
+    "situation-titled": {
+      "kind": "situation",
+      "confidence": 0.99
+    },
+    "situation-etat": {
+      "kind": "situation",
+      "confidence": 0.9
+    },
+    "situation-ocr": {
+      "kind": "situation",
+      "confidence": 0.95
+    },
+    "avoir-titled": {
+      "kind": "avoir",
+      "confidence": 0.95
+    },
+    "avoir-rectificatif": {
+      "kind": "avoir",
+      "confidence": 0.9
+    },
+    "avoir-credit-note": {
+      "kind": "avoir",
+      "confidence": 0.95
+    },
+    "devis-titled": {
+      "kind": "devis",
+      "confidence": 0.95
+    },
+    "devis-proposition": {
+      "kind": "devis",
+      "confidence": 0.95
+    },
+    "devis-ocr": {
+      "kind": "devis",
+      "confidence": 0.95
+    },
+    "sous-traitance-titled": {
+      "kind": "contrat_sous_traitance",
+      "confidence": 0.95
+    },
+    "sous-traitance-conditions": {
+      "kind": "contrat_sous_traitance",
+      "confidence": 0.9
+    },
+    "sous-traitance-avenant": {
+      "kind": "contrat_sous_traitance",
+      "confidence": 0.95
+    },
+    "travail-titled": {
+      "kind": "contrat_travail",
+      "confidence": 0.95
+    },
+    "travail-engagement": {
+      "kind": "contrat_travail",
+      "confidence": 0.95
+    },
+    "travail-apprentissage": {
+      "kind": "contrat_travail",
+      "confidence": 0.95
+    },
+    "vigilance-titled": {
+      "kind": "attestation_vigilance",
+      "confidence": 0.95
+    },
+    "vigilance-ocr": {
+      "kind": "attestation_vigilance",
+      "confidence": 0.95
+    },
+    "vigilance-msa": {
+      "kind": "attestation_vigilance",
+      "confidence": 0.95
+    },
+    "kbis-titled": {
+      "kind": "kbis",
+      "confidence": 0.95
+    },
+    "kbis-rne": {
+      "kind": "kbis",
+      "confidence": 0.95
+    },
+    "kbis-ocr": {
+      "kind": "kbis",
+      "confidence": 0.95
+    },
+    "decennale-titled": {
+      "kind": "attestation_assurance_decennale",
+      "confidence": 0.95
+    },
+    "decennale-rc-et": {
+      "kind": "attestation_assurance_decennale",
+      "confidence": 0.95
+    },
+    "decennale-1792": {
+      "kind": "attestation_assurance_decennale",
+      "confidence": 0.95
+    },
+    "rc-titled": {
+      "kind": "attestation_assurance_rc",
+      "confidence": 0.95
+    },
+    "rc-abbr": {
+      "kind": "attestation_assurance_rc",
+      "confidence": 0.95
+    },
+    "rc-encourue": {
+      "kind": "attestation_assurance_rc",
+      "confidence": 0.95
+    },
+    "etrangers-titled": {
+      "kind": "liste_salaries_etrangers",
+      "confidence": 0.95
+    },
+    "etrangers-article": {
+      "kind": "liste_salaries_etrangers",
+      "confidence": 0.95
+    },
+    "etrangers-tableau": {
+      "kind": "liste_salaries_etrangers",
+      "confidence": 0.95
+    },
+    "pv-titled": {
+      "kind": "pv_reception",
+      "confidence": 0.95
+    },
+    "pv-levee": {
+      "kind": "pv_reception",
+      "confidence": 0.9
+    },
+    "pv-sans-titre": {
+      "kind": "pv_reception",
+      "confidence": 0.9
+    },
+    "dgd-titled": {
+      "kind": "dgd",
+      "confidence": 0.95
+    },
+    "dgd-ocr": {
+      "kind": "dgd",
+      "confidence": 0.95
+    },
+    "autre-livraison": {
+      "kind": "autre",
+      "confidence": 0.9
+    },
+    "autre-releve": {
+      "kind": "autre",
+      "confidence": 0.95
+    },
+    "autre-relance": {
+      "kind": "autre",
+      "confidence": 0.9
+    },
+    "autre-plan": {
+      "kind": "autre",
+      "confidence": 0.95
+    },
+    "autre-paie": {
+      "kind": "autre",
+      "confidence": 0.95
+    },
+    "autre-courrier": {
+      "kind": "autre",
+      "confidence": 0.85
+    },
+    "autre-commande": {
+      "kind": "autre",
+      "confidence": 0.95
+    }
+  },
+  "label": "llmfp-smart",
+  "provider": "openai-compatible",
+  "model": "auto - Smart models - Hermes",
+  "recordedAt": "2026-10-24",
+  "gate": true
+}

@@ -95,9 +95,10 @@ export interface RecordedJobs extends Jobs {
   registry: string[];
   /** Connections whose check was queued. */
   connectors: string[];
-  /** Documents queued to be read, then checked. */
+  /** Documents queued to be read, then checked (an invoice) or classified (a text). */
   ingests: string[];
   validations: string[];
+  classifies: string[];
 }
 
 export function recordedJobs(): RecordedJobs {
@@ -109,6 +110,7 @@ export function recordedJobs(): RecordedJobs {
   const connectors: string[] = [];
   const ingests: string[] = [];
   const validations: string[] = [];
+  const classifies: string[] = [];
   return {
     sends,
     syncs,
@@ -118,6 +120,7 @@ export function recordedJobs(): RecordedJobs {
     connectors,
     ingests,
     validations,
+    classifies,
     async enqueueSend(id) {
       sends.push(id);
     },
@@ -141,6 +144,9 @@ export function recordedJobs(): RecordedJobs {
     },
     async enqueueValidate(documentId) {
       validations.push(documentId);
+    },
+    async enqueueClassify(documentId) {
+      classifies.push(documentId);
     },
   };
 }

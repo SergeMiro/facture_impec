@@ -200,3 +200,15 @@ Each line says where it came from and what would bring it back.
 | Documents in the pane (stage 1B) | `POST /ingest` and `GET /documents/:id` exist; the pane has no screen for them | Stage 2: the documents list with their kind, chantier and deadlines, once the classifier gives a kind. |
 | Bytes in S3 (stage 1B) | The FileStore keeps bytes in Postgres (`blobs`); 20 MB per file | The database passes a few GB, or a pilot sends scans every day: an S3 driver behind the same `FileStore` (`apps/api/src/files.ts`), the keys unchanged. |
 | OCR past ten pages (stage 1B) | A scan is read on its first ten pages (`truncated: true` beyond); a text PDF is kept up to 100 000 characters | A classifier needs a page further on (a contract's annexes): read more pages in the background, after the first ten. |
+
+## What each document is, and its deadlines (BTP plan stage 2A, 2026-10-24)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| A contract's end (`extractContract`, `contrat_fin`) | Contracts are classified and linked to their company; no deadline | A pilot asks for contract ends: a model reads the end date and the notice from the first pages, with its eval, keyed like the others. |
+| Dates read by a model | Labelled patterns: issue, validity (period or end), réception; a missing one goes to a person (`dates_missing`) | Real documents show the patterns missing often: a model reads the date the patterns could not, a person still confirms a date that makes a deadline. |
+| A réception's deadline across copies | Keyed by its document: the same PV as a scan and as a PDF makes two retenues | Chantiers (stage 4): the key becomes the chantier and the réception date, and the copies meet. |
+| The chantier of a document | None: no pattern finds it reliably in a text | Stage 4's ERP connectors give chantiers; a document is linked by the address or the reference they list. |
+| An invoice's amounts without XML | `invoice_without_data`: a person says it is an invoice, it is `done` without a deadline | The owner's question « Reading invoices without XML » (`docs/TODO.md`): `extractInvoice` and its 98 % eval. |
+| Deadlines of a company not confirmed yet | Keyed by its SIREN, without a party; `confirmer_tiers` asks once | Stage 3: approving `confirmer_tiers` creates the party and links its open deadlines to it. |
+| Review reasons in the pane | The API gives the reason (`unclassified`, `invoice_without_data`, `dates_missing`, `party_unclear`, stage 1's `other_company`, `missing_file`, `no_text`, `damaged`, `xml`) | 2B: each one said in plain French in `fr.json`, with the form that answers it. |

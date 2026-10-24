@@ -23,6 +23,8 @@ export const QUEUES = {
   ingest: 'document.ingest',
   /** An invoice document checked by the rules (src/ingest.ts). `exclusive` per document. */
   validate: 'document.validate',
+  /** A text document classified, linked and its deadlines derived (src/document-pipeline.ts). */
+  classify: 'document.classify',
 } as const;
 
 export function createBoss(database: Database): PgBoss {
@@ -96,6 +98,14 @@ export async function ensureQueues(boss: PgBoss): Promise<void> {
     retryBackoff: true,
     expireInSeconds: 60,
   });
+  // A model's call takes up to the orchestrator's timeout, its own retries included.
+  await boss.createQueue(QUEUES.classify, {
+    policy: 'exclusive',
+    retryLimit: 3,
+    retryDelay: 10,
+    retryBackoff: true,
+    expireInSeconds: 600,
+  });
 }
 
 export const syncKey = (target: SyncTarget) =>
@@ -126,6 +136,9 @@ export function bossJobs(boss: PgBoss): Jobs {
     },
     async enqueueValidate(documentId) {
       await boss.send(QUEUES.validate, { documentId }, { singletonKey: documentId });
+    },
+    async enqueueClassify(documentId) {
+      await boss.send(QUEUES.classify, { documentId }, { singletonKey: documentId });
     },
   };
 }

@@ -47,6 +47,19 @@ export function addDays(iso: string, days: number): string {
   return new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 }
 
+/**
+ * `iso` plus `months` calendar months, the day kept or, past the month's end, its last day:
+ * 2026-08-31 + 6 months = 2027-02-28 (a renewal is never pushed into the month after).
+ */
+export function addMonths(iso: string, months: number): string {
+  const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
+  const index = y * 12 + (m - 1) + months;
+  const year = Math.floor(index / 12);
+  const month = index - year * 12;
+  const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return `${String(year).padStart(4, '0')}-${String(month + 1).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
+}
+
 /** Whole days from a to b (b − a). Both must be ISO dates. */
 export function daysBetween(a: string, b: string): number {
   return (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000;

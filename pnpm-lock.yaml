@@ -249,6 +249,9 @@ importers:
       '@fi/core':
         specifier: workspace:*
         version: link:../core
+      '@fi/domain':
+        specifier: workspace:*
+        version: link:../domain
       '@fi/shared':
         specifier: workspace:*
         version: link:../shared

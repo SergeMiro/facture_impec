@@ -1,7 +1,9 @@
 // Every file the back end receives becomes one document (BTP plan §5, stage 1): its bytes say what it
 // is (never its name or declared type), its SHA-256 makes the same file twice one document per
 // company and mode, its bytes go to the FileStore and the queue `document.ingest` reads it. A company
-// sending faster than the worker reads is asked to wait (429) before anything is stored.
+// sending faster than the workers read and classify is asked to wait (429) before anything is stored.
+// A text goes on to `document.classify` (src/document-pipeline.ts); an invoice's data to its rules.
+import { deriveObligations } from '@fi/agents';
 import {
   type ContextInput,
   type Invoice,
@@ -21,6 +23,7 @@ import {
   documents,
   eq,
   inboundQueue,
+  isNotNull,
   isNull,
   lt,
   type PartyRow,
@@ -38,12 +41,13 @@ import {
 } from '@fi/domain';
 import { z } from 'zod';
 import type { ApiDeps, Jobs } from './deps';
+import { saveObligations } from './document-pipeline';
 import { ApiError } from './errors';
 import { type FileStore, postgresFiles } from './files';
 import { buyerSettings } from './invoices';
 import { type Reading, readDocument } from './reading';
 
-/** Documents of one company waiting to be read; past this, a new one waits (429). */
+/** Documents of one company waiting to be read or classified; past this, a new one waits (429). */
 export const INGEST_BACKLOG = 200;
 const RETRY_AFTER_SECONDS = 60;
 /** Text kept from a document: the first pages of a long contract say what it is. */
@@ -170,17 +174,13 @@ export async function getDocument(
   return row;
 }
 
-/** Not read yet: `ingested` with nothing extracted (a text document waits there for stage 2). */
-const unread = (tenantId: string) =>
-  and(
-    eq(documents.tenantId, tenantId),
-    eq(documents.stage, 'ingested'),
-    isNull(documents.extracted),
-  );
-
 /** A company with too many documents waiting is asked to come back (429); nothing is stored. */
 export async function checkBacklog(db: Db, tenantId: string): Promise<void> {
-  const [waiting] = await db.select({ n: count() }).from(documents).where(unread(tenantId));
+  // `ingested`: not read yet, or read and waiting for its classifier.
+  const [waiting] = await db
+    .select({ n: count() })
+    .from(documents)
+    .where(and(eq(documents.tenantId, tenantId), eq(documents.stage, 'ingested')));
   if ((waiting?.n ?? 0) >= INGEST_BACKLOG) {
     throw new ApiError(429, 'ingest_busy', undefined, undefined, {
       'retry-after': String(RETRY_AFTER_SECONDS),
@@ -260,7 +260,7 @@ export async function inboundDocuments(
 
 // ── The queue `document.ingest`: read, then sort what can be sorted without a model ─────────────────
 
-/** What a document became once read, before stage 2's classifier. */
+/** What a document became once read: a text goes on to the classifier. */
 interface Outcome {
   kind: DocumentKind | null;
   stage: DocumentRow['stage'];
@@ -292,7 +292,7 @@ function outcomeOf(reading: Reading, siren: string): Outcome {
   const long = reading.text.length > MAX_TEXT;
   return {
     kind: null,
-    // Read; what it is waits for stage 2's classifier.
+    // Read; what it is, the queue `document.classify` says.
     stage: 'ingested',
     reviewReason: null,
     extracted: {
@@ -306,7 +306,7 @@ function outcomeOf(reading: Reading, siren: string): Outcome {
 
 export interface DocumentDeps {
   db: Db;
-  jobs: Pick<Jobs, 'enqueueValidate'>;
+  jobs: Pick<Jobs, 'enqueueValidate' | 'enqueueClassify'>;
   files?: FileStore;
   now: () => Date;
 }
@@ -350,9 +350,10 @@ export async function runDocumentIngest(deps: DocumentDeps, documentId: string):
     return true;
   });
   if (moved && outcome.stage === 'classified') await deps.jobs.enqueueValidate(doc.id);
+  if (moved && outcome.stage === 'ingested') await deps.jobs.enqueueClassify(doc.id);
 }
 
-// ── The queue `document.validate`: the invoice's rules, BTP included ───────────────────────────────
+// ── The queue `document.validate`: the invoice's rules, BTP included, then its deadline ─────────────
 
 async function partyOf(db: DbOrTx, tenantId: string, kind: PartyRow['kind'], siren?: string) {
   if (!siren) return null;
@@ -400,11 +401,27 @@ export async function runDocumentValidate(deps: DocumentDeps, documentId: string
     partySiren(other),
   );
   const issues = validate(invoice, contextOf(tenant, direction, party, deps.now()));
+  // A sale's due date and what is left to pay (D7); a purchase's waits for stage 3's payables.
+  const deadlines = doc.kind
+    ? deriveObligations({
+        documentId: doc.id,
+        kind: doc.kind,
+        fields: { issuedOn: null, validTo: null, receptionOn: null },
+        siren: partySiren(other) ?? null,
+        invoice: {
+          number: invoice.number ?? '',
+          sellerSiren: partySiren(invoice.seller) ?? null,
+          dueDate: invoice.dueDate ?? null,
+          payable: invoice.totals?.payable ?? 0,
+        },
+        isTest: doc.isTest,
+      })
+    : [];
   await deps.db.transaction(async (tx) => {
     const [row] = await tx
       .update(documents)
       .set({
-        stage: 'validated',
+        stage: 'done',
         validation: issues,
         partyId: party?.id ?? null,
         updatedAt: deps.now(),
@@ -412,6 +429,7 @@ export async function runDocumentValidate(deps: DocumentDeps, documentId: string
       .where(and(eq(documents.id, doc.id), eq(documents.stage, 'classified')))
       .returning({ id: documents.id });
     if (!row) return;
+    const written = await saveObligations(tx, doc, deadlines, party?.id ?? null, deps.now());
     await audit(tx, {
       tenantId: doc.tenantId,
       actor: 'agent:ingest',
@@ -421,32 +439,45 @@ export async function runDocumentValidate(deps: DocumentDeps, documentId: string
       after: {
         errors: issues.filter((i) => i.severity === 'error').map((i) => i.ruleId),
         warnings: issues.filter((i) => i.severity === 'warning').map((i) => i.ruleId),
+        deadlines: written,
       },
     });
   });
 }
 
-/** Documents a worker left half-way (a crash, a deploy): the sweep queues them again. */
+/**
+ * Documents a worker left half-way (a crash, a deploy), and texts read before stage 2 existed: the
+ * sweep queues them again.
+ */
 export async function documentsBehind(
   db: Db,
   now: Date,
-): Promise<{ read: string[]; validate: string[] }> {
+): Promise<{ read: string[]; classify: string[]; validate: string[] }> {
   const before = new Date(now.getTime() - STUCK_MS);
-  const stuck = (stage: 'ingested' | 'classified') =>
+  const stuck = (step: 'read' | 'classify' | 'validate') =>
     db
       .select({ id: documents.id })
       .from(documents)
       .innerJoin(tenants, and(eq(tenants.id, documents.tenantId), isNull(tenants.deletedAt)))
       .where(
         and(
-          eq(documents.stage, stage),
-          stage === 'ingested' ? isNull(documents.extracted) : undefined,
+          eq(documents.stage, step === 'validate' ? 'classified' : 'ingested'),
+          step === 'read' ? isNull(documents.extracted) : undefined,
+          step === 'classify' ? isNotNull(documents.extracted) : undefined,
           lt(documents.updatedAt, before),
         ),
       )
       .limit(500);
-  const [read, check] = await Promise.all([stuck('ingested'), stuck('classified')]);
-  return { read: read.map((r) => r.id), validate: check.map((r) => r.id) };
+  const [read, classify, check] = await Promise.all([
+    stuck('read'),
+    stuck('classify'),
+    stuck('validate'),
+  ]);
+  return {
+    read: read.map((r) => r.id),
+    classify: classify.map((r) => r.id),
+    validate: check.map((r) => r.id),
+  };
 }
 
 /** The pane's and the API's view: never the bytes, nor the text read (stage 2 shows what matters). */

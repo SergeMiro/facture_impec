@@ -1492,3 +1492,61 @@ the work:
 | No Message-ID, no sender | › without a Message-ID or a usable sender: `sha256:` reference, no hints, `piece-jointe-1.pdf`, an empty part skipped. |
 | Dependency | `postal-mime` 4.0.5 (2026-10-07, MIT-0, no dependencies), `docs/DEPENDENCIES.md`. |
 
+
+## BTP plan — stage 2A: what each document is, and the deadlines it makes (started 2026-10-24)
+
+`docs/plans/phase-2.md` › 2A, `docs/DECISIONS.md` D7. Criteria, written before the work:
+
+- **Classified**: a text document gets its kind from the rules (title 0.95, body 0.75), then from
+  the model of role `classify` when the rules are unsure; an answer under 0.7, malformed or missing
+  sends it to review (`unclassified`), never retried on a malformed answer; with the AI off the
+  rules still answer; the text sent to the model holds no SIREN, e-mail or company name.
+- **Eval**: 45 synthetic French documents over the 14 labels; the rules alone recorded as the floor;
+  rules then the model ≥ 95 % on a recording made through llmfp; the recording fails when the prompt
+  or its schema changes.
+- **Read and linked**: the dates each kind needs and the SIRENs with a valid check digit, by
+  patterns; a known SIREN links the company; an unknown one on an attestation, a Kbis or an
+  insurance makes one `confirmer_tiers` draft; a missing date or company sends to review with its
+  reason.
+- **Deadlines**: the table of D7; one per key whatever the number of copies or sources; a newer
+  attestation moves the renewal, an older one does not; a structured sale invoice gives
+  `facture_echeance` with its amount; Mode test never makes a real deadline or draft.
+- **Persisted once**: the document's final stage, its deadlines, drafts and audit in one
+  transaction; the job run twice changes nothing; the sweep requeues a document left waiting.
+- **A person decides**: `POST /documents/:id/review` sets the kind, dates and SIREN of a document
+  in review and runs the same derivation.
+- **Measured**: the classify job on the golden documents, p95 (rules); one run with the model.
+
+Evidence (2026-10-24):
+
+| Criterion | Evidence |
+|---|---|
+| Classified | `packages/agents/src/classify.test.ts` › the classifier rules › take the kind named in the first lines, the most specific first; › read the file name as a title, the subject only as a body hint; › answer from the body only when one kind alone matches there. › the classifier › needs no model when the title says it; › asks the model otherwise, and a person when the model doubts; › never sends a SIREN, an e-mail or a company name to the model; › reads at most the first 2 000 characters; › sends a malformed answer to a person at once, without asking again; › asks again after a provider error, then falls back to the body pattern; › works on the rules alone with the AI off. |
+| Eval | `packages/agents/evals/evals.test.ts` › ClassifyAgent eval fixtures › are 45 documents, every kind at least twice…; › the patterns alone: never a wrong kind, and at least the floor (31/45 answered, 0 wrong); › recording llmfp-smart › was made with the current prompt; › gives the right kind ≥ 95 %, rules then model (45/45, model alone 45/45, `docs/AI_PROVIDERS.md`). Free models: a gate for the code path; the production model's recording waits for the owner's Mistral key. |
+| Read and linked | `document-fields.test.ts` › read French dates in their usual shapes, and refuse impossible ones; › take each date after its label only; › read a validity as a period or as its end; › read the réception date of a PV; › find SIRENs with a valid check digit… `obligations.test.ts` › an unknown SIREN on a Kbis: its deadline still, and the company asked to confirm it; › goes to a person when its date, its company or its data is missing. `document-pipeline.test.ts` › a known sous-traitant's attestation: its company, its renewal, nothing to ask; › an unknown company: its deadline still, and one question to confirm it; › gives what the patterns cannot settle to a person, with the reason. |
+| Deadlines | `obligations.test.ts` › renewal six months after issue; › insurance: the end of its cover, décennale and RC apart; › a PV de réception: the retenue released a year later; › a sale: its due date and what is left to pay, keyed by seller and number; › nothing for a purchase, a sale without a due date, a number or anything to pay; › keeps Mode test apart in every key. `document-pipeline.test.ts` › makes a deadline once however often it runs; a newer copy moves it, an older one not (a dismissed one stays dismissed); › keeps a Mode test document apart. `ingest.test.ts` › the 50 golden documents › … the buyer's deadlines (décennale 2026-12-31, vigilance 2027-04-01, Kbis 2027-04-02, two retenues 2027-10-15), the seller's `facture_echeance` for goldens 01 and 07, one `confirmer_tiers`. |
+| Persisted once | `document-pipeline.test.ts` › makes a deadline once however often it runs (one audit event); › the queue › finds the texts left unclassified, and counts them in the backlog. `ingest.test.ts` › the workers › read a document once…; › are given again what a crash left half-way. |
+| A person decides | `document-pipeline.test.ts` › a person's review › gives the date or the company the text lacked; the same deadline follows (422 naming the field, 400 for a bad SIREN, 409 once settled, an invoice taken as said, 404 for another company). |
+| Measured | `ingest.test.ts` on this server: classify p95 **26 ms** (13 text documents, patterns; asserted < 1 s); ingest p95 127 ms without OCR (37), 1 858 ms with OCR (7). With the model through llmfp (scratch run on the 45 eval documents, 45/45 right): p50 2.5 s, p95 5.6 s, max 14 s on the 20 the patterns left to it. |
+| Gate | `pnpm verify` green on 2026-10-24: api 334, agents 154 (evals included), core 708 + oracle 278, add-in 113, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 7, scripts 4. |
+
+## BTP plan — stage 2B: the documents and their deadlines in the pane (started 2026-10-24)
+
+`docs/plans/phase-2.md` › 2B. Criteria, written before the work:
+
+- **Listed**: `GET /documents` gives the company's documents newest first, by stage or kind, 50 at a
+  time with the total; each with its kind, stage, review reason, company and, in review, the start
+  of its text. `GET /obligations?horizon=` gives the open deadlines due within the horizon (90 days
+  by default), overdue first, each with its company (its name, or the SIREN of one not confirmed),
+  its amount and the document it came from. Mode test and real ones apart; another company's never.
+- **In the pane**: a tab « Documents »: « Échéances » (date, what is due, for whom, « en retard »
+  when past), « À vérifier » (why, in plain French, and the form: the kind, the date or the SIREN
+  asked for, « Enregistrer »), « Reçus » (each document and what it became, « Afficher plus »).
+  « Déposer un document » sends a PDF or an image and shows where it went.
+- **A person decides**: the form sends `POST /documents/:id/review`; the document leaves « À
+  vérifier », its deadline appears in « Échéances »; a field still missing is said next to it.
+- **Plain French**: every kind, deadline and review reason has its words in `fr.json`; no code or
+  English reaches the screen.
+- **Tested**: API tests for both lists (order, filters, horizon, test apart, another company's
+  refused); controller tests for load, review and upload; the views rendered in the harness.
+

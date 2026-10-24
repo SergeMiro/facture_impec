@@ -49,6 +49,8 @@ export interface Jobs {
   enqueueIngest(documentId: string): Promise<void>;
   /** Check an invoice document with the rules (src/ingest.ts). */
   enqueueValidate(documentId: string): Promise<void>;
+  /** Classify a text document and derive its deadlines (src/document-pipeline.ts). */
+  enqueueClassify(documentId: string): Promise<void>;
 }
 
 export interface AiDeps {
