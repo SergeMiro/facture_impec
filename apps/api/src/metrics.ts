@@ -124,6 +124,10 @@ export const metrics = {
     'Model tokens used, by agent, model and direction (input or output).',
   ),
   agentRuns: new Counter('fi_agent_runs_total', 'Model calls, by agent and status.'),
+  periodic: new Histogram(
+    'fi_periodic_run_seconds',
+    'Time of a run of the chasing timer’s tasks (chasing, watchers, weekly, purge), by task and outcome.',
+  ),
 };
 
 const gauge = (name: string, help: string, rows: { labels: Labels; value: number }[]) => [

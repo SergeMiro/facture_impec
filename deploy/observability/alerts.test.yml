@@ -49,10 +49,15 @@ tests:
         values: '0+1x22'
       - series: 'fi_document_read_seconds_bucket{job="api", source="mail", read="ocr", le="+Inf"}'
         values: '0+1x22'
-      # The sweep within 15 s.
-      - series: 'fi_job_duration_seconds_bucket{job="api", queue="pdp.sweep", outcome="ok", le="15"}'
+      # The deadline watchers between 60 and 120 s.
+      - series: 'fi_periodic_run_seconds_bucket{job="api", task="watchers", outcome="ok", le="60"}'
+        values: '0x22'
+      - series: 'fi_periodic_run_seconds_bucket{job="api", task="watchers", outcome="ok", le="120"}'
         values: '0+1x22'
-      - series: 'fi_job_duration_seconds_bucket{job="api", queue="pdp.sweep", outcome="ok", le="+Inf"}'
+      - series: 'fi_periodic_run_seconds_bucket{job="api", task="watchers", outcome="ok", le="+Inf"}'
+        values: '0+1x22'
+      # The chasing itself has no budget.
+      - series: 'fi_periodic_run_seconds_bucket{job="api", task="chasing", outcome="ok", le="+Inf"}'
         values: '0+1x22'
     alert_rule_test:
       - eval_time: 4m
@@ -105,6 +110,12 @@ tests:
       - eval_time: 20m
         alertname: DocumentReadOverBudget
         exp_alerts: []
-      - eval_time: 20m
-        alertname: SweepOverBudget
+      - eval_time: 10m
+        alertname: WatchersOverBudget
         exp_alerts: []
+      - eval_time: 20m
+        alertname: WatchersOverBudget
+        exp_alerts:
+          - exp_annotations:
+              summary: 'The deadline watchers: p95 1m 57s, over 60 s.'
+              runbook: docs/RUNBOOK.md § Observability, WatchersOverBudget

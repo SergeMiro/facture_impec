@@ -45,8 +45,9 @@ BTP plan §11 and §12 stage 7, adapted by `docs/DECISIONS.md` D10. Stages 5 and
 - **An ERP import runs** while its result has no `finishedAt` and the row no `lastError`, as the pane
   says (`syncView`, `src/erp.ts`), timed from `startedAt`: `lastRunAt` moves with each batch.
 - **Two alerts more than the plan**: `ApiDown` (a dead API silences every other alert) and
-  `SweepOverBudget` (the deadline watchers run in the sweep: §11's 60 s on 1 000 deadlines is watched
-  through it; `pnpm perf` measures the watchers alone). « decide → continued 2 s » is watched as
+  `WatchersOverBudget` (§11's 60 s on 1 000 deadlines, on the chasing timer's own durations,
+  `fi_periodic_run_seconds{task}`: the watchers run there, not in a queue; `pnpm perf` measures them
+  on 1 000 deadlines). « decide → continued 2 s » is watched as
   `POST /actions/:id/decide`'s p95; the mail that follows is `action.send`'s time, on the dashboard.
 - **Grafana on 3001**: 3000 is the add-in's dev server. **The API's log is rotated** by Docker
   (5 files of 10 MB): one JSON line per event would otherwise fill the disk.

@@ -60,10 +60,11 @@ groups:
           summary: 'Documents read by {{ $labels.read }}: p95 {{ $value | humanizeDuration }} to done or review, over budget.'
           runbook: docs/RUNBOOK.md § Observability, DocumentSettledOverBudget
 
-      # The deadline watchers run in the sweep (src/workers.ts): 60 s for a company of 1 000 deadlines.
-      - alert: SweepOverBudget
-        expr: histogram_quantile(0.95, sum by (le) (rate(fi_job_duration_seconds_bucket{queue="pdp.sweep", outcome="ok"}[1h]))) > 60
+      # The deadline watchers run on the chasing timer (src/workers.ts), every 5 minutes: 60 s for a
+      # company of 1 000 deadlines.
+      - alert: WatchersOverBudget
+        expr: histogram_quantile(0.95, sum by (le) (rate(fi_periodic_run_seconds_bucket{task="watchers", outcome="ok"}[1h]))) > 60
         for: 15m
         annotations:
-          summary: 'The sweep (with the deadline watchers): p95 {{ $value | humanizeDuration }}, over 60 s.'
-          runbook: docs/RUNBOOK.md § Observability, SweepOverBudget
+          summary: 'The deadline watchers: p95 {{ $value | humanizeDuration }}, over 60 s.'
+          runbook: docs/RUNBOOK.md § Observability, WatchersOverBudget

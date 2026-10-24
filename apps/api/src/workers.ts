@@ -638,14 +638,26 @@ export async function startWorkers(
   // on the same timer (src/rgpd.ts purgeExpired), and so do the deadline watchers (src/watchers.ts),
   // which must see each business day too.
   let collecting = false;
+  // Each task's time in /metrics: §11 gives the watchers 60 s on a company of 1 000 deadlines.
+  const task = async (name: string, run: () => Promise<unknown>) => {
+    const started = performance.now();
+    const seconds = () => (performance.now() - started) / 1000;
+    try {
+      await run();
+      metrics.periodic.observe({ task: name, outcome: 'ok' }, seconds());
+    } catch (e) {
+      metrics.periodic.observe({ task: name, outcome: 'failed' }, seconds());
+      throw e;
+    }
+  };
   const collect = async () => {
     if (collecting) return;
     collecting = true;
     try {
-      await runCollect(deps, options.log);
-      await runWatchers(deps, options.log);
-      await runWeeklyReports(deps, options.log);
-      await purgeExpired(deps);
+      await task('chasing', () => runCollect(deps, options.log));
+      await task('watchers', () => runWatchers(deps, options.log));
+      await task('weekly', () => runWeeklyReports(deps, options.log));
+      await task('purge', () => purgeExpired(deps));
     } catch (e) {
       options.log?.(`chasing run failed: ${message(e)}`);
     } finally {

@@ -693,9 +693,10 @@ dashboard's « Jobs waiting » says whether they wait in the queue (a backlog: m
 the workers busy) or are slow to read or classify (OCR, the model provider: `fi_agent_runs_total` by
 status). A backlog empties by itself; a company sending more than 200 at once is told to wait (429).
 
-**SweepOverBudget** — the sweep, which runs the deadline watchers, takes more than 60 s (p95 of the
-hour). The sweep's log lines (`"queue":"pdp.sweep"`) and `pnpm perf` (the watchers on 1 000 deadlines)
-say which part.
+**WatchersOverBudget** — the deadline watchers, on the chasing timer every 5 minutes, take more than
+60 s (p95 of the hour). `pnpm perf` measures them on a company of 1 000 deadlines; the dashboard's
+« Chasing timer » shows whether the other tasks of the same run (chasing, weekly reports) grew too.
+Nothing is lost while they are slow: a deadline is drafted at the next run that reaches it.
 
 ## Legacy MVP
 

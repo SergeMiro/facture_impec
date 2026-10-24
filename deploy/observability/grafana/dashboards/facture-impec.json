@@ -380,7 +380,7 @@
     {
       "id": 9,
       "type": "timeseries",
-      "title": "Job p95 by queue (the sweep with the watchers: 60 s)",
+      "title": "Job p95 by queue",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -611,6 +611,91 @@
           },
           "expr": "sum by (agent, status) (increase(fi_agent_runs_total[1h]))",
           "legendFormat": "{{agent}} {{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["lastNotNull", "max"]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Chasing timer p95 by task (budget: the watchers 60 s)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, task) (rate(fi_periodic_run_seconds_bucket{outcome=\"ok\"}[1h])))",
+          "legendFormat": "{{task}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["lastNotNull", "max"]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "description": "Every 5 minutes: chasing, the deadline watchers, the weekly reports, the purge of expired sign-ins."
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Chasing timer runs failed per hour by task",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (task) (increase(fi_periodic_run_seconds_count{outcome=\"failed\"}[1h]))",
+          "legendFormat": "{{task}}"
         }
       ],
       "fieldConfig": {

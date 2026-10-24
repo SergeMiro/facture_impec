@@ -184,6 +184,18 @@ describe('GET /metrics', () => {
     ).toBe(1);
   });
 
+  it('times each task of the chasing timer, the deadline watchers among them', async () => {
+    // The timer runs once as the workers start, then every 5 minutes.
+    for (const task of ['chasing', 'watchers', 'weekly', 'purge']) {
+      const count = await until(
+        async () =>
+          seriesValue(await scrape(), `fi_periodic_run_seconds_count{task="${task}",outcome="ok"}`),
+        `the ${task} run`,
+      );
+      expect(count, task).toBeGreaterThanOrEqual(1);
+    }
+  });
+
   it('tells how a document was read from what was read', () => {
     expect(readOf({ format: 'ubl', invoice: {} })).toBe('xml');
     expect(readOf({ text: 'Attestation', ocr: true })).toBe('ocr');
