@@ -6,6 +6,8 @@ export {
   ApprovalDecision,
   DECISIONS,
   Decision,
+  LINK_DECISIONS,
+  type LinkDecision,
   MAX_SNOOZE_DAYS,
 } from './approval';
 export {

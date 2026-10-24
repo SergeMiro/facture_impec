@@ -169,6 +169,13 @@
       "when": 1792858961790,
       "tag": "0023_inbound_document",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792865626207,
+      "tag": "0024_action_links",
+      "breakpoints": true
     }
   ]
 }

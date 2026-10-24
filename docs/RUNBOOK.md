@@ -495,6 +495,13 @@ where id = '<id>'`; a claim older than 10 minutes becomes a draft « send_unknow
 for a person to decide again (the e-mail may or may not have left). `failed` with `mail_failed`: SMTP
 refused it three times (`docs/DEPLOY.md` › mail); with `no_longer_needed`: its deadline closed or moved.
 
+The weekly e-mail (stage 3C) lists the drafts with « Envoyer » and « Ignorer » links to
+`API_PUBLIC_URL/decide?token=…`: that variable must be the address people reach the API at, or the
+links lead nowhere (without it in the workers, the e-mail lists nothing). A person says a link « n'est
+plus valable »: `select decision, revision, used_at, expires_at from action_links where action_id =
+'<id>'`: used, older than 7 days, or the request changed since (its `revision` above the link's). The
+decision itself is in `audit_events` (`action.decide`, actor `user:<id>`), the channel on the action.
+
 ## Deployment
 
 The API image, the compose file and the settings of a hosted sandbox or prod: `docs/DEPLOY.md`. The

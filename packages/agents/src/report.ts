@@ -1,8 +1,10 @@
 // ReportAgent (plan §6 phase 9): the weekly summary, at most ten lines: four numbers (five when the
 // checks found money not invoiced, R7), then up to three things to do, the most pressing first.
-// Deterministic: the API counts, this file only words it.
+// Deterministic: the API counts, this file only words it. BTP stage 3C: the e-mail then lists the
+// requests waiting in « À valider », each with its links (`approvalLines`).
 import { type Cents, frDate, frMoney } from '@fi/core';
-import { t } from '@fi/shared';
+import type { ActionKind } from '@fi/domain';
+import { type MessageKey, t } from '@fi/shared';
 
 export interface Tally {
   count: number;
@@ -34,6 +36,8 @@ export interface WeekFacts {
   drafts: number;
   /** Validated, waiting for « Envoyer ». */
   toSend: number;
+  /** BTP stage 3C: requests waiting in « À valider » (Mode test apart). */
+  approvals?: number;
 }
 
 export interface WeeklyReport {
@@ -63,6 +67,7 @@ function actionsFor(f: WeekFacts): string[] {
     ...notices,
     ...refusals,
     ...(f.toFix ? [t('report.action.fix', { count: f.toFix })] : []),
+    ...(f.approvals ? [t('report.action.approvals', { count: f.approvals })] : []),
     ...(f.drafts ? [t('report.action.drafts', { count: f.drafts })] : []),
     ...(f.toSend ? [t('report.action.toSend', { count: f.toSend })] : []),
   ].slice(0, MAX_ACTIONS);
@@ -92,4 +97,49 @@ export function weeklyReport(f: WeekFacts, sender = t('app.title')): WeeklyRepor
     actions,
     text: [title, ...numbers, ...tail].join('\n'),
   };
+}
+
+/** A request the weekly e-mail lists with its links (BTP stage 3C); the API makes the links. */
+export interface ApprovalItem {
+  kind: ActionKind;
+  /** The company asked; null for `confirmer_tiers`, which names the SIREN. */
+  company: string | null;
+  siren: string | null;
+  /** The deadline's day, when the request serves one. */
+  dueOn: string | null;
+  to: string | null;
+  /** « Envoyer » (« Ajouter comme fournisseur »); null while the address is missing. */
+  approveUrl: string | null;
+  rejectUrl: string;
+}
+
+/** The e-mail's « À valider » part: each request and its links, then how many more wait in the pane. */
+export function approvalLines(items: readonly ApprovalItem[], more = 0): string[] {
+  if (items.length === 0) return [];
+  const lines = ['', t('report.approvals.title', { count: items.length + more })];
+  for (const a of items) {
+    const kind = t(`action.kind.${a.kind}` as MessageKey);
+    lines.push('');
+    if (a.kind === 'confirmer_tiers') {
+      lines.push(`• ${t('report.approvals.unknown', { siren: a.siren ?? '' })}`);
+    } else {
+      const company = a.company ?? '';
+      lines.push(
+        `• ${
+          a.dueOn
+            ? t('report.approvals.item', { kind, company, due: frDate(a.dueOn) })
+            : t('report.approvals.itemNoDue', { kind, company })
+        }`,
+        `  ${a.to ? t('report.approvals.to', { to: a.to }) : t('report.approvals.noRecipient')}`,
+      );
+    }
+    if (a.approveUrl) {
+      const key = a.kind === 'confirmer_tiers' ? 'report.approvals.add' : 'report.approvals.send';
+      lines.push(`  ${t(key, { url: a.approveUrl })}`);
+    }
+    lines.push(`  ${t('report.approvals.reject', { url: a.rejectUrl })}`);
+  }
+  if (more > 0) lines.push('', t('report.approvals.more', { count: more }));
+  lines.push('', t('report.approvals.howTo'));
+  return lines;
 }

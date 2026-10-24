@@ -1,6 +1,6 @@
 import { NBSP } from '@fi/core';
 import { describe, expect, it } from 'vitest';
-import { MAX_ACTIONS, type WeekFacts, weeklyReport } from './report';
+import { approvalLines, MAX_ACTIONS, type WeekFacts, weeklyReport } from './report';
 
 const none = { count: 0, amount: 0 };
 const quiet: WeekFacts = {
@@ -77,5 +77,74 @@ describe('ReportAgent', () => {
       `Manque à facturer repéré : 2 écart(s), 800,00${NBSP}€ (onglet « Contrôles »)`,
     );
     expect(r.text.split('\n').length).toBe(10);
+  });
+
+  it('counts the requests waiting in « À valider », after the invoices to correct', () => {
+    expect(weeklyReport({ ...quiet, toFix: 1, approvals: 2, toSend: 3 }).actions).toEqual([
+      'Corrigez 1 facture(s) rejetée(s) ou à corriger.',
+      'Validez 2 demande(s) préparée(s) pour vos fournisseurs ou vos clients : onglet « Documents », « À valider ».',
+      'Envoyez 3 facture(s) prête(s).',
+    ]);
+  });
+});
+
+describe('the e-mail’s « À valider » (BTP stage 3C)', () => {
+  it('lists each request with its links, then how many more wait in the pane', () => {
+    expect(approvalLines([])).toEqual([]);
+    const url = (token: string) => `https://api.test/decide?token=${token}`;
+    expect(
+      approvalLines(
+        [
+          {
+            kind: 'demande_kbis',
+            company: 'Plâtrerie Dumas',
+            siren: null,
+            dueOn: '2026-11-10',
+            to: 'contact@dumas.test',
+            approveUrl: url('a'),
+            rejectUrl: url('b'),
+          },
+          {
+            kind: 'relance_facture',
+            company: 'Client Roux',
+            siren: null,
+            dueOn: null,
+            to: null,
+            approveUrl: null,
+            rejectUrl: url('c'),
+          },
+          {
+            kind: 'confirmer_tiers',
+            company: null,
+            siren: '400000006',
+            dueOn: null,
+            to: null,
+            approveUrl: url('d'),
+            rejectUrl: url('e'),
+          },
+        ],
+        4,
+      ),
+    ).toEqual([
+      '',
+      'À valider (7) :',
+      '',
+      '• Demander un extrait Kbis : Plâtrerie Dumas, échéance le 10/11/2026',
+      '  À : contact@dumas.test',
+      `  Envoyer : ${url('a')}`,
+      `  Ignorer : ${url('b')}`,
+      '',
+      '• Relancer une facture impayée : Client Roux',
+      '  Adresse e-mail manquante : ajoutez-la dans le volet (onglet « Documents », « À valider »).',
+      `  Ignorer : ${url('c')}`,
+      '',
+      '• Une entreprise inconnue : le SIREN 400000006, sur un document reçu. Est-ce un de vos fournisseurs ?',
+      `  Ajouter comme fournisseur : ${url('d')}`,
+      `  Ignorer : ${url('e')}`,
+      '',
+      'Et 4 autre(s) dans le volet, onglet « Documents », « À valider ».',
+      '',
+      "Chaque lien ouvre une page où vous confirmez d'un clic : rien ne part avant. Il sert une fois, pendant 7 jours, et il est à votre nom : ne transférez pas cet e-mail.",
+    ]);
   });
 });

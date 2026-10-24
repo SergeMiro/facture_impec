@@ -58,6 +58,7 @@ describe('migrations', () => {
       sql`select table_name from information_schema.tables where table_schema = 'public' order by 1`,
     );
     expect(tables.map((r) => r.table_name)).toEqual([
+      'action_links',
       'actions',
       'agent_runs',
       'api_keys',

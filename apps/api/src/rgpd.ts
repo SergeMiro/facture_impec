@@ -4,6 +4,7 @@
 // append-only audit log, which holds hashes and ids, never names or e-mails.
 
 import {
+  actionLinks,
   actions,
   agentRuns,
   and,
@@ -654,6 +655,7 @@ export async function deleteTenant(
     // the connectors' cursors. Of the files received, only real invoices stay (the company's purchase
     // and sales records), without what their e-mail said of the sender; attestations, contracts and
     // lists of employees go, their bytes with them. The building sites go: an address can be a home.
+    await tx.delete(actionLinks).where(eq(actionLinks.tenantId, tenant.id));
     await tx.delete(actions).where(eq(actions.tenantId, tenant.id));
     await tx.delete(obligations).where(eq(obligations.tenantId, tenant.id));
     await tx.delete(connectorSyncs).where(eq(connectorSyncs.tenantId, tenant.id));

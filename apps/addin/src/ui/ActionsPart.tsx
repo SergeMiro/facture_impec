@@ -130,7 +130,7 @@ function Request({ item, today }: { item: ActionItem; today: string }) {
     <li>
       <Card className={styles.card} data-testid={`action-${item.kind}`}>
         <span className={styles.head}>
-          <Text weight="semibold">{t(`addin.actions.kind.${item.kind}`)}</Text>
+          <Text weight="semibold">{t(`action.kind.${item.kind}`)}</Text>
           {busy && <Spinner size="tiny" />}
         </span>
         {item.party && <Text>{item.party.name}</Text>}
@@ -216,7 +216,7 @@ function Confirm({ item }: { item: ActionItem }) {
     <li>
       <Card className={styles.card} data-testid="action-confirmer_tiers">
         <span className={styles.head}>
-          <Text weight="semibold">{t('addin.actions.kind.confirmer_tiers')}</Text>
+          <Text weight="semibold">{t('action.kind.confirmer_tiers')}</Text>
           {busy && <Spinner size="tiny" />}
         </span>
         <Text>

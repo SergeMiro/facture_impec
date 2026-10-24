@@ -1103,6 +1103,14 @@ pane ─► POST /obligations/:id/close (done | dismissed) ─► its drafts wit
   (`reject`). Every decision carries the revision the pane showed; a refusal comes back in the API's
   French and the list reloads. Each deadline has « C'est fait » / « Ignorer »
   (`POST /obligations/:id/close`).
+- **The weekly e-mail** (3C, `apps/api/src/action-links.ts`): `runWeeklyReports` asks
+  `approvalItems` for each owner: the real drafts (ten, nearest deadline first), each with an
+  `action_links` row per decision (the secret's SHA-256, the person, the revision, 7 days) and the
+  URL `API_PUBLIC_URL/decide?token=…`; `approvalLines` (@fi/agents) words them under the report.
+  `GET /decide` only shows what the button will do; `POST /decide` claims the link (`used_at`), then
+  calls `decideAction` as that person with `channel: 'email'`. A revision moved on since the e-mail,
+  or a request no longer a draft, is refused before the claim; a failure on our side gives the link
+  back.
 
 ## Decision: port the Rust core to TypeScript, archive Rust
 

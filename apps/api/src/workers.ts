@@ -73,8 +73,11 @@ import type { Vies } from './vies';
 import { runWatchers } from './watchers';
 
 export interface WorkerDeps {
-  /** Only FI_ENV, for the go-live gate (src/platform.ts); absent in unit tests: not prod. */
-  env?: { FI_ENV: FiEnv };
+  /**
+   * FI_ENV for the go-live gate (src/platform.ts), API_PUBLIC_URL for the weekly e-mail's links
+   * (src/action-links.ts); absent in unit tests: not prod, no links.
+   */
+  env?: { FI_ENV: FiEnv; API_PUBLIC_URL?: string };
   db: Db;
   pdp: PdpRegistry;
   test: TestPlatform | null;

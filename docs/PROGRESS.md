@@ -1627,3 +1627,34 @@ Evidence (2026-10-24):
 | Deadlines closed | same test (`closed.done`, no deadline left); `btp3-closed.png`. |
 | In a browser | `apps/addin/e2e/harness.spec.ts` › BTP stage 3: the attestation's company is added, its request edited and validated (browser: local, 43.6 s for the whole spec): the unknown company with its file and SIREN, « Ajouter comme fournisseur », the request without an address and « Envoyer » disabled, the letter « est arrivée à échéance », « Modifier » with an address, « Envoyer » in Mode test (`sentTest`, « Rien à valider en Mode test. »), « C'est fait ». |
 | Found on the way | The E2E API asked the real company directory (no `SIRENE_URL`): now the mock's stand-in. And `RechercheEntreprises` dropped the path of its base URL (`new URL('/search', base)`), so a directory served under a path never answered: fixed, `onboarding.test.ts` › the directory client › keeps the path of its base URL. The pane's issue cards had duplicate React keys for BR-FR-05/06 (one finding per mention on `notes`): the text is in the key. |
+
+## BTP plan — stage 3C: the drafts in the weekly e-mail, decided by a link (started 2026-10-24)
+
+`docs/plans/phase-3.md` › 3C. Criteria, written before the work:
+
+- **Listed**: the weekly e-mail to each owner lists the requests waiting in « À valider » (real ones,
+  never Mode test), the nearest deadline first, ten at most and how many more; each with its company,
+  its date, its recipient, and the links « Envoyer » (« Ajouter comme fournisseur » for a new
+  company) and « Ignorer ». A request without an address has « Ignorer » only and says to add it in
+  the pane. The report's « À faire » counts them, in the pane too.
+- **A link**: a secret of 32 random bytes, stored as SHA-256, for one person, one decision and the
+  revision the e-mail showed; it serves once, for 7 days.
+- **Opened**: GET shows a page saying what will happen and one button; it decides nothing (a mail
+  scanner may open it). A used or expired link, or a request that changed or was decided since the
+  e-mail, says so and points to the pane.
+- **Decided**: POST decides as that person with `channel: 'email'` (audit `action.decide`), through
+  the same path as the pane: the request is sent once by the queue, the company added. The same link
+  twice, the other link of the same request, or a link to an older revision change nothing.
+- **Deleted with the account**: an account's links go with its actions.
+
+Evidence (2026-10-24):
+
+| Criterion | Evidence |
+|---|---|
+| Listed | `apps/api/src/action-links.test.ts` › the weekly e-mail's links › list the waiting requests; a link decides once, as its person, and the request is sent once (« Validez 2 demande(s) », « À valider (2) », the company and its date, « À : », « Adresse e-mail manquante », one « Envoyer » and two « Ignorer », the Mode test request absent); › leave Mode test out, and say nothing of them when none waits. `packages/agents/src/report.test.ts` › the e-mail's « À valider » (the exact lines: request, missing address, new company, « Et 4 autre(s) », the warning not to forward) and › counts the requests waiting in « À valider ». |
+| A link | same test: three `action_links` rows for the owner at revision 0, the secret absent from them (SHA-256 only); `packages/db/drizzle/0024_action_links.sql`. |
+| Opened | same test: GET answers the page and its form, the request still a draft at revision 0; › decide nothing for a text edited since the e-mail, nor after seven days (« a changé ou a déjà été décidée » after an edit in the pane; 410 « il a plus de 7 jours » eight days later; a made-up token 410). Page: `docs/evidence/btp3-link-page.png`, `btp3-link-done.png` (the API's page template and strings, local Chrome headless; browser: local). |
+| Decided | same test: POST → « C'est validé », the action `approved` by the owner's id with `channel: 'email'`, audit `action.decide` by `user:<id>`, queued; the job run twice sends one e-mail with `Reply-To` the owner; the same link again 410; the other link of the same request « a changé », nothing changed; « Ignorer » on the request without an address → `rejected`. › add a new company from « Ajouter comme fournisseur » (the supplier from the directory). |
+| Deleted with the account | `apps/api/src/action-links.test.ts` › go with the account, and a link mailed before serves no more (no `action_links` row left after `DELETE /tenant`, the mailed link 410); `apps/api/src/rgpd.ts` deletes them before the actions; `docs/RGPD.md`. |
+| Gate | `pnpm verify` green on 2026-10-24: api 355, add-in 115, agents 162 (evals included), core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 8, scripts 4. The harness E2E passes (local Chrome; browser: local) with the kinds' strings moved to `action.kind.*`. |
+| Found on the way | Two requests with the same deadline are listed in no fixed order (`listActions` breaks the tie by id): the test first took « the first Ignorer » for the request it had approved and failed one run in three; it now finds each link's request from the hash of its secret. |

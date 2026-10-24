@@ -233,3 +233,5 @@ Each line says where it came from and what would bring it back.
 | The company's own renewals (its own attestation, Kbis) | Listed in « Échéances », no request (nobody to ask) | A reminder to the company itself, with the instant alerts. |
 | Withdrawn, refused and failed requests in the pane | `GET /actions?status=` lists them; the pane shows the drafts | A pilot asks what happened to one: a « Historique » under « À valider ». |
 | A request to a supplier not marked sous-traitant | Drafted for any supplier whose attestation, Kbis or insurance runs out | Pilots find it noisy: only for suppliers marked « sous-traitant », with a switch. |
+| The weekly e-mail's links (3C) | Plain text, owners only, « Envoyer » and « Ignorer » (« Ajouter comme fournisseur »), ten listed | A pilot wants « Modifier » or « Plus tard » from the e-mail (a page with the text and the address), members who are not owners, or an HTML e-mail with buttons. |
+| Old links | Expired links stay in `action_links` until their action or the account goes | Many reports: a daily purge of links expired more than 30 days ago, with `purgeExpired`. |

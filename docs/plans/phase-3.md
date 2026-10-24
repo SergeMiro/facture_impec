@@ -64,3 +64,9 @@ drafts. Three series of commits, each with `pnpm verify` green:
   `supplier_duplicate`), as « Clients » does for customers, and drafts the new supplier's requests at once rather than at
   the next run. The withdrawal reasons are
   `deadline_moved`, `deadline_done`, `deadline_dismissed`, `deadline_gone`, in `comment`.
+- **3C (2026-10-24)**: the links live at `/decide?token=` (`/actions/*` needs a company key) and go
+  to the owners, who are the weekly report's recipients. A new company's request gets « Ajouter comme
+  fournisseur » in place of « Envoyer »; a request without an address gets « Ignorer » only (the
+  address is added in the pane). The e-mail lists ten at most, the nearest deadline first, and says
+  how many more wait. A decision that failed on the server's side (the directory down) gives the link
+  back; one refused (changed since, already decided) uses it up.

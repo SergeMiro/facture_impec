@@ -35,6 +35,7 @@ import {
   DOCUMENT_SOURCES,
   DOCUMENT_STAGES,
   type EnvelopeHints,
+  LINK_DECISIONS,
   OBLIGATION_KINDS,
   OBLIGATION_STATUSES,
 } from '@fi/domain';
@@ -1480,6 +1481,38 @@ export const actions = pgTable(
     check('actions_kind', oneOf(t.kind, ACTION_KINDS)),
     check('actions_status', oneOf(t.status, ACTION_STATUSES)),
     check('actions_channel', oneOf(t.channel, APPROVAL_CHANNELS)),
+  ],
+);
+
+/**
+ * « Envoyer » and « Ignorer » in the weekly e-mail (BTP stage 3C): one link per person, decision and
+ * draft, bound to the draft's revision when mailed, so a link to a text since edited or a draft
+ * already decided changes nothing. The secret is stored as SHA-256; it serves once, for 7 days.
+ */
+export const actionLinks = pgTable(
+  'action_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    actionId: uuid('action_id')
+      .notNull()
+      .references(() => actions.id, { onDelete: 'cascade' }),
+    /** The person it was mailed to, who decides through it. */
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    decision: text('decision', { enum: LINK_DECISIONS }).notNull(),
+    revision: integer('revision').notNull(),
+    linkHash: text('link_hash').notNull().unique(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('action_links_action').on(t.actionId),
+    check('action_links_decision', oneOf(t.decision, LINK_DECISIONS)),
   ],
 );
 

@@ -201,8 +201,8 @@ Stages (`docs/plans/phase-N.md` each):
 - [ ] **3 — watchers and approvals** (`docs/plans/phase-3.md`; 3A, the deadline watchers, the
       requests from `fr.json`, `GET /actions`, `POST /actions/:id/decide`, the queue `action.send`,
       « Ajouter comme fournisseur », `POST /obligations/:id/close`: done 2026-10-24; 3B « À valider »
-      in the pane, « C'est fait » on the deadlines: done 2026-10-24). Left: 3C the weekly e-mail's
-      links; the Telegram bot waits for the owner (below);
+      in the pane, « C'est fait » on the deadlines: done 2026-10-24; 3C the weekly e-mail's links:
+      done 2026-10-24). Left: the Telegram bot waits for the owner (below);
       invoices sent through Facture Impec keep CollectAgent's chasing, not duplicated.
 - [ ] **4 — connectors**: the frame and the ERP-export connector (D5); EBP SaaS paused (D3).
 - [ ] **5, 6** paused (D3). **7 — observability, performance, runbook, onboarding.**
@@ -267,5 +267,9 @@ Left from stage 3A for later (2026-10-24):
 - [ ] **Reply-To on CollectAgent's chasing e-mails**: a customer's answer to a reminder reaches our
       sender address, not the company. `Mail.replyTo` exists since 3A (requests use it); the chasing
       mails (`apps/api/src/collect.ts`) should set it to the person who sent the step, or the owner.
+- [ ] **The weekly e-mail's links in a real mailbox** (stage 3C): needs SMTP on a hosted deployment
+      (`docs/DEPLOY.md` › mail) and `API_PUBLIC_URL` set to its public address. Open a report in
+      Gmail and in Outlook (whose Safe Links open every link first) from a phone: the page shows, the
+      scanner's visit decides nothing, « Envoyer » sends once.
 - [ ] **The requests' letters read by a pilot**: the six `request.body.*` in `fr.json` (the
       retenue's cites loi n° 71-584 art. 2, `TODO(verify)` with Légifrance above).

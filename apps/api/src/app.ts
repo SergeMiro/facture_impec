@@ -12,6 +12,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { z } from 'zod';
+import { actionLinkRoutes } from './action-links';
 import {
   ActionsQuery,
   CloseObligationBody,
@@ -243,6 +244,7 @@ export function createApp(deps: ApiDeps) {
     if (path === '/connectors/google/begin' || path === '/connectors/google/callback') {
       return byAddress.public(c, next);
     }
+    if (path === '/decide') return byAddress.public(c, next);
     if (path.startsWith('/auth/') || path.startsWith('/onboarding/')) {
       return (path.endsWith('/poll') ? byAddress.poll : byAddress.public)(c, next);
     }
@@ -273,6 +275,8 @@ export function createApp(deps: ApiDeps) {
   app.route('/auth', loginRoutes(deps));
   // « Créer un compte »: the directory lookup, the request, its e-mailed confirmation, the poll.
   app.route('/onboarding', onboardingRoutes(deps));
+  // « Envoyer » / « Ignorer » from the weekly e-mail (BTP stage 3C): the link is the credential.
+  app.route('/decide', actionLinkRoutes(deps));
 
   // ── Platform webhooks (signed; no tenant key) ─────────────────────────────────────────────────
   app.post('/webhooks/pdp/:provider', async (c) => {

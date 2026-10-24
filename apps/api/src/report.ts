@@ -2,7 +2,9 @@
 // by @fi/agents weeklyReport. The task pane shows it on demand (GET /report); every ISO week, from
 // Monday 8:00 Paris, it is mailed once to the company's owners where the deployment can send mail.
 // Test invoices never count. R7: the money the checks found billed short in the week, still open.
-import { type WeekFacts, type WeeklyReport, weeklyReport } from '@fi/agents';
+// BTP stage 3C: the requests waiting in « À valider » are counted, and the e-mail lists them, each
+// with its links for that owner (src/action-links.ts).
+import { approvalLines, type WeekFacts, type WeeklyReport, weeklyReport } from '@fi/agents';
 import {
   addDays,
   type ChaseStep,
@@ -13,6 +15,7 @@ import {
   parisToday,
 } from '@fi/core';
 import {
+  actions,
   and,
   audit,
   between,
@@ -31,10 +34,11 @@ import {
   users,
   weeklyReports,
 } from '@fi/db';
+import { approvalItems } from './action-links';
 import { balanceOf } from './collect';
 import type { ApiDeps } from './deps';
 
-type Deps = Pick<ApiDeps, 'db' | 'mailer' | 'now'>;
+type Deps = Pick<ApiDeps, 'db' | 'mailer' | 'now'> & { env?: { API_PUBLIC_URL?: string } };
 
 const REPORT_HOUR = 8;
 
@@ -124,6 +128,12 @@ export async function weekFacts(deps: Deps, tenant: TenantRow, now: Date): Promi
         gte(findings.firstSeenAt, since),
       ),
     );
+  const [waiting] = await deps.db
+    .select({ count: count() })
+    .from(actions)
+    .where(
+      and(eq(actions.tenantId, tenant.id), eq(actions.status, 'draft'), eq(actions.isTest, false)),
+    );
   const drafted = (s: ChaseStep) => s.status === 'drafted';
   return {
     from: parisToday(since),
@@ -152,6 +162,7 @@ export async function weekFacts(deps: Deps, tenant: TenantRow, now: Date): Promi
       0,
     ),
     toSend: (await ofTenant(['validated'])).length,
+    approvals: waiting?.count ?? 0,
   };
 }
 
@@ -184,7 +195,7 @@ export async function runWeeklyReports(
   let sent = 0;
   for (const { tenants: tenant } of due) {
     const owners = await deps.db
-      .select({ email: users.email })
+      .select({ id: users.id, email: users.email })
       .from(users)
       .where(and(eq(users.tenantId, tenant.id), eq(users.role, 'owner')));
     const claimed = await deps.db.transaction(async (tx) => {
@@ -209,12 +220,17 @@ export async function runWeeklyReports(
     // An accounting firm's full white label: its name in the subject and as the sender.
     const firm = tenant.whiteLabel?.full ? tenant.whiteLabel.firmName : undefined;
     const report = weeklyReport(await weekFacts(deps, tenant, now), firm);
-    for (const { email } of owners) {
+    for (const { id, email } of owners) {
       try {
+        // Each owner's own links: one decides as the person it was mailed to.
+        const base = deps.env?.API_PUBLIC_URL;
+        const { items, more } = base
+          ? await approvalItems({ db: deps.db, base }, tenant, id, now)
+          : { items: [], more: 0 };
         await mailer.send({
           to: email,
           subject: report.subject,
-          text: report.text,
+          text: [report.text, ...approvalLines(items, more)].join('\n'),
           ...(firm && { fromName: firm }),
         });
         sent++;
