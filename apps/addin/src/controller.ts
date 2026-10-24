@@ -35,6 +35,7 @@ import {
   type Inbound,
   type InboundExport,
   type InvoiceDetail,
+  type InvoiceSummary,
   type LayoutDetection,
   type Me,
   type NormalChoice,
@@ -49,6 +50,7 @@ import {
   type Rehearsal,
   type RowStatus,
   type Scenario,
+  type SearchQuery,
   type Settings,
   type SettingsPatch,
   type SignupOffer,
@@ -196,6 +198,8 @@ export interface FiState {
   reception: Reception | null;
   /** Clients; null until loaded. */
   customers: Customers | null;
+  /** « Retrouver une facture » on the Tableau de bord: the last search and what it found so far. */
+  search: { query: SearchQuery; invoices: InvoiceSummary[]; total: number } | null;
   /** « Registre » (R1): what the included sheets brought, the latest documents; null until loaded. */
   registry: Registry | null;
   /** « Contrôles » (R2): the open findings and the links to confirm; null until loaded. */
@@ -334,6 +338,7 @@ const INITIAL: FiState = {
   report: null,
   reception: null,
   customers: null,
+  search: null,
   registry: null,
   checks: null,
   chat: null,
@@ -796,6 +801,7 @@ export class Controller {
       report: null,
       reception: null,
       customers: null,
+      search: null,
       registry: null,
       checks: null,
       card: null,
@@ -1611,6 +1617,14 @@ export class Controller {
       // Not worth a notice: the screen keeps what it showed, the next read asks again.
     }
   }
+
+  /** « Retrouver une facture »: the first results for `query`, or (`more`) the next ones. */
+  searchInvoices = async (query: SearchQuery, more = false): Promise<void> => {
+    const shown = more ? (this.#state.search?.invoices ?? []) : [];
+    const page = await this.#act('search', () => this.api.searchInvoices(query, shown.length));
+    if (!page) return;
+    this.#set({ search: { query, invoices: [...shown, ...page.invoices], total: page.total } });
+  };
 
   /** The « Registre » screen: the totals, this workbook's sheets, and the sheets to propose. */
   loadRegistry = async (): Promise<void> => {

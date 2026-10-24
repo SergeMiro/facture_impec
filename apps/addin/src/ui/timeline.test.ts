@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { centsOf } from './ChasePanel';
+import { resultLine } from './InvoiceSearch';
 import { eventText } from './InvoiceView';
 
 const note = (payload: unknown, event = 'vat_check', actor = 'agent:party') => ({
@@ -39,6 +40,33 @@ describe('the invoice timeline', () => {
       'system',
     );
     expect(eventText(stopped)).toContain('votre client en avait déjà payé 400,00\u00a0€');
+  });
+
+  it('shows a search result with its kind, customer, amount, date and Mode test', () => {
+    const base = {
+      id: 'i1',
+      number: 'AV2026-0001',
+      typeCode: '381',
+      status: 'validated',
+      statusLabel: 'Prête à envoyer',
+      issueDate: '2026-10-24',
+      dueDate: null,
+      currency: 'EUR',
+      buyerName: 'Boulangerie Martin',
+      payable: 120_000,
+      amountPaid: 0,
+      pdpRef: null,
+      isTest: true,
+      partyId: null,
+      autopilot: { at: null, held: false },
+      excelBinding: null,
+    };
+    expect(resultLine(base)).toBe(
+      'Avoir · Boulangerie Martin · 1\u00a0200,00\u00a0€ · 24/10/2026 · Test',
+    );
+    expect(resultLine({ ...base, typeCode: '380', isTest: false, buyerName: null })).toBe(
+      '1\u00a0200,00\u00a0€ · 24/10/2026',
+    );
   });
 
   it('reads the amount received as the user types it', () => {

@@ -1,27 +1,8 @@
 // HTTP API (plan §1): tenants, invoices, validation, platform webhooks, and the add-in's routes
 // (sign-in, sheet sync, settings, Mode test, supplier invoices, RGPD). Business rules live in the modules next to this
 // file and in @fi/core; this file reads requests (Zod) and shapes answers.
-import {
-  Address,
-  InvoiceDraft,
-  isIsoDate,
-  LayoutMapping,
-  SheetMapping,
-  STATES,
-  toCii,
-} from '@fi/core';
-import {
-  and,
-  audit,
-  CONNECTION_PROVIDERS,
-  desc,
-  eq,
-  inArray,
-  invoices,
-  PDP_PROVIDERS,
-  type TenantRow,
-  tenants,
-} from '@fi/db';
+import { Address, InvoiceDraft, isIsoDate, LayoutMapping, SheetMapping, toCii } from '@fi/core';
+import { audit, CONNECTION_PROVIDERS, eq, PDP_PROVIDERS, type TenantRow, tenants } from '@fi/db';
 import { PdpRequestError } from '@fi/pdp-adapter';
 import { t } from '@fi/shared';
 import { Hono } from 'hono';
@@ -128,6 +109,7 @@ import { awaitsGoLive } from './platform';
 import { reportFor } from './report';
 import { DeleteBody, deleteTenant, exportTenant } from './rgpd';
 import { playScenario, SCENARIOS } from './sandbox';
+import { ListQuery, listInvoices } from './search';
 import {
   AiChoice,
   PdpKeyBody,
@@ -183,17 +165,6 @@ const TenantPatch = z
     vatOnDebits: z.boolean(),
   })
   .partial();
-const ListQuery = z.object({
-  status: z.enum(STATES).optional(),
-  /** Comma-separated: the task pane asks only for the invoices its sheet is waiting on. */
-  ids: z
-    .string()
-    .transform((s) => s.split(','))
-    .pipe(z.array(z.uuid()).min(1).max(200))
-    .optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  offset: z.coerce.number().int().min(0).default(0),
-});
 
 /** « Envoyer quand même »: the fingerprints of the blocking findings the user saw (src/checks.ts). */
 const SendBody = z.object({ acknowledge: z.array(z.string().max(128)).max(200).default([]) });
@@ -746,23 +717,11 @@ export function createApp(deps: ApiDeps) {
     return c.json(invoiceDetail(row, await invoiceDetailData(deps, row)), created ? 201 : 200);
   });
 
+  // The pane's sheet rows (`ids`), and « Retrouver une facture » (src/search.ts).
   api.get('/invoices', async (c) => {
     const q = parse(ListQuery, c.req.query());
-    const tenant = c.get('tenant');
-    const rows = await deps.db
-      .select()
-      .from(invoices)
-      .where(
-        and(
-          eq(invoices.tenantId, tenant.id),
-          q.status ? eq(invoices.status, q.status) : undefined,
-          q.ids ? inArray(invoices.id, q.ids) : undefined,
-        ),
-      )
-      .orderBy(desc(invoices.createdAt), desc(invoices.id))
-      .limit(q.limit)
-      .offset(q.offset);
-    return c.json({ invoices: rows.map(invoiceSummary), limit: q.limit, offset: q.offset });
+    const { rows, total } = await listInvoices(deps, c.get('tenant'), q);
+    return c.json({ invoices: rows.map(invoiceSummary), total, limit: q.limit, offset: q.offset });
   });
 
   api.get('/invoices/:id', async (c) => {

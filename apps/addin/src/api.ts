@@ -594,6 +594,30 @@ export interface PaymentInput {
   paidBefore?: number | undefined;
 }
 
+export type InvoiceSummary = z.infer<typeof InvoiceSummary>;
+
+/** « Retrouver une facture »: where an invoice stands, as groups of statuses (apps/api/src/search.ts). */
+export const SEARCH_STAGES = [
+  'to_send',
+  'awaiting',
+  'late',
+  'paid',
+  'to_correct',
+  'closed',
+] as const;
+export type SearchStage = (typeof SEARCH_STAGES)[number];
+export interface SearchQuery {
+  /** A piece of the number or of the customer's name. */
+  q?: string | undefined;
+  stage?: SearchStage | undefined;
+  /** Issue date, YYYY-MM-DD, both ends included. */
+  from?: string | undefined;
+  to?: string | undefined;
+}
+const SearchPage = z.object({ invoices: z.array(InvoiceSummary), total: z.number() });
+/** Results shown at a time; « Plus de résultats » asks for the next ones. */
+const SEARCH_PAGE = 20;
+
 export const InvoiceDetail = InvoiceSummary.extend({
   issues: z.array(Issue),
   /** Open findings of the checks across documents; a blocking one makes « Envoyer quand même ». */
@@ -1083,6 +1107,16 @@ export class ApiClient {
       InvoiceStatuses,
       `/invoices?limit=${MAX_IDS}&ids=${ids.slice(0, MAX_IDS).join(',')}`,
     );
+  /** « Retrouver une facture »: the company's invoices matching `query`, last issued first. */
+  searchInvoices = (query: SearchQuery, offset = 0) => {
+    const params = new URLSearchParams({
+      sort: 'issued',
+      limit: String(SEARCH_PAGE),
+      offset: String(offset),
+    });
+    for (const [key, value] of Object.entries(query)) if (value) params.set(key, value);
+    return this.#json(SearchPage, `/invoices?${params}`);
+  };
   explain = (id: string) => this.#json(Explained, `/invoices/${id}/explain`, { method: 'POST' });
   rehearse = (id: string) => this.#json(Rehearsal, `/invoices/${id}/rehearse`, { method: 'POST' });
   /** `acknowledge`: the blocking findings the user saw and sends past (« Envoyer quand même »). */

@@ -168,6 +168,15 @@ Each closes with a call or two on the owner's sandbox key (`docs/RUNBOOK.md` § 
       règlement de… ; il reste … à régler ») and of the formal notice, which now demands the balance.
 - [ ] **Weekly report:** count the instalments received in the week (`docs/DEFERRED.md` › Instalments).
 
+## Finding an invoice, built on 2026-10-24
+
+- [ ] **Chat eval fixture:** `packages/agents/evals/chat.fixtures.ts` still quotes the old answer to a
+      correction of a sent invoice (« établissez une facture rectificative ou un avoir… »); the API now
+      says to click « Établir un avoir » on its fiche (`api.error.invoice_sent`). Update the fixture
+      and record `chat` again, with the `monitor` and `mapping` recordings above.
+- [ ] **Hosted database:** whether `unaccent` can be enabled there, before a pilot asks for searches
+      that ignore accents (`docs/DEFERRED.md` › Finding an invoice).
+
 ## Excel on the web E2E
 
 - [ ] A Microsoft account that can upload an add-in in Excel on the web, then

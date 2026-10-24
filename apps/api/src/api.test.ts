@@ -1,3 +1,4 @@
+import { addDays, parisToday } from '@fi/core';
 import type { Database } from '@fi/db';
 import { apiKeys, auditEvents, eq, invoices, pdpSubmissions, sha256, sql } from '@fi/db';
 import { createMockPdpAdapter, MOCK_HEADERS, type MockWebhook, signWebhook } from '@fi/pdp-adapter';
@@ -251,6 +252,63 @@ describe('invoices', () => {
     expect((await list(`?ids=${created.body.id}`)).map((i) => i.id)).toEqual([created.body.id]);
     expect(await list(`?ids=${created.body.id}`, b.apiKey)).toHaveLength(0);
     expect((await request('/invoices?ids=nope', { token: a.apiKey })).status).toBe(400);
+  });
+
+  it('finds an invoice by a piece of its number or customer, stage, kind and period, sorted', async () => {
+    const a = await newTenant(request);
+    const b = await newTenant(request);
+    const day = (n: number) => addDays(parisToday(), n);
+    const make = async (index: number, buyer: string, issued: number, quantity = '1') =>
+      (
+        await create(a.apiKey, {
+          draft: draft(index, (d) => {
+            d.buyer.name = buyer;
+            d.issueDate = day(issued);
+            d.dueDate = day(issued + 30);
+            const line = d.lines?.[0];
+            if (line) line.quantity = quantity;
+          }),
+        })
+      ).body;
+    const martin = await make(11, 'Boulangerie Martin', -40);
+    const dupont = await make(12, 'Garage Dupont', -20, '3');
+    const percent = await make(13, 'Remise 100% SARL', -2);
+    await create(b.apiKey, { draft: draft(14, (d) => (d.buyer.name = 'Boulangerie Martin')) });
+    const find = async (query: string, key = a.apiKey) =>
+      (await (await request(`/invoices?${query}`, { token: key })).json()) as {
+        invoices: Detail[];
+        total: number;
+      };
+    const ids = async (query: string) => (await find(query)).invoices.map((i) => i.id);
+
+    expect(await ids('q=martin')).toEqual([martin.id]);
+    expect(await ids('q=MARTIN')).toEqual([martin.id]);
+    expect(await ids(`q=${dupont.number.slice(-4)}`)).toEqual([dupont.id]);
+    // What the user types is text: « % » and « _ » match only themselves.
+    expect(await ids(`q=${encodeURIComponent('100%')}`)).toEqual([percent.id]);
+    expect(await ids(`q=${encodeURIComponent('%')}`)).toEqual([percent.id]);
+    expect((await find('q=_')).total).toBe(0);
+    expect((await ids(`from=${day(-25)}&to=${day(0)}`)).sort()).toEqual(
+      [dupont.id, percent.id].sort(),
+    );
+    expect(await ids('sort=issued')).toEqual([percent.id, dupont.id, martin.id]);
+    expect(await ids('sort=due')).toEqual([martin.id, dupont.id, percent.id]);
+    expect((await ids('sort=amount'))[0]).toBe(dupont.id);
+    expect((await find('stage=to_send')).total).toBe(3);
+    expect((await find('stage=paid')).total).toBe(0);
+    expect((await find('kind=invoice')).total).toBe(3);
+    expect((await find('kind=credit_note')).total).toBe(0);
+    expect((await find('test=true')).total).toBe(0);
+    const page = await find('sort=issued&limit=1&offset=1');
+    expect(page.invoices.map((i) => i.id)).toEqual([dupont.id]);
+    expect(page.total).toBe(3);
+    // Another company's invoice of the same customer is never shown.
+    expect((await find('q=martin', b.apiKey)).invoices.map((i) => i.number)).toEqual([
+      draft(14).number,
+    ]);
+    for (const bad of ['stage=nope', 'from=2026-13-01', 'sort=price', `q=${'x'.repeat(101)}`]) {
+      expect((await request(`/invoices?${bad}`, { token: a.apiKey })).status).toBe(400);
+    }
   });
 
   it('edits a draft and validates it again', async () => {

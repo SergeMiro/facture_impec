@@ -424,6 +424,28 @@ describe('a new user on the demo sheet', () => {
     );
   });
 
+  it('finds any invoice of the company from the Tableau de bord, and opens it', async () => {
+    const paid = row(2);
+    if (!paid?.invoiceId || !paid.number) throw new Error('row 2 has no invoice');
+    await controller.searchInvoices({ q: paid.number.slice(-4).toLowerCase() });
+    expect(state().search?.invoices.map((i) => i.id)).toContain(paid.invoiceId);
+    await controller.searchInvoices({ stage: 'paid' });
+    expect(state().search?.invoices.map((i) => [i.id, i.status])).toEqual([
+      [paid.invoiceId, 'paid'],
+    ]);
+    expect(state().search?.total).toBe(1);
+    await controller.searchInvoices({ q: 'aucune-facture-ainsi' });
+    expect(state().search).toMatchObject({ invoices: [], total: 0 });
+    // « Plus de résultats » adds the next page to what is shown.
+    await controller.searchInvoices({});
+    const all = state().search?.total ?? 0;
+    expect(all).toBeGreaterThan(1);
+    await controller.searchInvoices({}, true);
+    expect(state().search?.invoices.length).toBe(Math.min(all, 40));
+    await controller.openInvoice(paid.invoiceId);
+    expect(state().screen).toMatchObject({ name: 'invoice', id: paid.invoiceId });
+  });
+
   it('shows the week on the dashboard', async () => {
     controller.navigate({ name: 'dashboard' });
     await until(() => state().report !== null, 'the weekly report');

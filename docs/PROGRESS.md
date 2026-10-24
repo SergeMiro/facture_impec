@@ -1334,3 +1334,32 @@ received or marked paid too early. Criteria, written here before the work:
 | No full credit note on a partly paid invoice | Same API test: « Établir un avoir » → 409 `credit_partly_paid`. `apps/api/src/credits.test.ts` › leaves an invoice paid in part meanwhile as it is: the credit note would cancel that money (`credit_note_not_applied` with what was paid; timeline text in `timeline.test.ts` › tells an instalment with what is left, and a credit note stopped by one), › write-off › gives up only what is left after an instalment. |
 | Audit, tests, docs | `payment.partial` / `payment.record` audit events (now written whether or not a platform holds the invoice). `docs/ARCHITECTURE.md` (M5 flow, `payments.ts`, decision « Instalments »), `docs/DEFERRED.md` (row closed; § Instalments: weekly « encaissé », a « Reste à payer » column, the MonitorAgent's input, undoing a payment, the platform's own partial payments), `docs/TODO.md` › Instalments (T25, accountant, weekly report), `docs/B2BROUTER.md` T25. |
 | Gate | `pnpm verify` green on 2026-10-24 (tests with `--concurrency=1`): api 304, core 689 + oracle 276, agents 122, add-in 108, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 13. `pnpm test:e2e` green in local Chrome (browser: local): 4 passed, the live B2Brouter run skipped (no key); `apps/addin/e2e/b2brouter.spec.ts` › … « Relancer, then Encaissée » now types an instalment of 10 € in « Montant reçu » (the fiche shows what is left), then pays the rest, and the sheet says « Payée ». |
+
+## Finding an invoice (started 2026-10-24)
+
+`docs/DEFERRED.md` row « Listing invoices beyond `limit`/`offset` » (M2): the pane lists only the
+open sheet's rows, so an invoice that is not in the sheet any more (another month's sheet, a row
+deleted) or a credit note made by « Établir un avoir » can only be reached from another fiche.
+Supplier invoices keep their own screen, « Réception ». Criteria, written here before the work:
+
+- **The API searches**: `GET /invoices` takes a text (`q`, part of the number or of the customer's
+  name, whatever the case; `%` and `_` are plain characters), a stage (`stage`: to send, sent and
+  awaiting payment, late, paid, to correct, closed), a document kind (invoice or credit note), a
+  period on the issue date (`from`, `to`), Mode test or not, and a sort (newest, issue
+  date, due date, amount); it answers the page and the `total`. Only the company's own invoices,
+  as before.
+- **« Retrouver une facture » on the Tableau de bord**: a search box, a stage and a period; the
+  results show number, customer, amount, date and status, a credit note marked as one, and open the
+  fiche; « Plus de résultats » pages on. An empty search says nothing was found and how to widen it.
+- **Tests and docs**: API tests (each filter, the sort, the total, another company's invoices never
+  shown, a `%` typed by the user), a controller test through the real API; `docs/ARCHITECTURE.md`,
+  `docs/DEFERRED.md` (row closed; what is left logged) and `docs/TODO.md` updated.
+
+### Evidence (2026-10-24)
+
+| Criterion | Evidence |
+|---|---|
+| The API searches | `apps/api/src/api.test.ts` › finds an invoice by a piece of its number or customer, stage, kind and period, sorted (`q` on the customer whatever the case and on the end of the number; `100%` and `%` match only the name holding a « % », `_` nothing; a period on the issue date; `sort=issued`, `due`, `amount`; `stage`, `kind`, `test`; `limit`/`offset` with `total`; another company's invoice of the same customer never shown; a wrong stage, date, sort or a 101-character text → 400). The sheet's lookup by `ids` is unchanged (› lists, filters and keeps tenants apart). `apps/api/src/search.ts`. |
+| « Retrouver une facture » on the Tableau de bord | `apps/addin/src/controller.test.ts` › finds any invoice of the company from the Tableau de bord, and opens it (real API: by the end of its number, by stage « Payée », nothing found, « Plus de résultats » adding the next page, the fiche opened). `apps/addin/src/ui/timeline.test.ts` › shows a search result with its kind, customer, amount, date and Mode test. E2E: `apps/addin/e2e/harness.spec.ts` › … « Retrouver une facture: the rejected one, by a piece of its number » (« 101 » and « À reprendre »: one result, TEST-F2026-101, whose fiche opens « Rejetée par la plateforme »; screenshot `search.png`). |
+| Tests and docs | `docs/ARCHITECTURE.md` › Finding an invoice, `docs/DEFERRED.md` (row closed; § Finding an invoice: accents, amount or SIREN, the last search kept, supplier invoices), `docs/TODO.md` › Finding an invoice. With it, the answer to a correction of a sent invoice now says to click « Établir un avoir » on its fiche (`apps/api/src/edits.test.ts` › refuses on an invoice already sent: « Établir un avoir » on its fiche instead), and the DEFERRED rows on credit notes from a refusal or for a sent invoice are closed by §4. |
+| Gate | `pnpm verify` green on 2026-10-24 (tests with `--concurrency=1`): api 305, core 689 + oracle 276, agents 122, add-in 110, mock-pdp 68, pdp-adapter 41, db 10, shared 17, site 13. `pnpm test:e2e` green in local Chrome (browser: local): 4 passed, the live B2Brouter run skipped (no key). |

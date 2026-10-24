@@ -126,6 +126,21 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
     await page.screenshot({ path: info.outputPath('rejected.png') });
   });
 
+  await test.step('Retrouver une facture: the rejected one, by a piece of its number', async () => {
+    await pane.getByRole('button', { name: t('addin.invoice.back') }).click();
+    const search = pane.getByTestId('invoice-search');
+    await search.getByTestId('search-text').fill('101');
+    await search.getByTestId('search-stage').selectOption('to_correct');
+    await search.getByRole('button', { name: t('addin.search.go') }).click();
+    await expect(search.getByTestId('search-result')).toHaveCount(1);
+    await expect(search.getByTestId('search-result')).toContainText('TEST-F2026-101');
+    await page.screenshot({ path: info.outputPath('search.png') });
+    await search.getByText('TEST-F2026-101', { exact: true }).click();
+    await expect(pane.getByTestId('invoice-status')).toHaveText(
+      t('invoice.status.rejected_by_pdp'),
+    );
+  });
+
   await test.step('Réception: test supplier invoices, the duplicate and the new IBAN flagged, export', async () => {
     await pane.getByRole('tab', { name: t('addin.nav.reception') }).click();
     await expect(pane.getByText(t('addin.reception.emptyTest'))).toBeVisible();

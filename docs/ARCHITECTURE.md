@@ -245,6 +245,16 @@ B2Brouter adapter), `controller.test.ts` and `e2e/b2brouter.spec.ts` for the pan
 | Payment report | One `payment_reports` row per payment, written with it; the job retries only outages | « Encaissée » must reach the platform once; a lost answer at B2Brouter is still open (`docs/B2BROUTER.md` T21). Several rows per invoice since the instalments (migration `0020_partial_payments.sql`; T25). |
 | Instalments (2026-10-24) | `invoices.amount_paid` holds what was received; no new state: an invoice paid in part stays delivered, accepted, overdue or chased until the balance is paid | The platform's statuses have no « partly paid » (212 is « Encaissée »), and the chasing, the overdue sweep, the autopilot's ceiling and the weekly report only need the balance. A full credit note is refused on a partly paid invoice (it would cancel money received); « Abandonner la créance » gives up the balance. |
 
+### Finding an invoice (2026-10-24)
+
+`GET /invoices` (`apps/api/src/search.ts`) is both the pane's sheet-row lookup (`ids`) and « Retrouver
+une facture » on the Tableau de bord (`apps/addin/src/ui/InvoiceSearch.tsx`): a piece of the number or
+of the customer's name (`ilike`, with `%`, `_` and `\` escaped so they match only themselves), a stage
+(groups of statuses: `to_send`, `awaiting`, `late`, `paid`, `to_correct`, `closed`), invoice or credit
+note (`typeCode` 381), a period on the issue date, Mode test, and a sort (`recent`, `issued`, `due`,
+`amount`, each ending on creation time then id so pages never overlap). It answers the page and the
+`total`; the company's own invoices only, as every route.
+
 ## What M6 added: receiving supplier invoices (Réception)
 
 ```

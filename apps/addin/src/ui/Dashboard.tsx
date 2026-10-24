@@ -1,5 +1,6 @@
-// Screen 3, Tableau de bord (plan §5): the week in a few lines (ReportAgent), then one line per
-// invoice of the sheet, coloured like its FI_Statut cell, with « Voir » to open its fiche.
+// Screen 3, Tableau de bord (plan §5): the week in a few lines (ReportAgent), « Retrouver une
+// facture » for any invoice of the company, then one line per invoice of the sheet, coloured like its
+// FI_Statut cell, with « Voir » to open its fiche.
 import { t } from '@fi/shared';
 import {
   Badge,
@@ -19,6 +20,7 @@ import {
 import type { RowStatus, WeeklyReport } from '../api';
 import { namedLikeSource } from '../controller';
 import { parisTime, useFi } from './context';
+import { InvoiceSearch } from './InvoiceSearch';
 
 const useStyles = makeStyles({
   section: { display: 'flex', flexDirection: 'column', gap: '10px' },
@@ -139,6 +141,8 @@ export function Dashboard() {
       ) : (
         state.busy.includes('report') && <Spinner size="tiny" label={t('addin.report.loading')} />
       )}
+
+      <InvoiceSearch />
 
       {sync && (
         <Text weight="semibold" data-testid="counts">

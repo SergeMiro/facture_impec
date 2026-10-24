@@ -167,7 +167,7 @@ describe('« Corriger pour moi » on the 300/400 example', () => {
     expect((await c.decide(second.id, { status: 'reverted' })).edit.status).toBe('reverted');
   });
 
-  it('refuses on an invoice already sent: a corrective invoice or a credit note instead', async () => {
+  it('refuses on an invoice already sent: « Établir un avoir » on its fiche instead', async () => {
     const c = await example('wb-edits-03');
     const id = c.finding.invoiceId ?? '';
     const [held] = (await c.detail(id)).findings;
@@ -185,7 +185,7 @@ describe('« Corriger pour moi » on the 300/400 example', () => {
     const body = (await refused.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe('invoice_sent');
     expect(body.error.message).toBe(
-      'La facture F-2026-042 du 10/09/2026 est déjà envoyée : elle ne se modifie plus et reste telle quelle. Pour les 100,00 € en cause, établissez une facture rectificative ou un avoir qui cite son numéro et sa date.',
+      "La facture F-2026-042 du 10/09/2026 est déjà envoyée : elle ne se modifie plus et reste telle quelle. Pour corriger les 100,00 € en cause, ouvrez sa fiche et cliquez sur « Établir un avoir » : l'avoir l'annule en entier. Envoyez ensuite une nouvelle facture corrigée, avec un nouveau numéro.",
     );
     expect(await c.audits('edit.propose')).toEqual([]);
   });
