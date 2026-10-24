@@ -383,7 +383,7 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
         siret: p.siret,
         address: p.address,
         source: p.source,
-        subcontractor: p.subcontractor,
+        subcontracting: p.subcontracting,
         erpRef: p.erpRef,
         createdAt: p.createdAt.toISOString(),
       })),

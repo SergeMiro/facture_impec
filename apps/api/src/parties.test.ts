@@ -51,6 +51,7 @@ interface Party {
   autopilot: boolean;
   requiresPurchaseOrder: boolean;
   publicEntity: boolean;
+  subcontracting: boolean;
 }
 interface ErrorBody {
   error: { code: string; message: string };
@@ -379,5 +380,38 @@ describe('sync: the sheet completed from the customer', () => {
     expect(again.rows[0]?.detail).toContain('bon de commande');
     await patch({ requiresPurchaseOrder: false });
     expect((await state())?.status).toBe('validated');
+  });
+
+  it("calls VAT an error on an invoice to a donneur d'ordre, only for a building firm", async () => {
+    const t = await tenant();
+    const party = (await confirm(t.apiKey, MARTIN_SIREN, 'Martin')).body;
+    const first = await sync(t.apiKey, sheet(line('F-1', 'MARTIN')));
+    const id = first.rows[0]?.invoiceId ?? '';
+    const status = async () =>
+      (await database.db.select().from(invoices).where(eq(invoices.id, id)))[0]?.status;
+    const send = async (path: string, body: Record<string, boolean>) => {
+      const res = await request(path, { method: 'PATCH', token: t.apiKey, body });
+      expect(res.status).toBe(200);
+      return (await res.json()) as Record<string, unknown>;
+    };
+    expect(await send(`/parties/${party.id}`, { subcontracting: true })).toMatchObject({
+      subcontracting: true,
+    });
+    // Not a building firm: the BTP rules do not speak.
+    expect(await status()).toBe('validated');
+
+    expect(await send('/settings', { btp: true })).toMatchObject({ btp: true });
+    expect(await status()).toBe('needs_fix');
+    const again = await sync(t.apiKey, sheet(line('F-1', 'MARTIN')));
+    expect(again.rows[0]).toMatchObject({ invoiceId: id, status: 'needs_fix', errors: 1 });
+    expect(again.rows[0]?.detail).toContain('autoliquidée');
+    const me = await request('/me', { token: t.apiKey });
+    expect(((await me.json()) as { tenant: { btp: boolean } }).tenant.btp).toBe(true);
+
+    await send(`/parties/${party.id}`, { subcontracting: false });
+    expect(await status()).toBe('validated');
+    await send(`/parties/${party.id}`, { subcontracting: true });
+    await send('/settings', { btp: false });
+    expect(await status()).toBe('validated');
   });
 });

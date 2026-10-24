@@ -59,6 +59,7 @@ interface Settings {
   pseudonymizeLlm: boolean;
   chaseCadence: number[];
   minMarginPercent: number | null;
+  btp: boolean;
   invoiceDefaults: Record<string, unknown>;
   pdp: {
     provider: string;
@@ -92,6 +93,7 @@ describe('settings', () => {
       pseudonymizeLlm: true,
       chaseCadence: [-3, 1, 8, 15, 30],
       minMarginPercent: null,
+      btp: false,
       invoiceDefaults: {},
       pdp: {
         provider: 'mock',

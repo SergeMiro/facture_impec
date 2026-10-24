@@ -2,7 +2,13 @@
 // delivered, « Bon pour paiement » and « Contester », the export for the accountant, and « Mode test »
 // supplier invoices. Polling them is the sweep's job (workers.ts).
 import { randomUUID } from 'node:crypto';
-import { type EarlierInbound, readInbound, triageInbound } from '@fi/agents';
+import {
+  type EarlierInbound,
+  type InboundBtp,
+  readInbound,
+  retriageSubcontracting,
+  triageInbound,
+} from '@fi/agents';
 import {
   buildCsv,
   buildFec,
@@ -28,8 +34,10 @@ import {
   type Db,
   desc,
   eq,
+  hashOf,
   type InboundExportRow,
   type InboundRow,
+  inArray,
   inboundExports,
   inboundQueue,
   isNotNull,
@@ -37,6 +45,7 @@ import {
   like,
   max,
   ne,
+  parties,
   type TenantRow,
   type Tx,
   tenants,
@@ -100,12 +109,12 @@ async function triageOne(tx: Tx, id: string, now: Date): Promise<boolean> {
   if (!row || row.triagedAt) return false;
   // One triage at a time per company: two copies arriving together still see each other.
   const [tenant] = await tx
-    .select({ siren: tenants.siren })
+    .select({ siren: tenants.siren, btp: tenants.btp })
     .from(tenants)
     .where(eq(tenants.id, row.tenantId))
     .for('update');
   if (!tenant) return false;
-  const read = readInbound(row.xml, parisToday(now));
+  const read = readInbound(row.xml, parisToday(now), await inboundBtp(tx, row.tenantId, tenant));
   const facts = read.ok ? read.facts : null;
   const earlier: EarlierInbound[] = facts?.supplierKey
     ? (
@@ -161,6 +170,73 @@ async function triageOne(tx: Tx, id: string, now: Date): Promise<boolean> {
   return true;
 }
 
+/** The SIRENs of the suppliers the company marked as its sous-traitants. */
+export async function subcontractors(db: Db | Tx, tenantId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ siren: parties.siren })
+    .from(parties)
+    .where(
+      and(
+        eq(parties.tenantId, tenantId),
+        eq(parties.kind, 'supplier'),
+        eq(parties.subcontracting, true),
+      ),
+    );
+  return new Set(rows.map((r) => r.siren));
+}
+
+/** What the BTP rules know of the suppliers, only for a building firm (docs/research/BTP_RULES.md). */
+async function inboundBtp(
+  db: Db | Tx,
+  tenantId: string,
+  tenant: Pick<TenantRow, 'btp'>,
+): Promise<InboundBtp | undefined> {
+  return tenant.btp ? { subcontractors: await subcontractors(db, tenantId) } : undefined;
+}
+
+/**
+ * The company's word on a supplier moved (its « sous-traitance », or « Entreprise du bâtiment »): the
+ * invoices still to decide, of that supplier or of all, get the flag that word decides made again.
+ * The other flags stay: a duplicate is still compared with what had arrived before it.
+ */
+export async function recheckSubcontracting(
+  tx: Tx,
+  tenant: TenantRow,
+  now: Date,
+  supplierKey?: string,
+): Promise<void> {
+  const rows = await tx
+    .select()
+    .from(inboundQueue)
+    .where(
+      and(
+        eq(inboundQueue.tenantId, tenant.id),
+        inArray(inboundQueue.status, ['new', 'disputed']),
+        isNotNull(inboundQueue.triagedAt),
+        supplierKey ? eq(inboundQueue.supplierKey, supplierKey) : undefined,
+      ),
+    );
+  const btp = await inboundBtp(tx, tenant.id, tenant);
+  for (const row of rows) {
+    if (!row.triage) continue;
+    const triage = retriageSubcontracting(row.triage, readInbound(row.xml, parisToday(now), btp));
+    if (hashOf(triage) === hashOf(row.triage)) continue;
+    await tx
+      .update(inboundQueue)
+      .set({ triage, updatedAt: now })
+      .where(eq(inboundQueue.id, row.id));
+    await audit(tx, {
+      tenantId: tenant.id,
+      actor: 'agent:inbound',
+      action: 'inbound.retriage',
+      objectType: 'inbound',
+      objectId: row.id,
+      before: row.triage,
+      after: triage,
+    });
+  }
+}
+
 // ── What the pane shows ──────────────────────────────────────────────────────────────────────────
 
 const flagMessage = (flag: InboundFlag) => t(`inbound.flag.${flag.code}`, flag.params);
@@ -175,6 +251,8 @@ export function inboundView(row: InboundRow) {
     isTest: row.isTest,
     triaged: row.triagedAt !== null,
     supplierName: row.supplierName ?? t('inbound.unknownSupplier'),
+    /** The supplier's SIREN when its invoice gives one: the pane's « sous-traitant » switch needs it. */
+    supplierSiren: row.supplierKey?.startsWith('siren:') ? row.supplierKey.slice(6) : null,
     number: row.number,
     creditNote: row.parsed ? isCreditNote(row.parsed) : false,
     issueDate: row.issueDate,
@@ -231,7 +309,11 @@ export async function listInbound(deps: ApiDeps, tenant: TenantRow, test: boolea
     .where(and(eq(inboundQueue.tenantId, tenant.id), eq(inboundQueue.isTest, test)))
     .orderBy(desc(inboundQueue.receivedAt), desc(inboundQueue.id))
     .limit(200);
-  return rows.map(inboundView);
+  return {
+    inbound: rows.map(inboundView),
+    /** The suppliers marked « sous-traitant »; null: not a building firm, the pane hides the switch. */
+    subcontractors: tenant.btp ? [...(await subcontractors(deps.db, tenant.id))].sort() : null,
+  };
 }
 
 export async function listExports(deps: ApiDeps, tenant: TenantRow, test: boolean) {

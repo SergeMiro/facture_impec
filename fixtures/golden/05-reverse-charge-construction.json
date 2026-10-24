@@ -1,5 +1,10 @@
 {
   "description": "Sous-traitance dans le bâtiment : autoliquidation de la TVA par le client.",
+  "context": {
+    "btp": {
+      "subcontracting": true
+    }
+  },
   "draft": {
     "processType": "S1",
     "number": "F2026-0045",

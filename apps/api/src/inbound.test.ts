@@ -335,6 +335,72 @@ describe('« Mode test » supplier invoices', () => {
   });
 });
 
+describe('BTP: a supplier the company marks as its sous-traitant', () => {
+  const codes = (row?: View) => row?.flags.map((f) => f.code);
+  const mark = (c: Awaited<ReturnType<typeof company>>, siren: string, on: boolean) =>
+    c.call(`/suppliers/${siren}`, { method: 'PATCH', body: { subcontracting: on } });
+
+  it('has its invoices with VAT flagged once the company is a building firm, and only then', async () => {
+    const c = await company();
+    await c.deliver(goldenXml('01-services-standard-rate'));
+    await c.deliver(goldenXml('05-reverse-charge-construction'));
+    const before = await c.call('/inbound?test=false');
+    // Not a building firm: the pane shows no switch.
+    expect(before.body.subcontractors).toBeNull();
+    const [reverse, taxed] = before.body.inbound ?? [];
+    expect(taxed).toMatchObject({ supplierSiren: '100000009', number: 'F2026-0042' });
+    expect(codes(taxed)).toEqual(['new_supplier']);
+
+    // Kept on the supplier, which joins the company's parties as its invoice names it.
+    expect((await mark(c, '100000009', true)).body).toEqual({
+      siren: '100000009',
+      legalName: 'Atelier Dupont SARL',
+      subcontracting: true,
+    });
+    expect(codes((await c.list())[1])).toEqual(['new_supplier']);
+
+    await c.call('/settings', { method: 'PATCH', body: { btp: true } });
+    const btp = await c.call('/inbound?test=false');
+    expect(btp.body.subcontractors).toEqual(['100000009']);
+    const [reverseNow, taxedNow] = btp.body.inbound ?? [];
+    // The flag joins the ones the triage found, which stay as they were (not a duplicate now).
+    expect(taxedNow?.flags.map((f) => [f.code, f.level])).toEqual([
+      ['subcontracting_vat', 'warn'],
+      ['new_supplier', 'info'],
+    ]);
+    expect(taxedNow?.flags[0]?.message).toMatch(/sous-traitant.*sans TVA/);
+    expect(taxedNow?.canApprove).toBe(true);
+    expect(reverseNow?.flags).toEqual(reverse?.flags);
+
+    await mark(c, '100000009', false);
+    expect(codes((await c.list())[1])).toEqual(['new_supplier']);
+    await mark(c, '100000009', true);
+    await c.call('/settings', { method: 'PATCH', body: { btp: false } });
+    expect(codes((await c.list())[1])).toEqual(['new_supplier']);
+
+    const retriaged = await database.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.tenantId, c.id), eq(auditEvents.action, 'inbound.retriage')));
+    expect(retriaged).toHaveLength(4);
+  });
+
+  it('triages a new invoice of a marked supplier with it; an unknown SIREN changes nothing', async () => {
+    const c = await company();
+    await c.call('/settings', { method: 'PATCH', body: { btp: true } });
+    expect((await mark(c, '100000009', true)).body.error).toMatchObject({
+      code: 'supplier_missing',
+    });
+    expect((await mark(c, '12345', true)).status).toBe(404);
+    await c.deliver(goldenXml('05-reverse-charge-construction'));
+    await mark(c, '100000009', true);
+    await c.deliver(goldenXml('01-services-standard-rate'));
+    const [taxed, reverse] = await c.list();
+    expect(codes(taxed)).toEqual(['subcontracting_vat']);
+    expect(codes(reverse)).toEqual(['new_supplier']);
+  });
+});
+
 describe('RGPD', () => {
   it('exports supplier invoices and their exports; deletion removes the test ones', async () => {
     const c = await company();

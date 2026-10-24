@@ -1420,3 +1420,27 @@ the work:
 | Boundaries | `scripts/boundaries/check.test.ts` › importsOf (every form, with its line, none in a comment), › checkBoundaries (a forbidden outside package, a Node module in browser code, a path into another package, a workspace package the rule refuses, one not declared, one that does not exist, an outside package not allowed, a package without a rule; tests and scripts exempt), › the repository keeps its package boundaries. Root `package.json` `boundaries`, `test:scripts`, `verify`. The first run found the add-in importing `ai` (the chat client of R8, allowed: the rule forbids the providers `@ai-sdk/*` there). |
 | Nothing else changes | `pnpm verify` green on 2026-10-24 (tests with `--concurrency=1`): boundaries 10 packages without violation; api 310 (308 before, + the 2 RGPD tests), core 689 + oracle 276, agents 122, add-in 112, mock-pdp 68, pdp-adapter 41, db 14 (10 before), shared 17, site 13, domain 7, scripts 4. `docker build -f apps/api/Dockerfile .` succeeds (433 MB); inside the image `@fi/db` and `@fi/domain` load under tsx. |
 
+
+## BTP plan — stage 1A: the BTP rules where invoices are checked (2026-10-24)
+
+`docs/plans/phase-1.md` › 1A. Criteria, written there before the work:
+
+- **Sources**: every BTP rule has its source in its comment and in `docs/research/BTP_RULES.md`, with
+  what is verified (XP Z12-014 annexe A, BOFiP) and what is not (Légifrance unread: `TODO(verify)`).
+- **Rules**: BTP-AUTOLIQ-01/02, BTP-RG-01/02/03, BTP-SIT-01/02 in `@fi/core`, each with cases that
+  fire and a golden they stay silent on; a rule without cases fails `pnpm verify`; silent without the
+  context `btp`.
+- **What the company says**: « Entreprise du bâtiment (BTP) » in Réglages, « sous-traitance » on a
+  customer (Clients) and on a supplier (Réception), each moving the verdicts of what is still to
+  decide, audited.
+- **Where it shows**: a sous-traitant's invoice with VAT is an error on the company's sheet invoice
+  and a flag on the received invoice, only once the relationship is marked and the company is a
+  building firm.
+
+### Evidence (2026-10-24)
+
+| Criterion | Evidence |
+|---|---|
+| Sources, rules | `docs/research/BTP_RULES.md`; `packages/core/src/rules/btp.ts`; `packages/core/src/rules/btp.test.ts` (silent without context; AUTOLIQ-01 message; exactly 5 % of the TTC accepted, a cent more refused; SIT messages; first situation and unlinked chantier silent); `fixtures/invalid/btp.json` (9 cases) and golden 26 under `rules.test.ts`; oracle 278 (golden 26's XML against the official XSD and schematrons). |
+| What the company says | `apps/api/src/parties.test.ts` › calls VAT an error on an invoice to a donneur d'ordre, only for a building firm; `apps/api/src/inbound.test.ts` › BTP (the flag only once marked and BTP on, the other flags kept, 4 `inbound.retriage` audits; a new invoice of a marked supplier triaged with it; unknown or malformed SIREN 404); `packages/agents/src/inbound.test.ts` › for a building firm; `apps/addin/src/controller.test.ts` › lets a building firm mark a supplier as its sous-traitant. E2E step added to `apps/addin/e2e/harness.spec.ts` (BTP), not run yet. |
+| Gate | On 2026-10-24: biome ci, typecheck, boundaries (10 packages, no violation); tests api 313, core 707 + oracle 278, agents 124, add-in 113, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, domain 7. The server was loaded by another session: one run timed out in API hooks, rerun green. |

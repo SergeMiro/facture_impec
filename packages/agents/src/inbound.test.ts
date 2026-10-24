@@ -2,7 +2,13 @@ import { readFileSync } from 'node:fs';
 import { type Invoice, toCii } from '@fi/core';
 import { computeGolden, FIXTURES, golden, TODAY } from '@fi/core/testing';
 import { describe, expect, it } from 'vitest';
-import { type EarlierInbound, type InboundRead, readInbound, triageInbound } from './inbound';
+import {
+  type EarlierInbound,
+  type InboundRead,
+  readInbound,
+  retriageSubcontracting,
+  triageInbound,
+} from './inbound';
 
 const BUYER = '200000008';
 const IBAN = 'FR7630006000011234567890189';
@@ -158,5 +164,33 @@ describe('InboundAgent triage', () => {
       code: 'foreign_currency',
       params: { currency: 'USD' },
     });
+  });
+});
+
+describe('InboundAgent for a building firm (BTP)', () => {
+  const marked = { subcontractors: new Set(['100000009']) };
+  const btp = (name: string, given = marked) => readInbound(xml(name), TODAY, given);
+
+  it('flags VAT charged by a supplier the company marked as its sous-traitant, nothing else', () => {
+    expect(codes(btp('01-services-standard-rate'))).toEqual(['subcontracting_vat', 'new_supplier']);
+    // Under reverse charge, as a sous-traitant must invoice; an unmarked supplier, or no BTP: silent.
+    expect(codes(btp('05-reverse-charge-construction'))).toEqual(['new_supplier']);
+    expect(codes(btp('01-services-standard-rate', { subcontractors: new Set() }))).toEqual([
+      'new_supplier',
+    ]);
+    expect(codes(read('01-services-standard-rate'))).toEqual(['new_supplier']);
+  });
+
+  it("makes only that flag again when the company's word moves", () => {
+    const before = triageInbound(ok(read('01-services-standard-rate')), {
+      buyerSiren: BUYER,
+      earlier: [earlier({ number: 'F2026-0042' })],
+    });
+    expect(before.flags.map((f) => f.code)).toEqual(['duplicate']);
+    const marked = retriageSubcontracting(before, btp('01-services-standard-rate'));
+    expect(marked.flags.map((f) => f.code)).toEqual(['duplicate', 'subcontracting_vat']);
+    const unmarked = retriageSubcontracting(marked, read('01-services-standard-rate'));
+    expect(unmarked).toEqual(before);
+    expect(retriageSubcontracting(before, readInbound('not xml <', TODAY))).toEqual(before);
   });
 });

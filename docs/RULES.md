@@ -2,14 +2,14 @@
 
 # Validation rules
 
-225 rules: 211 errors and 14 warnings. 157 of the 223 CEN EN 16931 rules are applied; the others are listed at the end with the reason.
+232 rules: 215 errors and 17 warnings. 157 of the 223 CEN EN 16931 rules are applied; the others are listed at the end with the reason.
 
 ## How to read this
 
 - **error** blocks sending; **warning** is shown but does not block.
 - **auto-fix** marks pure formatting fixes that cannot change the meaning (spaces, dots, date format, decimal comma). An auto-fixable issue hides the other issues on the same path: once the fix is applied, validation runs again and shows what is left.
 - The message column is the French text shown to the user (packages/shared/i18n/fr.json); `{value}`, `{field}`, `{rate}`, `{category}`, `{mention}` and `{last}` are filled in per issue.
-- Some rules read the context given by the caller, not the invoice alone: today in Europe/Paris (BR-FR-CO-01), the invoices already issued (BR-FR-CO-02, FF-NUM-01, FF-NUM-02, FF-CN-01; silent when the history is unknown), the seller option for VAT on debits (FF-DEB-01) and customer settings (FF-PO-01 purchase order required, BR-FR-14 delivers elsewhere, DGFIP-G2.32 public entity).
+- Some rules read the context given by the caller, not the invoice alone: today in Europe/Paris (BR-FR-CO-01), the invoices already issued (BR-FR-CO-02, FF-NUM-01, FF-NUM-02, FF-CN-01; silent when the history is unknown), the seller option for VAT on debits (FF-DEB-01) and customer settings (FF-PO-01 purchase order required, BR-FR-14 delivers elsewhere, DGFIP-G2.32 public entity). The BTP-* rules run only for a building firm, on what it knows and the invoice cannot say: the other party is its sous-traitant or donneur d'ordre, the retenue de garantie, the chantier, the situation before (sources: docs/research/BTP_RULES.md).
 - BR-FR-DEC-01 runs while reading an XML file: the model holds cents and cannot represent a third decimal.
 - Every rule has at least one failing case in fixtures/invalid and passes on the golden invoices in fixtures/golden (packages/core/src/rules/rules.test.ts).
 
@@ -239,7 +239,7 @@ Rules of the tax administration specifications that the AFNOR list does not carr
 
 Our own checks: legal mentions of the Commercial Code, identifier keys (Luhn, VAT key, IBAN), numbering, formatting that can be fixed automatically, the line amount (FF-LINE-CALC, which CEN does not check) and sanity checks.
 
-30 rules.
+37 rules.
 
 | Id | Level | Scope | BT | Checks | Message |
 |---|---|---|---|---|---|
@@ -273,6 +273,13 @@ Our own checks: legal mentions of the Commercial Code, identifier keys (Luhn, VA
 | FF-CUR-01 | warning | document | BT-5 | The invoice is in euros; another currency is allowed but worth a second look. | La facture est en {value}, pas en euros. |
 | FF-QTY-01 | warning | lines | BT-129 | Quantities are not negative, except on credit notes. | Une ligne a une quantité négative. |
 | FF-DLV-01 | error | delivery | BT-75, BT-77, BT-78, BT-80 | A delivery address has street, city, post code and country. | L'adresse de livraison est incomplète. |
+| BTP-AUTOLIQ-01 | error | vat | BT-110, BT-118 | Between a sous-traitant and its donneur d'ordre (the company said so), construction works are invoiced without VAT, under reverse charge (CGI art. 283, 2 nonies). | Entre un sous-traitant du bâtiment et l'entreprise qui lui confie les travaux, la TVA est autoliquidée : cette facture ne doit pas porter de TVA (article 283, 2 nonies du CGI). |
+| BTP-AUTOLIQ-02 | warning | vat | BT-118, BT-121 | French reverse charge (VATEX-FR-AE) with a company the building firm has not marked as its sous-traitant or donneur d'ordre. | La TVA est autoliquidée, mais cette entreprise n'est indiquée ni comme votre sous-traitant ni comme votre donneur d'ordre. |
+| BTP-RG-01 | error | totals | BT-112 | The retenue de garantie is at most 5 % of the amount invoiced, TTC (loi n° 71-584, art. 1). | La retenue de garantie dépasse 5 % du montant de la facture, le maximum permis par la loi du 16 juillet 1971. |
+| BTP-RG-02 | warning | notes | BT-22 | A retenue de garantie on an invoice of a chantier whose contract agreed none. | Une retenue de garantie est appliquée, alors que le marché de ce chantier n'en prévoit pas. |
+| BTP-RG-03 | warning | notes | BT-21, BT-22 | A retenue de garantie the invoice does not show: XP Z12-014 annex A case 26 writes it as a note with subject ABU. | La retenue de garantie n'apparaît pas dans la facture électronique. |
+| BTP-SIT-01 | error | document | BT-1 | A situation's number follows the previous situation of the same chantier. | Cette situation porte le n° {numero}, alors que la précédente de ce chantier était la n° {precedent}. |
+| BTP-SIT-02 | error | totals | BT-109 | A situation's cumulative works are not below the previous situation's of the same chantier. | Le cumul des travaux de cette situation ({cumul}) est inférieur à celui de la précédente ({precedent}). |
 
 ## CEN rules not applied
 

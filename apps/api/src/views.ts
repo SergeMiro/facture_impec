@@ -20,6 +20,7 @@ export function tenantView(row: TenantRow) {
     sandboxEnabled: row.sandboxEnabled,
     pseudonymizeLlm: row.pseudonymizeLlm,
     vatOnDebits: row.vatOnDebits,
+    btp: row.btp,
     liveAt: row.liveAt?.toISOString() ?? null,
     whiteLabel: row.whiteLabel,
     billing: {

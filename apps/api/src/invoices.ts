@@ -114,8 +114,11 @@ export const columns = ({ draft, document, fingerprint }: Computed) => ({
   payable: document.totals.payable,
 });
 
-/** What the rules must know about the customer (core RuleContext.buyer), from its fiche. */
-export type BuyerSettings = Pick<PartyRow, 'requiresPurchaseOrder' | 'publicEntity'>;
+/** What the rules must know about the customer (core RuleContext.buyer and .btp), from its fiche. */
+export type BuyerSettings = Pick<
+  PartyRow,
+  'requiresPurchaseOrder' | 'publicEntity' | 'subcontracting'
+>;
 
 /** BR-FR-14's « delivered elsewhere » waits for a delivery address a sheet can give (DEFERRED.md). */
 export const buyerSettings = (party?: BuyerSettings | null) => ({
@@ -191,6 +194,9 @@ export function checkOf(
     seller: { vatOnDebits: tenant.vatOnDebits },
     // Absent when never asked: the key of an invoice without an EU number does not move.
     buyer: { ...buyerSettings(buyer), ...(vat && { vat }) },
+    // The BTP rules speak only to a building firm (docs/research/BTP_RULES.md): « sous-traitance »
+    // on the customer says the company works for it as its sous-traitant.
+    ...(tenant.btp && { btp: { subcontracting: buyer?.subcontracting ?? false } }),
   };
   return {
     key: hashOf({ ruleset: RULESET, fingerprint: computed.fingerprint, ...context }),
@@ -496,6 +502,40 @@ export async function recheckParty(tx: Tx, tenant: TenantRow, party: PartyRow, n
         inArray(invoices.status, [...EDITABLE]),
       ),
     );
+  await recheckRows(tx, tenant, rows, now, () => party);
+}
+
+/** The company's settings the rules read changed (« Entreprise du bâtiment »): all its invoices not yet sent. */
+export async function recheckCompany(tx: Tx, tenant: TenantRow, now: Date) {
+  const rows = await tx
+    .select()
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.tenantId, tenant.id),
+        eq(invoices.direction, 'out'),
+        inArray(invoices.status, [...EDITABLE]),
+      ),
+    );
+  const fiches = new Map<string | null, Promise<PartyRow | null>>();
+  await recheckRows(tx, tenant, rows, now, (id) => {
+    let fiche = fiches.get(id);
+    if (!fiche) {
+      fiche = partySettings(tx, id);
+      fiches.set(id, fiche);
+    }
+    return fiche;
+  });
+}
+
+/** A new verdict for each row whose check's key moved; the autopilot decides again on those. */
+async function recheckRows(
+  tx: Tx,
+  tenant: TenantRow,
+  rows: readonly InvoiceRow[],
+  now: Date,
+  partyOf: (partyId: string | null) => PartyRow | null | Promise<PartyRow | null>,
+) {
   const knowns = new Map<boolean, Known>();
   for (const row of rows) {
     let known = knowns.get(row.isTest);
@@ -503,7 +543,7 @@ export async function recheckParty(tx: Tx, tenant: TenantRow, party: PartyRow, n
       known = await loadKnown(tx, tenant, row.isTest);
       knowns.set(row.isTest, known);
     }
-    const { key, run } = checkOf(tenant, row, known, party, now, row.id);
+    const { key, run } = checkOf(tenant, row, known, await partyOf(row.partyId), now, row.id);
     if (key === row.validatedKey) continue;
     await storeVerdict(tx, row.id, key, run(), now);
     await planAutopilot(tx, now, tenant, row.id);

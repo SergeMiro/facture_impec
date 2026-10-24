@@ -107,6 +107,8 @@ export const tenants = pgTable('tenants', {
   pseudonymizeLlm: boolean('pseudonymize_llm').notNull().default(true),
   /** Option pour le paiement de la TVA d'après les débits: the context of rule FF-DEB-01. */
   vatOnDebits: boolean('vat_on_debits').notNull().default(false),
+  /** A building firm (Réglages): the BTP rules run on its invoices (docs/research/BTP_RULES.md). */
+  btp: boolean('btp').notNull().default(false),
   /** What every invoice of a sheet reuses (IBAN, payment terms, mentions): core InvoiceDefaults. */
   invoiceDefaults: jsonb('invoice_defaults_json')
     .$type<InvoiceDefaultsInput>()
@@ -330,10 +332,11 @@ export const parties = pgTable(
     /** When the directory confirmed it; null for a supplier nobody looked up. */
     verifiedAt: timestamp('verified_at', { withTimezone: true }),
     /**
-     * A supplier that is the company's sous-traitant (docs/DECISIONS.md D2): its URSSAF attestation is
-     * watched (C. trav. D8222-5) and its invoices carry no VAT (CGI art. 283, 2 nonies).
+     * Sous-traitance with this company (docs/DECISIONS.md D2): a supplier that works for the company as
+     * its sous-traitant (its URSSAF attestation is watched, C. trav. D8222-5), or a customer the company
+     * works for as one. Either way the invoices between them carry no VAT (CGI art. 283, 2 nonies).
      */
-    subcontractor: boolean('subcontractor').notNull().default(false),
+    subcontracting: boolean('subcontracting').notNull().default(false),
     /** The establishment the company deals with, when known; SIREN stays the key. */
     siret: text('siret'),
     /** The ERP's own id of this company (BTP plan §9), once a connector read it. */

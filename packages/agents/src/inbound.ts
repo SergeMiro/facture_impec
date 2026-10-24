@@ -45,8 +45,18 @@ export type InboundRead =
 const AMOUNT_RULES = /^BR-(?:1[2-5]|4[56]|CO-1[0-8]|(?:S|Z|E|AE|IC|G|O)-0[89])$/;
 /** How many rule messages a flag carries: the screen shows them, the file has the rest. */
 const DETAILS = 3;
+/** A sous-traitant's invoice with VAT (the company said it is one): its own flag, not one rule among others. */
+const SUBCONTRACTING_VAT = 'BTP-AUTOLIQ-01';
 
-export function readInbound(xml: string, today: string): InboundRead {
+/**
+ * What the company said about its suppliers, for the BTP rules (docs/research/BTP_RULES.md): given
+ * only when it is a building firm, with the SIRENs of the suppliers it marked as its sous-traitants.
+ */
+export interface InboundBtp {
+  subcontractors: ReadonlySet<string>;
+}
+
+export function readInbound(xml: string, today: string, btp?: InboundBtp): InboundRead {
   let parsed: ReturnType<typeof parseInvoiceXml>;
   try {
     parsed = parseInvoiceXml(xml);
@@ -55,7 +65,11 @@ export function readInbound(xml: string, today: string): InboundRead {
     throw e;
   }
   const { invoice } = parsed;
-  const issues = [...parsed.issues, ...validate(invoice, { today })];
+  const siren = partySiren(invoice.seller);
+  const context = btp && {
+    btp: { subcontracting: siren !== undefined && btp.subcontractors.has(siren) },
+  };
+  const issues = [...parsed.issues, ...validate(invoice, { today, ...context })];
   return {
     ok: true,
     invoice,
@@ -118,7 +132,10 @@ export function triageInbound(read: InboundRead, context: TriageContext): Inboun
   if (amountErrors.length > 0 || booked !== (invoice.totals.taxInclusive ?? 0)) {
     flags.push({ code: 'amounts', details: details(amountErrors) });
   }
-  const otherErrors = errors.filter((i) => !AMOUNT_RULES.test(i.ruleId));
+  flags.push(...subcontractingFlags(errors));
+  const otherErrors = errors.filter(
+    (i) => !AMOUNT_RULES.test(i.ruleId) && i.ruleId !== SUBCONTRACTING_VAT,
+  );
   if (otherErrors.length > 0) {
     flags.push({
       code: 'rules',
@@ -169,6 +186,26 @@ export function triageInbound(read: InboundRead, context: TriageContext): Inboun
   if (facts.currency && facts.currency !== 'EUR') {
     flags.push({ code: 'foreign_currency', params: { currency: facts.currency } });
   }
+  return ranked(flags);
+}
+
+const ranked = (flags: InboundFlag[]): InboundTriage => {
   const rank = (f: InboundFlag) => ORDER.indexOf(INBOUND_FLAGS[f.code]);
   return { flags: flags.sort((a, b) => rank(a) - rank(b)) };
+};
+
+function subcontractingFlags(issues: readonly Issue[]): InboundFlag[] {
+  // The flag's own message says it all; the rule's, written for the seller, would repeat it.
+  const found = issues.some((i) => i.ruleId === SUBCONTRACTING_VAT && i.severity === 'error');
+  return found ? [{ code: 'subcontracting_vat' }] : [];
+}
+
+/**
+ * The company's word on the supplier moved (« sous-traitance », « Entreprise du bâtiment »): only the
+ * flag that word decides is made again, from `read` (read with the new word); the others stay as the
+ * triage found them, duplicates compared with what had arrived before.
+ */
+export function retriageSubcontracting(triage: InboundTriage, read: InboundRead): InboundTriage {
+  const kept = triage.flags.filter((f) => f.code !== 'subcontracting_vat');
+  return ranked(read.ok ? [...kept, ...subcontractingFlags(read.issues)] : kept);
 }

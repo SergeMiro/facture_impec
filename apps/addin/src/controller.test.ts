@@ -460,7 +460,12 @@ describe('a new user on the demo sheet', () => {
     expect(state().testMode).toBe(true);
     controller.navigate({ name: 'reception' });
     await until(() => state().reception !== null, 'the received invoices');
-    expect(state().reception).toEqual({ test: true, inbound: [], exports: [] });
+    expect(state().reception).toEqual({
+      test: true,
+      inbound: [],
+      exports: [],
+      subcontractors: null,
+    });
 
     // The duplicate and the IBAN change both start from a first, normal invoice.
     await controller.receiveTestInbound('duplicate');
@@ -507,7 +512,12 @@ describe('a new user on the demo sheet', () => {
     // Out of Mode test, the real side: nothing received, nothing exported.
     await controller.setTestMode(false);
     await until(() => state().reception?.test === false, 'the real received invoices');
-    expect(state().reception).toEqual({ test: false, inbound: [], exports: [] });
+    expect(state().reception).toEqual({
+      test: false,
+      inbound: [],
+      exports: [],
+      subcontractors: null,
+    });
   });
 
   it("finds the fiche's customer in the directory, saves it, then opts it in for the autopilot", async () => {
@@ -650,6 +660,37 @@ describe('a new user on the demo sheet', () => {
       status: 'credited',
       credit: { by: { id: avoir?.id, status: 'deposited' } },
     });
+  });
+
+  it('lets a building firm mark a supplier as its sous-traitant, from Réception', async () => {
+    const wasTest = state().testMode;
+    if (!wasTest) await controller.setTestMode(true);
+    expect(await controller.saveSettings({ btp: true })).toBe(true);
+    expect(state().me?.tenant.btp).toBe(true);
+    controller.navigate({ name: 'reception' });
+    await until(() => Array.isArray(state().reception?.subcontractors), 'the switch');
+    expect(state().reception?.subcontractors).toEqual([]);
+    await controller.receiveTestInbound('normal');
+    const [fresh] = state().reception?.inbound ?? [];
+    if (!fresh?.supplierSiren) throw new Error('a test invoice with a SIREN expected');
+    const codes = () =>
+      state()
+        .reception?.inbound.find((r) => r.id === fresh.id)
+        ?.flags.map((f) => f.code);
+    expect(codes()).not.toContain('subcontracting_vat');
+
+    await controller.setSubcontractor(fresh.supplierSiren, true);
+    expect(state().notice?.text).toBe(
+      t('addin.reception.subcontractorOn', { name: fresh.supplierName }),
+    );
+    expect(state().reception?.subcontractors).toEqual([fresh.supplierSiren]);
+    expect(codes()).toContain('subcontracting_vat');
+    await controller.setSubcontractor(fresh.supplierSiren, false);
+    expect(codes()).not.toContain('subcontracting_vat');
+
+    expect(await controller.saveSettings({ btp: false })).toBe(true);
+    expect(state().me?.tenant.btp).toBe(false);
+    if (!wasTest) await controller.setTestMode(false);
   });
 });
 

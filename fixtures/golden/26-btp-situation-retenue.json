@@ -1,0 +1,124 @@
+{
+  "description": "Situation de travaux n° 3 d'un chantier, avec une retenue de garantie de 5 % indiquée en note (clause de réserve).",
+  "context": {
+    "btp": {
+      "subcontracting": false,
+      "retenue": {
+        "rateBps": 500,
+        "amount": 132000
+      },
+      "chantier": {
+        "retenueBps": 500
+      },
+      "situation": {
+        "number": 3,
+        "cumulative": 6200000,
+        "previous": {
+          "number": 2,
+          "cumulative": 4000000
+        }
+      }
+    }
+  },
+  "draft": {
+    "processType": "S1",
+    "number": "F2026-0070",
+    "issueDate": "2026-10-15",
+    "typeCode": "380",
+    "currency": "EUR",
+    "dueDate": "2026-11-14",
+    "projectReference": "CH-12",
+    "contractReference": "Marché du 2 mars 2026",
+    "paymentTerms": "Paiement à 30 jours par virement.",
+    "notes": [
+      {
+        "subjectCode": "PMT",
+        "text": "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €."
+      },
+      {
+        "subjectCode": "PMD",
+        "text": "Pénalités de retard : trois fois le taux d'intérêt légal."
+      },
+      {
+        "subjectCode": "AAB",
+        "text": "Escompte pour paiement anticipé : néant."
+      },
+      {
+        "subjectCode": "ABU",
+        "text": "Clause de réserve : retenue de garantie de 5 % sur le montant TTC, soit 1 320,00 €, à payer à la levée des réserves et au plus tard un an après la réception (loi n° 71-584 du 16 juillet 1971)."
+      }
+    ],
+    "seller": {
+      "name": "Atelier Dupont SARL",
+      "ids": [
+        {
+          "id": "10000000900017",
+          "scheme": "0009"
+        }
+      ],
+      "legalId": {
+        "id": "100000009",
+        "scheme": "0002"
+      },
+      "vatId": "FR88100000009",
+      "electronicAddress": {
+        "id": "100000009",
+        "scheme": "0225"
+      },
+      "address": {
+        "line1": "12 rue des Lilas",
+        "city": "Dijon",
+        "postCode": "21000",
+        "country": "FR"
+      }
+    },
+    "buyer": {
+      "name": "SCI Les Tilleuls",
+      "legalId": {
+        "id": "200000008",
+        "scheme": "0002"
+      },
+      "vatId": "FR37200000008",
+      "electronicAddress": {
+        "id": "200000008",
+        "scheme": "0225"
+      },
+      "address": {
+        "line1": "3 place du Marché",
+        "city": "Beaune",
+        "postCode": "21200",
+        "country": "FR"
+      }
+    },
+    "delivery": {
+      "date": "2026-09-30"
+    },
+    "payment": {
+      "meansCode": "30",
+      "accounts": [
+        {
+          "iban": "FR7630006000011234567890189",
+          "name": "Atelier Dupont SARL"
+        }
+      ]
+    },
+    "lines": [
+      {
+        "id": "1",
+        "quantity": "1",
+        "unitCode": "C62",
+        "price": {
+          "net": "22000.00"
+        },
+        "vat": {
+          "category": "S",
+          "rate": "20"
+        },
+        "item": {
+          "name": "Situation n° 3 — travaux réalisés au 30/09/2026 : cumul 62 000,00 € HT (62 % du marché), moins 40 000,00 € HT déjà facturés"
+        },
+        "nature": "services"
+      }
+    ]
+  }
+}

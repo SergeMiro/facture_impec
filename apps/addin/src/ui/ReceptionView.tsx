@@ -18,6 +18,7 @@ import {
   mergeClasses,
   Spinner,
   Subtitle2,
+  Switch,
   Text,
   tokens,
 } from '@fluentui/react-components';
@@ -92,6 +93,7 @@ function Received({ row, focused = false }: { row: Inbound; focused?: boolean })
   const sending = state.busy.includes(`dispute:${row.id}`);
   const number = row.number ?? '—';
   const date = row.issueDate ? frDate(row.issueDate) : '—';
+  const subcontractors = state.reception?.subcontractors ?? null;
 
   return (
     <li>
@@ -133,6 +135,17 @@ function Received({ row, focused = false }: { row: Inbound; focused?: boolean })
         {row.flags.map((f) => (
           <Flag key={f.code} flag={f} />
         ))}
+        {subcontractors && row.supplierSiren && (
+          <Switch
+            checked={subcontractors.includes(row.supplierSiren)}
+            disabled={state.busy.includes(`supplier:${row.supplierSiren}`)}
+            onChange={(_, d) => {
+              if (row.supplierSiren) void fi.setSubcontractor(row.supplierSiren, d.checked);
+            }}
+            label={t('addin.reception.subcontractor')}
+            data-testid="supplier-subcontracting"
+          />
+        )}
         {row.status === 'disputed' && row.disputeReason && (
           <Caption1>{t('addin.reception.disputed', { reason: row.disputeReason })}</Caption1>
         )}

@@ -1,0 +1,168 @@
+{
+  "cases": [
+    {
+      "rule": "BTP-AUTOLIQ-01",
+      "base": "01-services-standard-rate",
+      "why": "the seller is the buyer's sous-traitant, VAT at 20 %",
+      "context": {
+        "btp": {
+          "subcontracting": true
+        }
+      }
+    },
+    {
+      "rule": "BTP-AUTOLIQ-01",
+      "base": "05-reverse-charge-construction",
+      "why": "reverse charge, but a VAT amount left",
+      "on": "invoice",
+      "set": {
+        "totals.taxTotal": 96000
+      }
+    },
+    {
+      "rule": "BTP-AUTOLIQ-02",
+      "base": "05-reverse-charge-construction",
+      "why": "reverse charge with a company marked as neither",
+      "context": {
+        "btp": {
+          "subcontracting": false
+        }
+      }
+    },
+    {
+      "rule": "BTP-RG-01",
+      "base": "26-btp-situation-retenue",
+      "why": "a rate of 6 %",
+      "context": {
+        "btp": {
+          "subcontracting": false,
+          "retenue": {
+            "rateBps": 600
+          },
+          "chantier": {
+            "retenueBps": 500
+          },
+          "situation": {
+            "number": 3,
+            "cumulative": 6200000,
+            "previous": {
+              "number": 2,
+              "cumulative": 4000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "rule": "BTP-RG-01",
+      "base": "26-btp-situation-retenue",
+      "why": "an amount over 5 % of the TTC",
+      "context": {
+        "btp": {
+          "subcontracting": false,
+          "retenue": {
+            "amount": 132001
+          },
+          "chantier": {
+            "retenueBps": 500
+          },
+          "situation": {
+            "number": 3,
+            "cumulative": 6200000,
+            "previous": {
+              "number": 2,
+              "cumulative": 4000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "rule": "BTP-RG-02",
+      "base": "26-btp-situation-retenue",
+      "why": "the chantier agreed no retenue",
+      "context": {
+        "btp": {
+          "subcontracting": false,
+          "retenue": {
+            "rateBps": 500,
+            "amount": 132000
+          },
+          "chantier": {
+            "retenueBps": null
+          },
+          "situation": {
+            "number": 3,
+            "cumulative": 6200000,
+            "previous": {
+              "number": 2,
+              "cumulative": 4000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "rule": "BTP-RG-03",
+      "base": "01-services-standard-rate",
+      "why": "a retenue without the ABU note",
+      "context": {
+        "btp": {
+          "retenue": {
+            "rateBps": 500
+          }
+        }
+      }
+    },
+    {
+      "rule": "BTP-SIT-01",
+      "base": "26-btp-situation-retenue",
+      "why": "n° 4 after n° 2",
+      "context": {
+        "btp": {
+          "subcontracting": false,
+          "retenue": {
+            "rateBps": 500,
+            "amount": 132000
+          },
+          "chantier": {
+            "retenueBps": 500
+          },
+          "situation": {
+            "number": 4,
+            "cumulative": 6200000,
+            "previous": {
+              "number": 2,
+              "cumulative": 4000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "rule": "BTP-SIT-02",
+      "base": "26-btp-situation-retenue",
+      "why": "the cumulative goes down",
+      "context": {
+        "btp": {
+          "subcontracting": false,
+          "retenue": {
+            "rateBps": 500,
+            "amount": 132000
+          },
+          "chantier": {
+            "retenueBps": 500
+          },
+          "situation": {
+            "number": 3,
+            "cumulative": 3900000,
+            "previous": {
+              "number": 2,
+              "cumulative": 4000000
+            }
+          }
+        }
+      }
+    }
+  ]
+}

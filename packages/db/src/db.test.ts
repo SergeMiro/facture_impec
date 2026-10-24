@@ -394,7 +394,7 @@ describe('BTP tables (docs/DECISIONS.md D2)', () => {
         kind: 'supplier',
         legalName: 'Plâtrerie Dumas',
         siren: '200000009',
-        subcontractor: true,
+        subcontracting: true,
       })
       .returning();
     const [site] = await db()

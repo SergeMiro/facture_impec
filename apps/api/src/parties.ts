@@ -21,7 +21,9 @@ import {
   asc,
   audit,
   type DbOrTx,
+  desc,
   eq,
+  inboundQueue,
   ne,
   type PartyRow,
   parties,
@@ -35,6 +37,7 @@ import { planAll, unplanAll } from './autopilot';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { Email } from './http';
+import { recheckSubcontracting } from './inbound';
 import { recheckParty } from './invoices';
 import { awaitsGoLive, routeFor } from './platform';
 import { DirectoryUnavailable } from './sirene';
@@ -59,9 +62,14 @@ export const PartyPatch = z
     autopilot: z.boolean(),
     requiresPurchaseOrder: z.boolean(),
     publicEntity: z.boolean(),
+    /** BTP: the company works for this customer as its sous-traitant (no VAT, BTP-AUTOLIQ-01). */
+    subcontracting: z.boolean(),
   })
   .partial()
   .refine((p) => Object.keys(p).length > 0, { message: 'nothing to change' });
+
+/** BTP: the supplier works for the company as its sous-traitant (« Réception »). */
+export const SupplierPatch = z.object({ subcontracting: z.boolean() }).strict();
 
 /** A company's customers fit on one page; more is docs/DEFERRED.md. */
 const LIST_LIMIT = 1_000;
@@ -79,6 +87,7 @@ export function partyView(row: PartyRow) {
     autopilot: row.autopilot,
     requiresPurchaseOrder: row.requiresPurchaseOrder,
     publicEntity: row.publicEntity,
+    subcontracting: row.subcontracting,
     verifiedAt: row.verifiedAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -300,7 +309,8 @@ export async function updateParty(
     // What the rules know about the customer changed: its invoices not yet sent are checked now.
     const rules =
       row.requiresPurchaseOrder !== before.requiresPurchaseOrder ||
-      row.publicEntity !== before.publicEntity;
+      row.publicEntity !== before.publicEntity ||
+      row.subcontracting !== before.subcontracting;
     if (rules) await recheckParty(tx, tenant, row, deps.now());
     if (row.autopilot !== before.autopilot) {
       if (row.autopilot) await planAll(tx, deps.now(), tenant, id);
@@ -316,6 +326,88 @@ export async function updateParty(
       after: partyView(row),
     });
     return partyView(row);
+  });
+}
+
+/** A supplier as « Réception » shows it: the switch reads its SIREN, the screen its name. */
+export function supplierView(row: PartyRow) {
+  return { siren: row.siren, legalName: row.legalName, subcontracting: row.subcontracting };
+}
+
+/** A malformed SIREN is a supplier we do not have. */
+export function supplierSiren(value: string): string {
+  if (!/^\d{9}$/.test(value)) throw new ApiError(404, 'supplier_missing');
+  return value;
+}
+
+/**
+ * « Ce fournisseur est mon sous-traitant » (BTP): kept on the supplier, which joins the company's
+ * parties as its received invoices name it (R3) if it is not there yet; its invoices still to decide
+ * are triaged again for the VAT a sous-traitant must not charge.
+ */
+export async function updateSupplier(
+  deps: ApiDeps,
+  tenant: TenantRow,
+  siren: string,
+  patch: z.infer<typeof SupplierPatch>,
+) {
+  return deps.db.transaction(async (tx) => {
+    const now = deps.now();
+    const supplierKey = `siren:${siren}`;
+    const [known] = await tx
+      .select()
+      .from(parties)
+      .where(
+        and(
+          eq(parties.tenantId, tenant.id),
+          eq(parties.kind, 'supplier'),
+          eq(parties.siren, siren),
+        ),
+      )
+      .for('update');
+    let before = known;
+    if (!before) {
+      // Only a supplier the company received an invoice from: its name and address are the invoice's.
+      const [received] = await tx
+        .select({ name: inboundQueue.supplierName, parsed: inboundQueue.parsed })
+        .from(inboundQueue)
+        .where(and(eq(inboundQueue.tenantId, tenant.id), eq(inboundQueue.supplierKey, supplierKey)))
+        .orderBy(desc(inboundQueue.receivedAt))
+        .limit(1);
+      if (!received) throw new ApiError(404, 'supplier_missing');
+      [before] = await tx
+        .insert(parties)
+        .values({
+          tenantId: tenant.id,
+          kind: 'supplier',
+          legalName: received.name ?? siren,
+          siren,
+          address: received.parsed?.seller.address ?? null,
+          source: 'invoice',
+          verifiedAt: null,
+        })
+        .returning();
+      if (!before) throw new ApiError(404, 'supplier_missing');
+    }
+    const [row] = await tx
+      .update(parties)
+      .set({ subcontracting: patch.subcontracting, updatedAt: now })
+      .where(eq(parties.id, before.id))
+      .returning();
+    if (!row) throw new ApiError(404, 'supplier_missing');
+    await audit(tx, {
+      tenantId: tenant.id,
+      actor: 'user',
+      action: 'party.update',
+      objectType: 'party',
+      objectId: row.id,
+      before: known ? supplierView(known) : null,
+      after: supplierView(row),
+    });
+    if (row.subcontracting !== known?.subcontracting) {
+      await recheckSubcontracting(tx, tenant, now, supplierKey);
+    }
+    return supplierView(row);
   });
 }
 

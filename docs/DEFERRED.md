@@ -189,3 +189,11 @@ Each line says where it came from and what would bring it back.
 | The last search kept when the pane reopens | Kept while the pane is open | Users repeat the same search every morning. |
 | Supplier invoices in the same search | « Réception » lists them on its own | A user looks for a supplier's invoice from the Tableau de bord. |
 
+
+## BTP rules where invoices are checked (BTP plan stage 1A, 2026-10-24)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| Retenue de garantie and situation on the company's own invoices | The rules BTP-RG-01/02/03 and BTP-SIT-01/02 are in `@fi/core` with their cases, and speak when the caller gives the retenue, the chantier and the situation; neither the sheet nor the pane gives them yet, so on a sheet invoice only the autoliquidation rules speak | A BTP pilot invoices situations from its sheet: optional columns « Retenue de garantie », « Chantier », « N° de situation », « Cumul des travaux », detected like the others; the retenue written as the ABU note of annex A cas n°26; the previous situation of the chantier read from the company's invoices. Stage 2's chantiers give the link. |
+| The sous-traitance said once per relationship | A switch on the customer (Clients) and on the supplier (Réception); a sous-traitant who also sells materials alone gets a warning to ignore on those | A pilot mixes works and supplies with the same company often: a per-invoice « Fourniture seule » choice, or reading the line's nature (`goods`) to stay silent. |
+| A supplier in « Mode test » | Marking the made-up supplier of a test invoice keeps it among the company's suppliers like a real one | The made-up supplier shows in a pilot's lists: mark those parties as test and leave them out of « Registre ». |

@@ -100,8 +100,11 @@ import {
   PartyConfirm,
   PartyPatch,
   PartySearch,
+  SupplierPatch,
   searchParties,
+  supplierSiren,
   updateParty,
+  updateSupplier,
 } from './parties';
 import { acceptFinding, decideSynonym, NormalBody, removeException, SynonymBody } from './patterns';
 import { PaymentBody, recordPayment } from './payments';
@@ -378,6 +381,7 @@ export function createApp(deps: ApiDeps) {
     '/inbound/*',
     '/parties',
     '/parties/*',
+    '/suppliers/*',
     '/report',
     '/billing',
     '/billing/checkout',
@@ -890,11 +894,17 @@ export function createApp(deps: ApiDeps) {
     c.json(await deleteParty(deps, c.get('tenant'), partyId(c.req.param('id')))),
   );
 
+  // A supplier is found by its SIREN, the one its received invoices give (« Réception »).
+  api.patch('/suppliers/:siren', async (c) => {
+    const siren = supplierSiren(c.req.param('siren'));
+    return c.json(await updateSupplier(deps, c.get('tenant'), siren, await body(c, SupplierPatch)));
+  });
+
   // ── Supplier invoices (plan §3 screen 5, §6 InboundAgent) ─────────────────────────────────────────
   // Paths with a fixed word come before /inbound/:id.
   api.get('/inbound', async (c) => {
     const { test } = parse(InboundQuery, c.req.query());
-    return c.json({ inbound: await listInbound(deps, c.get('tenant'), test) });
+    return c.json(await listInbound(deps, c.get('tenant'), test));
   });
 
   api.post('/inbound/test', async (c) => {

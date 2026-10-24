@@ -41,6 +41,8 @@ const Tenant = z.object({
   pdpProvider: z.string(),
   mode: z.string(),
   sandboxEnabled: z.boolean(),
+  /** « Entreprise du bâtiment (BTP) »: the « sous-traitance » switches show. */
+  btp: z.boolean().default(false),
   whiteLabel: Brand.nullable().default(null),
 });
 const User = z.object({ email: z.string(), role: z.string() });
@@ -713,6 +715,7 @@ export const Settings = z.object({
   chaseCadence: z.array(z.number()),
   /** Under this margin over the purchase price, a sold line is « À vérifier » (R3); null: none. */
   minMarginPercent: z.number().nullable().default(null),
+  btp: z.boolean().default(false),
   // Loose: the fields this pane does not edit (payment means, legal notes) go back unchanged, since
   // PATCH /settings replaces the whole object.
   invoiceDefaults: z.looseObject({
@@ -750,6 +753,7 @@ export type SettingsPatch = Partial<{
   mode: Settings['mode'];
   autopilotMaxAmount: number | null;
   minMarginPercent: number | null;
+  btp: boolean;
 }>;
 
 /** A customer of the fiche clients, confirmed against the company directory (plan §4 parties). */
@@ -767,6 +771,8 @@ export const Party = z.object({
   /** What the checks know about the customer (rules FF-PO-01, DGFIP-G2.32). */
   requiresPurchaseOrder: z.boolean(),
   publicEntity: z.boolean(),
+  /** BTP: the company works for this customer as its sous-traitant (TVA autoliquidée). */
+  subcontracting: z.boolean().default(false),
   verifiedAt: z.string(),
 });
 export type Party = z.infer<typeof Party>;
@@ -800,7 +806,16 @@ export type PartyPatch = Partial<{
   autopilot: boolean;
   requiresPurchaseOrder: boolean;
   publicEntity: boolean;
+  subcontracting: boolean;
 }>;
+
+/** A supplier, as « Ce fournisseur est mon sous-traitant » changed it. */
+export const Supplier = z.object({
+  siren: z.string(),
+  legalName: z.string(),
+  subcontracting: z.boolean(),
+});
+export type Supplier = z.infer<typeof Supplier>;
 
 /** The weekly report (Tableau de bord card): numbers first, then what to do. */
 export const WeeklyReport = z.object({
@@ -829,6 +844,7 @@ export const Inbound = z.object({
   isTest: z.boolean(),
   triaged: z.boolean(),
   supplierName: z.string(),
+  supplierSiren: z.string().nullable().default(null),
   number: z.string().nullable(),
   creditNote: z.boolean(),
   issueDate: z.string().nullable(),
@@ -1194,7 +1210,15 @@ export class ApiClient {
   exportData = async () => (await this.#send('/tenant/export')).blob();
 
   inbound = (test: boolean) =>
-    this.#json(z.object({ inbound: z.array(Inbound) }), `/inbound?test=${test}`);
+    this.#json(
+      z.object({
+        inbound: z.array(Inbound),
+        subcontractors: z.array(z.string()).nullable().default(null),
+      }),
+      `/inbound?test=${test}`,
+    );
+  patchSupplier = (siren: string, subcontracting: boolean) =>
+    this.#json(Supplier, `/suppliers/${siren}`, { method: 'PATCH', body: { subcontracting } });
   inboundExports = (test: boolean) =>
     this.#json(z.object({ exports: z.array(InboundExport) }), `/inbound/exports?test=${test}`);
   approveInbound = (id: string, ibanChecked: boolean) =>

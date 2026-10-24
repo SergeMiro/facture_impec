@@ -49,6 +49,33 @@ export interface RuleContext {
     /** VIES' last answer on the customer's VAT number (FF-VIES-01); absent: never asked. */
     vat?: ViesVerdict | undefined;
   };
+  /** What a building firm knows of this invoice (rules BTP-*); absent: not a building firm. */
+  btp?: BtpContext | undefined;
+}
+
+/**
+ * The BTP rules' facts, each absent when unknown (its rules stay silent). XML carries none of them:
+ * they come from the company's records, its sheet, its ERP or the PDF (docs/research/BTP_RULES.md).
+ */
+export interface BtpContext {
+  /**
+   * The seller is the buyer's sous-traitant for construction works: the company marked the other party
+   * so (a customer it works for as sous-traitant, a supplier that works for it as one). False: marked
+   * as neither.
+   */
+  subcontracting?: boolean | undefined;
+  /** The retenue de garantie this invoice is under: a rate in basis points (500 = 5 %), an amount. */
+  retenue?: { rateBps?: number | undefined; amount?: number | undefined } | undefined;
+  /** The chantier's contract, when the invoice is linked to one: its retenue rate, null if none. */
+  chantier?: { retenueBps: number | null } | undefined;
+  /** A situation: its number and cumulative works (cents, HT), and the chantier's previous one. */
+  situation?:
+    | {
+        number: number;
+        cumulative?: number | undefined;
+        previous?: { number: number; cumulative?: number | undefined } | undefined;
+      }
+    | undefined;
 }
 
 /** What VIES last said of a VAT number (the API asks and keeps the proof, core only reads it). */

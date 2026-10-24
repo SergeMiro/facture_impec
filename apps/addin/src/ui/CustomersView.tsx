@@ -206,6 +206,15 @@ function Customer({ party }: { party: Party }) {
           onChange={(_, d) => void fi.updateCustomer(party.id, { publicEntity: d.checked })}
           label={t('addin.customers.publicEntity')}
         />
+        {(state.me?.tenant.btp || party.subcontracting) && (
+          <Switch
+            checked={party.subcontracting}
+            disabled={busy}
+            onChange={(_, d) => void fi.updateCustomer(party.id, { subcontracting: d.checked })}
+            label={t('addin.customers.subcontracting')}
+            data-testid="customer-subcontracting"
+          />
+        )}
         <span className={styles.line}>
           <Button
             size="small"

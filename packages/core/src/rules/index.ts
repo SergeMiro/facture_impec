@@ -3,6 +3,7 @@ import { isMessageKey, type MessageParams, t } from '@fi/shared';
 import { z } from 'zod';
 import { parisToday } from '../dates';
 import type { Invoice } from '../model';
+import { BTP_RULES } from './btp';
 import { CODELIST_RULES } from './codelists';
 import { EN16931_RULES } from './en16931';
 import { FR_RULES } from './fr';
@@ -17,6 +18,7 @@ export const RULES: readonly Rule[] = [
   ...VAT_RULES,
   ...CODELIST_RULES,
   ...FR_RULES,
+  ...BTP_RULES,
 ];
 
 const BY_ID = new Map(RULES.map((r) => [r.id, r]));
@@ -85,6 +87,19 @@ export const ContextInput = z.object({
     })
     .partial()
     .optional(),
+  btp: z
+    .object({
+      subcontracting: z.boolean(),
+      retenue: z.object({ rateBps: z.int().min(0), amount: z.int().min(0) }).partial(),
+      chantier: z.object({ retenueBps: z.int().min(0).nullable() }),
+      situation: z.object({
+        number: z.int().min(1),
+        cumulative: z.int().optional(),
+        previous: z.object({ number: z.int().min(0), cumulative: z.int().optional() }).optional(),
+      }),
+    })
+    .partial()
+    .optional(),
 });
 export type ContextInput = z.infer<typeof ContextInput>;
 
@@ -99,6 +114,7 @@ export function ruleContext(input: ContextInput = {}): RuleContext {
       publicEntity: false,
       ...input.buyer,
     },
+    ...(input.btp && { btp: input.btp }),
   };
 }
 

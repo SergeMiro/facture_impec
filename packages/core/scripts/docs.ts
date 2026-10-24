@@ -119,7 +119,8 @@ export function renderRules(cenIds: readonly string[]): string {
       'An auto-fixable issue hides the other issues on the same path: once the fix is applied, validation runs again and shows what is left.',
     '- The message column is the French text shown to the user (packages/shared/i18n/fr.json); `{value}`, `{field}`, `{rate}`, `{category}`, `{mention}` and `{last}` are filled in per issue.',
     '- Some rules read the context given by the caller, not the invoice alone: today in Europe/Paris (BR-FR-CO-01), the invoices already issued (BR-FR-CO-02, FF-NUM-01, FF-NUM-02, FF-CN-01; silent when the history is unknown), ' +
-      'the seller option for VAT on debits (FF-DEB-01) and customer settings (FF-PO-01 purchase order required, BR-FR-14 delivers elsewhere, DGFIP-G2.32 public entity).',
+      'the seller option for VAT on debits (FF-DEB-01) and customer settings (FF-PO-01 purchase order required, BR-FR-14 delivers elsewhere, DGFIP-G2.32 public entity). ' +
+      "The BTP-* rules run only for a building firm, on what it knows and the invoice cannot say: the other party is its sous-traitant or donneur d'ordre, the retenue de garantie, the chantier, the situation before (sources: docs/research/BTP_RULES.md).",
     '- BR-FR-DEC-01 runs while reading an XML file: the model holds cents and cannot represent a third decimal.',
     '- Every rule has at least one failing case in fixtures/invalid and passes on the golden invoices in fixtures/golden (packages/core/src/rules/rules.test.ts).',
     '',

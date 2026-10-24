@@ -131,6 +131,8 @@ export interface Reception {
   test: boolean;
   inbound: Inbound[];
   exports: InboundExport[];
+  /** SIRENs of the suppliers marked « sous-traitant »; null: not a building firm (no switch). */
+  subcontractors: string[] | null;
 }
 
 /** Clients: the fiche clients, and the last « Chercher dans l'annuaire » with what was asked. */
@@ -1348,11 +1350,11 @@ export class Controller {
   loadReception = async (): Promise<void> => {
     const test = this.#state.testMode;
     const reception = await this.#act('reception', async () => {
-      const [{ inbound }, { exports }] = await Promise.all([
+      const [{ inbound, subcontractors }, { exports }] = await Promise.all([
         this.api.inbound(test),
         this.api.inboundExports(test),
       ]);
-      return { test, inbound, exports };
+      return { test, inbound, exports, subcontractors };
     });
     if (reception) this.#set({ reception });
   };
@@ -1391,6 +1393,21 @@ export class Controller {
       made.skipped > 0
         ? t('addin.reception.exportedSkipped', { count: made.count, skipped: made.skipped })
         : t('addin.reception.exported', { count: made.count }),
+    );
+    await this.loadReception();
+  };
+
+  /**
+   * « Ce fournisseur est mon sous-traitant » (BTP): the API triaged its invoices still to decide again
+   * for the VAT a sous-traitant must not charge, so the list is read again.
+   */
+  setSubcontractor = async (siren: string, on: boolean): Promise<void> => {
+    const supplier = await this.#act(`supplier:${siren}`, () => this.api.patchSupplier(siren, on));
+    if (!supplier) return;
+    const name = { name: supplier.legalName };
+    this.notify(
+      'success',
+      t(on ? 'addin.reception.subcontractorOn' : 'addin.reception.subcontractorOff', name),
     );
     await this.loadReception();
   };
@@ -1465,7 +1482,10 @@ export class Controller {
     if (!party) return false;
     this.#putParty(party);
     // The checks read the two switches: the API checked its invoices again, the sheet shows it.
-    const rules = patch.requiresPurchaseOrder !== undefined || patch.publicEntity !== undefined;
+    const rules =
+      patch.requiresPurchaseOrder !== undefined ||
+      patch.publicEntity !== undefined ||
+      patch.subcontracting !== undefined;
     const name = { name: party.legalName };
     this.notify(
       'success',
@@ -2493,11 +2513,16 @@ export class Controller {
     const settings = await this.#act('saveSettings', () => this.api.patchSettings(patch));
     if (!settings) return false;
     this.#set({ settings });
-    if (patch.sandboxEnabled !== undefined) {
+    if (patch.sandboxEnabled !== undefined || patch.btp !== undefined) {
       const me = await this.#act('settings', () => this.api.me());
       if (me) this.#set({ me });
     }
     this.notify('success', t('addin.settings.saved'));
+    // The API checked the invoices not yet sent again: the sheet shows their new verdicts.
+    if (patch.btp !== undefined) {
+      this.#set({ reception: null });
+      void this.sync();
+    }
     return true;
   };
 

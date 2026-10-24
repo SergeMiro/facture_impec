@@ -234,6 +234,15 @@ function General({ settings }: { settings: Settings }) {
       </form>
 
       <Switch
+        checked={settings.btp}
+        disabled={saving}
+        onChange={(_, d) => void fi.saveSettings({ btp: d.checked })}
+        label={t('addin.settings.btp')}
+        data-testid="btp"
+      />
+      <Caption1>{t('addin.settings.btpHint')}</Caption1>
+
+      <Switch
         checked={settings.pseudonymizeLlm}
         disabled
         label={t('addin.settings.pseudonymize')}

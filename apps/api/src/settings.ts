@@ -18,6 +18,8 @@ import { isOwner, type Principal } from './auth';
 import { planAll, unplanAll } from './autopilot';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
+import { recheckSubcontracting } from './inbound';
+import { recheckCompany } from './invoices';
 import { adapterFor } from './platform';
 
 export const ChaseCadence = z
@@ -40,6 +42,8 @@ export const SettingsPatch = z
     autopilotMaxAmount: z.number().int().min(0).max(100_000_000).nullable(),
     /** The margin wanted on what the company resells, % of the sale price (rule B2); null: none. */
     minMarginPercent: z.number().int().min(1).max(90).nullable(),
+    /** « Entreprise du bâtiment (BTP) »: the BTP rules and switches (docs/research/BTP_RULES.md). */
+    btp: z.boolean(),
   })
   .partial()
   // The pseudonymization switch is not settable yet (docs/DEFERRED.md).
@@ -89,6 +93,7 @@ export function settingsView(deps: ApiDeps, tenant: TenantRow) {
     autopilotAvailable: Boolean(deps.mailer),
     autopilotMaxAmount: tenant.autopilotMaxAmount,
     minMarginPercent: tenant.minMarginPercent,
+    btp: tenant.btp,
     sandboxEnabled: tenant.sandboxEnabled,
     testPlatform: deps.test !== null,
     /** Always on during the pilot (docs/DEFERRED.md). */
@@ -140,6 +145,12 @@ async function save(
     if (row.mode !== before.mode || row.autopilotMaxAmount !== before.autopilotMaxAmount) {
       if (row.mode === 'autopilot') await planAll(tx, deps.now(), row);
       else await unplanAll(tx, row.id);
+    }
+    // The BTP rules start or stop speaking: the invoices not yet sent, and the received ones still to
+    // decide, are checked again.
+    if (row.btp !== before.btp) {
+      await recheckCompany(tx, row, deps.now());
+      await recheckSubcontracting(tx, row, deps.now());
     }
     return row;
   });

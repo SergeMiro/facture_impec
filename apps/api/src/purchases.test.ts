@@ -336,7 +336,7 @@ describe('a supplier invoice uploaded from the pane (R6)', () => {
       file: 'Facture FA-2026-411.pdf',
     });
     expect(await c.suppliers()).toMatchObject([{ siren: '600000004', source: 'invoice' }]);
-    expect(await c.call('/inbound')).toEqual({ inbound: [] });
+    expect(await c.call('/inbound')).toEqual({ inbound: [], subcontractors: null });
 
     // The platform delivers the same invoice: the registry keeps the received one only.
     await c.deliver(supplierInvoice('FA-2026-411', '35.00'));

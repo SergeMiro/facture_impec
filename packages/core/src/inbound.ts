@@ -98,6 +98,8 @@ export const INBOUND_FLAGS = {
   amounts: 'block',
   iban_changed: 'alert',
   possible_duplicate: 'warn',
+  /** BTP: a supplier the company marked as its sous-traitant invoices VAT (BTP-AUTOLIQ-01). */
+  subcontracting_vat: 'warn',
   iban_invalid: 'warn',
   foreign_currency: 'warn',
   rules: 'info',

@@ -36,7 +36,7 @@ exists here under another name, and the plan's own rule keeps what is there.
 | BTP plan §4 | Here | Notes |
 |---|---|---|
 | `org` | `tenants` | `pa_provider` = `pdp_provider`; `settings` = the existing columns and `invoice_defaults`. |
-| `party` (`role[]`, `source`, `erp_ref`) | `parties` (`kind` customer or supplier) + `subcontractor` on a supplier, `siret`, `erp_ref` | Sous-traitance is a property of the supplier relationship, not a third kind of company: a supplier row says whether it is a sous-traitant. SIREN stays the key: the URSSAF attestation and the Kbis are per enterprise. |
+| `party` (`role[]`, `source`, `erp_ref`) | `parties` (`kind` customer or supplier) + `subcontracting`, `siret`, `erp_ref` | Sous-traitance is a property of the relationship, not a third kind of company: a supplier marked so is the company's sous-traitant, a customer marked so is the company's donneur d'ordre (0021 named it `subcontractor`, 0022 renamed it when the customer side came in stage 1). SIREN stays the key: the URSSAF attestation and the Kbis are per enterprise. |
 | `chantier` | `chantiers` (new) | |
 | `document` | `documents` (new): every file that arrives, whatever its kind, with `sha256` unique per company and a `storage_key` | The registry `docs` stays the projection of business documents (invoices, orders, deliveries, purchases) that the checks across documents read; a document that is an invoice is projected there as before. |
 | `invoice` | `invoices` (sent, full lifecycle, state machine) and the registry `docs` (received ones) | Situation number, retenue de garantie and autoliquidation are added where an invoice is read (see D4). |

@@ -746,4 +746,24 @@ test('a new user maps the sheet, fixes two errors, rehearses and plays a test sc
     );
     await page.screenshot({ path: info.outputPath('vies.png') });
   });
+
+  await test.step('BTP: « Entreprise du bâtiment », then a sous-traitant charging VAT is flagged', async () => {
+    await pane.getByRole('tab', { name: t('addin.nav.settings') }).click();
+    await pane.getByLabel(t('addin.settings.btp')).check();
+    await expect(pane.getByTestId('notice')).toContainText(t('addin.settings.saved'));
+    await pane.getByRole('tab', { name: t('addin.nav.reception') }).click();
+    // The disputed duplicate is still to decide: the switch triages it again.
+    const twin = pane.locator('[data-testid="inbound"][data-status="disputed"]').first();
+    const marked = twin.getByLabel(t('addin.reception.subcontractor'));
+    await expect(marked).not.toBeChecked();
+    await expect(twin.getByTestId('flag-subcontracting_vat')).toHaveCount(0);
+    await marked.check();
+    await expect(pane.getByTestId('notice')).toContainText('est indiqué comme votre sous-traitant');
+    await expect(twin.getByTestId('flag-subcontracting_vat')).toContainText(
+      t('inbound.flag.subcontracting_vat').slice(0, 40),
+    );
+    await twin.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('btp-reception.png') });
+    expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+  });
 });

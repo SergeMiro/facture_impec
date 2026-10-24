@@ -188,7 +188,8 @@ Each closes with a call or two on the owner's sandbox key (`docs/RUNBOOK.md` § 
 Stages (`docs/plans/phase-N.md` each):
 
 - [x] **0 — vocabulary, tables, boundaries** (`docs/plans/phase-0.md`).
-- [ ] **1 — ingest and validate**: FileStore, `POST /ingest` (sha256 dedupe, backpressure), the ingest
+- [ ] **1 — ingest and validate** (1A, the BTP rules where invoices are already checked: done
+      2026-10-24): FileStore, `POST /ingest` (sha256 dedupe, backpressure), the ingest
       worker (Factur-X XML, PDF text, OCR), BTP rules v1 with sources, adapters (pane upload, PDP
       inbound, drive and e-mail stand-ins), 50 golden documents, a measured p95.
 - [ ] **2 — documents pipeline**: classify (rules, then a model with its eval), extract, validate, link
@@ -225,6 +226,18 @@ Owner questions (BTP plan §13 and what stage 0 found):
       attestation or a contrat de travail after the sous-traitant or employee left. Today: until the
       account is deleted.
 - [ ] **Row-level security per company** (D1): deployment hardening, with the hosting.
+
+Left from stage 1 for later (2026-10-24):
+
+- [ ] **Légifrance, read in a browser**: loi n° 71-584 art. 1 and 2 (the retenue's 5 % of the TTC, its
+      release after a year) and C. trav. L8222-1 / D8222-1 (the 5 000 € HT threshold of the
+      attestation de vigilance). Both are `TODO(verify)` in `docs/research/BTP_RULES.md`: Légifrance
+      answered 403 to WebFetch and curl; a real browser (neo) may pass its Cloudflare check.
+- [ ] **Drive folders watched** (BTP plan stage 1 `drive` adapter): a folder picker in the pane, then
+      the Graph (`/delta`) and Drive (`changes.list`) change feeds read and recorded with their dates
+      before a line of code; today the R4/R5 connections read the files a person picks.
+- [ ] **Retenue and situation columns on the sheet** (`docs/DEFERRED.md` › BTP rules): needed before
+      BTP-RG-* and BTP-SIT-* speak on the company's own invoices.
 
 ## Excel on the web E2E
 

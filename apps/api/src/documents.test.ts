@@ -35,7 +35,7 @@ async function btpCompany() {
       legalName: 'Plâtrerie Dumas',
       siren: '200000009',
       siret: '20000000900017',
-      subcontractor: true,
+      subcontracting: true,
       source: 'invoice',
     })
     .returning();
@@ -127,7 +127,7 @@ describe('the BTP back end and RGPD', () => {
   it('exports the chantiers, the files without their bytes, the deadlines and the actions', async () => {
     const { t } = await btpCompany();
     const exported = (await (await api.request('/tenant/export', { token: t.apiKey })).json()) as {
-      suppliers: { subcontractor: boolean; siret: string | null; id: string }[];
+      suppliers: { subcontracting: boolean; siret: string | null; id: string }[];
       chantiers: { name: string; erpRef: string; retenueBps: number }[];
       documents: Record<string, unknown>[];
       obligations: { kind: string; dueOn: string; documentId: string }[];
@@ -135,7 +135,7 @@ describe('the BTP back end and RGPD', () => {
       connectorSyncs: { connector: string; cursor: unknown }[];
     };
     expect(exported.suppliers).toEqual([
-      expect.objectContaining({ subcontractor: true, siret: '20000000900017' }),
+      expect.objectContaining({ subcontracting: true, siret: '20000000900017' }),
     ]);
     expect(exported.chantiers).toEqual([
       expect.objectContaining({ name: 'Les Tilleuls', erpRef: 'CH-12', retenueBps: 500 }),

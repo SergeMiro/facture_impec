@@ -933,7 +933,8 @@ later stage stands on (`docs/plans/phase-0.md`); nothing of the product's behavi
   and mode: `sha256` unique), `blobs` (the FileStore's first driver: bytes in Postgres under the
   document's `storage_key`), `chantiers`, `obligations` (only from a document or an invoice: a check
   constraint; `key` makes deriving it again idempotent), `actions` (`key` per step served, `revision`
-  for stale answers), `connector_syncs`; on `parties`: `subcontractor`, `siret`, `erp_ref`. Postgres
+  for stale answers), `connector_syncs`; on `parties`: `subcontractor` (renamed `subcontracting` in
+  stage 1), `siret`, `erp_ref`. Postgres
   keeps each closed list as a check constraint, so a new kind is a migration. A deleted company or
   chantier is forgotten by what pointed to it (`on delete set null`).
 - **RGPD**: the export gives the new tables (files without their bytes); a deletion keeps only the
@@ -947,6 +948,30 @@ later stage stands on (`docs/plans/phase-0.md`); nothing of the product's behavi
   `package.json` (the API image installs the declared ones only). Tests and their helpers are exempt
   from the layers, not from declaring what they import. `scripts/boundaries/check.test.ts` shows each
   failure on a fixture tree and the repository passing.
+
+## BTP back end, stage 1A: the BTP rules where invoices are checked
+
+The building-trade rules (`packages/core/src/rules/btp.ts`, sources in
+`docs/research/BTP_RULES.md`) run inside the same `validate()` as every other rule, and speak only
+when the caller passes the context `btp`: what the company knows and the invoice cannot say. A
+company that is not a building firm never sees one.
+
+- **What the company says.** `tenants.btp` (« Entreprise du bâtiment (BTP) », Réglages) and
+  `parties.subcontracting` (migration 0022): on a customer, the company works for it as its
+  sous-traitant (Clients); on a supplier, the supplier works for the company as one (Réception,
+  `PATCH /suppliers/:siren`, which adds the supplier as its received invoice names it if needed).
+- **Outgoing invoices.** `checkOf` (`apps/api/src/invoices.ts`) adds `btp: { subcontracting }` from
+  the customer's fiche when the company is a building firm; the context is part of the check's key,
+  so a switch moved gives the invoices not yet sent a new verdict (`recheckParty`,
+  `recheckCompany`), and the sheet shows it at the next sync.
+- **Received invoices.** `readInbound` takes the SIRENs of the suppliers marked sous-traitant; a VAT
+  charged by one is the triage flag `subcontracting_vat` (warn: a sous-traitant selling materials
+  alone does charge VAT). When the company's word moves, `recheckSubcontracting`
+  (`apps/api/src/inbound.ts`) makes only that flag again on the invoices still to decide; the others
+  stay as the first triage found them, so a duplicate is still compared with what arrived before it.
+- **Retenue and situation.** BTP-RG-* and BTP-SIT-* need the retenue, the chantier and the situation,
+  which an EN 16931 invoice does not carry as fields (annex A cas n°26: a note ABU); nothing gives
+  them yet (`docs/DEFERRED.md`).
 
 ## Decision: port the Rust core to TypeScript, archive Rust
 
