@@ -70,3 +70,70 @@ What a real personal account showed and what is still open: `docs/MICROSOFT365.m
       `docs/GOOGLE_SHEETS.md`. Native-service and browser stand-ins remain separate evidence.
 - [ ] Public Marketplace distribution: publisher registration, consent-screen configuration and
       Google's review. A manually installed bound script does not prove Marketplace acceptance.
+
+## Pilot and production, with the owner
+
+What only the owner can provide or decide before real invoices leave (`docs/RUNBOOK.md` § Pilot,
+`docs/DEPLOY.md`).
+
+- [ ] A host and a domain for the API and the pane (`docs/DEPLOY.md`); then `API_PUBLIC_URL`,
+      `ADDIN_ORIGINS`, and the sealing keys set once and kept: `PDP_KEY_SEALING_KEY`,
+      `CONNECTOR_SEALING_KEY`, `AI_KEY_SEALING_KEY` (changing one later means re-entering what it seals).
+- [ ] B2Brouter: the account and its sandbox key (`test_…`, T13), then the live key when the first
+      company goes live; prices of eDocExchange / eDocSync and the startups programme (T12).
+- [ ] A mail provider (`MAIL_SMTP_URL`, `MAIL_FROM`): sign-in links, chasing e-mails, weekly reports.
+- [ ] The CGU reviewed by a lawyer (with `docs/CGU_ONEDRIVE.md`), published, then `TERMS_URL` and
+      `TERMS_VERSION`.
+- [ ] Stripe: the Dashboard setup of `docs/BILLING.md` §11 (meter, prices, webhook, portal, tax,
+      restricted key), then its step 9 on the sandbox (Checkout with 4242…, meter event, portal,
+      cancellation on deletion).
+- [ ] Three pilot companies who agree to work in « Mode test » until they say « go ».
+- [ ] The marketing site's publisher identity, address and contact e-mail (legal notice), then its
+      production publication.
+- [ ] AppSource: the decisions on policies 1100.7 (brand in the name) and 100.4 (payment outside the
+      Marketplace), and the store screenshots taken in Excel (`docs/APPSOURCE.md`).
+- [ ] An EU bucket with object lock for the ten-year archive copy (`docs/DEFERRED.md` › Object storage).
+
+## B2Brouter sandbox: the open questions of `docs/B2BROUTER.md` §11
+
+Each closes with a call or two on the owner's sandbox key (`docs/RUNBOOK.md` § B2Brouter sandbox,
+`FI_LIVE_B2BROUTER_*`); record the answer in §11 and remove the `TODO(verify)` it names in the code.
+
+- [ ] T1 content type of an import · T2 / T17 XML or Factur-X forwarded as is · T3 webhook envelope ·
+      T4 directory 200 or 202 and its body · T5 list metadata · T6 `mark_as` body · T9 French
+      `document_type_code` list · T10 sending twice · T11 event names · T16 deleting an attachment ·
+      T19 Schematron failure on import or on send · T20 the sandbox's path for a French invoice ·
+      T21 a second `POST /payments` after a lost answer · T22 what `{account}` is, and whether it
+      differs between sandbox and production · T23 a valid key on an account it cannot reach.
+- [ ] With staging (`stag_` key and a ticket): T7 how « 213 Rejetée » shows; T14 inbound invoices.
+- [ ] With B2Brouter's support: T8 meaning of `allegedly_paid`, `closed`, `expired`…; T15 webhook
+      retries, timeout and source addresses; T18 whether 212 (paid) is required.
+
+## AI in production
+
+- [ ] The provider and model for prod (decided 2026-10-20: Mistral; preprod a free OpenRouter model
+      on test data only), its key in the server's environment, never the repo.
+- [ ] Record the evals on that model and make them gates: `layout`, `mapping` and `monitor` are
+      recorded on llmfp only and not gating (`packages/agents/evals/recordings/*`, `"gate": false`).
+- [ ] The EU-residency and retention terms of each hosted provider before BYOK is offered
+      (`docs/AI_PROVIDERS.md`, `TODO(verify)`).
+
+## Formats: licences and sources (`docs/research/FORMATS.md` §6)
+
+- [ ] F1 the owner fills in the FNFE-MPE form for the Factur-X 1.09.2 XSD, Schematron and spec (it
+      needs an e-mail; an agent must not submit it); then F2 (AFRelationship) from the spec.
+- [ ] F3 UBL 2.1 XSD licence, F4 the sRGB ICC profile's licence, F5 origin of the BR-FR Schematron,
+      F6 the font embedded in generated PDFs: check each licence before a public release.
+
+## VIES (§6), built on 2026-10-24
+
+- [ ] The first check of a real company with its own French VAT number as requester: note the format
+      of VIES' consultation number in `docs/ONBOARDING.md` §5.1 and remove the `TODO(verify)` in
+      `apps/api/src/vies.ts`.
+- [ ] From the prod server, watch the sweep's log for a week: VIES never answering `IP_BLOCKED` or
+      `GLOBAL_MAX_CONCURRENT_REQ` to our traffic.
+
+## Excel on the web E2E
+
+- [ ] A Microsoft account that can upload an add-in in Excel on the web, then
+      `apps/addin/e2e/excel-web.spec.ts` run once and its Excel selectors confirmed (`TODO(verify)`).
