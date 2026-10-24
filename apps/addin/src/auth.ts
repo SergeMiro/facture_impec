@@ -32,7 +32,7 @@ if (hash.has('req')) {
   button.addEventListener('click', () => {
     button.disabled = true;
     try {
-      runPopupRelay({ allowedAuthorityOrigins: [AUTHORITY] });
+      runPopupRelay({ allowedAuthorityOrigins: [new URL(AUTHORITY).origin] });
     } catch {
       refused();
     }

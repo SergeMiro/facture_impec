@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import { Controller } from '../controller';
+import { browserMicrosoftPort } from '../microsoft/office';
 import { allowedPage, apiAddress } from '../pages';
 import { tokenStore } from '../storage';
 import { App } from '../ui/App';
@@ -33,6 +34,7 @@ const port = googleSheetsPort(
 );
 const controller = new Controller({
   port,
+  microsoft: browserMicrosoftPort(),
   tokens: tokenStore(),
   apiBase: __API_URL__,
   openUrl: async (url) => {

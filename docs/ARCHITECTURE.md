@@ -851,6 +851,8 @@ The spreadsheet id determines workbook identity. Document properties store mappi
 revision markers, without login tokens. The app retains its existing browser token store. The edit
 trigger records revision changes; the pane polls every five seconds and reconciles every minute.
 The existing API, registry, correction audit, sending and reception flows remain shared.
+OneDrive uses the standard MSAL browser client in Google Sheets, while Excel keeps nested app
+authentication. Both use the same token exchange, picker and `auth.html` popup relay.
 
 `scripts/sheets.ts` bundles the host and sidebar into `Code.gs`, `Sidebar.html` and a manifest with
 current-document and sidebar permissions. It performs no remote deployment. Contracts, installation,

@@ -150,5 +150,5 @@ Each line says where it came from and what would bring it back.
 | Item | Current behaviour | Bring back when |
 |---|---|---|
 | Public Google Workspace Marketplace listing | The reproducible bound-script package is installed manually in a spreadsheet. | The owner supplies the publisher account and hosted app/API addresses; complete Google's distribution review. |
-| Connecting a new OneDrive account from Google Sheets | The current Microsoft sign-in requires Office nested authentication. Previously connected files remain readable through the shared API. The pane explains how to connect through Excel. | A Google Sheets pilot needs OneDrive sign-in without Excel: add a browser OAuth flow and register its Microsoft redirect URI. |
+| ~~Connecting a new OneDrive account from Google Sheets~~ | **Implemented in R9** with the standard MSAL client and the existing popup relay. | Real-account consent and picker verification remain G5 in `docs/GOOGLE_SHEETS.md`. |
 | Google Sheets ranges above 5,000 used rows or 250,000 cells | The host refuses before reading the oversized range. | A pilot needs larger sheets: chunk reads with a stable revision check before syncing the combined snapshot. |

@@ -1076,7 +1076,7 @@ checks, sending, reception, registry, chat and billing screens. Acceptance crite
 | Bridge validation | `src/sheets/bridge.test.ts`: other origins, windows, channels and request ids are ignored; out-of-order replies match their requests; timeouts do not retry writes. `protocol.ts` validates every operation and response. |
 | Invoice workflow | `e2e/google-sheets.spec.ts`: e-mailed sign-in, mapping, validation, test send, status back in the cells, supplier approval, FEC download, source change, correction and undo. It passed on the native-service stand-in in 25 s. browser: local. [Test send](evidence/r9-sheets-send.png), [correction undone](evidence/r9-sheets-correction-undone.png). |
 | Packaging and deployment | `pnpm sheets:package --addin <https-url>/google-sheets.html`, `docs/GOOGLE_SHEETS.md`, `docs/DEPLOY.md`, `docs/RUNBOOK.md`, README. The package contains `Code.gs`, `Sidebar.html`, `appsscript.json`; it performs no remote deployment. RGPD notes are in `docs/RGPD.md`. |
-| Real account | Pending G1–G4 in `docs/GOOGLE_SHEETS.md` and `docs/TODO.md`: public hosting and installation in personal/Workspace accounts. Local tests do not close these checks. Marketplace distribution and browser OneDrive sign-in are tracked in `docs/DEFERRED.md`. |
+| Real account | Pending G1–G4 in `docs/GOOGLE_SHEETS.md` and `docs/TODO.md`: public hosting and installation in personal/Workspace accounts. Local tests do not close these checks. Marketplace distribution is tracked in `docs/DEFERRED.md`; browser OneDrive sign-in follows below. |
 
 - Final gate: `pnpm verify --concurrency=1` passed all ten test tasks, including 95 add-in tests
   (12 new Google Sheets/package tests), 283 API tests, 656 core tests and 276 XML oracle tests.
@@ -1086,3 +1086,28 @@ checks, sending, reception, registry, chat and billing screens. Acceptance crite
   existing Excel harness); real Excel web skipped without an account. browser: local.
 - Deployment remains pending: no public app/API address is configured in this working copy.
   The owner was asked which HTTPS addresses to use for a real Google account installation.
+
+## R9 — OneDrive sign-in from Google Sheets (started 2026-10-24)
+
+The shared sidebar can display existing OneDrive files, but connecting a new account still requires
+Office nested authentication. To close this host difference, before implementation:
+
+- Google Sheets uses the standard MSAL browser client and the existing popup relay and redirect page.
+  It does not require Office.js or change the API's scopes and token exchange.
+- Excel retains its nested-authentication client and login hint.
+- The picker and account selection stay shared. Token failures and cancellation retain calm errors.
+- The popup relay pins Microsoft's authority origin, without a path. Picker initialization checks its
+  exact frame, origin and channel before accepting a message port.
+- Focused authentication/security tests and the full verification gate pass. Real browser consent in
+  Google's sidebar stays a separate account check.
+
+### Evidence (2026-10-24)
+
+- `src/microsoft/browser.test.ts` passed five tests: standard browser client without Office, existing
+  Office NAA and account hint, popup cancellation without retry, SDK retry after a load failure,
+  client-id separation and picker initialization rejecting another frame/origin/channel.
+- The SDK loads only after a sign-in request. Google Sheets reuses `auth.html` and the same API
+  scope, account selection and picker; no new dependency or backend credential was added.
+- `pnpm verify --concurrency=1` passed all ten test tasks, with 100 add-in tests. `pnpm build` passed.
+- The full browser run passed 3 scenarios, including Google Sheets and the existing Excel harness;
+  real Excel web skipped. browser: local. Microsoft consent is still G5, not a claim of this run.

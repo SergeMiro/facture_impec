@@ -122,3 +122,21 @@ registration): not tried.
 
 `pnpm verify` and `pnpm test:e2e` never reach Microsoft: they run against the stand-in in
 `apps/mock-pdp` (`/microsoft`), which follows the shapes above.
+
+## Google Sheets host (R9, 2026-10-24)
+
+Google Sheets calls the shared Microsoft adapter in browser mode. It uses
+`createStandardPublicClientApplication`; Excel continues to use
+`createNestablePublicClientApplication` and its Office account hint. Both factories initialize their
+client before use. The picker, scopes and backend exchange remain the same.
+
+The browser client uses the existing `auth.html` as both redirect and popup relay. Its public address
+must be registered as an SPA redirect URI, as for Excel on the web. The relay pins
+`https://login.microsoftonline.com`. Picker initialization checks the source window, exact picker
+origin and channel id before accepting a message port.
+
+Sources: Microsoft's [MSAL initialization guide](https://learn.microsoft.com/en-us/entra/msal/javascript/browser/initialization)
+and [iframe guidance](https://learn.microsoft.com/en-us/entra/msal/javascript/browser/iframe-usage),
+checked on 2026-10-24; installed `@azure/msal-browser` 5.25.0 source. Focused tests script the SDK
+without reaching Microsoft. Actual consent and selection from Google's sidebar remain G5 in
+`GOOGLE_SHEETS.md`.

@@ -53,7 +53,22 @@ const Pick = z.object({
   ),
 });
 
-export function officeMicrosoftPort(): MicrosoftPort {
+/** Office keeps NAA; Google Sheets uses MSAL's standard browser flow over the same picker. */
+export const officeMicrosoftPort = (): MicrosoftPort => microsoftPort('office');
+export const browserMicrosoftPort = (): MicrosoftPort => microsoftPort('browser');
+
+export function isPickerInitialization(
+  event: { source: unknown; origin: string; data: unknown },
+  source: unknown,
+  channelId: string,
+  origin: string,
+): boolean {
+  if (event.source !== source || event.origin !== origin) return false;
+  const message = Initialize.safeParse(event.data);
+  return message.success && message.data.channelId === channelId;
+}
+
+function microsoftPort(host: 'office' | 'browser'): MicrosoftPort {
   let app: Promise<IPublicClientApplication> | null = null;
   let appFor = '';
 
@@ -61,11 +76,14 @@ export function officeMicrosoftPort(): MicrosoftPort {
     if (!app || appFor !== clientId) {
       appFor = clientId;
       const page = new URL(AUTH_PAGE, window.location.href).toString();
-      const created = import('@azure/msal-browser').then((msal) =>
-        msal.createNestablePublicClientApplication({
+      const created = import('@azure/msal-browser').then((msal) => {
+        const config = {
           auth: { clientId, authority: AUTHORITY, redirectUri: page, popupRelayUri: page },
-        }),
-      );
+        };
+        return host === 'office'
+          ? msal.createNestablePublicClientApplication(config)
+          : msal.createStandardPublicClientApplication(config);
+      });
       // A failed load is tried again at the next click.
       created.catch(() => {
         if (app === created) app = null;
@@ -77,7 +95,7 @@ export function officeMicrosoftPort(): MicrosoftPort {
 
   /** Learn (NAA): silently when Office already holds consent, else Microsoft's own window. */
   async function token(clientId: string, scope: string, authority?: string): Promise<string> {
-    if (!supported()) throw new MicrosoftPortError('unsupported');
+    if (host === 'office' && !supported()) throw new MicrosoftPortError('unsupported');
     let pca: IPublicClientApplication;
     try {
       pca = await client(clientId);
@@ -86,7 +104,7 @@ export function officeMicrosoftPort(): MicrosoftPort {
     }
     const request = {
       scopes: [scope],
-      loginHint: await loginHint(),
+      loginHint: host === 'office' ? await loginHint() : undefined,
       ...(authority && { authority }),
     };
     const signedIn = (result: AuthenticationResult) => {
@@ -216,10 +234,17 @@ export function officeMicrosoftPort(): MicrosoftPort {
           }
         };
         const onWindow = (event: MessageEvent) => {
-          if (event.source !== frame.contentWindow) return;
-          const message = Initialize.safeParse(event.data);
           const channel = event.ports[0];
-          if (!message.success || message.data.channelId !== channelId || !channel) return;
+          if (
+            !channel ||
+            !isPickerInitialization(
+              event,
+              frame.contentWindow,
+              channelId,
+              new URL(picker.baseUrl).origin,
+            )
+          )
+            return;
           port = channel;
           port.addEventListener('message', (e) => void onPort(e));
           port.start();

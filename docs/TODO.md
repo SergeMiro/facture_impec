@@ -66,7 +66,7 @@ What a real personal account showed and what is still open: `docs/MICROSOFT365.m
 
 - [ ] Publish the shared add-in and API at public HTTPS addresses, then generate the bound script
       with `pnpm sheets:package --addin https://YOUR-ADDIN/google-sheets.html`.
-- [ ] Install in a real personal Google account and a Workspace account; run G1–G4 in
+- [ ] Install in a real personal Google account and a Workspace account; run G1–G5 in
       `docs/GOOGLE_SHEETS.md`. Native-service and browser stand-ins remain separate evidence.
 - [ ] Public Marketplace distribution: publisher registration, consent-screen configuration and
       Google's review. A manually installed bound script does not prove Marketplace acceptance.

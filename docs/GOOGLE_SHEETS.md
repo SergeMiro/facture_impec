@@ -50,8 +50,12 @@ Only the sidebar's exact child window, origin and random channel can call its br
 validates an allowlist of operations on the current spreadsheet. No request can choose a different
 spreadsheet, run arbitrary code or fetch a URL. RPC timeouts do not retry writes automatically.
 
-The current native OneDrive sign-in uses Office nested authentication. A Google Sheets user can use
-Google Drive and uploads; OneDrive sign-in from this host requires a separate browser OAuth flow.
+OneDrive sign-in uses MSAL's standard browser client and the existing `auth.html` popup relay.
+Excel keeps its nested-authentication client. The account scopes, backend exchange and picker stay
+shared. The public `auth.html` address must be registered as an SPA redirect URI in Microsoft Entra.
+Microsoft's [initialization guide](https://learn.microsoft.com/en-us/entra/msal/javascript/browser/initialization)
+and [iframe guidance](https://learn.microsoft.com/en-us/entra/msal/javascript/browser/iframe-usage)
+were checked on 2026-10-24. Interactive sign-in uses popup windows, never a frame redirect.
 
 ## Verification still requiring a real Google account
 
@@ -60,3 +64,7 @@ Google Drive and uploads; OneDrive sign-in from this host requires a separate br
 - TODO(verify) G3: verify `onEdit` revisions with two people editing the same spreadsheet.
 - TODO(verify) G4: repeat mapping, test send, returned statuses, a source edit and correction/undo in
   the real spreadsheet. Local native-service and browser stand-ins are separate evidence.
+
+- TODO(verify) G5: connect personal and work OneDrive accounts through the real Google Sheets sidebar.
+  Verify popup consent, relay return, picker handshake and one selected file. Unit tests script MSAL;
+  they do not prove browser consent against Microsoft.
