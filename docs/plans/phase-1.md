@@ -37,10 +37,23 @@ sees the autoliquidation error before sending, not in a back end it does not use
 |---|---|
 | A raw e-mail (`.eml`) becomes one document per attachment, the sender and subject as hints (D3: the provider waits for the owner) | `apps/api/src/ingest-mail.ts`, dependency in `docs/DEPENDENCIES.md` |
 
+## 1D — a OneDrive folder watched (2026-10-24)
+
+The `drive` adapter, OneDrive first: Learn says what a folder pick and a folder's listing are
+(`docs/MICROSOFT365.md` › Sources, read 2026-10-24); Google's `drive.file` does not say whether a
+folder picked grants its files (`docs/GOOGLE.md` §2), so Google Drive waits for a real account.
+
+| What | Where |
+|---|---|
+| « Surveiller un dossier » in « Fichiers OneDrive »: OneDrive's picker in folder mode, one folder, the pane's « Mode test » with it | `apps/addin/src/microsoft/{port,office,stand-in}.ts`, `controller.ts`, `ui/RegistryView.tsx`, fr.json |
+| `POST /connectors/microsoft/folders`, `DELETE /connectors/microsoft/folders/:id`; the folders in the section's view | `apps/api/src/connectors.ts`, `app.ts` |
+| `connected_folders` and `folder_items` (what each file of a folder was, last seen): migration 0026 | `packages/db/src/schema.ts` |
+| Each check of the connection lists each folder (Graph `children`, paged) and gives each new or changed PDF, XML or image to `ingestFile` (source `drive`, the folder's name as `folderPath`), the company's backlog respected | `apps/api/src/connectors.ts`, `microsoft.ts` |
+
 ## Not in stage 1 (and where it went)
 
-- **Drive folders watched**: the R4/R5 connections read the files a person picks; watching a folder
-  means a folder picker and Graph / Drive change APIs to read and record first. `docs/TODO.md`.
+- **Google Drive folders**: `drive.file` and a folder picked, verified on a real account first
+  (`docs/TODO.md`). **Subfolders** of a watched folder: not walked (`docs/DEFERRED.md`).
 - **BTP-PARTY-01** (an unknown SIRET, « info »): core has no « info » severity, and it is not a fault
   of the invoice; stage 2's linking step proposes « confirmer_tiers » instead.
 - **The `classify` worker**: stage 2.
@@ -103,3 +116,30 @@ sees the autoliquidation error before sending, not in a back end it does not use
 - The backlog is checked once for the whole e-mail, so an e-mail is stored whole or not at all when
   the company is busy. The `sourceRef` of its documents is its Message-ID, or `sha256:` of the e-mail
   when it has none; its Date header is not trusted for `receivedAt` (the time it reached us is).
+
+**1D** (2026-10-24):
+
+- OneDrive only: `drive.file` does not say whether a folder picked in Google's picker grants its
+  files (`docs/GOOGLE.md` §2), so Google Drive folders wait for a real account (`docs/TODO.md`).
+- Each check lists the folder (Graph `children`, 200 a page, 25 pages: the first 5 000 items) and
+  compares each file's content tag with the one last seen, instead of a change feed: `delta` is
+  documented on a drive's root only, a whole OneDrive to filter (`docs/MICROSOFT365.md`).
+  Subfolders are not walked (`docs/DEFERRED.md`).
+- What a folder held is kept per file in `folder_items` (its content tag, the document it gave or
+  why it was skipped), not read off `documents`: documents dedupe by their bytes per company, so the
+  same invoice in two folders, or put back, is one document, and a skipped file has no document.
+- The files already in the folder when it is picked are read too: a person picks the folder where
+  their invoices already are. 50 files are read at most per check; a folder with more is marked
+  `behind`, and the sweep checks it again at once instead of waiting for the next notification or
+  poll (`connectorsBehind`). The company's backlog full (`ingest_busy`) stops the folder for this
+  check without `behind`: the next check takes the rest.
+- A file gone from the folder is forgotten; put back, it is read again and its bytes give back the
+  same document.
+- The folder keeps the pane's « Mode test » of the moment it was picked: its documents are test
+  documents whatever the pane shows later. Picked again in the other mode, the files read from then
+  on follow it.
+- 5 folders per connection (`MAX_FOLDERS`), one at a time in the picker.
+- The documents a folder gives are audited with the actor `connector:microsoft`; the pick and
+  « Ne plus surveiller » with `user`.
+- « Ne plus surveiller » and « Déconnecter » delete the folder and what it held (`folder_items`),
+  never the documents it gave: they are the company's, read and perhaps already linked.

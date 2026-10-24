@@ -4,19 +4,25 @@
 // disconnecting that deletes what was read, and RGPD.
 
 import { randomBytes } from 'node:crypto';
-import { FILE_LIMITS } from '@fi/core';
+import { FILE_LIMITS, toCii } from '@fi/core';
+import { computeGolden, golden } from '@fi/core/testing';
 import { type XlsxCell, xlsxOf } from '@fi/core/testing/xlsx';
 import type { Database } from '@fi/db';
 import {
+  and,
   auditEvents,
   connectedFiles,
+  connectedFolders,
   connections,
   docs,
+  documents,
   eq,
   findings,
   invoices,
+  like,
   sources,
 } from '@fi/db';
+import { MAX_DOCUMENT_BYTES } from '@fi/domain';
 import { MICROSOFT_STAND_IN_APP, MicrosoftStandIn } from '@fi/mock-pdp';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { checkNow } from './checks';
@@ -24,11 +30,14 @@ import { type Checks, companies, invoiceRow, invoiceSheet } from './checks.fixtu
 import {
   checkConnection,
   connectorsBehind,
+  FOLDER_READS_PER_CHECK,
+  MAX_FOLDERS,
   type MicrosoftConnector,
   POLL_EVERY_MS,
   servedByMicrosoft,
   WATCHED_POLL_EVERY_MS,
 } from './connectors';
+import { INGEST_BACKLOG } from './ingest';
 import { createMicrosoftClient } from './microsoft';
 import {
   fakeAdapter,
@@ -214,7 +223,7 @@ describe('a personal OneDrive', () => {
     await stand.putFile(PERSONAL.account, 'cmd-01', 'Commandes 2026.xlsx', ordersFile(40));
     expect(stand.delivered.at(-1)).toEqual({ subscriptionId: conn?.subscriptionId, status: 202 });
     expect(jobs.connectors.slice(queued)).toContain(conn?.id);
-    expect(await check(conn?.id ?? '')).toEqual({ read: 1 });
+    expect(await check(conn?.id ?? '')).toEqual({ read: 1, documents: 0 });
     await checkNow(database.db, c.id, clock);
     const [b1] = (await c.checks()).findings;
     expect(b1).toMatchObject({ rule: 'B1', severity: 'blocking', amount: 10_000 });
@@ -236,7 +245,7 @@ describe('a personal OneDrive', () => {
 
     // Nothing changed since: one metadata call, no download, nothing written.
     const downloads = contentCalls();
-    expect(await check(conn?.id ?? '')).toEqual({ read: 0 });
+    expect(await check(conn?.id ?? '')).toEqual({ read: 0, documents: 0 });
     expect(contentCalls()).toBe(downloads);
     expect(await c.audits('source.read')).toHaveLength(reads.length);
   });
@@ -322,7 +331,7 @@ describe('a work OneDrive', () => {
     expect(jobs.connectors).toContain(c.connectionId);
 
     await stand.putFile(WORK.account, 'cmd-04', 'Commandes 2026.xlsx', ordersFile(40));
-    expect(await check(c.connectionId)).toEqual({ read: 1 });
+    expect(await check(c.connectionId)).toEqual({ read: 1, documents: 0 });
     const [order] = await database.db
       .select({ netTotal: docs.netTotal })
       .from(docs)
@@ -411,7 +420,7 @@ describe('when something breaks', () => {
   it('waits when Microsoft asks to, and stops until the person reconnects when it refuses the token', async () => {
     const c = await connected('wb-ms-06', PERSONAL, 'cmd-06');
     stand.throttle(1);
-    expect(await check(c.connectionId)).toEqual({ read: 0 });
+    expect(await check(c.connectionId)).toEqual({ read: 0, documents: 0 });
     const [waiting] = await database.db
       .select()
       .from(connections)
@@ -563,6 +572,253 @@ describe('« Déconnecter OneDrive »', () => {
     expect(view.connection?.files).toEqual([]);
     expect(await database.db.select().from(sources).where(eq(sources.tenantId, c.id))).toEqual([]);
     expect(await c.audits('connected_file.remove')).toHaveLength(1);
+  });
+});
+
+/** A company with its OneDrive connected and nothing picked yet. */
+async function withOneDrive(workbook: string) {
+  const c = await company(workbook);
+  await c.call('/connectors/microsoft', 'POST', { token: stand.signIn(PERSONAL.account) });
+  const [conn] = await database.db.select().from(connections).where(eq(connections.tenantId, c.id));
+  if (!conn) throw new Error('no connection');
+  const request = (path: string, method: string, body?: unknown) =>
+    api.request(path, { method, token: c.apiKey, ...(body !== undefined && { body }) });
+  const watch = (itemId: string, test = false) =>
+    request('/connectors/microsoft/folders', 'POST', {
+      driveId: PERSONAL.driveId,
+      itemId,
+      test,
+    });
+  return { ...c, connectionId: conn.id, request, watch };
+}
+
+const ciiOf = (name: string) => new TextEncoder().encode(toCii(computeGolden(golden(name))));
+const pdf = (text: string) => new TextEncoder().encode(`%PDF-1.4\n% ${text}\n%%EOF\n`);
+const codeOf = async (res: Response) =>
+  ((await res.json()) as { error: { code: string } }).error.code;
+
+interface FolderView {
+  connection: {
+    folders: {
+      id: string;
+      name: string;
+      isTest: boolean;
+      problem: string | null;
+      documents: number;
+      skipped: number;
+      checkedAt: string | null;
+    }[];
+  } | null;
+}
+
+describe('a watched OneDrive folder (BTP stage 1D)', () => {
+  it('gives each PDF, XML or image once, a changed one again, and skips the rest once', async () => {
+    const c = await withOneDrive('wb-ms-folder-01');
+    stand.putFolder(PERSONAL.account, 'dir-01', 'Factures fournisseurs');
+    await stand.putFile(
+      PERSONAL.account,
+      'dir-01-a',
+      'Facture Durand.pdf',
+      pdf('Durand 300'),
+      'dir-01',
+    );
+    await stand.putFile(
+      PERSONAL.account,
+      'dir-01-b',
+      'Facture Lilas.xml',
+      ciiOf('02-goods-two-rates'),
+      'dir-01',
+    );
+    await stand.putFile(
+      PERSONAL.account,
+      'dir-01-c',
+      'Notes.docx',
+      new Uint8Array([80, 75, 3, 4]),
+      'dir-01',
+    );
+    const big = new Uint8Array(MAX_DOCUMENT_BYTES + 1);
+    big.set(pdf('trop gros'));
+    await stand.putFile(PERSONAL.account, 'dir-01-d', 'Scan entier.pdf', big, 'dir-01');
+    // A subfolder's files are not read (docs/DEFERRED.md).
+    stand.putFolder(PERSONAL.account, 'dir-01-sub', 'Archives');
+    await stand.putFile(
+      PERSONAL.account,
+      'dir-01-e',
+      'Vieille facture.pdf',
+      pdf('2019'),
+      'dir-01-sub',
+    );
+
+    const queued = jobs.connectors.length;
+    const picked = await c.watch('dir-01');
+    expect(picked.status).toBe(200);
+    const view = (await picked.json()) as FolderView;
+    expect(view.connection?.folders).toMatchObject([
+      { name: 'Factures fournisseurs', isTest: false, problem: null, documents: 0, skipped: 0 },
+    ]);
+    // Checked at once, in the background.
+    expect(jobs.connectors.slice(queued)).toEqual([c.connectionId]);
+
+    expect(await check(c.connectionId)).toEqual({ read: 0, documents: 2 });
+    const docs = await database.db.select().from(documents).where(eq(documents.tenantId, c.id));
+    expect(docs.map((d) => [d.name, d.source, d.hints, d.isTest]).sort()).toEqual([
+      ['Facture Durand.pdf', 'drive', { folderPath: 'Factures fournisseurs' }, false],
+      ['Facture Lilas.xml', 'drive', { folderPath: 'Factures fournisseurs' }, false],
+    ]);
+    expect(jobs.ingests).toEqual(expect.arrayContaining(docs.map((d) => d.id)));
+    const after = (await c.call('/connectors/microsoft')) as FolderView;
+    expect(after.connection?.folders[0]).toMatchObject({ documents: 2, skipped: 2 });
+
+    // Nothing changed: nothing is downloaded again, the skipped files are not counted twice.
+    const downloads = contentCalls();
+    expect(await check(c.connectionId)).toEqual({ read: 0, documents: 0 });
+    expect(contentCalls()).toBe(downloads);
+
+    // Durand's invoice saved again with other content: read again, a new document.
+    await stand.putFile(
+      PERSONAL.account,
+      'dir-01-a',
+      'Facture Durand.pdf',
+      pdf('Durand 400'),
+      'dir-01',
+    );
+    expect(await check(c.connectionId)).toEqual({ read: 0, documents: 1 });
+    const again = await database.db.select().from(documents).where(eq(documents.tenantId, c.id));
+    expect(again).toHaveLength(3);
+    const ingested = await database.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.tenantId, c.id), eq(auditEvents.action, 'document.ingest')));
+    expect(new Set(ingested.map((e) => e.actor))).toEqual(new Set(['connector:microsoft']));
+    const pickedAudit = await database.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.tenantId, c.id), eq(auditEvents.action, 'connected_folder.pick')));
+    expect(pickedAudit.map((e) => e.actor)).toEqual(['user']);
+  });
+
+  it('takes the pane’s « Mode test », and refuses a file, a sixth folder and a refused connection', async () => {
+    const c = await withOneDrive('wb-ms-folder-02');
+    stand.putFolder(PERSONAL.account, 'dir-02', 'Essais');
+    await stand.putFile(PERSONAL.account, 'dir-02-a', 'Devis.pdf', pdf('essai'), 'dir-02');
+    expect((await c.watch('dir-02', true)).status).toBe(200);
+    expect(await check(c.connectionId)).toEqual({ read: 0, documents: 1 });
+    const [doc] = await database.db.select().from(documents).where(eq(documents.tenantId, c.id));
+    expect(doc?.isTest).toBe(true);
+
+    await stand.putFile(PERSONAL.account, 'file-02', 'Commandes.xlsx', ordersFile(30));
+    const notFolder = await c.watch('file-02');
+    expect(notFolder.status).toBe(422);
+    expect(await codeOf(notFolder)).toBe('connector_not_folder');
+    const nowhere = await c.watch('dir-02-nowhere');
+    expect(nowhere.status).toBe(404);
+    expect(await codeOf(nowhere)).toBe('connector_folder_missing');
+
+    for (let i = 2; i <= MAX_FOLDERS; i++) {
+      stand.putFolder(PERSONAL.account, `dir-02-${i}`, `Dossier ${i}`);
+      expect((await c.watch(`dir-02-${i}`)).status).toBe(200);
+    }
+    stand.putFolder(PERSONAL.account, 'dir-02-extra', 'Un de trop');
+    const sixth = await c.watch('dir-02-extra');
+    expect(sixth.status).toBe(422);
+    expect(await codeOf(sixth)).toBe('connector_too_many_folders');
+    // The same folder again is no sixth one.
+    expect((await c.watch('dir-02', true)).status).toBe(200);
+
+    await database.db
+      .update(connections)
+      .set({ status: 'reconnect' })
+      .where(eq(connections.id, c.connectionId));
+    const refused = await c.watch('dir-02-extra');
+    expect(refused.status).toBe(409);
+    expect(await codeOf(refused)).toBe('connector_reconnect');
+  });
+
+  it('says a folder is gone, and « Ne plus surveiller » or « Déconnecter » keep its documents', async () => {
+    const c = await withOneDrive('wb-ms-folder-03');
+    stand.putFolder(PERSONAL.account, 'dir-03', 'Chantier Lilas');
+    await stand.putFile(
+      PERSONAL.account,
+      'dir-03-a',
+      'Situation 1.pdf',
+      pdf('situation'),
+      'dir-03',
+    );
+    stand.putFolder(PERSONAL.account, 'dir-03-b', 'Chantier Durand');
+    await stand.putFile(PERSONAL.account, 'dir-03-b-a', 'Devis.pdf', pdf('devis'), 'dir-03-b');
+    await c.watch('dir-03');
+    await c.watch('dir-03-b');
+    expect(await check(c.connectionId)).toEqual({ read: 0, documents: 2 });
+
+    await stand.deleteFile(PERSONAL.account, 'dir-03');
+    expect(await check(c.connectionId)).toEqual({ read: 0, documents: 0 });
+    const view = (await c.call('/connectors/microsoft')) as FolderView;
+    const gone = view.connection?.folders.find((f) => f.name === 'Chantier Lilas');
+    expect(gone).toMatchObject({ problem: 'missing', documents: 1 });
+
+    const removed = (await c.call(
+      `/connectors/microsoft/folders/${gone?.id}`,
+      'DELETE',
+    )) as FolderView;
+    expect(removed.connection?.folders.map((f) => f.name)).toEqual(['Chantier Durand']);
+    await c.call('/connectors/microsoft', 'DELETE');
+    // The documents are the company's: they stay.
+    const docs = await database.db.select().from(documents).where(eq(documents.tenantId, c.id));
+    expect(docs.map((d) => d.name).sort()).toEqual(['Devis.pdf', 'Situation 1.pdf']);
+    expect(
+      await database.db.select().from(connectedFolders).where(eq(connectedFolders.tenantId, c.id)),
+    ).toEqual([]);
+    const actions = await database.db
+      .select({ action: auditEvents.action })
+      .from(auditEvents)
+      .where(eq(auditEvents.tenantId, c.id));
+    expect(actions.map((a) => a.action)).toEqual(
+      expect.arrayContaining([
+        'connected_folder.problem',
+        'connected_folder.remove',
+        'connection.disconnect',
+      ]),
+    );
+  });
+
+  it('reads 50 files a check and the sweep comes back for the rest; a full backlog waits', async () => {
+    const c = await withOneDrive('wb-ms-folder-04');
+    stand.putFolder(PERSONAL.account, 'dir-04', 'Scans');
+    for (let i = 0; i < FOLDER_READS_PER_CHECK + 5; i++) {
+      await stand.putFile(
+        PERSONAL.account,
+        `dir-04-${i}`,
+        `Scan ${i}.pdf`,
+        pdf(`scan ${i}`),
+        'dir-04',
+      );
+    }
+    await c.watch('dir-04');
+    expect(await check(c.connectionId)).toEqual({ read: 0, documents: FOLDER_READS_PER_CHECK });
+    // Just checked, yet due: the folder has more.
+    expect(await connectorsBehind(database.db, clock)).toContain(c.connectionId);
+    expect(await check(c.connectionId)).toEqual({ read: 0, documents: 5 });
+    expect(await connectorsBehind(database.db, clock)).not.toContain(c.connectionId);
+
+    // The company's documents are still being read: the folder waits for the next check.
+    await database.db.insert(documents).values(
+      Array.from({ length: INGEST_BACKLOG }, (_, i) => ({
+        tenantId: c.id,
+        source: 'excel' as const,
+        sourceRef: `waiting:${i}`,
+        name: `attente-${i}.pdf`,
+        mime: 'application/pdf',
+        size: 1,
+        sha256: `waiting-${i}`,
+        storageKey: 'waiting',
+        isTest: false,
+        receivedAt: clock,
+      })),
+    );
+    await stand.putFile(PERSONAL.account, 'dir-04-new', 'Nouveau.pdf', pdf('nouveau'), 'dir-04');
+    expect(await check(c.connectionId)).toEqual({ read: 0, documents: 0 });
+    await database.db.delete(documents).where(like(documents.sourceRef, 'waiting:%'));
+    expect(await check(c.connectionId)).toEqual({ read: 0, documents: 1 });
   });
 });
 

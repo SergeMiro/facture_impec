@@ -1,8 +1,8 @@
 // What the pane asks of Microsoft for « Fichiers OneDrive » (R4, docs/MICROSOFT365.md): a token for
-// our API, signed in with the account Office already knows, and the files the person picks in
-// OneDrive's own picker. The real port is ./office.ts; the harness and the E2E run use ./stand-in.ts.
+// our API, signed in with the account Office already knows, and the files (or the folder, BTP stage
+// 1D) the person picks in OneDrive's own picker. The real port is ./office.ts; the harness and the E2E run use ./stand-in.ts.
 
-/** A file picked in OneDrive: the API reads it itself from then on. */
+/** A file or a folder picked in OneDrive: the API reads it itself from then on. */
 export interface PickedFile {
   driveId: string;
   itemId: string;
@@ -39,6 +39,8 @@ export interface MicrosoftPort {
   pick(input: {
     clientId: string;
     picker: PickerTarget;
+    /** `folder`: one folder, whose documents the API reads (BTP stage 1D). Default: workbooks. */
+    kind?: 'files' | 'folder';
     /** The picker's own frame: its title and its « Fermer » button. */
     labels: { title: string; close: string };
   }): Promise<PickedFile[]>;

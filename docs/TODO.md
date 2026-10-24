@@ -196,7 +196,8 @@ Stages (`docs/plans/phase-N.md` each):
 - [ ] **1 — ingest and validate** (1A, the BTP rules where invoices are already checked: done
       2026-10-24; 1B, FileStore, `POST /ingest`, the ingest and validate workers with OCR, the PDP
       adapter, 50 golden documents and a measured p95: done 2026-10-24; 1C, raw e-mail (`.eml`):
-      done 2026-10-24). Left: drive folders watched (below), the e-mail provider (owner, D3).
+      done 2026-10-24; 1D, a OneDrive folder watched: done 2026-10-24). Left: Google Drive folders
+      (below), the e-mail provider (owner, D3).
 - [x] **2 — documents pipeline** (`docs/plans/phase-2.md`; 2A, classify with its eval, dates and
       SIRENs read, the company linked, deadlines derived, `POST /documents/:id/review`: done
       2026-10-24; 2B, `GET /documents`, `GET /obligations` and the pane's « Documents » tab with
@@ -254,9 +255,17 @@ Left from stage 1 for later (2026-10-24):
       release after a year) and C. trav. L8222-1 / D8222-1 (the 5 000 € HT threshold of the
       attestation de vigilance). Both are `TODO(verify)` in `docs/research/BTP_RULES.md`: Légifrance
       answered 403 to WebFetch and curl; a real browser (neo) may pass its Cloudflare check.
-- [ ] **Drive folders watched** (BTP plan stage 1 `drive` adapter): a folder picker in the pane, then
-      the Graph (`/delta`) and Drive (`changes.list`) change feeds read and recorded with their dates
-      before a line of code; today the R4/R5 connections read the files a person picks.
+- [x] **OneDrive folders watched** (BTP plan stage 1 `drive` adapter): done 2026-10-24, stage 1D
+      (`docs/plans/phase-1.md` › 1D; `apps/api/src/connectors.test.ts` › a watched OneDrive folder).
+- [ ] **OneDrive's picker in folder mode, on real accounts** (owner, with the app registration):
+      « Registre » → « Fichiers OneDrive » → « Surveiller un dossier » on a personal and on a work
+      account; the picker shows folders only and its answer gives the folder (`docs/MICROSOFT365.md`,
+      TODO(verify) in `apps/addin/src/microsoft/office.ts`). Then drop a PDF into the folder and see it
+      under « Documents » within the hour (personal) or two minutes (work).
+- [ ] **Google Drive folders watched**: check on a real Google account whether a folder picked with
+      `setSelectFolderEnabled` lets `drive.file` list and read the files inside it (`docs/GOOGLE.md`
+      §2). If yes, the same `checkFolder` over Drive; if no, Google Drive stays files only
+      (`docs/DEFERRED.md`).
 - [ ] **Retenue and situation columns on the sheet** (`docs/DEFERRED.md` › BTP rules): needed before
       BTP-RG-* and BTP-SIT-* speak on the company's own invoices.
 

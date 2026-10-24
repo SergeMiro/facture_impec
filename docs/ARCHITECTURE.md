@@ -672,6 +672,17 @@ Tests: `packages/core/src/sheet/file.test.ts`, `apps/api/src/microsoft.test.ts`,
 mailExchangesFromDns, `apps/addin/src/controller.test.ts` › OneDrive files read without Excel (R4),
 `apps/addin/e2e/harness.spec.ts` › OneDrive.
 
+**BTP stage 1D** adds a watched folder to the same connection (`docs/plans/phase-1.md` › 1D):
+« Surveiller un dossier » opens OneDrive's picker in folder mode (`microsoft/office.ts`, `kind:
+'folder'`); `pickFolder` and `removeFolder` in `connectors.ts` keep it in `connected_folders`
+(migration `0026_watched_folders.sql`); each `checkConnection` then runs `checkFolder`, which lists the
+folder (`microsoft.ts` › `children`, paged), keeps what each file was in `folder_items` and gives each
+new or changed PDF, XML or image to `ingestFile` (source `drive`), 50 a check, the company's backlog
+respected. The stand-in OneDrive in `apps/mock-pdp` has folders and their children. Tests:
+`apps/api/src/connectors.test.ts` › a watched OneDrive folder (BTP stage 1D),
+`apps/api/src/microsoft.test.ts` › lists a folder page by page, `apps/addin/src/controller.test.ts` ›
+watches a folder.
+
 ### Decisions taken in R4
 
 | Topic | Decision | Why |

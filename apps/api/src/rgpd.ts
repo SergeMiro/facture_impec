@@ -19,6 +19,7 @@ import {
   chats,
   checkState,
   connectedFiles,
+  connectedFolders,
   connections,
   connectorSyncs,
   type Db,
@@ -114,6 +115,7 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
     conversations,
     accounts,
     picked,
+    watched,
     exceptions,
     synonyms,
     uploaded,
@@ -202,6 +204,11 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       .from(connectedFiles)
       .where(eq(connectedFiles.tenantId, tenant.id))
       .orderBy(asc(connectedFiles.name)),
+    db
+      .select()
+      .from(connectedFolders)
+      .where(eq(connectedFolders.tenantId, tenant.id))
+      .orderBy(asc(connectedFolders.name)),
     db
       .select()
       .from(ruleExceptions)
@@ -325,6 +332,15 @@ export async function exportTenant(deps: ApiDeps, tenant: TenantRow, principal: 
       pickedAt: f.pickedAt.toISOString(),
       checkedAt: f.checkedAt?.toISOString() ?? null,
       changedAt: f.changedAt?.toISOString() ?? null,
+    })),
+    /** BTP stage 1D: the folders watched; what they gave is in `documents`. */
+    connectedFolders: watched.map((f) => ({
+      id: f.id,
+      name: f.name,
+      isTest: f.isTest,
+      problem: f.problem,
+      pickedAt: f.pickedAt.toISOString(),
+      checkedAt: f.checkedAt?.toISOString() ?? null,
     })),
     invoices: rows.map((r) => ({
       ...invoiceSummary(r),
@@ -647,8 +663,9 @@ export async function deleteTenant(
     // The sheets' layouts and consents go with the account; their documents went with the registry.
     await tx.delete(sources).where(eq(sources.tenantId, tenant.id));
     await tx.delete(layoutProfiles).where(eq(layoutProfiles.tenantId, tenant.id));
-    // The connected account's token and its picked files (R4).
+    // The connected account's token, its picked files (R4) and watched folders (BTP stage 1D).
     await tx.delete(connectedFiles).where(eq(connectedFiles.tenantId, tenant.id));
+    await tx.delete(connectedFolders).where(eq(connectedFolders.tenantId, tenant.id));
     await tx.delete(connections).where(eq(connections.tenantId, tenant.id));
     // The files uploaded from the pane (R6), their bytes with them.
     await tx.delete(uploads).where(eq(uploads.tenantId, tenant.id));

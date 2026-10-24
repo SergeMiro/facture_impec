@@ -1,7 +1,7 @@
 // Microsoft's identity platform and Graph, as the OneDrive connector uses them (R4,
 // docs/MICROSOFT365.md, read on Learn 2026-10-21): the on-behalf-of exchange of the pane's token for
 // a Graph token and a refresh token, its refresh, the account, a picked file's metadata and content,
-// and change-notification subscriptions. Every answer is checked with Zod; every failure becomes a
+// a watched folder's files (BTP stage 1D), and change-notification subscriptions. Every answer is checked with Zod; every failure becomes a
 // MicrosoftError whose kind says what the connector does next.
 
 import { z } from 'zod';
@@ -64,9 +64,17 @@ export const DriveItem = z.object({
   eTag: z.string().nullish(),
   cTag: z.string().nullish(),
   file: z.object({}).loose().nullish(),
+  folder: z.object({}).loose().nullish(),
   parentReference: z.object({ driveId: z.string().nullish() }).loose().nullish(),
 });
 export type DriveItem = z.infer<typeof DriveItem>;
+const Children = z.object({
+  value: z.array(DriveItem),
+  '@odata.nextLink': z.string().optional(),
+});
+/** Learn (list children): 200 items a page by default; a folder longer than this waits a check. */
+const CHILDREN_PAGES = 25;
+const ITEM_FIELDS = 'id,name,size,eTag,cTag,file,folder,parentReference';
 const Subscription = z.object({ id: z.string().min(1), expirationDateTime: z.string() });
 
 /** The token's claims, read without checking it: Microsoft checks it in the exchange. */
@@ -220,13 +228,34 @@ export function createMicrosoftClient(config: MicrosoftConfig) {
 
     async item(accessToken: string, driveId: string, itemId: string): Promise<DriveItem> {
       return json(
-        await call(
-          accessToken,
-          `${item(driveId, itemId)}?$select=id,name,size,eTag,cTag,file,parentReference`,
-        ),
+        await call(accessToken, `${item(driveId, itemId)}?$select=${ITEM_FIELDS}`),
         DriveItem,
         'drive item',
       );
+    },
+
+    /**
+     * Learn (list children, read 2026-10-24): a folder's own items, page by page through
+     * `@odata.nextLink`. The link is followed only on our Graph address: the token goes nowhere else.
+     */
+    async children(accessToken: string, driveId: string, itemId: string): Promise<DriveItem[]> {
+      const items: DriveItem[] = [];
+      let path: string | undefined =
+        `${item(driveId, itemId)}/children?$select=${ITEM_FIELDS}&$top=200`;
+      for (let page = 0; path && page < CHILDREN_PAGES; page++) {
+        const answer: z.infer<typeof Children> = await json(
+          await call(accessToken, path),
+          Children,
+          'folder children',
+        );
+        items.push(...answer.value);
+        const next: string | undefined = answer['@odata.nextLink'];
+        if (next && !next.startsWith(`${graphUrl}/`)) {
+          throw new MicrosoftError('unavailable', 'folder children: next page off Graph');
+        }
+        path = next?.slice(graphUrl.length);
+      }
+      return items;
     },
 
     /**

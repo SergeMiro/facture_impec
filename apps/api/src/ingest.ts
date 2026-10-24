@@ -91,6 +91,9 @@ export interface IngestRequest {
   hints?: EnvelopeHints;
 }
 
+/** Who brought a document: a person, a key, a platform, or a watched folder (src/connectors.ts). */
+export type IngestActor = 'user' | 'api' | 'pdp' | 'connector:microsoft';
+
 export interface Ingested {
   document: DocumentRow;
   /** False: the same bytes were already a document of this company and mode; nothing was stored. */
@@ -103,7 +106,7 @@ export async function storeDocument(
   tenant: Pick<TenantRow, 'id'>,
   request: IngestRequest,
   files: FileStore = postgresFiles,
-  actor: 'user' | 'api' | 'pdp' = 'api',
+  actor: IngestActor = 'api',
 ): Promise<Ingested> {
   const { bytes } = request;
   if (bytes.byteLength === 0) throw new ApiError(422, 'ingest_empty');
@@ -193,7 +196,7 @@ export async function ingestFile(
   deps: { db: Db; jobs: Pick<Jobs, 'enqueueIngest'>; files?: FileStore },
   tenant: Pick<TenantRow, 'id'>,
   request: IngestRequest,
-  options: { actor?: 'user' | 'api' | 'pdp'; backpressure?: boolean } = {},
+  options: { actor?: IngestActor; backpressure?: boolean } = {},
 ): Promise<Ingested> {
   if (options.backpressure) await checkBacklog(deps.db, tenant.id);
   const result = await deps.db.transaction((tx) =>

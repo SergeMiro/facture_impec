@@ -140,7 +140,7 @@ function microsoftPort(host: 'office' | 'browser'): MicrosoftPort {
      * `initialize` → `activate`, and commands `authenticate` / `pick` / `close` on the channel.
      * TODO(verify): with the owner's app registration, personal and work (docs/MICROSOFT365.md).
      */
-    async pick({ clientId, picker, labels }) {
+    async pick({ clientId, picker, labels, kind = 'files' }) {
       const first = await token(clientId, picker.scope, picker.authority);
       const channelId = crypto.randomUUID();
       const options = {
@@ -148,8 +148,14 @@ function microsoftPort(host: 'office' | 'browser'): MicrosoftPort {
         entry: { oneDrive: { files: {} } },
         authentication: {},
         messaging: { origin: window.location.origin, channelId },
-        selection: { mode: 'multiple' },
-        typesAndSources: { mode: 'files', filters: ['.xlsx', '.xlsm', '.csv'] },
+        // Learn (File Picker v8 schema, read 2026-10-24): `folders` lists folders only.
+        // TODO(verify): the folder mode with the owner's app registration (docs/MICROSOFT365.md).
+        ...(kind === 'folder'
+          ? { selection: { mode: 'single' }, typesAndSources: { mode: 'folders' } }
+          : {
+              selection: { mode: 'multiple' },
+              typesAndSources: { mode: 'files', filters: ['.xlsx', '.xlsm', '.csv'] },
+            }),
       };
       const url = `${picker.baseUrl}?${new URLSearchParams({
         filePicker: JSON.stringify(options),

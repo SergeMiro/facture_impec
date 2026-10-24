@@ -224,7 +224,7 @@ describe('the one Google window', () => {
       status: 200,
     });
     expect(jobs.connectors.slice(queued)).toContain(conn?.id);
-    expect(await check(conn?.id ?? '')).toEqual({ read: 1 });
+    expect(await check(conn?.id ?? '')).toEqual({ read: 1, documents: 0 });
     await checkNow(database.db, c.id, clock);
     const [b1] = (await c.checks()).findings;
     expect(b1).toMatchObject({ rule: 'B1', amount: 10_000 });
@@ -232,7 +232,7 @@ describe('the one Google window', () => {
 
     // Same version: no export.
     const before = exports();
-    expect(await check(conn?.id ?? '')).toEqual({ read: 0 });
+    expect(await check(conn?.id ?? '')).toEqual({ read: 0, documents: 0 });
     expect(exports()).toBe(before);
   });
 
@@ -314,7 +314,7 @@ describe('when something breaks', () => {
   it('waits when Google asks to, and stops until the person reconnects when it refuses the token', async () => {
     const c = await connected('wb-google-06', 'gs-06');
     stand.throttle(1);
-    expect(await check(c.connectionId)).toEqual({ read: 0 });
+    expect(await check(c.connectionId)).toEqual({ read: 0, documents: 0 });
     const [waiting] = await database.db
       .select()
       .from(connections)

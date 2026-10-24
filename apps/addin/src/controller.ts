@@ -2093,6 +2093,57 @@ export class Controller {
     this.notify('success', t('addin.connector.picked', { count: next.count }));
   };
 
+  /**
+   * « Surveiller un dossier » (BTP stage 1D): one folder picked in OneDrive's picker; each PDF, XML or
+   * image in it becomes a document, in « Mode test » if the pane is.
+   */
+  watchFolder = async (): Promise<void> => {
+    const view = this.#state.connector;
+    const port = this.#deps.microsoft;
+    const picker = view?.connection?.picker;
+    if (!view?.microsoft || !port || !picker) {
+      this.notify(
+        'info',
+        t(port ? 'addin.connector.port.unsupported' : 'addin.connector.port.unavailable'),
+      );
+      return;
+    }
+    const app = view.microsoft;
+    const next = await this.#act('connector:folder', async () => {
+      let picked: Awaited<ReturnType<MicrosoftPort['pick']>>;
+      try {
+        picked = await port.pick({
+          clientId: app.clientId,
+          picker,
+          kind: 'folder',
+          labels: {
+            title: t('addin.connector.folderPickerTitle'),
+            close: t('addin.connector.close'),
+          },
+        });
+      } catch (e) {
+        if (this.#signInFailed(e)) return null;
+        throw e;
+      }
+      const [folder] = picked;
+      if (!folder) return null;
+      return this.api.watchFolder(folder, this.#state.testMode);
+    });
+    if (!next) return;
+    this.#set({ connector: next });
+    const name = next.connection?.folders.at(-1)?.name ?? '';
+    this.notify('success', t('addin.connector.folderWatched', { folder: name }));
+  };
+
+  /** « Ne plus surveiller »: the folder is no longer read; the documents it gave stay. */
+  unwatchFolder = async (folderId: string): Promise<void> => {
+    const name = this.#state.connector?.connection?.folders.find((f) => f.id === folderId)?.name;
+    const view = await this.#act(`folder:${folderId}`, () => this.api.unwatchFolder(folderId));
+    if (!view) return;
+    this.#set({ connector: view });
+    this.notify('success', t('addin.connector.folderRemoved', { folder: name ?? '' }));
+  };
+
   /** « Inclure » on a sheet of a picked file: what it holds, from the API's own read of the file. */
   includeFileSheet = async (fileId: string, sheet: string): Promise<void> => {
     const found = this.#pickedFile(fileId);

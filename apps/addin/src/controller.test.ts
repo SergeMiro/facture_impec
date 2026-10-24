@@ -1582,7 +1582,10 @@ describe('OneDrive files read without Excel (R4)', () => {
     await stand.putFile('msa-camille', 'cmd-r4', FILE, ordersFile(600));
     const [connection] = r4.jobs.connectors.slice(queued);
     if (!connection) throw new Error('no notification');
-    expect(await checkConnection({ ...r4.deps, microsoft }, connection)).toEqual({ read: 1 });
+    expect(await checkConnection({ ...r4.deps, microsoft }, connection)).toEqual({
+      read: 1,
+      documents: 0,
+    });
 
     await controller.loadChecks();
     expect(b1()).toMatchObject({ severity: 'blocking', amount: 30_000 });
@@ -1596,6 +1599,34 @@ describe('OneDrive files read without Excel (R4)', () => {
       t('addin.connector.inFile', { file: FILE, sheet: 'Commandes' }),
     );
     expect(book.active).toEqual(active);
+  });
+
+  it('watches a folder: each PDF in it becomes a document, until « Ne plus surveiller »', async () => {
+    controller.navigate({ name: 'registry' });
+    await until(() => Boolean(state().connector?.connection), 'the OneDrive connection');
+    const FOLDER = 'Factures fournisseurs';
+    stand.putFolder('msa-camille', 'dir-r4', FOLDER);
+    const pdf = new TextEncoder().encode('%PDF-1.4\n% Durand, situation 2\n%%EOF\n');
+    await stand.putFile('msa-camille', 'dir-r4-a', 'Situation 2.pdf', pdf, 'dir-r4');
+    const queued = r4.jobs.connectors.length;
+    await controller.watchFolder();
+    expect(state().notice?.text).toBe(t('addin.connector.folderWatched', { folder: FOLDER }));
+    const folder = () => state().connector?.connection?.folders[0];
+    expect(folder()).toMatchObject({ name: FOLDER, isTest: false, documents: 0, problem: null });
+
+    // Checked at once by the worker: the PDF is a document, the folder its source.
+    const [connection] = r4.jobs.connectors.slice(queued);
+    if (!connection) throw new Error('no check queued');
+    expect(await checkConnection({ ...r4.deps, microsoft }, connection)).toEqual({
+      read: 0,
+      documents: 1,
+    });
+    await controller.loadRegistry();
+    expect(folder()).toMatchObject({ documents: 1, skipped: 0 });
+
+    await controller.unwatchFolder(folder()?.id ?? '');
+    expect(state().notice?.text).toBe(t('addin.connector.folderRemoved', { folder: FOLDER }));
+    expect(state().connector?.connection?.folders).toEqual([]);
   });
 
   it('takes a sheet out, then disconnects: what the files gave leaves, the invoices stay', async () => {
@@ -1747,7 +1778,10 @@ describe('Google Drive files read without Excel (R5)', () => {
     await stand.putFile('g-camille', 'gs-r5', FILE, ordersFile(600), GOOGLE_SHEET_TYPE);
     const [connection] = r5.jobs.connectors.slice(queued);
     if (!connection) throw new Error('no notification');
-    expect(await checkConnection({ ...r5.deps, google }, connection)).toEqual({ read: 1 });
+    expect(await checkConnection({ ...r5.deps, google }, connection)).toEqual({
+      read: 1,
+      documents: 0,
+    });
     await controller.loadChecks();
     expect(b1()).toMatchObject({ severity: 'blocking', amount: 30_000 });
   });

@@ -1225,6 +1225,61 @@ export const connectedFiles = pgTable(
   (t) => [uniqueIndex('connected_files_item').on(t.tenantId, t.driveId, t.itemId)],
 );
 
+export const FOLDER_PROBLEMS = ['missing', 'forbidden'] as const;
+export const FOLDER_SKIPS = ['too_large', 'unsupported', 'empty'] as const;
+
+/**
+ * A folder the company picked in a connection (BTP stage 1D): each PDF, XML or image in it becomes a
+ * document. Only its own files are read, not its subfolders'.
+ */
+export const connectedFolders = pgTable(
+  'connected_folders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => connections.id, { onDelete: 'cascade' }),
+    driveId: text('drive_id').notNull(),
+    itemId: text('item_id').notNull(),
+    name: text('name').notNull(),
+    /** Picked in « Mode test »: its documents are test documents. */
+    isTest: boolean('is_test').notNull().default(false),
+    /** Why the last check could not list it; null when it could. */
+    problem: text('problem', { enum: FOLDER_PROBLEMS }),
+    /** The last check stopped at its share of files: the sweep comes back without waiting. */
+    behind: boolean('behind').notNull().default(false),
+    pickedBy: text('picked_by').notNull(),
+    pickedAt: timestamp('picked_at', { withTimezone: true }).notNull(),
+    checkedAt: timestamp('checked_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('connected_folders_item').on(t.tenantId, t.driveId, t.itemId)],
+);
+
+/** A file of a watched folder as last seen: the same content tag, it is not downloaded again. */
+export const folderItems = pgTable(
+  'folder_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    folderId: uuid('folder_id')
+      .notNull()
+      .references(() => connectedFolders.id, { onDelete: 'cascade' }),
+    itemId: text('item_id').notNull(),
+    name: text('name').notNull(),
+    contentTag: text('content_tag'),
+    /** The document it gave; it stays the company's when the folder goes. */
+    documentId: uuid('document_id').references(() => documents.id, { onDelete: 'set null' }),
+    /** Why it was not read; null when it was. */
+    skipped: text('skipped', { enum: FOLDER_SKIPS }),
+    seenAt: timestamp('seen_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex('folder_items_item').on(t.folderId, t.itemId)],
+);
+
 export const UPLOAD_FORMATS = ['xlsx', 'xlsm', 'csv', 'facturx', 'ubl', 'cii'] as const;
 export type UploadFormat = (typeof UPLOAD_FORMATS)[number];
 
@@ -1592,6 +1647,7 @@ export type EditRow = typeof edits.$inferSelect;
 export type ChatRow = typeof chats.$inferSelect;
 export type ConnectionRow = typeof connections.$inferSelect;
 export type ConnectedFileRow = typeof connectedFiles.$inferSelect;
+export type ConnectedFolderRow = typeof connectedFolders.$inferSelect;
 export type RuleExceptionRow = typeof ruleExceptions.$inferSelect;
 export type ItemSynonymRow = typeof itemSynonyms.$inferSelect;
 export type VatCheckRow = typeof vatChecks.$inferSelect;

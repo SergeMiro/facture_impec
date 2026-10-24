@@ -256,6 +256,23 @@ export const ConnectorView = z.object({
           ),
         }),
       ),
+      /** Watched folders (BTP stage 1D): each PDF, XML or image in them becomes a document. */
+      folders: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            isTest: z.boolean(),
+            /** `missing` or `forbidden`: the last check could not list it. */
+            problem: z.string().nullable(),
+            pickedAt: z.string(),
+            checkedAt: z.string().nullable(),
+            documents: z.number(),
+            /** Files it holds that are not documents we read (another kind, too large, empty). */
+            skipped: z.number(),
+          }),
+        )
+        .default([]),
     })
     .nullable(),
 });
@@ -1228,6 +1245,16 @@ export class ApiClient {
     this.#json(ConnectorView, '/connectors/microsoft/files', { method: 'POST', body: { files } });
   removeFile = (fileId: string) =>
     this.#json(ConnectorView, filePath('microsoft', fileId), { method: 'DELETE' });
+  /** « Surveiller un dossier »: its documents are test documents when picked in « Mode test ». */
+  watchFolder = (folder: PickedFile, test: boolean) =>
+    this.#json(ConnectorView, '/connectors/microsoft/folders', {
+      method: 'POST',
+      body: { ...folder, test },
+    });
+  unwatchFolder = (folderId: string) =>
+    this.#json(ConnectorView, `/connectors/microsoft/folders/${encodeURIComponent(folderId)}`, {
+      method: 'DELETE',
+    });
   detectFileSheet = (fileId: string, sheet: string, provider: FileOwner = 'microsoft') =>
     this.#json(FileDetection, `${filePath(provider, fileId, sheet)}/detect`, { method: 'POST' });
   includeFileSheet = (fileId: string, layout: LayoutMapping, provider: FileOwner = 'microsoft') =>

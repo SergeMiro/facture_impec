@@ -41,6 +41,12 @@ with the app through the Google Picker ». Non-sensitive scopes need only basic 
 (no security assessment). `about.get`, `files.get`, `files.export`, `changes.getStartPageToken` and
 `changes.watch` all list `drive.file` among their scopes (their reference pages).
 
+A folder picked in the Google Picker (`setSelectFolderEnabled`, updated 2025-06-20) and its files:
+neither that page nor « Choose Google Drive API scopes » and « Limited and expansive access »
+(both updated 2026-09-03, read 2026-10-24) say whether `drive.file` then reaches the files inside
+it. TODO(verify) on a real account before a Google folder is watched (BTP stage 1D watches OneDrive
+folders only).
+
 ## 3. The account and the files
 
 - `GET https://www.googleapis.com/drive/v3/about?fields=user(...)` (`fields` required): `user` is

@@ -98,4 +98,29 @@ describe('Graph', () => {
     ]);
     await expect(ms.content('at', 'd', 'i', 1_000)).rejects.toMatchObject({ kind: 'too_large' });
   });
+
+  it('lists a folder page by page, and follows a next page only on Graph', async () => {
+    const item = (id: string) => ({ id, name: `${id}.pdf`, file: {} });
+    const { ms, seen } = client((url) =>
+      url.includes('$skiptoken')
+        ? json({ value: [item('b')] })
+        : json({
+            value: [item('a')],
+            '@odata.nextLink': 'https://graph.test/v1.0/drives/d/items/f/children?$skiptoken=2',
+          }),
+    );
+    expect((await ms.children('at', 'd', 'f')).map((i) => i.id)).toEqual(['a', 'b']);
+    expect(seen.map((s) => s.url)).toEqual([
+      'https://graph.test/v1.0/drives/d/items/f/children?$select=id,name,size,eTag,cTag,file,folder,parentReference&$top=200',
+      'https://graph.test/v1.0/drives/d/items/f/children?$skiptoken=2',
+    ]);
+
+    const elsewhere = client(() =>
+      json({ value: [], '@odata.nextLink': 'https://evil.test/v1.0/drives/d/items/f/children' }),
+    );
+    await expect(elsewhere.ms.children('at', 'd', 'f')).rejects.toMatchObject({
+      kind: 'unavailable',
+    });
+    expect(elsewhere.seen).toHaveLength(1);
+  });
 });

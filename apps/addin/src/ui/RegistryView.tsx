@@ -410,6 +410,7 @@ function ConnectorSection() {
               ))}
             </ul>
           )}
+          <Folders />
           {confirming ? (
             <>
               <MessageBar intent="warning" layout="multiline">
@@ -607,6 +608,84 @@ function UploadSection() {
         </ul>
       )}
     </section>
+  );
+}
+
+const FOLDER_PROBLEM: Record<string, MessageKey> = {
+  missing: 'addin.connector.folderProblem.missing',
+  forbidden: 'addin.connector.folderProblem.forbidden',
+};
+
+/** « Dossiers surveillés » (BTP stage 1D): each folder, what it gave, and « Ne plus surveiller ». */
+function Folders() {
+  const styles = useStyles();
+  const [state, fi] = useFi();
+  const conn = state.connector?.connection;
+  if (!conn) return null;
+  const watching = state.busy.includes('connector:folder');
+  return (
+    <>
+      <Text weight="semibold">{t('addin.connector.folders')}</Text>
+      <Caption1>{t('addin.connector.foldersIntro')}</Caption1>
+      {conn.status === 'active' && conn.picker && (
+        <span className={styles.line}>
+          <Button size="small" onClick={() => void fi.watchFolder()} disabled={watching}>
+            {t('addin.connector.watchFolder')}
+          </Button>
+          {watching && <Spinner size="tiny" />}
+        </span>
+      )}
+      {conn.folders.length > 0 && (
+        <ul className={styles.list}>
+          {conn.folders.map((f) => {
+            const busy = state.busy.includes(`folder:${f.id}`);
+            return (
+              <li key={f.id}>
+                <Card className={styles.card} data-testid={`folder-${f.name}`}>
+                  <span className={styles.line}>
+                    <Text weight="semibold">{f.name}</Text>
+                    {busy && <Spinner size="tiny" />}
+                  </span>
+                  {f.problem && (
+                    <MessageBar intent="warning" layout="multiline">
+                      <MessageBarBody>
+                        {t(FOLDER_PROBLEM[f.problem] ?? 'addin.connector.folderProblem.missing')}
+                      </MessageBarBody>
+                    </MessageBar>
+                  )}
+                  {f.isTest && (
+                    <Caption1 className={styles.muted}>{t('addin.connector.folderTest')}</Caption1>
+                  )}
+                  <Caption1>
+                    {t('addin.connector.folderDocuments', { count: f.documents })}
+                  </Caption1>
+                  {f.skipped > 0 && (
+                    <Caption1 className={styles.muted}>
+                      {t('addin.connector.folderSkipped', { count: f.skipped })}
+                    </Caption1>
+                  )}
+                  {f.checkedAt && (
+                    <Caption1 className={styles.muted}>
+                      {t('addin.connector.checkedAt', { time: parisDateTime(f.checkedAt) })}
+                    </Caption1>
+                  )}
+                  <span className={styles.line}>
+                    <Button
+                      size="small"
+                      appearance="subtle"
+                      onClick={() => void fi.unwatchFolder(f.id)}
+                      disabled={busy}
+                    >
+                      {t('addin.connector.unwatchFolder')}
+                    </Button>
+                  </span>
+                </Card>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
   );
 }
 

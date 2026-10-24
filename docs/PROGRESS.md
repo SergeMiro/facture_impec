@@ -1493,6 +1493,33 @@ the work:
 | Dependency | `postal-mime` 4.0.5 (2026-10-07, MIT-0, no dependencies), `docs/DEPENDENCIES.md`. |
 
 
+## BTP plan — stage 1D: a OneDrive folder watched (2026-10-24)
+
+`docs/plans/phase-1.md` › 1D. Criteria, written before the work:
+
+- A person connected to OneDrive picks a folder in OneDrive's picker; the API refuses an item that
+  is not a folder, a sixth folder, and a connection waiting for « Reconnecter »; the folder is
+  checked at once.
+- Each check lists the folder and gives each PDF, XML or image it has not seen in that version to
+  `ingestFile` (source `drive`, `folderPath` the folder's name, the folder's « Mode test »): new
+  documents are read like any other; a file seen in the same version is not downloaded again; a
+  changed file is read again; a file too large or of another kind is skipped once and counted.
+- The company's backlog stops the folder for this check and the rest comes at the next; a folder
+  deleted or no longer shared says so in the pane; a refused token stops the connection as for files.
+- « Ne plus surveiller » and « Déconnecter » stop the folder, audited; the documents it gave stay
+  the company's.
+- The pane shows each folder with the documents it gave and when it was last checked.
+
+### Evidence (2026-10-24)
+
+| Criterion | Evidence |
+|---|---|
+| Picked, refused, checked at once | `apps/api/src/connectors.test.ts` › a watched OneDrive folder › takes the pane's « Mode test », and refuses a file, a sixth folder and a refused connection (422 `connector_not_folder`, 404 `connector_folder_missing`, 422 `connector_too_many_folders`, 409 `connector_reconnect`; the same folder again is no sixth one); › gives each PDF, XML or image once (the pick queues the connection's check, audited `connected_folder.pick` by `user`). |
+| Each file once, changed again, skipped once | › gives each PDF, XML or image once, a changed one again, and skips the rest once: a PDF and a CII become documents (source `drive`, `folderPath`, not test), a `.docx` and a PDF over 20 MB skipped and counted once, a subfolder's file not read, nothing downloaded on the second check, a changed PDF read again; the documents are audited by `connector:microsoft`. `apps/api/src/microsoft.test.ts` › lists a folder page by page, and follows a next page only on Graph. |
+| Backlog, gone folder, refused token | › reads 50 files a check and the sweep comes back for the rest; a full backlog waits (`connectorsBehind` takes the folder again, then not; nothing read while the backlog is full, the file read once it empties); › says a folder is gone (`problem: missing`, audited `connected_folder.problem`). A refused token goes through the connection's existing path (`checkConnection` before any folder). |
+| Stop, documents stay | › says a folder is gone, and « Ne plus surveiller » or « Déconnecter » keep its documents (`connected_folder.remove`, `connection.disconnect`, no `connected_folders` row left, both documents still the company's). Export and erasure: `apps/api/src/rgpd.ts` (`connectedFolders` exported, deleted before the connections). |
+| The pane | `apps/addin/src/controller.test.ts` › watches a folder: each PDF in it becomes a document, until « Ne plus surveiller » (the stand-in's folder picked, its PDF read by the check, the folder with its document in the pane's state, then removed); the card is `apps/addin/src/ui/RegistryView.tsx` › `Folders`, not rendered by a test. Real accounts: `docs/TODO.md` › OneDrive's picker in folder mode. |
+
 ## BTP plan — stage 2A: what each document is, and the deadlines it makes (started 2026-10-24)
 
 `docs/plans/phase-2.md` › 2A, `docs/DECISIONS.md` D7. Criteria, written before the work:

@@ -183,6 +183,13 @@
       "when": 1792867289146,
       "tag": "0025_erp_sync_result",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792876545789,
+      "tag": "0026_watched_folders",
+      "breakpoints": true
     }
   ]
 }

@@ -37,6 +37,7 @@ import {
   connectorView,
   detectFileSheet,
   disconnect,
+  FolderBody,
   GOOGLE_COOKIE,
   type GoogleOutcome,
   googleBegin,
@@ -50,7 +51,9 @@ import {
   ownFile,
   PickBody,
   pickFiles,
+  pickFolder,
   removeFile,
+  removeFolder,
 } from './connectors';
 import { createCreditNote, writeOff } from './credits';
 import type { ApiDeps } from './deps';
@@ -624,6 +627,16 @@ export function createApp(deps: ApiDeps) {
     const { files } = await body(c, PickBody);
     return c.json(await pickFiles(deps, c.get('tenant'), c.get('principal'), files));
   });
+
+  // A watched folder (BTP stage 1D): its PDFs, XML and images become documents.
+  api.post('/connectors/microsoft/folders', async (c) => {
+    const folder = await body(c, FolderBody);
+    return c.json(await pickFolder(deps, c.get('tenant'), c.get('principal'), folder));
+  });
+
+  api.delete('/connectors/microsoft/folders/:id', async (c) =>
+    c.json(await removeFolder(deps, c.get('tenant'), uuid(c.req.param('id')))),
+  );
 
   api.get('/connectors/google', async (c) => c.json(await googleView(deps, c.get('tenant'))));
 

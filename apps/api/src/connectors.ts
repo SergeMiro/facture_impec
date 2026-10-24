@@ -4,7 +4,8 @@
 // are ever read. A check compares each file's content tag (Graph's cTag, Google's version) with the
 // provider and downloads only what changed; change notifications (a personal OneDrive, Google Drive)
 // trigger a check, the others are polled. Disconnecting deletes the account's token, its files and
-// everything read from them.
+// everything read from them. A OneDrive folder can be watched too (BTP stage 1D): each PDF, XML or
+// image in it becomes a document (src/ingest.ts), and those documents stay the company's.
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { openSecret, sealSecret } from '@fi/agents';
 import {
@@ -18,27 +19,34 @@ import {
   and,
   audit,
   type ConnectedFileRow,
+  type ConnectedFolderRow,
   type ConnectionProvider,
   type ConnectionRow,
   connectedFiles,
+  connectedFolders,
   connections,
   count,
   type Db,
   eq,
   type FileProblem,
+  type FOLDER_SKIPS,
+  folderItems,
   inArray,
   sha256,
   sources,
+  sql,
   type TenantRow,
   type Tx,
   tenants,
 } from '@fi/db';
+import { MAX_DOCUMENT_BYTES } from '@fi/domain';
 import { z } from 'zod';
 import { type Principal, who } from './auth';
 import type { ApiDeps, Jobs } from './deps';
 import { DriveError } from './drive';
 import { ApiError } from './errors';
 import { GOOGLE_SHEET, type GoogleClient, GoogleError, type GoogleFile } from './google';
+import { checkBacklog, documentName, ingestFile } from './ingest';
 import { type DriveItem, type MicrosoftClient, MicrosoftError } from './microsoft';
 import { detectSource, includeSource, readSource, sourceView } from './sources';
 
@@ -77,6 +85,12 @@ const ACTOR: Record<ConnectionProvider, string> = {
 };
 /** A company follows at most this many files per provider (more: docs/DEFERRED.md). */
 export const MAX_FILES = 20;
+/** …and at most this many folders (BTP stage 1D; more: docs/DEFERRED.md). */
+export const MAX_FOLDERS = 5;
+/** Files of one folder read in one check; the sweep comes back for the rest without waiting. */
+export const FOLDER_READS_PER_CHECK = 50;
+/** A watched folder's files read as documents: what `ingestFile` takes (src/ingest.ts sniffMime). */
+const DOCUMENT_FILE = /\.(pdf|xml|jpe?g|png|tiff?)$/i;
 /** A file without change notifications is checked this often… */
 export const POLL_EVERY_MS = 2 * 60_000;
 /** …and one with them, in case a notification is lost. */
@@ -98,6 +112,12 @@ export const GOOGLE_DRIVE = 'google';
 export const apiScope = (clientId: string) => `api://${clientId}/.default`;
 
 export const ConnectBody = z.object({ token: z.string().min(20).max(16_384) });
+export const FolderBody = z.object({
+  driveId: z.string().min(1).max(256),
+  itemId: z.string().min(1).max(256),
+  /** The pane's « Mode test »: the folder's documents are test documents. */
+  test: z.boolean().default(false),
+});
 export const PickBody = z.object({
   files: z
     .array(z.object({ driveId: z.string().min(1).max(256), itemId: z.string().min(1).max(256) }))
@@ -124,7 +144,7 @@ function googleOf(deps: Pick<ApiDeps, 'google'>): GoogleConnector {
 /** What the person is told when the provider or the file says no. */
 function calm(
   e: unknown,
-  during: 'connect' | 'file',
+  during: 'connect' | 'file' | 'folder',
   provider: ConnectionProvider = 'microsoft',
 ): never {
   const names = NAMES[provider];
@@ -141,9 +161,13 @@ function calm(
     case 'throttled':
       throw new ApiError(503, 'connector_busy', names, e.message);
     case 'missing':
-      throw new ApiError(404, 'connector_file_missing', names, e.message);
+      throw during === 'folder'
+        ? new ApiError(404, 'connector_folder_missing', names, e.message)
+        : new ApiError(404, 'connector_file_missing', names, e.message);
     case 'forbidden':
-      throw new ApiError(403, 'connector_file_forbidden', names, e.message);
+      throw during === 'folder'
+        ? new ApiError(403, 'connector_folder_forbidden', names, e.message)
+        : new ApiError(403, 'connector_file_forbidden', names, e.message);
     case 'too_large':
       throw new ApiError(422, 'connector_file_too_large', undefined, e.message);
     default:
@@ -344,6 +368,44 @@ async function filesView(deps: ConnectorDeps, conn: ConnectionRow) {
   });
 }
 
+/** A connection's watched folders: the documents each gave, the files it skipped. */
+async function foldersView(deps: ConnectorDeps, conn: ConnectionRow) {
+  const folders = await deps.db
+    .select()
+    .from(connectedFolders)
+    .where(eq(connectedFolders.connectionId, conn.id))
+    .orderBy(connectedFolders.name);
+  const counts = folders.length
+    ? await deps.db
+        .select({
+          folderId: folderItems.folderId,
+          documents: sql<number>`count(distinct ${folderItems.documentId})::int`,
+          skipped: sql<number>`count(${folderItems.skipped})::int`,
+        })
+        .from(folderItems)
+        .where(
+          inArray(
+            folderItems.folderId,
+            folders.map((f) => f.id),
+          ),
+        )
+        .groupBy(folderItems.folderId)
+    : [];
+  return folders.map((f) => {
+    const n = counts.find((c) => c.folderId === f.id);
+    return {
+      id: f.id,
+      name: f.name,
+      isTest: f.isTest,
+      problem: f.problem,
+      pickedAt: f.pickedAt.toISOString(),
+      checkedAt: f.checkedAt?.toISOString() ?? null,
+      documents: n?.documents ?? 0,
+      skipped: n?.skipped ?? 0,
+    };
+  });
+}
+
 /** Change notifications reach us: a change shows within minutes, else at the next poll. */
 const notifiedNow = (conn: ConnectionRow, now: Date) =>
   conn.subscriptionId !== null && (conn.subscriptionExpiresAt ?? now) > now;
@@ -371,6 +433,7 @@ export async function connectorView(deps: ConnectorDeps, tenant: TenantRow, prin
       connectedAt: conn.connectedAt.toISOString(),
       checkedAt: conn.checkedAt?.toISOString() ?? null,
       files: await filesView(deps, conn),
+      folders: await foldersView(deps, conn),
     },
   };
 }
@@ -535,7 +598,12 @@ export async function disconnect(
       .select({ name: connectedFiles.name })
       .from(connectedFiles)
       .where(eq(connectedFiles.connectionId, conn.id));
-    // Files, then their sheets, documents, lines and findings go with it (foreign keys cascade).
+    const folders = await tx
+      .select({ name: connectedFolders.name })
+      .from(connectedFolders)
+      .where(eq(connectedFolders.connectionId, conn.id));
+    // Files, then their sheets, documents, lines and findings go with it (foreign keys cascade);
+    // so do the watched folders, but not the documents they gave.
     await tx.delete(connections).where(eq(connections.id, conn.id));
     await audit(tx, {
       tenantId: tenant.id,
@@ -543,7 +611,12 @@ export async function disconnect(
       action: 'connection.disconnect',
       objectType: 'connection',
       objectId: conn.id,
-      before: { provider, account: conn.label, files: files.map((f) => f.name) },
+      before: {
+        provider,
+        account: conn.label,
+        files: files.map((f) => f.name),
+        ...(folders.length > 0 && { folders: folders.map((f) => f.name) }),
+      },
     });
   });
   await deps.jobs.enqueueRegistry(tenant.id);
@@ -767,6 +840,87 @@ export async function removeFile(
   return viewOf(deps, tenant, provider);
 }
 
+/**
+ * « Surveiller un dossier »: what OneDrive's picker returned in folder mode. The folder is checked at
+ * once, in the background; the same folder again takes the pane's « Mode test » as it is now.
+ */
+export async function pickFolder(
+  deps: ConnectorDeps,
+  tenant: TenantRow,
+  principal: Principal,
+  picked: z.infer<typeof FolderBody>,
+) {
+  const conn = await activeConnection(deps, tenant.id);
+  const ms = microsoftOf(deps);
+  let item: DriveItem | undefined;
+  try {
+    item = await ms.client.item(await accessFor(deps, conn), picked.driveId, picked.itemId);
+  } catch (e) {
+    calm(e, 'folder');
+  }
+  if (!item?.folder) throw new ApiError(422, 'connector_not_folder');
+  const folder = { driveId: item.parentReference?.driveId ?? picked.driveId, itemId: item.id };
+  const now = deps.now();
+  await deps.db.transaction(async (tx) => {
+    const watched = await tx
+      .select({ driveId: connectedFolders.driveId, itemId: connectedFolders.itemId })
+      .from(connectedFolders)
+      .where(eq(connectedFolders.connectionId, conn.id));
+    const known = watched.some((w) => w.driveId === folder.driveId && w.itemId === folder.itemId);
+    if (!known && watched.length >= MAX_FOLDERS) {
+      throw new ApiError(422, 'connector_too_many_folders', { max: MAX_FOLDERS });
+    }
+    const values = { name: item.name, isTest: picked.test, problem: null };
+    const [row] = await tx
+      .insert(connectedFolders)
+      .values({
+        tenantId: tenant.id,
+        connectionId: conn.id,
+        ...folder,
+        ...values,
+        pickedBy: who(principal),
+        pickedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [connectedFolders.tenantId, connectedFolders.driveId, connectedFolders.itemId],
+        set: { ...values, updatedAt: now },
+      })
+      .returning();
+    if (!row) throw new Error('upsert returned nothing');
+    await audit(tx, {
+      tenantId: tenant.id,
+      actor: 'user',
+      action: 'connected_folder.pick',
+      objectType: 'connected_folder',
+      objectId: row.id,
+      after: { name: row.name, isTest: row.isTest },
+    });
+  });
+  await deps.jobs.enqueueConnector(conn.id);
+  return connectorView(deps, tenant);
+}
+
+/** « Ne plus surveiller »: the folder is no longer read; the documents it gave stay. */
+export async function removeFolder(deps: ConnectorDeps, tenant: TenantRow, folderId: string) {
+  const [folder] = await deps.db
+    .select()
+    .from(connectedFolders)
+    .where(and(eq(connectedFolders.tenantId, tenant.id), eq(connectedFolders.id, folderId)));
+  if (!folder) throw new ApiError(404, 'connector_folder_not_found');
+  await deps.db.transaction(async (tx) => {
+    await tx.delete(connectedFolders).where(eq(connectedFolders.id, folder.id));
+    await audit(tx, {
+      tenantId: tenant.id,
+      actor: 'user',
+      action: 'connected_folder.remove',
+      objectType: 'connected_folder',
+      objectId: folder.id,
+      before: { name: folder.name },
+    });
+  });
+  return connectorView(deps, tenant);
+}
+
 /** Change notifications started or renewed: the background did it, the audit log says until when. */
 function auditWatch(
   tx: Tx,
@@ -975,6 +1129,133 @@ async function checkFile(
   return true;
 }
 
+/** A watched folder checked: whether it could be listed, and whether it stopped at its share. */
+async function folderChecked(
+  deps: ConnectorDeps,
+  folder: ConnectedFolderRow,
+  problem: ConnectedFolderRow['problem'],
+  behind: boolean,
+) {
+  const now = deps.now();
+  await deps.db.transaction(async (tx) => {
+    await tx
+      .update(connectedFolders)
+      .set({ problem, behind, checkedAt: now, updatedAt: now })
+      .where(eq(connectedFolders.id, folder.id));
+    if (problem !== folder.problem) {
+      await audit(tx, {
+        tenantId: folder.tenantId,
+        actor: CONNECTOR_ACTOR,
+        action: 'connected_folder.problem',
+        objectType: 'connected_folder',
+        objectId: folder.id,
+        before: { problem: folder.problem },
+        after: { problem },
+      });
+    }
+  });
+}
+
+/** Why a file of a folder was not read; undefined: not the file's fault. */
+function skipOf(e: unknown): (typeof FOLDER_SKIPS)[number] | undefined {
+  if (e instanceof DriveError && e.kind === 'too_large') return 'too_large';
+  if (!(e instanceof ApiError)) return undefined;
+  if (e.code === 'ingest_too_large') return 'too_large';
+  if (e.code === 'ingest_empty') return 'empty';
+  if (e.code === 'ingest_unsupported') return 'unsupported';
+  return undefined;
+}
+
+/**
+ * One watched folder: its own files listed (not its subfolders'), and each PDF, XML or image not seen
+ * in this version given to `ingestFile` as the folder's document. A file too large or of another kind
+ * is noted once; the company's backlog stops the folder until the next check. Returns the documents
+ * read.
+ */
+async function checkFolder(
+  deps: ConnectorDeps,
+  folder: ConnectedFolderRow,
+  access: string,
+): Promise<number> {
+  const ms = microsoftOf(deps);
+  let listed: DriveItem[];
+  try {
+    listed = await ms.client.children(access, folder.driveId, folder.itemId);
+  } catch (e) {
+    if (!(e instanceof DriveError && (e.kind === 'missing' || e.kind === 'forbidden'))) throw e;
+    await folderChecked(deps, folder, e.kind, false);
+    return 0;
+  }
+  const files = listed.filter((i) => i.file);
+  const seen = await deps.db.select().from(folderItems).where(eq(folderItems.folderId, folder.id));
+  // A file gone from the folder is forgotten: put back, it is read again (and its bytes give back the
+  // same document).
+  const gone = seen.filter((s) => !files.some((f) => f.id === s.itemId)).map((s) => s.id);
+  if (gone.length > 0) await deps.db.delete(folderItems).where(inArray(folderItems.id, gone));
+  let read = 0;
+  let behind = false;
+  for (const item of files) {
+    const tag = tagOf(item);
+    const before = seen.find((s) => s.itemId === item.id);
+    if (before && tag !== null && before.contentTag === tag) continue;
+    if (read >= FOLDER_READS_PER_CHECK) {
+      behind = true;
+      break;
+    }
+    let skipped: ReturnType<typeof skipOf> = !DOCUMENT_FILE.test(item.name)
+      ? 'unsupported'
+      : (item.size ?? 0) > MAX_DOCUMENT_BYTES
+        ? 'too_large'
+        : undefined;
+    let documentId: string | null = null;
+    if (!skipped) {
+      try {
+        await checkBacklog(deps.db, folder.tenantId);
+      } catch (e) {
+        if (e instanceof ApiError && e.code === 'ingest_busy') break;
+        throw e;
+      }
+      try {
+        const bytes = await ms.client.content(access, folder.driveId, item.id, MAX_DOCUMENT_BYTES);
+        const { document } = await ingestFile(
+          deps,
+          { id: folder.tenantId },
+          {
+            source: 'drive',
+            sourceRef: `onedrive:${folder.driveId}:${item.id}`,
+            name: documentName(item.name),
+            bytes,
+            isTest: folder.isTest,
+            receivedAt: deps.now(),
+            hints: { folderPath: folder.name },
+          },
+          { actor: CONNECTOR_ACTOR },
+        );
+        documentId = document.id;
+        read++;
+      } catch (e) {
+        // Deleted between the listing and the download: the next listing will not have it.
+        if (e instanceof DriveError && e.kind === 'missing') continue;
+        skipped = skipOf(e);
+        if (!skipped) throw e;
+      }
+    }
+    const values = {
+      name: item.name,
+      contentTag: tag,
+      documentId,
+      skipped: skipped ?? null,
+      seenAt: deps.now(),
+    };
+    await deps.db
+      .insert(folderItems)
+      .values({ folderId: folder.id, itemId: item.id, ...values })
+      .onConflictDoUpdate({ target: [folderItems.folderId, folderItems.itemId], set: values });
+  }
+  await folderChecked(deps, folder, null, behind);
+  return read;
+}
+
 /** The provider is offered by this deployment. */
 const offered = (deps: Pick<ApiDeps, 'microsoft' | 'google'>, provider: ConnectionProvider) =>
   provider === 'google' ? Boolean(deps.google) : Boolean(deps.microsoft);
@@ -988,7 +1269,7 @@ export async function checkConnection(
   deps: ConnectorDeps,
   connectionId: string,
   log?: (message: string) => void,
-): Promise<{ read: number } | null> {
+): Promise<{ read: number; documents: number } | null> {
   const [conn] = await deps.db.select().from(connections).where(eq(connections.id, connectionId));
   const now = deps.now();
   if (!conn || !offered(deps, conn.provider)) return null;
@@ -996,6 +1277,7 @@ export async function checkConnection(
   const remote = remoteOf(deps, conn.provider);
   const actor = ACTOR[conn.provider];
   let readCount = 0;
+  let documents = 0;
   try {
     const access = await remote.access(conn);
     const files = await deps.db
@@ -1010,17 +1292,29 @@ export async function checkConnection(
         log?.(`${conn.provider}: ${file.id} not checked: ${e.message}`);
       }
     }
+    const folders = await deps.db
+      .select()
+      .from(connectedFolders)
+      .where(eq(connectedFolders.connectionId, conn.id));
+    for (const folder of folders) {
+      try {
+        documents += await checkFolder(deps, folder, access);
+      } catch (e) {
+        if (!(e instanceof DriveError && e.kind === 'unavailable')) throw e;
+        log?.(`${conn.provider}: folder ${folder.id} not checked: ${e.message}`);
+      }
+    }
     await remote.watch(conn, access, log);
   } catch (e) {
     if (!(e instanceof DriveError)) throw e;
     await stopped(deps, conn, e, log);
-    return { read: readCount };
+    return { read: readCount, documents };
   }
   await deps.db
     .update(connections)
     .set({ checkedAt: deps.now(), waitUntil: null, updatedAt: deps.now() })
     .where(eq(connections.id, conn.id));
-  return { read: readCount };
+  return { read: readCount, documents };
 }
 
 async function stopped(
@@ -1058,8 +1352,8 @@ async function stopped(
 }
 
 /**
- * Connections due a check (the sweep, src/workers.ts): notified ones hourly, the others often; only
- * those of a provider this deployment offers.
+ * Connections due a check (the sweep, src/workers.ts): notified ones hourly, the others often, one
+ * whose folder stopped at its share at once; only those of a provider this deployment offers.
  */
 export async function connectorsBehind(
   db: Db,
@@ -1068,10 +1362,15 @@ export async function connectorsBehind(
   offeredBy?: Pick<ApiDeps, 'microsoft' | 'google'>,
 ): Promise<string[]> {
   const rows = await db.select().from(connections).where(eq(connections.status, 'active'));
+  const behind = await db
+    .selectDistinct({ id: connectedFolders.connectionId })
+    .from(connectedFolders)
+    .where(eq(connectedFolders.behind, true));
   return rows
     .filter((c) => {
       if (offeredBy && !offered(offeredBy, c.provider)) return false;
       if (c.waitUntil && c.waitUntil > now) return false;
+      if (behind.some((b) => b.id === c.id)) return true;
       const every = notifiedNow(c, now) ? WATCHED_POLL_EVERY_MS : POLL_EVERY_MS;
       return !c.checkedAt || +now - +c.checkedAt >= every;
     })

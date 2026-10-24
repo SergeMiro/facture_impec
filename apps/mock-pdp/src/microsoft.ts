@@ -1,7 +1,7 @@
 // A stand-in for the part of Microsoft that the OneDrive connector uses (R4, docs/MICROSOFT365.md),
 // served at /microsoft: the identity platform's token endpoint (on-behalf-of and refresh), Graph's
-// /me, /me/drive, drive items and their content, and change-notification subscriptions with their
-// validation handshake. Two accounts live here, a personal one and a work one; tests and the E2E run
+// /me, /me/drive, drive items and their content, a folder's children, and change-notification
+// subscriptions with their validation handshake. Two accounts live here, a personal one and a work one; tests and the E2E run
 // change a file through /microsoft/control, as a person would in OneDrive. Shapes follow Learn as read
 // on 2026-10-21; what Learn leaves open is marked there TODO(verify), not decided here.
 import { randomBytes } from 'node:crypto';
@@ -38,6 +38,9 @@ export interface StandInFile {
   bytes: Uint8Array;
   version: number;
   deleted: boolean;
+  /** A folder: its children are the items whose `parentId` is its id. */
+  folder?: boolean;
+  parentId?: string;
 }
 
 interface Subscription {
@@ -145,8 +148,17 @@ export class MicrosoftStandIn {
     return assertion;
   }
 
-  /** A person saves the file in OneDrive: new content, new tags, and each subscription is told. */
-  async putFile(accountId: string, itemId: string, name: string, bytes: Uint8Array) {
+  /**
+   * A person saves the file in OneDrive, in the folder `parentId` if given: new content, new tags,
+   * and each subscription is told.
+   */
+  async putFile(
+    accountId: string,
+    itemId: string,
+    name: string,
+    bytes: Uint8Array,
+    parentId?: string,
+  ) {
     const account = this.#account(accountId);
     const key = `${account.driveId}/${itemId}`;
     const before = this.files.get(key);
@@ -157,8 +169,23 @@ export class MicrosoftStandIn {
       bytes,
       version: (before?.version ?? 0) + 1,
       deleted: false,
+      ...(parentId && { parentId }),
     });
     await this.#notify(account.id);
+  }
+
+  /** A person makes a folder in OneDrive. */
+  putFolder(accountId: string, itemId: string, name: string) {
+    const account = this.#account(accountId);
+    this.files.set(`${account.driveId}/${itemId}`, {
+      driveId: account.driveId,
+      itemId,
+      name,
+      bytes: new Uint8Array(),
+      version: 1,
+      deleted: false,
+      folder: true,
+    });
   }
 
   async deleteFile(accountId: string, itemId: string) {
@@ -279,19 +306,28 @@ export class MicrosoftStandIn {
     return file;
   }
 
+  #children(folder: StandInFile) {
+    return [...this.files.values()]
+      .filter((f) => f.driveId === folder.driveId && f.parentId === folder.itemId && !f.deleted)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   #item(account: StandInAccount, file: StandInFile) {
     return {
       id: file.itemId,
       name: file.name,
-      size: file.bytes.byteLength,
+      size: file.folder ? 0 : file.bytes.byteLength,
       eTag: `"{${file.itemId}},${file.version}"`,
       cTag: `"c:{${file.itemId}},${file.version}"`,
       lastModifiedDateTime: this.#now().toISOString(),
       webUrl: this.#url(`/web/${file.driveId}/${file.itemId}`),
-      file: { mimeType: 'application/octet-stream' },
+      ...(file.folder
+        ? { folder: { childCount: this.#children(file).length } }
+        : { file: { mimeType: 'application/octet-stream' } }),
       parentReference: {
         driveId: file.driveId,
         driveType: account.kind === 'personal' ? 'personal' : 'business',
+        ...(file.parentId && { id: file.parentId }),
       },
     };
   }
@@ -399,6 +435,23 @@ export class MicrosoftStandIn {
       const a = this.#caller(c);
       return c.json(this.#item(a, this.#file(a, c.req.param('drive'), c.req.param('item'))));
     });
+    // Learn (list children): `$top` items a page (200 by default), the rest behind `@odata.nextLink`.
+    graph.get('/drives/:drive/items/:item/children', (c) => {
+      const a = this.#caller(c);
+      const folder = this.#file(a, c.req.param('drive'), c.req.param('item'));
+      const top = Math.min(Number(c.req.query('$top') ?? 200) || 200, 999);
+      const skip = Number(c.req.query('$skiptoken') ?? 0) || 0;
+      const all = this.#children(folder);
+      const next = skip + top < all.length;
+      return c.json({
+        value: all.slice(skip, skip + top).map((f) => this.#item(a, f)),
+        ...(next && {
+          '@odata.nextLink': this.#url(
+            `/graph/v1.0/drives/${folder.driveId}/items/${folder.itemId}/children?$top=${top}&$skiptoken=${skip + top}`,
+          ),
+        }),
+      });
+    });
     graph.get('/drives/:drive/items/:item/content', (c) => {
       const a = this.#caller(c);
       const file = this.#file(a, c.req.param('drive'), c.req.param('item'));
@@ -481,7 +534,13 @@ export class MicrosoftStandIn {
       return c.json(
         [...this.files.values()]
           .filter((f) => f.driveId === a.driveId && !f.deleted)
-          .map((f) => ({ driveId: f.driveId, itemId: f.itemId, name: f.name })),
+          .map((f) => ({
+            driveId: f.driveId,
+            itemId: f.itemId,
+            name: f.name,
+            folder: Boolean(f.folder),
+            ...(f.parentId && { parentId: f.parentId }),
+          })),
       );
     });
     app.put('/control/files/:account/:item', async (c) => {
@@ -492,7 +551,14 @@ export class MicrosoftStandIn {
         c.req.param('item'),
         name,
         new Uint8Array(await c.req.arrayBuffer()),
+        c.req.query('parent'),
       );
+      return c.body(null, 204);
+    });
+    app.put('/control/folders/:account/:item', (c) => {
+      const name = c.req.query('name');
+      if (!name) return c.json({ error: 'name is required' }, 400);
+      this.putFolder(c.req.param('account'), c.req.param('item'), name);
       return c.body(null, 204);
     });
     app.delete('/control/files/:account/:item', async (c) => {
