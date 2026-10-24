@@ -1,6 +1,6 @@
 # Facture Impec
 
-L'agent de facturation électronique pour les TPE/PME qui facturent dans Excel.
+L'agent de facturation électronique pour les TPE/PME qui facturent dans Excel ou Google Sheets.
 Vous continuez à facturer dans votre tableur ; Facture Impec vérifie chaque facture, la convertit
 au format Factur-X, l'envoie par une plateforme agréée, la suit jusqu'au paiement et vous explique
 chaque problème en français simple.
@@ -29,12 +29,25 @@ pnpm verify    # lint + types + tests
 pnpm test:e2e  # le parcours du complément dans Chrome
 ```
 
+Le volet Google Sheets utilise les mêmes écrans et le même serveur que le complément Excel.
+Pour préparer son installation dans une feuille :
+
+```bash
+pnpm sheets:package --addin https://VOTRE-COMPLEMENT/google-sheets.html
+```
+
+Le paquet Apps Script donne accès uniquement à la feuille ouverte. Le parcours est testé contre les
+services Google simulés : connexion, envoi en Mode test, retour des statuts, réception et export,
+contrôles entre feuilles, correction et annulation. L'installation dans un compte Google réel reste à
+vérifier. Les étapes et les limites sont dans `docs/GOOGLE_SHEETS.md`.
+
 Branches : on développe sur `dev`, on fusionne `dev` → `preprod`, puis `preprod` → `prod` quand tout
 est vert (voir `CLAUDE.md`).
 
 - `docs/RUNBOOK.md` — installation, commandes, pilote
 - `docs/DEPLOY.md` — image Docker de l'API et hébergement
 - `docs/APPSOURCE.md` — soumission au Microsoft Marketplace
+- `docs/GOOGLE_SHEETS.md` — volet Google Sheets, paquet Apps Script et installation
 - `docs/ARCHITECTURE.md` — architecture et décisions
 - `docs/PROGRESS.md` — avancement par jalon
 - `CLAUDE.md` — règles de travail pour les agents de code

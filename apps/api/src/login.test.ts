@@ -58,7 +58,7 @@ describe('sign-in links', () => {
     expect(await page.text()).toContain('<form method="post"');
     expect((await poll(asked.body.requestId)).body).toEqual({ status: 'pending' });
     const confirmed = await request(`/auth/magic-link/confirm?token=${token}`, { method: 'POST' });
-    expect(await confirmed.text()).toContain('retournez dans Excel');
+    expect(await confirmed.text()).toContain('retournez dans votre tableur');
 
     const done = await poll(asked.body.requestId);
     expect(done.body).toMatchObject({

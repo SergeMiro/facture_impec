@@ -90,3 +90,12 @@ Tests: `apps/api/src/settings.test.ts` › RGPD (export without secrets, what de
 6. **Anyone can request an account for a SIREN** (`docs/ONBOARDING.md` §3): the e-mail is proven, the
    right to act for the company is not. The CGU should say that the person who accepts them declares
    they may engage the company.
+
+## Google Sheets sidebar (R9)
+
+The sidebar sends the same consented spreadsheet data to the existing API as the Excel pane.
+The bound script requests access only to its current spreadsheet. Shared document properties contain
+mappings, test mode and edit revisions. They contain no account token or API key. The hosted app
+stores the login token in browser storage and removes it at sign-out, using the existing account flow.
+The spreadsheet id identifies the workbook. Account export and erasure use the existing source,
+invoice, correction and conversation records. Installing this host adds no new server data table.

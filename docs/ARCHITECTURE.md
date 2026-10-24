@@ -1,6 +1,6 @@
 # Architecture
 
-Status: M2 (2026-10-18). This file records what is built and the decisions taken; the product spec
+Status: M0–M8 and R0–R8 implemented; R9 in progress (2026-10-24). This file records what is built and the decisions taken; the product spec
 is the owner's implementation plan (see `CLAUDE.md`). "Plan §N" refers to its sections.
 
 ## Shape
@@ -837,6 +837,24 @@ savepoints. Registry checks are queued after the outer transaction commits.
 | Not a purchase | The company's own invoice and one addressed to another SIREN are refused | Its own invoices come from its sheet; another buyer's is a wrong file. |
 | The same name again | Replaces the file; a workbook keeps its row so its included sheets are read again | What a person expects from saving a new version; R1's idempotence makes the same content free. |
 | A plain PDF | Refused with a message that says why (`upload_plain_pdf`) | Reading a printed invoice needs OCR and a model, with errors to explain: the owner's decision (`docs/TODO.md`). |
+
+## R9: Google Sheets as an interactive host
+
+`google-sheets.html` runs the shared controller and screens without Office.js. A bound Apps Script
+sidebar embeds that page. The page uses `googleSheetsPort` through an origin-pinned message channel.
+The sidebar serializes calls to `fiSheetsCall`, which validates an allowlist of operations on the
+current spreadsheet. `host.ts` reads native values, displayed text, formats and formulas. It writes
+only status columns or a confirmed plain numeric cell. Native dates become ISO calendar dates in
+the spreadsheet's timezone before they cross the RPC boundary.
+
+The spreadsheet id determines workbook identity. Document properties store mappings, test mode and
+revision markers, without login tokens. The app retains its existing browser token store. The edit
+trigger records revision changes; the pane polls every five seconds and reconciles every minute.
+The existing API, registry, correction audit, sending and reception flows remain shared.
+
+`scripts/sheets.ts` bundles the host and sidebar into `Code.gs`, `Sidebar.html` and a manifest with
+current-document and sidebar permissions. It performs no remote deployment. Contracts, installation,
+limits and the real-account verification list are in `docs/GOOGLE_SHEETS.md`.
 
 ## Decision: port the Rust core to TypeScript, archive Rust
 

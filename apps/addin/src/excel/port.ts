@@ -67,3 +67,14 @@ export interface ExcelPort {
 }
 
 export type { SheetSnapshot };
+
+/** A spreadsheet host error whose French message can be shown without exposing provider details. */
+export class SpreadsheetError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'SpreadsheetError';
+  }
+}

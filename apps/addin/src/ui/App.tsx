@@ -61,17 +61,23 @@ const useStyles = makeStyles({
   tabs: { flexWrap: 'wrap' },
 });
 
-export function App({ controller }: { controller: Controller }) {
+export function App({
+  controller,
+  host = 'excel',
+}: {
+  controller: Controller;
+  host?: 'excel' | 'sheets';
+}) {
   return (
     <ControllerContext.Provider value={controller}>
       <FluentProvider theme={theme}>
-        <Pane />
+        <Pane host={host} />
       </FluentProvider>
     </ControllerContext.Provider>
   );
 }
 
-function Pane() {
+function Pane({ host }: { host: 'excel' | 'sheets' }) {
   const styles = useStyles();
   const [state, fi] = useFi();
   const signedIn = state.me !== null;
@@ -85,8 +91,10 @@ function Pane() {
   if (state.outsideExcel) {
     return (
       <main className={styles.root}>
-        <Title3 as="h1">{t('addin.outside.title')}</Title3>
-        <Text>{t('addin.outside.text')}</Text>
+        <Title3 as="h1">
+          {t(host === 'sheets' ? 'sheets.outside.title' : 'addin.outside.title')}
+        </Title3>
+        <Text>{t(host === 'sheets' ? 'sheets.outside.text' : 'addin.outside.text')}</Text>
       </main>
     );
   }
@@ -107,6 +115,24 @@ function Pane() {
         </span>
         {state.me && <Text size={200}>{state.me.tenant.name}</Text>}
       </div>
+
+      {host === 'sheets' && signedIn && (
+        <div role="toolbar" aria-label={t('sheets.toolbar')} className={styles.tabs}>
+          <Button size="small" onClick={() => void fi.verifyFromRibbon()}>
+            {t('sheets.verify')}
+          </Button>
+          <Button size="small" onClick={() => void fi.sendFromRibbon()}>
+            {t('sheets.send')}
+          </Button>
+          <Button
+            size="small"
+            aria-pressed={state.testMode}
+            onClick={() => void fi.toggleTestModeFromRibbon()}
+          >
+            {t('sheets.test')}
+          </Button>
+        </div>
+      )}
 
       {state.testMode && (
         <div className={styles.testBanner} role="status" data-testid="test-banner">

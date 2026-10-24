@@ -55,8 +55,8 @@ export default defineConfig(async ({ command, mode }) => {
       // harness.html is a dev page: the task pane, the dialog's first page (src/pages.ts) and the page
       // of Microsoft's sign-in on the web (src/auth.ts) ship.
       rolldownOptions: {
-        input: ['./taskpane.html', './redirect.html', './auth.html'].map((page) =>
-          fileURLToPath(new URL(page, import.meta.url)),
+        input: ['./taskpane.html', './redirect.html', './auth.html', './google-sheets.html'].map(
+          (page) => fileURLToPath(new URL(page, import.meta.url)),
         ),
       },
     },

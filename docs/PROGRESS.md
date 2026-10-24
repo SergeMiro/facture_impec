@@ -1042,3 +1042,47 @@ Acceptance criteria before implementation:
 - `pnpm verify --concurrency=1` passed: all ten test tasks, including 283 API tests and the XML oracle.
 - `pnpm test:e2e` passed against the B2Brouter stand-in and the workbook harness (2 passed, Excel web
   skipped without an account). browser: local. The upload and supplier-cost scenarios passed.
+
+## R9 — Google Sheets as a working spreadsheet (started 2026-10-24)
+
+Owner request: the complete invoice workflow must also work from Google Sheets. R5 only reads picked
+Google Drive files. R9 adds the interactive spreadsheet host and reuses the existing controller,
+checks, sending, reception, registry, chat and billing screens. Acceptance criteria before work:
+
+- A bound Apps Script package opens the shared app in a Google Sheets sidebar, without Office.js.
+  Installation instructions, narrow permissions and a reproducible package command are included.
+- The host reads visible sheets, displayed values, formats and formulas. Google dates retain the
+  spreadsheet's calendar date. Workbook identity comes from the spreadsheet id, including copies.
+- Status writes touch only `FI_Statut` and `FI_Détail`. Confirmed single-cell corrections preserve
+  formatting and refuse changed values or formulas. Nonsecret settings stay with the spreadsheet.
+  Session tokens stay in the app's browser storage, never shared document properties.
+- The sidebar notices edits to invoice sheets and included sources, stops polling after sign-out,
+  and periodically reconciles changes that do not fire Google's edit trigger.
+- The browser bridge accepts only its parent, exact origin and random channel. Apps Script exposes
+  an allowlist of validated operations on the current spreadsheet, with no arbitrary execution.
+- Local host tests, bridge tests and a browser scenario cover mapping, validation, sending in test
+  mode, status return, a source change and correction/undo through the Google Sheets adapter.
+- `pnpm verify --concurrency=1`, the production build and existing Excel browser scenarios pass.
+  A real Google account installation is recorded separately; a stand-in never proves it.
+
+### Implementation evidence (2026-10-24)
+
+| Criterion | Evidence |
+|---|---|
+| Bound sidebar and shared app | `src/sheets/main.tsx`, `google-sheets.html`, `ui/App.tsx`: the existing controller and screens, with Google Sheets toolbar actions and no Office.js dependency. `scripts/sheets.test.ts` builds the package, executes `Code.gs` in a clean JS context and checks the menu, spreadsheet identity and narrow manifest scopes. |
+| Native reads and settings | `src/sheets/sheets.test.ts`: native dates retain the spreadsheet's calendar day across Paris/Los Angeles, formats and formula flags survive, hidden sheets stay out, quoted sheet names work, spreadsheet copies get separate ids, settings reject token-like keys. |
+| Writes and corrections | The same host tests cover preserved numeric formats, formula and changed-value refusals, status-column ownership checks and unchanged user data. `google-sheets.spec.ts` applies 900 → 1200 only after confirmation, then undoes it through the two-frame bridge. |
+| Changes and lifecycle | Host tests cover edit revisions, reconciliation after API/script changes and polling cancellation after the last listener. The browser scenario changes an included order without reopening it, then finds the 300 € difference. Sign-out returns to login without changing the cells. |
+| Bridge validation | `src/sheets/bridge.test.ts`: other origins, windows, channels and request ids are ignored; out-of-order replies match their requests; timeouts do not retry writes. `protocol.ts` validates every operation and response. |
+| Invoice workflow | `e2e/google-sheets.spec.ts`: e-mailed sign-in, mapping, validation, test send, status back in the cells, supplier approval, FEC download, source change, correction and undo. It passed on the native-service stand-in in 25 s. browser: local. [Test send](evidence/r9-sheets-send.png), [correction undone](evidence/r9-sheets-correction-undone.png). |
+| Packaging and deployment | `pnpm sheets:package --addin <https-url>/google-sheets.html`, `docs/GOOGLE_SHEETS.md`, `docs/DEPLOY.md`, `docs/RUNBOOK.md`, README. The package contains `Code.gs`, `Sidebar.html`, `appsscript.json`; it performs no remote deployment. RGPD notes are in `docs/RGPD.md`. |
+| Real account | Pending G1–G4 in `docs/GOOGLE_SHEETS.md` and `docs/TODO.md`: public hosting and installation in personal/Workspace accounts. Local tests do not close these checks. Marketplace distribution and browser OneDrive sign-in are tracked in `docs/DEFERRED.md`. |
+
+- Final gate: `pnpm verify --concurrency=1` passed all ten test tasks, including 95 add-in tests
+  (12 new Google Sheets/package tests), 283 API tests, 656 core tests and 276 XML oracle tests.
+- Production: `pnpm build` passed for the add-in and marketing site. Google Sheets and Office entry
+  pages share the application chunks; the Google page does not load Office.js.
+- Full browser run: `pnpm test:e2e` passed 3 scenarios (B2Brouter stand-in, Google Sheets and the
+  existing Excel harness); real Excel web skipped without an account. browser: local.
+- Deployment remains pending: no public app/API address is configured in this working copy.
+  The owner was asked which HTTPS addresses to use for a real Google account installation.

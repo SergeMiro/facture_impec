@@ -144,3 +144,11 @@ Each line says where it came from and what would bring it back.
 | Terms and privacy links on Microsoft's consent screen | 2026-10-22: the registration's Branding has none yet | The CGU and the privacy page are published (`TERMS_URL`): the owner adds both in Entra → Branding & properties. |
 | The File Picker in an Office dialog instead of a frame over the pane | R4: a frame over the task pane, with its own « Fermer » | The picker refuses to run inside the pane's frame on some Excel (TODO(verify) 3 in `docs/MICROSOFT365.md`). |
 | Writing into a connected file | R4: picked files are only read, never modified (R8 writes only into the open workbook) | Users want corrections applied to their OneDrive files too: needs `Files.ReadWrite` and the co-authoring question of R8. |
+
+## Google Sheets host (R9)
+
+| Item | Current behaviour | Bring back when |
+|---|---|---|
+| Public Google Workspace Marketplace listing | The reproducible bound-script package is installed manually in a spreadsheet. | The owner supplies the publisher account and hosted app/API addresses; complete Google's distribution review. |
+| Connecting a new OneDrive account from Google Sheets | The current Microsoft sign-in requires Office nested authentication. Previously connected files remain readable through the shared API. The pane explains how to connect through Excel. | A Google Sheets pilot needs OneDrive sign-in without Excel: add a browser OAuth flow and register its Microsoft redirect URI. |
+| Google Sheets ranges above 5,000 used rows or 250,000 cells | The host refuses before reading the oversized range. | A pilot needs larger sheets: chunk reads with a stable revision check before syncing the combined snapshot. |

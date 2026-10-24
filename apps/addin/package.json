@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "icons": "tsx scripts/icons.ts",
-    "appsource": "tsx scripts/appsource.ts"
+    "appsource": "tsx scripts/appsource.ts",
+    "sheets": "tsx scripts/sheets.ts"
   },
   "dependencies": {
     "@azure/msal-browser": "5.25.0",

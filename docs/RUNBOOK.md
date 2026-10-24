@@ -200,7 +200,8 @@ one more call by hand on an invoice the contract left in the sandbox.
 | `pnpm --filter @fi/core pdf:check [dir]` | Renders the 25 golden invoices as Factur-X and runs veraPDF (Docker `verapdf/cli:v1.30.2`) and the Akretion extractor (`pip install factur-x`; `FACTURX_EXTRACT=/path/to/facturx-pdfextractxml` if it is not on PATH). Manual, before changing the PDF layout. |
 | `pnpm accounting:check [file]` | Imports the accountant FEC into Paheko (Docker) and checks the books (§ Accountant export check). Manual, before changing the export. |
 | `pnpm format` | Format and apply safe lint fixes. |
-| `pnpm build` | Production build (add-in and marketing site). |
+| `pnpm build` | Production build (Excel/Google Sheets add-in and marketing site). |
+| `pnpm sheets:package --addin <https-url>/google-sheets.html` | Generate the bound Apps Script package (`GOOGLE_SHEETS.md`). |
 | `pnpm --filter @fi/api dev` | Run one package. |
 
 On a loaded VPS, use `pnpm verify --concurrency=1` to run test packages sequentially.

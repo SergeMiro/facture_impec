@@ -12,6 +12,9 @@ like "plan §7" refer to it. Where this file and the plan disagree, the plan win
 - Layout: `apps/{addin,api,mock-pdp,site}`, `packages/{core,agents,pdp-adapter,db,shared}`, `fixtures/`, `docs/`, `scripts/`.
 - `apps/site` is the marketing site (Astro + Vercel, green brand). Its copy lives in `apps/site/src/content/`;
   rule 6 below is about product UI. Never put unverified claims, fake testimonials or customer counts on it.
+- `apps/addin` has two hosts: Office.js (`taskpane.html`) and a bound Google Sheets sidebar
+  (`google-sheets.html`, `src/sheets/`). Both use the same controller and API. Google installation,
+  scopes and real-account checks: `docs/GOOGLE_SHEETS.md`.
 - The previous Rust/Next.js MVP was ported to `packages/core` in M1 and removed; the tag
   `archive/rust-mvp-v1` keeps it with its history. Never build on it.
 - Progress and evidence: `docs/PROGRESS.md`. Things consciously postponed: `docs/DEFERRED.md`.
@@ -29,6 +32,7 @@ pnpm load             # k6 batch test, 1 000 invoices on a throwaway Postgres (D
 pnpm accounting:check [file]   # accountant FEC imported into Paheko (Docker); not part of verify
 pnpm appsource:package --addin <url> --support <url> --version a.b.c.d [--validate]   # store package (docs/APPSOURCE.md)
 pnpm addin:icons      # redraw the add-in's icons
+pnpm sheets:package --addin <https-url>/google-sheets.html   # bound Apps Script package (R9)
 docker compose -f deploy/compose.yaml up -d --build   # API + Postgres, settings in deploy/.env (docs/DEPLOY.md)
 ```
 

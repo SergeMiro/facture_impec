@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { Controller } from '../controller';
 import { FakeWorkbook } from '../excel/fake';
 import { standInMicrosoftPort } from '../microsoft/stand-in';
+import { fakeGoogleSheets } from '../sheets/fake';
 import { tokenStore } from '../storage';
 import { App } from '../ui/App';
 import {
@@ -23,6 +24,12 @@ const workbook = new FakeWorkbook({
   [DEMO_PURCHASES]: demoPurchases(),
 });
 const query = new URLSearchParams(window.location.search);
+const sheetsHost = query.get('host') === 'sheets';
+const native = sheetsHost ? fakeGoogleSheets(workbook) : null;
+if (native) {
+  Object.assign(window, { fiSheetsCall: native.host.dispatch });
+}
+
 const controller = new Controller({
   port: workbook,
   // Microsoft's stand-in in apps/mock-pdp, behind the dev server's proxy; `?microsoft=work` signs in
@@ -43,7 +50,7 @@ const controller = new Controller({
 
 function Harness() {
   return (
-    <div className="harness">
+    <div className="harness" style={sheetsHost ? { gridTemplateColumns: '1fr 300px' } : undefined}>
       <div className="ribbon" role="toolbar" aria-label="Ruban Facture Impec">
         <strong>Facture Impec</strong>
         <button
@@ -72,7 +79,16 @@ function Harness() {
         <Grid workbook={workbook} />
       </main>
       <aside className="pane" data-testid="pane">
-        <App controller={controller} />
+        {sheetsHost ? (
+          <iframe
+            title="Google Sheets sidebar stand-in"
+            data-testid="sheets-sidebar"
+            src="/sheets-sidebar-harness.html"
+            style={{ width: '100%', height: '100%', border: 0 }}
+          />
+        ) : (
+          <App controller={controller} />
+        )}
       </aside>
     </div>
   );
@@ -86,4 +102,4 @@ createRoot(root).render(
   </StrictMode>,
 );
 window.addEventListener('online', controller.online);
-void controller.start();
+if (!sheetsHost) void controller.start();

@@ -59,7 +59,13 @@ import {
   type WeeklyReport,
 } from './api';
 import { type CardCall, type ChatStatus, PaneChat, waitingCards } from './chat';
-import type { CellContent, ExcelPort, SheetSnapshot, StatusPlan } from './excel/port';
+import {
+  type CellContent,
+  type ExcelPort,
+  type SheetSnapshot,
+  SpreadsheetError,
+  type StatusPlan,
+} from './excel/port';
 import {
   detectionSample,
   headersOf,
@@ -452,6 +458,10 @@ export class Controller {
         void this.#signedOut({ tone: 'error', text: e.message });
         return;
       }
+      this.notify('error', e.message);
+      return;
+    }
+    if (e instanceof SpreadsheetError) {
       this.notify('error', e.message);
       return;
     }
@@ -1710,7 +1720,10 @@ export class Controller {
     const app = this.#state.connector?.microsoft;
     const port = this.#deps.microsoft;
     if (!app || !port) {
-      this.notify('info', t('addin.connector.port.unsupported'));
+      this.notify(
+        'info',
+        t(port ? 'addin.connector.port.unsupported' : 'addin.connector.port.unavailable'),
+      );
       return;
     }
     const again = this.#state.connector?.connection !== null;
@@ -1740,7 +1753,10 @@ export class Controller {
     const port = this.#deps.microsoft;
     const picker = view?.connection?.picker;
     if (!view?.microsoft || !port || !picker) {
-      this.notify('info', t('addin.connector.port.unsupported'));
+      this.notify(
+        'info',
+        t(port ? 'addin.connector.port.unsupported' : 'addin.connector.port.unavailable'),
+      );
       return;
     }
     const app = view.microsoft;

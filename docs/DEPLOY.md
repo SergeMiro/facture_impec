@@ -11,7 +11,7 @@ the domain and every key are the owner's (§6).
 |---|---|---|
 | API | `apps/api/src/server.ts` through `tsx` (internal packages are TypeScript source, no build step); migrates the database on start; runs the pg-boss workers (send, sync, sweep), chasing, weekly reports and the daily purge in the same process (`API_WORKERS=true`) | `api` service of `deploy/compose.yaml`, published on `127.0.0.1:4000` only |
 | Database | Postgres 17 (`postgres:17.11-alpine`), volume `pgdata` | `postgres` service, not published |
-| Task pane | `apps/addin/dist/` (`taskpane.html`, `redirect.html`, `auth.html`, `assets/`): static files, any https host | the same proxy, or a static host |
+| Task pane | `apps/addin/dist/` (`taskpane.html`, `google-sheets.html`, `redirect.html`, `auth.html`, `assets/`): static files, any https host | the same proxy, or a static host |
 | TLS proxy | Terminates https for the API and the pane (Office, Stripe's and B2Brouter's webhooks all need https) | the owner's choice (Caddy, nginx, Cloudflare Tunnel) |
 
 Two deployments are possible, same image: **sandbox** (`FI_ENV=sandbox`, B2Brouter sandbox key, Stripe
@@ -88,3 +88,12 @@ without them, later.
 A domain and its DNS; the TLS proxy; the B2Brouter live and sandbox keys and their webhooks; the mail
 provider; the Stripe account (`docs/BILLING.md` §11); the published CGU, privacy page and processing
 agreement (`docs/RGPD.md`); where backups go.
+
+
+## Google Sheets sidebar
+
+The add-in build includes `google-sheets.html`. Serve it over public HTTPS with the existing API
+address configured at build time. Allow Google's HTML-service frames to embed this page. The API
+origin allowlist contains the hosted app origin, as for Excel. Generate and install the bound script
+with `pnpm sheets:package --addin https://YOUR-ADDIN/google-sheets.html` (`GOOGLE_SHEETS.md`).
+This command produces local files. It does not publish an Apps Script project or Marketplace listing.

@@ -61,3 +61,12 @@ What a real personal account showed and what is still open: `docs/MICROSOFT365.m
 - [ ] **The CGU.** A draft of the connectors' articles (OneDrive; Google Drive since R5; uploaded
       files since R6): `docs/CGU_ONEDRIVE.md` (French). A lawyer reviews it with the rest of the
       CGU; then `TERMS_URL` and a new `TERMS_VERSION`. 
+
+## Google Sheets sidebar (R9), started 2026-10-24
+
+- [ ] Publish the shared add-in and API at public HTTPS addresses, then generate the bound script
+      with `pnpm sheets:package --addin https://YOUR-ADDIN/google-sheets.html`.
+- [ ] Install in a real personal Google account and a Workspace account; run G1–G4 in
+      `docs/GOOGLE_SHEETS.md`. Native-service and browser stand-ins remain separate evidence.
+- [ ] Public Marketplace distribution: publisher registration, consent-screen configuration and
+      Google's review. A manually installed bound script does not prove Marketplace acceptance.
