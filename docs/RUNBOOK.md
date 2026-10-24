@@ -535,6 +535,21 @@ plus valable »: `select decision, revision, used_at, expires_at from action_lin
 '<id>'`: used, older than 7 days, or the request changed since (its `revision` above the link's). The
 decision itself is in `audit_events` (`action.decide`, actor `user:<id>`), the channel on the action.
 
+### ERP lists (stages 4A–4C)
+
+A pilot gives its exports from the pane (Réglages › « Votre logiciel de gestion »). When the operator
+imports one for the company (a file sent by e-mail on day 1), with the company's API key, never the
+operator token:
+
+```bash
+curl -s -X POST -H "authorization: Bearer $FI_KEY" --data-binary @clients.csv \
+  "$FI_API_URL/erp/imports?name=clients.csv&list=customers"   # customers, suppliers, chantiers, invoices, payments
+curl -s -H "authorization: Bearer $FI_KEY" "$FI_API_URL/erp"   # each list: its last import, done or not
+```
+
+`list` is needed only when the file's columns do not say what it lists. The same file again does
+nothing once imported, and goes on from where it stopped otherwise.
+
 An ERP list (stage 4A) given from the pane and not imported: `select connector, last_error,
 cursor_json, result_json->>'finishedAt', result_json->'skipped' from connector_syncs where tenant_id =
 '<id>'`. `erp_interrupted`: a batch failed, the queue tries again three times a minute apart from the
@@ -573,24 +588,42 @@ rehearsal of the whole path is `apps/api/src/pilot.test.ts` (in `pnpm verify`).
       sends, `TERMS_URL` points at the published CGU.
 - [ ] Three pilot companies agreed to it, knowing it is a pilot: their invoices stay test invoices until
       they say « go » for real.
+- [ ] `pnpm org list` answers from the operator's machine (the address and the token are right).
 
 ### Each company
 
+`pnpm org` (`scripts/org/org.ts`) calls the operator's routes from any checkout of the repository
+(`pnpm install` done). It takes the API's address and the operator token from the environment and
+never prints the token; type it rather than keep it in a file or the shell's history:
+
 ```bash
-API=https://api.<domain>; AUTH="authorization: Bearer $ADMIN_TOKEN"
+export FI_API_URL=https://api.<domain>; read -rs ADMIN_TOKEN; export ADMIN_TOKEN
 # 1. They click « Créer un compte » in Excel (SIREN, e-mail, terms, the link). Find the company:
-curl -s -H "$AUTH" "$API/admin/tenants?siren=<SIREN>"
-# 2. Pilot status: never billed, whatever Stripe says.
-curl -s -X PUT -H "$AUTH" -H 'content-type: application/json' \
-  -d '{"status":"pilot"}' "$API/admin/tenants/<id>/billing"
+pnpm org show <SIREN>
+# 2. Pilot status: never billed, whatever Stripe says (--trial: back to a fresh trial month).
+pnpm org pilot <SIREN>
 # 3. If B2Brouter's account id is not the SIREN (docs/B2BROUTER.md T22):
-curl -s -X PUT -H "$AUTH" -H 'content-type: application/json' \
-  -d '{"account":"<B2Brouter account id>"}' "$API/admin/tenants/<id>/platform"
+pnpm org platform <SIREN> <B2Brouter account id>
 ```
 
-An accounting firm's brand, if a pilot comes through one:
-`PUT /admin/tenants/<id>/white-label {"whiteLabel":{"firmName":"…","accentColor":"#0f6cbd","full":false}}`
-(`full: true` also removes the Facture Impec mention and signs the weekly report with the firm's name).
+A company is named by its SIREN or its id; when two companies have the SIREN (a sign-up made twice),
+`pnpm org` lists their ids and takes one of them instead. Or the operator creates the company,
+already a pilot, its owner signing in with a link at that address:
+
+```bash
+pnpm org create --name "Maçonnerie Durand" --siren <SIREN> --owner <e-mail> \
+  [--vat FR…] [--account <B2Brouter account id>] [--line1 … --postcode … --city …]
+```
+
+It prints the company's API key once (for its ERP or a script; the pane signs in with the link): give
+it over and keep no copy, only its hash is stored. A refusal prints the API's status and code
+(`400 … not a valid SIREN`, `409 pdp_not_configured`) and changes nothing.
+
+An accounting firm's brand, if a pilot comes through one (no `pnpm org` command for it yet):
+`curl -X PUT -H "authorization: Bearer $ADMIN_TOKEN" -H 'content-type: application/json' -d
+'{"whiteLabel":{"firmName":"…","accentColor":"#0f6cbd","full":false}}'
+"$FI_API_URL/admin/tenants/<id>/white-label"` (`full: true` also removes the Facture Impec mention and
+signs the weekly report with the firm's name).
 
 ### P1, P2
 
@@ -610,7 +643,7 @@ First the alerts mailbox and the Grafana dashboard (`docs/DEPLOY.md` § 7, § Ob
 an alert of the night is either explained or a P1/P2. Then:
 
 ```bash
-curl -s -H "$AUTH" "$API/admin/tenants"                 # status, plan, live or not
+pnpm org list                                           # billing, live or not, account, id
 # The API's errors of the day, one JSON line each (tenantId, route or queue, jobId, the stack). A job
 # is an error only once its retries are spent; a failed attempt it retried is a warning.
 docker compose -f deploy/compose.yaml logs --since 24h --no-log-prefix api | grep '"level":"error"' | tail -50
@@ -638,15 +671,15 @@ After five consecutive days without P1, with the company's agreement and its B2B
 account set up (the owner's step: account, DGFiP setting, plan):
 
 ```bash
-curl -s -X PUT -H "$AUTH" -H 'content-type: application/json' \
-  -d '{"live":true,"confirmSiren":"<SIREN>"}' "$API/admin/tenants/<id>/live"
+pnpm org live <SIREN> --confirm <SIREN>      # the SIREN typed again, as a confirmation
 ```
 
 The call checks that B2Brouter answers for that account (`platform_account_missing` with B2Brouter's
 reason otherwise, nothing changed) and records `tenant.live` in the audit log. From then on the pane no
 longer says « Votre compte est en cours d'activation… », « Mode test » off sends for real, and the inbox is read.
-Watch its first real invoice to « Déposée » and beyond the same day. `{"live":false,…}` closes real
-sends again (audit `tenant.offline`); invoices already sent keep being followed.
+Watch its first real invoice to « Déposée » and beyond the same day. `pnpm org offline <SIREN>
+--confirm <SIREN>` closes real sends again (audit `tenant.offline`); invoices already sent keep being
+followed. Once live, the platform account is fixed (`409 tenant_live`).
 
 ### The ten-year archive (M8)
 
@@ -654,7 +687,7 @@ Every real invoice sent or received is in `invoice_archive` (`docs/ARCHITECTURE.
 company's archive, a deleted one included, after a restore or once a month:
 
 ```bash
-curl -s -H "$AUTH" "$API/admin/tenants/<id>/archive"
+curl -s -H "authorization: Bearer $ADMIN_TOKEN" "$FI_API_URL/admin/tenants/<id>/archive"
 # {"rows":12,"ok":true,"broken":null,"lastChain":"…"}
 ```
 

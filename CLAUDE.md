@@ -32,6 +32,8 @@ pnpm format           # biome check --write
 pnpm test:e2e         # add-in E2E in local Chrome, own ports (docs/RUNBOOK.md § E2E); not part of verify
 pnpm scenario [--provider b2brouter] all   # plan §9 scenarios, in-process; through the B2Brouter adapter
 pnpm load             # k6 batch test, 1 000 invoices on a throwaway Postgres (Docker); not part of verify
+pnpm perf             # BTP plan §11's budgets, 1 000 documents through the whole API in-process; not part of verify
+pnpm org list | show | create | pilot | platform | live | offline   # a company, over FI_API_URL with ADMIN_TOKEN
 pnpm accounting:check [file]   # accountant FEC imported into Paheko (Docker); not part of verify
 pnpm appsource:package --addin <url> --support <url> --version a.b.c.d [--validate]   # store package (docs/APPSOURCE.md)
 pnpm addin:icons      # redraw the add-in's icons

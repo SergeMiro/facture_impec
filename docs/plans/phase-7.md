@@ -80,3 +80,14 @@ BTP plan §11 and §12 stage 7, adapted by `docs/DECISIONS.md` D10. Stages 5 and
   worker for a new job but not through a backlog, and wants a session connection (no transaction
   pooler). A job sent from another process is still found by polling; LISTEN/NOTIFY is the step
   for several processes (`docs/DEFERRED.md`).
+
+7C:
+
+- **`scripts/org/`** (`run.ts` the command, `org.ts` what it does, `org.test.ts`), as `scripts/perf/`,
+  rather than one `scripts/org.ts`: the test calls the commands without a child process.
+- **More than create, show, pilot and platform**: `list` (the morning's look at every company),
+  `live` and `offline` with the SIREN typed again (the runbook's « Switching one live » was the last
+  curl of a company's set-up). The brand of an accounting firm and the archive check stay curls in
+  the runbook: rare, and one line each.
+- **A company named by its SIREN or its id**: the operator knows the SIREN; a SIREN can have two
+  companies (a sign-up made twice, nothing unique in `tenants`), and then the ids are listed.

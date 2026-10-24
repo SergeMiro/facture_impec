@@ -22,6 +22,7 @@
     "load": "tsx scripts/load/run.ts",
     "load:sync": "tsx scripts/load/sync.ts",
     "perf": "tsx scripts/perf/run.ts",
+    "org": "tsx scripts/org/run.ts",
     "accounting:check": "tsx scripts/accounting/check.ts",
     "test:e2e": "pnpm --filter @fi/addin test:e2e",
     "seed:demo": "pnpm --filter @fi/addin seed:demo",

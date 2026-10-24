@@ -1847,3 +1847,40 @@ machine shared with other work):
   domain 8, scripts 6. The harness E2E passes (local Chrome; browser: local).
 - **Not measured yet**: the production host; the model on (classify waits on it, its own budget); several API processes (a job sent from one
   is found by another's poll). In `docs/TODO.md` › BTP plan.
+
+## BTP plan — stage 7C: a company set up from the command line, and the runbook (started 2026-10-24)
+
+`docs/plans/phase-7.md` › 7C. Criteria, written before the code:
+
+- **`pnpm org`** over the operator's routes (`apps/api/src/admin.ts`), with `FI_API_URL` and
+  `ADMIN_TOKEN` from the environment, never printed: `list` (one line a company: SIREN, name,
+  billing, live or not, platform account, id), `show <SIREN|id>`, `create` (a pilot by default; the
+  company's API key printed once, with a warning), `pilot [--trial]`, `platform <account>`,
+  `live` / `offline --confirm <SIREN>`. A company is named by its SIREN or its id; a SIREN of two
+  companies is refused with their ids.
+- **Says what is wrong**: a missing token, a missing argument, an unknown company, the API's own
+  refusal (status and code) — exit code 1, nothing half done.
+- **Tested against the whole API** (`startStack`, PGlite, the mock platform): every command, the
+  key working on `GET /tenant`, live refused with the wrong SIREN, the account fixed once live.
+- **The runbook**: « Each company », « Every morning » and « Switching one live » with `pnpm org`
+  instead of the curls; the ERP imports in a section of their own; what the pilots of stage 7's
+  DoD need from the owner in `docs/TODO.md`.
+
+Evidence (2026-10-24):
+
+- **`pnpm org`**: `scripts/org/org.ts`, `scripts/org/run.ts`; `scripts/org/org.test.ts` against
+  `startStack` (PGlite, the mock platform): « creates a pilot company and hands its API key over
+  once » (the key answers `GET /tenant`, the address kept, `show` does not print the key), « sets
+  billing, the platform account, live and offline by SIREN » (the wrong SIREN refused with
+  `409 confirm_mismatch`, the account fixed once live: `409 tenant_live`), « asks for the id when a
+  SIREN has two companies, and takes it », « says what is missing rather than calling the API
+  wrongly » (no token, no argument, an unknown company, an invalid SIREN's `400`, an API that does
+  not answer: exit code 1).
+- **The runbook** (`docs/RUNBOOK.md` › Pilot): « Each company », « Every morning » and « Switching one
+  live » with `pnpm org`; the token typed (`read -rs`), never in a file; `pnpm org list` in « Before
+  day 1 »; « ERP lists (stages 4A–4C) » a section of its own, with the operator's import for a
+  pilot. Deviations in `docs/plans/phase-7.md` › 7C; what is left in `docs/DEFERRED.md` › A company
+  from the command line and `docs/TODO.md` › Left from stage 7 (the DoD's pilots, with the owner).
+- **Gate**: `pnpm verify` green on 2026-10-24: api 377, add-in 119, agents 162 (evals included),
+  core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, connectors 13,
+  domain 8, scripts 10.

@@ -283,3 +283,10 @@ Each line says where it came from and what would bring it back.
 | Waking workers in another process | A job sent from the process wakes its queue's workers there; a worker fetches again after each job (`bossWakeups`, `apps/api/src/jobs.ts`); another process finds the job at its next poll (2 s) | The workers run apart from the API: pg-boss's LISTEN/NOTIFY (`useListenNotify`, the queues' `notify`), on a session connection (not a transaction pooler). |
 | A load from outside the process | `fetch` in the API's process, the paths timed on the server's side | The API is hosted: the same paths from another machine (k6, as `pnpm load`), through the proxy and TLS, to see what the network adds. |
 | The model on during the run | Off: classify falls back to the rules; the run measures the pipeline, not a provider | The production model is chosen: a run with it on, classify's own time per document in the report (§11 gives the graph 25 s). |
+
+## A company from the command line (BTP plan stage 7C, 2026-10-24)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| A firm's brand and the archive check in `pnpm org` | Two curls in `docs/RUNBOOK.md` › Pilot | A firm brings several pilots, or the archive is checked more than monthly: `pnpm org brand`, `pnpm org archive`. |
+| A company's API key replaced or revoked | The key `pnpm org create` prints once; no route replaces it (the pane signs in with links, not the key) | A pilot's ERP or script uses the key and it leaks or is lost: `POST /admin/tenants/:id/api-keys` (a new key, the old ones revoked, audited) and `pnpm org key`. |

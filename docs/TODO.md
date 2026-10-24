@@ -209,7 +209,11 @@ Stages (`docs/plans/phase-N.md` each):
       payments from an export, the order of sources PDP > ERP > e-mail: done 2026-10-24; 4C
       « Votre logiciel de gestion » in Réglages, the chantiers in « Documents »: done 2026-10-24).
       Left: EBP SaaS paused (D3); real exports with the first pilot (below).
-- [ ] **5, 6** paused (D3). **7 — observability, performance, runbook, onboarding.**
+- [ ] **5, 6** paused (D3).
+- [ ] **7 — observability, performance, runbook, onboarding** (`docs/plans/phase-7.md`; 7A JSON
+      logs, `/metrics`, Prometheus, Alertmanager and Grafana: done 2026-10-24; 7B `pnpm perf`, every
+      path of §11 within its budget on PGlite and Postgres: done 2026-10-24; 7C `pnpm org` and the
+      runbook: done 2026-10-24). Left: the DoD's pilots, the owner's (below).
 
 Owner questions (BTP plan §13 and what stage 0 found):
 
@@ -263,10 +267,18 @@ Left from stage 2A for later (2026-10-24):
 
 Left from stage 7 for later (2026-10-24):
 
+- [ ] **Stage 7's DoD, with the owner**: five pilot companies connected (their sign-up then
+      `pnpm org pilot`, or `pnpm org create`); over four weeks, three or more approve drafts every
+      week (« Companies deciding (7 days) » on the dashboard) and no job failed for good at each
+      week's end (« Jobs failed for good », the morning's SQL in `docs/RUNBOOK.md` › Pilot). Needs
+      what « Pilot and production, with the owner » above lists: hosting, B2Brouter keys, mail.
+
 - [ ] **`pnpm perf` on the production host**, once it is chosen, before the first pilot: the numbers
       in `docs/PROGRESS.md` › stage 7B are the VPS's, PGlite and a throwaway Postgres 17.
 - [ ] **`pnpm perf` with the model on** (the owner's production key): classify's time per document
       under load (`docs/DEFERRED.md` › Measured under load).
+- [ ] **A company's API key replaced or revoked** by the operator (`docs/DEFERRED.md` › A company
+      from the command line): before a pilot's ERP or script holds one.
 - [ ] **The add-in tests' noise**: `controller.test` logs « request failed » for `GET /invoices`
       after its database closed (a request still in flight at teardown). Harmless, but it hides a
       real failure in the output: await the pane's last request before closing.
