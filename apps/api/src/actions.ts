@@ -20,7 +20,6 @@ import {
   sql,
   type TenantRow,
   type Tx,
-  users,
 } from '@fi/db';
 import {
   ACTION_STATUSES,
@@ -33,6 +32,7 @@ import { type Principal, who } from './auth';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import { DirectoryUnavailable } from './sirene';
+import { ownerEmail } from './tenants';
 import { draftDue, OPEN, withdrawDrafts } from './watchers';
 
 /** A mail that fails this many times leaves the request `failed`. */
@@ -185,17 +185,6 @@ export const deciderOf = (principal: Principal, channel: ApprovalChannel): Decid
   email: principal.kind === 'session' ? principal.email : null,
   channel,
 });
-
-/** The address answers go to when nobody signed in decided: the company's first owner. */
-async function ownerEmail(tx: Tx, tenantId: string): Promise<string | null> {
-  const [owner] = await tx
-    .select({ email: users.email })
-    .from(users)
-    .where(and(eq(users.tenantId, tenantId), eq(users.role, 'owner')))
-    .orderBy(asc(users.createdAt))
-    .limit(1);
-  return owner?.email ?? null;
-}
 
 /**
  * Applies one decision. The revision the person saw must be the action's: an edit elsewhere, or an

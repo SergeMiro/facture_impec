@@ -279,9 +279,9 @@ Left from stage 7 for later (2026-10-24):
       under load (`docs/DEFERRED.md` › Measured under load).
 - [ ] **A company's API key replaced or revoked** by the operator (`docs/DEFERRED.md` › A company
       from the command line): before a pilot's ERP or script holds one.
-- [ ] **The add-in tests' noise**: `controller.test` logs « request failed » for `GET /invoices`
-      after its database closed (a request still in flight at teardown). Harmless, but it hides a
-      real failure in the output: await the pane's last request before closing.
+- [x] **The add-in tests' noise** (fixed 2026-10-24): `controller.test` logged « request failed »
+      for `GET /invoices` after its database closed, a pane's timer firing late. The test now waits
+      for the requests in flight and unplugs the network before closing the database.
 
 ## Excel on the web E2E
 
@@ -321,9 +321,9 @@ Left from stage 4C for later (2026-10-24):
 
 Left from stage 3A for later (2026-10-24):
 
-- [ ] **Reply-To on CollectAgent's chasing e-mails**: a customer's answer to a reminder reaches our
-      sender address, not the company. `Mail.replyTo` exists since 3A (requests use it); the chasing
-      mails (`apps/api/src/collect.ts`) should set it to the person who sent the step, or the owner.
+- [x] **Reply-To on CollectAgent's chasing e-mails** (done 2026-10-24): the autopilot's reminders
+      answer to the company's first owner (`ownerEmail`, `apps/api/src/tenants.ts`, as the requests
+      of 3A); a step the user sends leaves from the user's own mailbox and is only recorded here.
 - [ ] **The weekly e-mail's links in a real mailbox** (stage 3C): needs SMTP on a hosted deployment
       (`docs/DEPLOY.md` › mail) and `API_PUBLIC_URL` set to its public address. Open a report in
       Gmail and in Outlook (whose Safe Links open every link first) from a phone: the page shows, the

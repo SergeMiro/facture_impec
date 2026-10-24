@@ -108,11 +108,20 @@ let platformEvents: PlatformEvent[] = [];
 let down = false;
 const calls: string[] = [];
 
+/** Requests still running: the database closes after them (a pane's timer may fire late). */
+const inFlight = new Set<Promise<Response>>();
+
 const fetchFn: typeof fetch = async (input, init) => {
   if (down) throw new TypeError('fetch failed');
   const url = String(input);
   calls.push(`${init?.method ?? 'GET'} ${url.replace(BASE, '')}`);
-  return api.app.request(url, init);
+  const answer = Promise.resolve(api.app.request(url, init));
+  inFlight.add(answer);
+  try {
+    return await answer;
+  } finally {
+    inFlight.delete(answer);
+  }
 };
 
 async function until(check: () => boolean, what: string, ms = 8_000): Promise<void> {
@@ -162,6 +171,9 @@ beforeAll(async () => {
   expect(res.status).toBe(200);
 });
 afterAll(async () => {
+  // The panes are never closed: from now on their timers find the network unplugged.
+  down = true;
+  await Promise.allSettled(inFlight);
   await database.close();
 });
 

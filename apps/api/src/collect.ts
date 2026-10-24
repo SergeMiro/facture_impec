@@ -41,6 +41,7 @@ import {
 } from '@fi/db';
 import type { ApiDeps, Mail } from './deps';
 import { ApiError } from './errors';
+import { ownerEmail } from './tenants';
 
 export type CollectDeps = Pick<ApiDeps, 'db' | 'mailer' | 'now'>;
 
@@ -279,10 +280,17 @@ async function workPlan(
         : { ...step, status: 'drafted', at, reason: decision.reason, draft };
       steps[next.act] = done;
       if (decision.send && draft.to) {
+        // The customer's answer (« je paie vendredi ») is for the company, not our sender address.
+        const replyTo = await ownerEmail(tx, tenant.id);
         claimed = {
           invoiceId,
           offset: step.offset,
-          mail: { to: draft.to, subject: draft.subject, text: draft.body },
+          mail: {
+            to: draft.to,
+            subject: draft.subject,
+            text: draft.body,
+            ...(replyTo && { replyTo }),
+          },
         };
       }
       if (step.offset > 0 && invoice.status === 'overdue') {

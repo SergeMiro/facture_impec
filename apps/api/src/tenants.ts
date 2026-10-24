@@ -2,7 +2,17 @@
 // or by the person who signs up (src/onboarding.ts, on a 30-day trial). Both write the same rows and
 // the same audit events.
 import type { Address } from '@fi/core';
-import { audit, type TenantProvider, type TenantRow, type Tx, tenants, users } from '@fi/db';
+import {
+  and,
+  asc,
+  audit,
+  eq,
+  type TenantProvider,
+  type TenantRow,
+  type Tx,
+  tenants,
+  users,
+} from '@fi/db';
 import { type BillingStatus, TERMS_VERSION, TRIAL_DAYS } from '@fi/shared';
 import { tenantView } from './views';
 
@@ -73,4 +83,18 @@ export async function insertTenant(
     });
   }
   return { tenant, ownerId };
+}
+
+/**
+ * Where an answer to a mail we send for the company goes when no person sent it (a request nobody
+ * signed in decided, the autopilot's reminder): the company's first owner.
+ */
+export async function ownerEmail(tx: Tx, tenantId: string): Promise<string | null> {
+  const [owner] = await tx
+    .select({ email: users.email })
+    .from(users)
+    .where(and(eq(users.tenantId, tenantId), eq(users.role, 'owner')))
+    .orderBy(asc(users.createdAt))
+    .limit(1);
+  return owner?.email ?? null;
 }

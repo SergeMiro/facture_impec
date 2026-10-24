@@ -192,7 +192,7 @@ describe('the chasing run', () => {
   });
 
   it('in Autopilot, sends the courtesy, reminder and firm e-mails itself, never the formal notice', async () => {
-    const t = await newTenant(request);
+    const t = await newTenant(request, { ownerEmail: 'gerant@autopilote.test' });
     expect((await autopilot(t.apiKey)).status).toBe(200);
     const email = 'paiement@autopilote.test';
     const d = due();
@@ -212,6 +212,8 @@ describe('the chasing run', () => {
     const mails = mailsTo(email);
     expect(mails).toHaveLength(4);
     expect(mails.some((m) => /mise en demeure/i.test(m.subject + m.text))).toBe(false);
+    // The customer's answer goes to the company, not to our sender address.
+    expect(mails.map((m) => m.replyTo)).toEqual(Array(4).fill('gerant@autopilote.test'));
     expect(steps[4]?.draft?.subject).toMatch(/^Mise en demeure/);
     // Each e-mail went out on its own day, business time.
     expect(mails.map((m) => parisToday(new Date(m.at)))).toEqual(
