@@ -41,6 +41,7 @@ import {
   links,
   lt,
   magicLinks,
+  memoryFindings,
   memoryLinks,
   memoryPages,
   memoryRaw,
@@ -52,6 +53,8 @@ import {
   paymentReports,
   pdpSubmissions,
   ruleExceptions,
+  ruleHits,
+  ruleRuns,
   sessions,
   sheetMappings,
   signupRequests,
@@ -764,6 +767,10 @@ export async function deleteTenant(
     await tx.delete(memoryPages).where(eq(memoryPages.tenantId, tenant.id));
     await tx.delete(memoryRaw).where(eq(memoryRaw.tenantId, tenant.id));
     await tx.delete(memoryRecalls).where(eq(memoryRecalls.tenantId, tenant.id));
+    // What the rules and the lint found quotes the pages (names, amounts): gone with them.
+    await tx.delete(ruleHits).where(eq(ruleHits.tenantId, tenant.id));
+    await tx.delete(ruleRuns).where(eq(ruleRuns.tenantId, tenant.id));
+    await tx.delete(memoryFindings).where(eq(memoryFindings.tenantId, tenant.id));
     await tx
       .update(apiKeys)
       .set({ revokedAt: now })

@@ -133,6 +133,7 @@ import { PaymentBody, recordPayment } from './payments';
 import { awaitsGoLive } from './platform';
 import { reportFor } from './report';
 import { DeleteBody, deleteTenant, exportTenant } from './rgpd';
+import { decideFinding, FindingDecision, openFindings, openRuleHits } from './rules';
 import { playScenario, SCENARIOS } from './sandbox';
 import { ListQuery, listInvoices } from './search';
 import {
@@ -466,6 +467,7 @@ export function createApp(deps: ApiDeps) {
     '/billing/portal',
     '/telegram',
     '/telegram/*',
+    '/memory/*',
   ]) {
     api.use(path, tenantAuth(deps), limitByTenant(windows));
   }
@@ -795,6 +797,23 @@ export function createApp(deps: ApiDeps) {
   api.delete('/telegram', async (c) => {
     const ended = await unbind(deps.db, c.get('tenant'), person(c), 'person', deps.now());
     return c.json({ ended });
+  });
+
+  // The memory's rules and lint (memory M5, src/rules.ts): what the rules found, open; what the
+  // night's lint found, waiting for a person, who approves its fix or dismisses it.
+  api.get('/memory/rules', async (c) =>
+    c.json({ hits: await openRuleHits(deps.db, c.get('tenant').id) }),
+  );
+  api.get('/memory/findings', async (c) =>
+    c.json({ findings: await openFindings(deps.db, c.get('tenant').id) }),
+  );
+  api.post('/memory/findings/:id/:decision', async (c) => {
+    const decision = FindingDecision.safeParse(c.req.param('decision'));
+    if (!decision.success) throw new ApiError(404, 'memory_finding_not_found');
+    const tenant = c.get('tenant');
+    return c.json(
+      await decideFinding(deps, tenant, c.get('principal'), c.req.param('id'), decision.data),
+    );
   });
 
   // « C'est fait » or « Ignorer » on a deadline; its drafts are withdrawn.

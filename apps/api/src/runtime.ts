@@ -342,6 +342,7 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
     vies:
       options.vies === undefined ? new RememberingVies(new ViesClient(env.VIES_URL)) : options.vies,
     fonts: bundledFonts(),
+    memory: runner?.vault ?? null,
     now,
   };
   const telegram =

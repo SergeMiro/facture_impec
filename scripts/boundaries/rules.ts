@@ -43,7 +43,8 @@ export const RULES: Record<string, PackageRule> = {
     forbid: ['pg-boss', 'hono', 'hono/*', '@hono/*', ...MODELS],
   },
   'packages/pdp-adapter': { imports: ['core', 'shared', 'domain'], forbid: [...SERVER, ...MODELS] },
-  'packages/agents': { imports: ['core', 'shared', 'domain'], forbid: SERVER },
+  // The rules read the memory's pages (memory M5): its types and schemas, never its store.
+  'packages/agents': { imports: ['core', 'shared', 'domain', 'memory'], forbid: SERVER },
   // The memory's vault and its index (docs/DECISIONS.md D12): no model, no queue, no HTTP; the
   // database only through @fi/db.
   'packages/memory': {

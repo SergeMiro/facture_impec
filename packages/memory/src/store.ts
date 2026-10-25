@@ -278,6 +278,7 @@ export class MemoryStore {
     level: number;
     ms: number;
     searched: unknown[];
+    found?: string[];
   }): Promise<void> {
     await this.db.insert(memoryRecalls).values({ tenantId: this.tenantId, ...entry });
   }

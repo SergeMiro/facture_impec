@@ -1,10 +1,14 @@
 // ReportAgent (plan §6 phase 9): the weekly summary, at most ten lines: four numbers (five when the
 // checks found money not invoiced, R7), then up to three things to do, the most pressing first.
 // Deterministic: the API counts, this file only words it. BTP stage 3C: the e-mail then lists the
-// requests waiting in « À valider », each with its links (`approvalLines`).
+// requests waiting in « À valider », each with its links (`approvalLines`). Memory M5: what the rules
+// raised during the week (three at most), and the completeness block: what was received and filed,
+// which rules ran, what the memory asks and what it waits to have mended.
 import { type Cents, frDate, frMoney } from '@fi/core';
 import type { ActionKind } from '@fi/domain';
 import { type MessageKey, t } from '@fi/shared';
+import type { Found } from './rules/context';
+import { noticeOf } from './rules/notice';
 
 export interface Tally {
   count: number;
@@ -38,6 +42,23 @@ export interface WeekFacts {
   toSend: number;
   /** BTP stage 3C: requests waiting in « À valider » (Mode test apart). */
   approvals?: number;
+  /** Memory M5: what the rules raised during the window, the latest first. */
+  spotted?: { rule: string; facts: Found['facts'] }[];
+  /** Memory M5: shown once the company receives documents or keeps a memory. */
+  completeness?: Completeness;
+}
+
+export interface Completeness {
+  /** Documents received during the window, and how many of them reached their last stage. */
+  received: number;
+  filed: number;
+  /** The catalogue's rules that ran during the window, of those that should have. */
+  rulesRun: number;
+  rulesDue: number;
+  /** The memory's open questions and the blocking ones; null where no memory is open. */
+  questions: { open: number; blocking: number } | null;
+  /** Lint findings waiting for a person's approval. */
+  fixes: number;
 }
 
 export interface WeeklyReport {
@@ -45,11 +66,39 @@ export interface WeeklyReport {
   title: string;
   numbers: string[];
   actions: string[];
-  /** The plain-text e-mail and card: title, numbers, then the actions or « nothing to do ». */
+  /** Memory M5: what the rules raised, then the completeness block; empty without them. */
+  spotted: string[];
+  completeness: string[];
+  /**
+   * The plain-text e-mail and card: title, numbers, the actions or « nothing to do », then what the
+   * rules raised and the completeness block.
+   */
   text: string;
 }
 
+function spottedLines(f: WeekFacts): string[] {
+  const all = f.spotted ?? [];
+  if (all.length === 0) return [];
+  const lines = all.slice(0, MAX_SPOTTED).map((s) => {
+    const { title, text } = noticeOf(s.rule, s.facts);
+    return `${title} : ${text}`;
+  });
+  const more = all.length - lines.length;
+  return more > 0 ? [...lines, t('report.spotted.more', { count: more })] : lines;
+}
+
+function completenessLines(c: Completeness | undefined): string[] {
+  if (!c) return [];
+  return [
+    t('report.completeness.documents', { received: c.received, filed: c.filed }),
+    t('report.completeness.rules', { run: c.rulesRun, due: c.rulesDue }),
+    ...(c.questions ? [t('report.completeness.questions', { ...c.questions })] : []),
+    ...(c.fixes ? [t('report.completeness.fixes', { count: c.fixes })] : []),
+  ];
+}
+
 export const MAX_ACTIONS = 3;
+export const MAX_SPOTTED = 3;
 
 function actionsFor(f: WeekFacts): string[] {
   const money = (cents: Cents) => frMoney(cents, f.currency);
@@ -68,6 +117,9 @@ function actionsFor(f: WeekFacts): string[] {
     ...refusals,
     ...(f.toFix ? [t('report.action.fix', { count: f.toFix })] : []),
     ...(f.approvals ? [t('report.action.approvals', { count: f.approvals })] : []),
+    ...(f.completeness?.questions?.blocking
+      ? [t('report.action.questions', { count: f.completeness.questions.blocking })]
+      : []),
     ...(f.drafts ? [t('report.action.drafts', { count: f.drafts })] : []),
     ...(f.toSend ? [t('report.action.toSend', { count: f.toSend })] : []),
   ].slice(0, MAX_ACTIONS);
@@ -90,12 +142,24 @@ export function weeklyReport(f: WeekFacts, sender = t('app.title')): WeeklyRepor
   const tail = actions.length
     ? [t('report.todo'), ...actions.map((a) => `• ${a}`)]
     : [t('report.nothing')];
+  const spotted = spottedLines(f);
+  const completeness = completenessLines(f.completeness);
   return {
     subject: t('report.subject', { ...range, sender }),
     title,
     numbers,
     actions,
-    text: [title, ...numbers, ...tail].join('\n'),
+    spotted,
+    completeness,
+    text: [
+      title,
+      ...numbers,
+      ...tail,
+      ...(spotted.length ? ['', t('report.spotted.title'), ...spotted.map((s) => `• ${s}`)] : []),
+      ...(completeness.length
+        ? ['', t('report.completeness.title'), ...completeness.map((c) => `• ${c}`)]
+        : []),
+    ].join('\n'),
   };
 }
 

@@ -751,10 +751,27 @@ What stops it from starting, each with the variable to change:
 | `VaultLocked: the vault is held by …` | Another runner holds the vault (the host and process are named), or one crashed less than 5 minutes ago: wait, it lapses |
 
 **Schedules after a stop.** Each periodic task's last run and count are in `schedule_runs`
-(`sweep`, `chasing`, `watchers`, `weekly`, `purge`, `dump`). At start each runs once, however long
-the stop: the sweep queues again the documents left half way, chasing and the watchers see the days
-missed, the weekly report goes out once for the week, the dump is made if 03:00 passed since the
-last one.
+(`sweep`, `chasing`, `watchers`, `weekly`, `purge`, `dump`, `lint`, `rules`). At start each runs
+once, however long the stop: the sweep queues again the documents left half way, chasing and the
+watchers see the days missed, the weekly report goes out once for the week, the dump is made if
+03:00 passed since the last one, the lint if 02:00 did, the rules if 06:00 did.
+
+**Rules and lint (memory M5).** The lint reads the vault every night; what code can mend waits in
+`memory_findings` (status `open`) for a person, the rest is asked in `open-questions.md`. The rules
+run every morning over the memory's pages; each pass is a `rule_runs` row per rule, what they found
+is `rule_hits` (`open` while it lasts, raised again after the rule's cooldown, `gone` when no longer
+found). A rule that threw shows its message in `rule_runs.error` and the log line « runner: rules
+failed: <rule> »; its hits stay as they were. The API, for the pane (a key reads, only a person
+signed in decides; each decision audited `memory.fix` or `memory.dismiss`):
+
+```bash
+curl -s -H "Authorization: Bearer $KEY" http://127.0.0.1:4000/memory/rules      # open hits, in French
+curl -s -H "Authorization: Bearer $KEY" http://127.0.0.1:4000/memory/findings   # waiting for a person
+curl -s -X POST -H "Authorization: Bearer $SESSION" http://127.0.0.1:4000/memory/findings/<id>/fix
+curl -s -X POST -H "Authorization: Bearer $SESSION" http://127.0.0.1:4000/memory/findings/<id>/dismiss
+```
+
+To run either again now: delete its `schedule_runs` row (`lint` or `rules`) and restart the runner.
 
 **Restore the database from a dump**, the runner stopped:
 

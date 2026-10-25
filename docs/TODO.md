@@ -361,6 +361,21 @@ Telegram through the relay (M4, built against a stand-in bot on 2026-10-25):
 - [ ] **A vault in a synchronised folder**: the lock's time to live against the real sync delay of
       Drive or OneDrive between two machines (`packages/memory/src/lock.ts`).
 
+Rules and lint (M5, built on 2026-10-25):
+
+- [ ] **`tva-declaration-due`, TODO(verify) with an accountant**: the reminder from the 10th for the
+      month before, on payments (encaissements, the default for services and works) or on invoices
+      (débits) per the company's option; CGI art. 269, 2, c and 287. The day of the month depends on
+      the company's regime and its SIE's calendar: confirm on a pilot's.
+- [ ] **A chantier's margin threshold**: `margin-below-threshold` reads the company's
+      `min_margin_percent` (Réglages, made for what it resells; 15 % when unset). Ask a pilot whether
+      their works need a threshold of their own.
+- [ ] **The pane's « Mémoire » view** (Codex's redesign): what the rules raised (`GET /memory/rules`,
+      each with its pages), the lint's findings with « Corriger » / « Ignorer »
+      (`POST /memory/findings/:id/fix`, `…/dismiss`), the open questions.
+- [ ] **The lint on a pilot's vault**: its findings for a week, to see which are noise before the
+      e-mail counts them.
+
 ## Excel on the web E2E
 
 - [ ] A Microsoft account that can upload an add-in in Excel on the web, then

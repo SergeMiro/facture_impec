@@ -1,6 +1,7 @@
 import type { AiHandle, Budget, Orchestrator, ProbeResult, ResolvedAi, RunStore } from '@fi/agents';
 import type { FacturXOptions } from '@fi/core/pdf';
 import type { Db, PdpProvider } from '@fi/db';
+import type { MemoryVault } from '@fi/memory';
 import type { PdpAdapter, ScenarioPort } from '@fi/pdp-adapter';
 import type { ServerEnv } from '@fi/shared/env';
 import type { Billing } from './billing';
@@ -135,5 +136,7 @@ export interface ApiDeps {
   limits?: RequestWindows;
   /** A runner's Telegram through its relay (src/telegram.ts, memory M4); absent or null: none. */
   telegram?: Telegram | null;
+  /** A runner's vault (src/runner.ts): mends what the lint found (src/rules.ts); absent or null: none. */
+  memory?: MemoryVault | null;
   now: () => Date;
 }

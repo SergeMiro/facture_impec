@@ -5,7 +5,18 @@
 // R7: the money the checks found billed short in the week, still open.
 // BTP stage 3C: the requests waiting in « À valider » are counted, and the e-mail lists them, each
 // with its links for that owner (src/action-links.ts).
-import { approvalLines, type WeekFacts, type WeeklyReport, weeklyReport } from '@fi/agents';
+// Memory M5: what the rules raised in the week (src/rules.ts), and the completeness block once the
+// company receives documents or keeps a memory.
+import {
+  approvalLines,
+  CATALOGUE,
+  type Completeness,
+  type Found,
+  type RuleRunner,
+  type WeekFacts,
+  type WeeklyReport,
+  weeklyReport,
+} from '@fi/agents';
 import {
   addDays,
   type ChaseStep,
@@ -23,6 +34,8 @@ import {
   chasePlans,
   count,
   countDistinct,
+  desc,
+  documents,
   eq,
   findings,
   gte,
@@ -30,7 +43,12 @@ import {
   invoiceEvents,
   invoices,
   isNull,
+  memoryFindings,
+  memoryPages,
+  ne,
   or,
+  ruleHits,
+  ruleRuns,
   sql,
   type TenantRow,
   tenants,
@@ -40,8 +58,11 @@ import {
 import { approvalItems } from './action-links';
 import { balanceOf } from './collect';
 import type { ApiDeps } from './deps';
+import { lastRun } from './schedules';
 
-type Deps = Pick<ApiDeps, 'db' | 'mailer' | 'now'> & { env?: { API_PUBLIC_URL?: string } };
+type Deps = Pick<ApiDeps, 'db' | 'mailer' | 'now' | 'memory'> & {
+  env?: { API_PUBLIC_URL?: string };
+};
 
 const REPORT_HOUR = 8;
 
@@ -115,6 +136,96 @@ async function received(deps: Deps, tenantId: string, since: Date) {
   return { count: row?.count ?? 0, amount: Number(row?.amount ?? 0) };
 }
 
+/** The schedule that runs each chaser of the catalogue; the checks run with every document. */
+const CHASER_SCHEDULE: Record<Exclude<RuleRunner, 'memory'>, string | null> = {
+  collect: 'chasing',
+  watchers: 'watchers',
+  checks: null,
+};
+
+/**
+ * Received and filed in the window; the rules that ran of those due (the memory's, where the company
+ * keeps a memory; a chaser, when its schedule ran); the memory's questions; the fixes waiting.
+ * Undefined for a company that neither receives documents nor keeps a memory.
+ */
+async function completenessOf(
+  deps: Deps,
+  tenantId: string,
+  since: Date,
+): Promise<Completeness | undefined> {
+  const real = and(eq(documents.tenantId, tenantId), eq(documents.isTest, false));
+  const [ever] = await deps.db.select({ n: count() }).from(documents).where(real);
+  const [pages] = await deps.db
+    .select({ n: count() })
+    .from(memoryPages)
+    .where(eq(memoryPages.tenantId, tenantId));
+  // A runner keeps its company's memory from its first start, pages or not yet.
+  const memory = (pages?.n ?? 0) > 0 || Boolean(deps.memory);
+  if (!ever?.n && !memory) return undefined;
+  const [week] = await deps.db
+    .select({
+      received: count(),
+      filed: sql<number>`count(*) filter (where ${documents.stage} = 'done')::int`,
+    })
+    .from(documents)
+    .where(and(real, gte(documents.receivedAt, since)));
+  const ran = new Set(
+    (
+      await deps.db
+        .selectDistinct({ rule: ruleRuns.rule })
+        .from(ruleRuns)
+        .where(
+          and(eq(ruleRuns.tenantId, tenantId), gte(ruleRuns.ranAt, since), isNull(ruleRuns.error)),
+        )
+    ).map((r) => r.rule),
+  );
+  const due = CATALOGUE.filter((e) => e.runs !== 'memory' || memory);
+  let rulesRun = 0;
+  for (const entry of due) {
+    if (entry.runs === 'memory') {
+      if (ran.has(entry.id)) rulesRun++;
+      continue;
+    }
+    const schedule = CHASER_SCHEDULE[entry.runs];
+    const last = schedule && (await lastRun(deps.db, schedule))?.lastRunAt;
+    if (!schedule || (last && last >= since)) rulesRun++;
+  }
+  const [fixes] = await deps.db
+    .select({ n: count() })
+    .from(memoryFindings)
+    .where(
+      and(
+        eq(memoryFindings.tenantId, tenantId),
+        eq(memoryFindings.status, 'open'),
+        ne(memoryFindings.fix, 'question'),
+      ),
+    );
+  return {
+    received: week?.received ?? 0,
+    filed: week?.filed ?? 0,
+    rulesRun,
+    rulesDue: due.length,
+    questions: deps.memory ? await deps.memory.questions() : null,
+    fixes: fixes?.n ?? 0,
+  };
+}
+
+/** What the rules raised in the window and still stands, the latest first. */
+async function spottedSince(deps: Deps, tenantId: string, since: Date) {
+  const rows = await deps.db
+    .select({ rule: ruleHits.rule, facts: ruleHits.facts })
+    .from(ruleHits)
+    .where(
+      and(
+        eq(ruleHits.tenantId, tenantId),
+        eq(ruleHits.status, 'open'),
+        gte(ruleHits.raisedAt, since),
+      ),
+    )
+    .orderBy(desc(ruleHits.raisedAt));
+  return rows.map((r) => ({ rule: r.rule, facts: r.facts as Found['facts'] }));
+}
+
 export async function weekFacts(deps: Deps, tenant: TenantRow, now: Date): Promise<WeekFacts> {
   const today = parisToday(now);
   const since = new Date(now.getTime() - 7 * 86_400_000);
@@ -165,6 +276,7 @@ export async function weekFacts(deps: Deps, tenant: TenantRow, now: Date): Promi
       and(eq(actions.tenantId, tenant.id), eq(actions.status, 'draft'), eq(actions.isTest, false)),
     );
   const drafted = (s: ChaseStep) => s.status === 'drafted';
+  const completeness = await completenessOf(deps, tenant.id, since);
   return {
     from: parisToday(since),
     to: today,
@@ -193,6 +305,8 @@ export async function weekFacts(deps: Deps, tenant: TenantRow, now: Date): Promi
     ),
     toSend: (await ofTenant(['validated'])).length,
     approvals: waiting?.count ?? 0,
+    spotted: await spottedSince(deps, tenant.id, since),
+    ...(completeness && { completeness }),
   };
 }
 

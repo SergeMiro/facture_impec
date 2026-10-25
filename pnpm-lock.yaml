@@ -295,6 +295,9 @@ importers:
       '@fi/domain':
         specifier: workspace:*
         version: link:../domain
+      '@fi/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@fi/shared':
         specifier: workspace:*
         version: link:../shared

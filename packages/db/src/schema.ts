@@ -1719,8 +1719,93 @@ export const memoryRecalls = pgTable(
     level: integer('level').notNull(),
     ms: integer('ms').notNull(),
     searched: jsonb('searched_json').$type<unknown[]>().notNull(),
+    /** The pages it answered with: lint reads which ones only a deep level finds (memory M5). */
+    found: text('found').array().notNull().default(sql`'{}'::text[]`),
   },
   (t) => [index('memory_recalls_at').on(t.tenantId, t.at)],
+);
+
+/**
+ * Each run of a proactive rule on a company (memory doc §9, M5): when, how many entities it looked
+ * at, how many fired, how many were held by the cooldown, or why it failed. « Règles exécutées
+ * 14/14 » in the weekly report is read here.
+ */
+export const ruleRuns = pgTable(
+  'rule_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    rule: text('rule').notNull(),
+    ranAt: timestamp('ran_at', { withTimezone: true }).notNull().defaultNow(),
+    checked: integer('checked').notNull().default(0),
+    fired: integer('fired').notNull().default(0),
+    cooled: integer('cooled').notNull().default(0),
+    error: text('error'),
+  },
+  (t) => [index('rule_runs_at').on(t.tenantId, t.ranAt)],
+);
+
+/**
+ * What a rule found, one row per rule and entity (memory doc §8): open while the situation lasts,
+ * with the facts and the pages it rests on; `raisedAt` is when it was last shown, so the same
+ * situation is not raised again before the rule's cooldown. A situation no longer found is gone.
+ */
+export const ruleHits = pgTable(
+  'rule_hits',
+  {
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    rule: text('rule').notNull(),
+    entity: text('entity').notNull(),
+    status: text('status', { enum: ['open', 'gone'] }).notNull(),
+    facts: jsonb('facts_json').$type<Record<string, unknown>>().notNull(),
+    cites: text('cites').array().notNull(),
+    firstAt: timestamp('first_at', { withTimezone: true }).notNull(),
+    lastAt: timestamp('last_at', { withTimezone: true }).notNull(),
+    raisedAt: timestamp('raised_at', { withTimezone: true }).notNull(),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.rule, t.entity] }),
+    index('rule_hits_open').on(t.tenantId, t.status),
+    check('rule_hits_status', oneOf(t.status, ['open', 'gone'])),
+  ],
+);
+
+/**
+ * What the nightly lint found in a company's memory (memory doc §9, M5), one row per defect: what a
+ * person approves (`fix` other than question) or dismisses, and when it was last seen. A defect no
+ * longer found is gone; one dismissed stays dismissed while it is found again.
+ */
+export const memoryFindings = pgTable(
+  'memory_findings',
+  {
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    /** SHA-256 of code, page and detail: the same defect, the same row. */
+    id: text('id').notNull(),
+    code: text('code').notNull(),
+    page: text('page').notNull(),
+    detail: text('detail').notNull(),
+    fix: text('fix', { enum: ['reindex', 'relink', 'drop_link', 'question'] }).notNull(),
+    link: jsonb('link_json').$type<{ kind: string; to: string }>(),
+    text: text('text').notNull(),
+    status: text('status', { enum: ['open', 'fixed', 'dismissed', 'gone'] }).notNull(),
+    foundAt: timestamp('found_at', { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
+    decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.id] }),
+    index('memory_findings_status').on(t.tenantId, t.status),
+    check('memory_findings_fix', oneOf(t.fix, ['reindex', 'relink', 'drop_link', 'question'])),
+    check('memory_findings_status', oneOf(t.status, ['open', 'fixed', 'dismissed', 'gone'])),
+  ],
 );
 
 /**
@@ -1869,4 +1954,6 @@ export type ObligationRow = typeof obligations.$inferSelect;
 export type ActionRow = typeof actions.$inferSelect;
 export type ConnectorSyncRow = typeof connectorSyncs.$inferSelect;
 export type MemoryPageRow = typeof memoryPages.$inferSelect;
+export type RuleHitRow = typeof ruleHits.$inferSelect;
+export type MemoryFindingRow = typeof memoryFindings.$inferSelect;
 export type MemoryLinkRow = typeof memoryLinks.$inferSelect;

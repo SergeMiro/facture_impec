@@ -2248,3 +2248,52 @@ Evidence (2026-10-25):
       Telegram channel, one action queued, one `action.decide`; the relay's inbox empty after; the
       same token pressed again and a forged one decide nothing; « keeps a press for its runner 7
       days, then forgets it »: gone after 7 days.
+
+## Memory M5: rules and lint (started 2026-10-25)
+
+`docs/plans/memory.md` § M5, memory doc §8 and §9. Criteria, written before the code:
+
+- **One catalogue** (`packages/agents/src/rules/`): each rule an entry with its category, trigger,
+  detect (a function by code), draft kind, default autonomy, the weakest link it may rely on, a
+  cooldown per rule and entity, its legal source when it has one. The chasers already built are
+  entries of it: `invoice-overdue` (CollectAgent), `attestation-expiring` and `retenue-releasable`
+  (the D8 watchers), `autoliquidation-error` (BTP-AUTOLIQ-01). `execute` is refused by code for a
+  rule whose draft leaves the company, whatever a preference says.
+- **The v1 rules not yet built**, each a detect over the memory's pages with a test « fires / does
+  not fire »: `devis-accepted-no-invoice`, `situation-due`, `purchase-not-rebilled`,
+  `price-increase`, `margin-below-threshold`, `cash-forecast`, `tva-declaration-due`,
+  `subcontractor-no-docs`. A rule relies only on links at least as sure as its entry says.
+- **`rule_runs`**: each run of each rule on a company (when, how many entities looked at, fired,
+  held by the cooldown, or the error); `rule_hits`: what fired, per rule and entity, with the facts
+  and the pages it rests on, so the same situation is not raised again before its cooldown, and a
+  situation gone is closed. The runner runs the catalogue once a day after 06:00 Paris and catches
+  up after a stop like its other schedules.
+- **Lint of the memory** (`packages/memory/src/lint.ts`): besides the links (M2), contradictions
+  (a page's amounts that do not add up, dates out of order, two pages of one document that
+  disagree, an amount in the text that is none of the page's), pages whose `raw/` source is gone,
+  stale section indexes, a dated page without its deadline, a page that recall found at levels 4–5
+  three times in 30 days. Each finding carries its fix: the ones code can make (backlinks, a link
+  to nothing, a rule's link whose fact is gone, an index) are applied once a person approves them;
+  the others become an open question. The runner lints every night.
+- **The weekly report's completeness block**: documents received and filed in the week, rules run
+  of rules due, open questions (the blocking ones), memory fixes waiting.
+- **Done when**: each rule has its « fires / does not fire » test; the lint finds the 20 defects
+  planted in a copy of the demo vault, and nothing in the demo vault itself.
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| One catalogue | ✅ | `packages/agents/src/rules/catalogue.ts`: `CATALOGUE` = the four chasers + the eight memory rules; `rules.test.ts` › « the catalogue »: « lists the four chasers and the eight memory rules, each valid, once », « refuses execute for a rule whose draft leaves the company, whatever is preferred », « has a French title for every rule and a sentence for every memory rule » |
+| The eight v1 rules | ✅ | `rules.test.ts` (34 tests): for each rule a « fires … » and a « does not fire … » test (e.g. « fires on a quote accepted more than 14 days ago with no invoice », « does not fire with a valid attestation, a guessed link, a closed site or another role »); a rule follows only links as sure as its entry (`minConfidence`) |
+| `rule_runs`, `rule_hits`, cooldown, daily at 06:00 | ✅ | Migration `0030_rules.sql`; `apps/api/src/rules.test.ts` « raises what they find, keeps it quiet for its cooldown, closes it when gone » (raised, cooled the same day, raised again after 7 days, gone when invoiced, back at once), « records a rule that throws and leaves its hits as they were »; `runner.test.ts` « stopped 30 hours… » now also `lint: 1, rules: 1` and 8 `rule_runs` rows |
+| Lint of the memory | ✅ | `packages/memory/src/lint-memory.test.ts` « finds nothing in the demo vault, which follows the deadlines it should », « finds the 20 defects planted in a copy of the demo vault, where they were planted », « drops a link, relinks, rebuilds and asks; only for a person »; `apps/api/src/rules.test.ts` « lints with what the database knows; a person mends or dismisses its findings » (deadlines from `obligations`, recalls of 30 days, fix and dismiss audited, a key refused 403, no vault 503, dismissed stays dismissed) |
+| Completeness block | ✅ | `packages/agents/src/report.test.ts` « lists three situations the rules raised, then how many more », « says what was received, filed and checked, what the memory asks and waits for »; `apps/api/src/rules.test.ts` checks `weekFacts` (`rulesRun: 9` of `rulesDue: 12` with no chaser schedule run, open questions 3) |
+| Done when | ✅ | The 34 rule tests; the lint's 20 planted defects found where planted, 0 findings on the demo vault |
+
+The rules read the company's Réglages (`min_margin_percent`, `vat_on_debits`): « takes the margin and
+the VAT basis from the company's settings ».
+
+Deviations (D12): the rules import `@fi/memory`'s types; the hits are shown by the API and the weekly
+e-mail, their drafts come with M6 and the pane's view after its redesign; BTP-AUTOLIQ-01 counts as
+run; `misplaced` and `no_deadline` are questions. Left for later: `docs/DEFERRED.md` § Memory: rules
+and lint, `docs/TODO.md` › Memory (TVA deadline with an accountant, a chantier's own margin threshold, the
+pane's « Mémoire » view).

@@ -3,7 +3,9 @@
 // on the machine and its database out of the vault (@fi/shared/env); here it takes the vault for as
 // long as it runs (a second runner on the same vault does not start), serves one company, and dumps
 // its database into the vault once a day, the last seven kept, so that a lost machine loses nothing
-// the vault does not hold. The dump catches up after a stop like every other schedule (schedules.ts).
+// the vault does not hold. Each night it also lints the vault and runs the memory's rules
+// (src/rules.ts, memory M5). These daily tasks catch up after a stop like every other schedule
+// (schedules.ts).
 import { randomBytes } from 'node:crypto';
 import { mkdir, open, readdir, readFile, rename, rm } from 'node:fs/promises';
 import { hostname } from 'node:os';
@@ -13,6 +15,7 @@ import { type Database, isNull, openDatabase, tenants } from '@fi/db';
 import { MemoryStore, MemoryVault } from '@fi/memory';
 import type { ServerEnv } from '@fi/shared/env';
 import { logLine } from './log';
+import { LINT_HOUR, RULES_HOUR, runLint, runRules } from './rules';
 import { dailyDue, lastRun, ran } from './schedules';
 
 /** The dump runs once a day after this hour (Paris), when nobody works. */
@@ -100,18 +103,40 @@ export async function openRunner(options: {
     ...(store && { store }),
   });
 
+  // Each daily task once its hour has passed, one failing leaving the others to run: the lint
+  // first (the night's questions), the dump, then the rules over what the night left.
+  const daily = async (name: string, hour: number, task: (at: Date) => Promise<string>) => {
+    try {
+      if (!dailyDue((await lastRun(database.db, name))?.lastRunAt, now(), hour)) return;
+      const at = now();
+      const done = await task(at);
+      await ran(database.db, name, at);
+      logLine('info', `runner: ${done}`);
+    } catch (e) {
+      log(`runner: ${name} failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+  const company = companies[0]?.id;
   let running: Promise<void> | null = null;
   const catchUp = () => {
     running ??= (async () => {
       try {
-        if (dailyDue((await lastRun(database.db, 'dump'))?.lastRunAt, now(), DUMP_HOUR)) {
-          const at = now();
-          const file = await dumpDatabase(database, root, at);
-          await ran(database.db, 'dump', at);
-          logLine('info', `runner: database dumped into ${file}`);
+        if (company) {
+          await daily('lint', LINT_HOUR, async (at) => {
+            const r = await runLint(database.db, vault, company, at);
+            return `memory linted: ${r.found} found, ${r.opened} new, ${r.gone} gone, ${r.asked} asked`;
+          });
         }
-      } catch (e) {
-        log(`runner: dump failed: ${e instanceof Error ? e.message : String(e)}`);
+        await daily('dump', DUMP_HOUR, async (at) => {
+          return `database dumped into ${await dumpDatabase(database, root, at)}`;
+        });
+        if (company) {
+          await daily('rules', RULES_HOUR, async (at) => {
+            const r = await runRules(database.db, company, at);
+            if (r.failed.length > 0) log(`runner: rules failed: ${r.failed.join(' ')}`);
+            return `rules: ${r.raised} raised, ${r.cooled} cooled, ${r.gone} gone`;
+          });
+        }
       } finally {
         running = null;
       }

@@ -10,6 +10,7 @@ export {
 } from './compile';
 export { fold, keyOf, terms } from './fold';
 export {
+  countQuestions,
   isGenerated,
   LOG,
   type LogReason,
@@ -30,7 +31,18 @@ export {
   sameLinks,
   withLinks,
 } from './link-rules';
-export { type LintCode, type LintFinding, lintLinks } from './lint';
+export {
+  LINT_FIXES,
+  type LintCode,
+  type LintFinding,
+  type LintFix,
+  type LintInput,
+  lintLinks,
+  lintMemory,
+  type MemoryFinding,
+  type MemoryLintCode,
+  MISPLACED_RECALLS,
+} from './lint';
 export {
   acquireLock,
   LOCK,

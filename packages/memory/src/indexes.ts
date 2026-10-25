@@ -214,6 +214,16 @@ export function addQuestions(file: string | null, questions: readonly Question[]
   return out;
 }
 
+/** The questions still open in the file (`- [ ]`), and how many of them block an action. */
+export function countQuestions(file: string | null): { open: number; blocking: number } {
+  const params = { date: 'd', entity: 'e', text: 't' };
+  const mark = t('memory.question.blocking', params).slice(
+    t('memory.question.line', params).length,
+  );
+  const open = (file ?? '').split('\n').filter((l) => l.startsWith('- [ ] '));
+  return { open: open.length, blocking: open.filter((l) => l.trimEnd().endsWith(mark)).length };
+}
+
 /** `_schema.md`: the version, then each type's folder and fields, from the Zod schemas. */
 export function renderSchema(): string {
   const rows = (Object.keys(TYPE_SCHEMAS) as PageType[]).map((type) => {

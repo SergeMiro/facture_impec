@@ -353,3 +353,16 @@ Each line says where it came from and what would bring it back.
 | The relay's own image and deploy | `pnpm relay` behind the operator's TLS proxy (RUNBOOK § The relay) | The owner gives the bot and a public address (D3): a Dockerfile and its place in `deploy/`. |
 | Other channels (WhatsApp, SMS) | Telegram only; `action_links.channel` takes `email` and `telegram` | A pilot's people do not use Telegram. |
 | « Confirmer / écarter » a guessed link from Telegram | Only requests waiting for a decision reach Telegram; links are confirmed with `reviewLink` (M2) | The pane or a pilot asks for it: a second kind of button, with its own token. |
+
+## Memory: rules and lint (M5, 2026-10-25)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| The drafts of the propose and prepare rules (a reminder to re-bill, a missing attestation asked for, an invoice from a quote) | The firing is recorded and shown with its facts and pages; no draft | M6 (`prepare`) for documents; the messages with the pane's « À valider » once its redesign shows them. |
+| The rules' hits and the lint's findings in the pane | `GET /memory/rules`, `GET /memory/findings`, `POST /memory/findings/:id/fix` and `…/dismiss`, the weekly e-mail | Codex's redesign of the pane (`apps/addin`): a « Mémoire » view (`docs/TODO.md`). |
+| A hit on Telegram | None: Telegram carries requests waiting for a decision only (M4) | The owner's bot is live (D3) and a pilot wants its alerts on the phone. |
+| `accepted_on` on a devis | `devis-accepted-no-invoice` counts from the quote's date | A pilot's quotes are accepted long after they are written: the acceptance date in the frontmatter, read from the signed quote. |
+| More v1 rules (stock low, CDD ending, visite médicale) | The eight of the plan's M5 row | The memory holds `rh/` (the owner's call, `docs/TODO.md`) and stock levels. |
+| `preferences/autonomie.md` (a company's autonomy per rule) | Each rule's default autonomy; `autonomyOf` already takes a preference, refusing `execute` for anything that leaves the company | A pilot wants a rule quieter or more autonomous: the file read at start, written from the pane. |
+| Contradictions a model reads in the text | By code only (amounts, sums, dates, duplicates, an amount in the text) | A pilot's vault shows contradictions code misses: a model's reading with its eval. |
+| The rules on a hosted company | They run on the runner, for its one company | The hosted API keeps a company's pages (it does not: D12). |

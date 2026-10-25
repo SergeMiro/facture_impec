@@ -5,6 +5,8 @@
 // for it get theirs again (M2). Recall reads the index; what it finds in `raw/` is written back onto
 // its page, and what it does not find, or finds twice, becomes an open question. The runner (M3)
 // opens it once and keeps it.
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { frDate, parisToday } from '@fi/core';
 import { t } from '@fi/shared';
 import {
@@ -15,15 +17,17 @@ import {
   type PageWrite,
   type VaultOptions,
 } from './compile';
+import { countQuestions, QUESTIONS, sectionIndex } from './indexes';
+import { walk } from './journal';
 import { keepWord, type Linkable, LinkIndex, linksOf, sameLinks, withLinks } from './link-rules';
-import { type LintFinding, lintLinks } from './lint';
+import { type LintInput, lintMemory, type MemoryFinding } from './lint';
 import { acquireLock, LOCK_TTL_MS, type LockFile, releaseLock, renewLock } from './lock';
 import type { Page } from './page';
 import { addRaw, type RawFile, readRawTexts } from './raw';
 import { classify, pageFiles, rebuild } from './rebuild';
 import { type RecallAnswer, type RecallQuery, recall } from './recall';
 import type { MemoryStore } from './store';
-import type { LinkKind } from './types';
+import { type LinkKind, SECTIONS, type Section } from './types';
 import { VaultFiles } from './vault';
 import { applyUserEdits, watchVault } from './watch';
 
@@ -37,6 +41,7 @@ export interface MemoryVaultOptions extends Omit<VaultOptions, 'now'> {
 }
 
 const RECALL_ACTOR = 'agent:recall';
+const LINT_ACTOR = 'agent:lint';
 const SYSTEM_ACTOR = 'system';
 
 const pathOf = (file: string) => file.replace(/\.md$/, '');
@@ -277,12 +282,79 @@ export class MemoryVault {
     });
   }
 
-  /** What is wrong with the links, as the files say now (lint.ts). */
-  lint(): Promise<LintFinding[]> {
+  /**
+   * What is wrong with the memory, as the files say now (lint.ts); `known` adds what only the
+   * database knows (the deadlines followed, what recall found).
+   */
+  lint(known: Pick<LintInput, 'deadlines' | 'recalls'> = {}): Promise<MemoryFinding[]> {
     return this.#serial(async () => {
       const files = await pageFiles(this.root);
-      return lintLinks(await this.#pages(files.map(pathOf)));
+      const pages = await this.#pages(files.map(pathOf));
+      const indexes = {} as Record<Section, string | null>;
+      for (const section of SECTIONS) {
+        indexes[section] = await readFile(join(this.root, sectionIndex(section)), 'utf8').catch(
+          () => null,
+        );
+      }
+      const raw = new Set(await walk(this.root, join(this.root, 'raw')));
+      const today = parisToday(this.#now());
+      return lintMemory({ pages, indexes, raw, today, ...known });
     });
+  }
+
+  /**
+   * A finding a person approved, mended: the vault rebuilt, a page's links made again, a link to
+   * nothing dropped. A question is asked instead. False when there was nothing left to mend.
+   */
+  async fix(finding: MemoryFinding, actor: string): Promise<boolean> {
+    if (!actor.startsWith('user:')) throw new Error('only a person approves a fix of the memory');
+    switch (finding.fix) {
+      case 'reindex':
+        await this.rebuild();
+        return true;
+      case 'relink':
+        return this.#serial(async () => {
+          if (!this.#links.get(finding.page)) return false;
+          await this.#relink([finding.page]);
+          return true;
+        });
+      case 'drop_link':
+        return this.#serial(async () => {
+          const [page] = await this.#pages([finding.page]);
+          const links = page?.frontmatter.links ?? [];
+          const { link } = finding;
+          const kept = links.filter((l) => !(l.kind === link?.kind && l.to === link.to));
+          if (!page || kept.length === links.length) return false;
+          const done = await this.#write({
+            reason: 'lint',
+            actor,
+            pages: [{ path: page.path, frontmatter: withLinks(factsOf(page), kept) }],
+            note: finding.detail,
+          });
+          return done.ok;
+        });
+      case 'question':
+        await this.ask([finding]);
+        return true;
+    }
+  }
+
+  /** Lint's questions in `open-questions.md`, each once while it stays open. */
+  ask(findings: readonly MemoryFinding[]): Promise<CompileResult> {
+    const date = parisToday(this.#now());
+    const questions = findings.map((f) => ({
+      date,
+      entity: f.page.endsWith('.md') ? undefined : f.page,
+      text: f.text,
+    }));
+    return this.#serial(() =>
+      this.#compile({ reason: 'lint', actor: LINT_ACTOR, pages: [], questions }),
+    );
+  }
+
+  /** How many questions `open-questions.md` holds open, and how many block an action. */
+  async questions(): Promise<{ open: number; blocking: number }> {
+    return countQuestions(await readFile(join(this.root, QUESTIONS), 'utf8').catch(() => null));
   }
 
   /** Keeps an original in `raw/`, its text in the index. */

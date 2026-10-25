@@ -88,6 +88,60 @@ describe('ReportAgent', () => {
   });
 });
 
+describe('what the rules raised and the completeness block (memory M5)', () => {
+  const quote = (n: number) => ({
+    rule: 'devis-accepted-no-invoice',
+    facts: { number: `D-${n}`, party: 'Client A', ht: 1_240_000, date: '2026-10-01', days: 17 },
+  });
+
+  it('lists three situations the rules raised, then how many more', () => {
+    const r = weeklyReport({ ...quiet, spotted: [1, 2, 3, 4, 5].map(quote) });
+    expect(r.spotted).toHaveLength(4);
+    expect(r.spotted[0]).toMatch(/^Devis accepté.* : .*D-1/);
+    expect(r.spotted[0]).toContain(`12${NBSP}400,00`);
+    expect(r.spotted[3]).toBe('Et 2 autre(s) situation(s) repérée(s).');
+    expect(r.text).toContain('Repéré par vos règles :');
+    expect(r.completeness).toEqual([]);
+    expect(weeklyReport({ ...quiet, spotted: [] }).text).toBe(weeklyReport(quiet).text);
+  });
+
+  it('says what was received, filed and checked, what the memory asks and waits for', () => {
+    const r = weeklyReport({
+      ...quiet,
+      completeness: {
+        received: 12,
+        filed: 11,
+        rulesRun: 11,
+        rulesDue: 12,
+        questions: { open: 4, blocking: 1 },
+        fixes: 2,
+      },
+    });
+    expect(r.completeness).toEqual([
+      "Documents reçus : 12, dont 11 classé(s) jusqu'au bout",
+      'Vérifications automatiques passées : 11 sur 12',
+      'Questions ouvertes dans votre mémoire : 4, dont 1 qui bloque(nt) une action',
+      'Corrections de votre mémoire qui attendent votre accord : 2',
+    ]);
+    expect(r.actions).toEqual([expect.stringContaining('1 question(s) de votre mémoire')]);
+    expect(r.text).toContain('Ce qui a été vu cette semaine :\n• Documents reçus : 12');
+
+    const hosted = weeklyReport({
+      ...quiet,
+      completeness: {
+        received: 3,
+        filed: 3,
+        rulesRun: 4,
+        rulesDue: 4,
+        questions: null,
+        fixes: 0,
+      },
+    });
+    expect(hosted.completeness).toHaveLength(2);
+    expect(hosted.actions).toEqual([]);
+  });
+});
+
 describe('the e-mail’s « À valider » (BTP stage 3C)', () => {
   it('lists each request with its links, then how many more wait in the pane', () => {
     expect(approvalLines([])).toEqual([]);

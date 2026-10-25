@@ -240,6 +240,7 @@ export async function recall(
         level: done.level,
         ms: Math.round(done.ms),
         searched,
+        found: hits.map((h) => h.path),
       });
     }
     return RecallAnswer.parse(done);

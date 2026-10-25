@@ -4,7 +4,8 @@
 import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { documents, eq, openDatabase, tenants } from '@fi/db';
+import { MEMORY_RULES } from '@fi/agents';
+import { documents, eq, openDatabase, ruleRuns, tenants } from '@fi/db';
 import { LOCK, VaultLocked } from '@fi/memory';
 import { ServerEnvSchema } from '@fi/shared/env';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -201,7 +202,9 @@ describe('the runner', () => {
     expect(api.runner?.vault).toBeDefined();
     expect(await settled(api, 2)).toMatchObject({ dump: 2 });
     await api.runner?.catchUp();
-    expect((await runs(api)).dump).toBe(2);
+    // The company came after the first start: its memory is linted and its rules run from the second.
+    expect(await runs(api)).toMatchObject({ dump: 2, lint: 1, rules: 1 });
+    expect(await api.database.db.select().from(ruleRuns)).toHaveLength(MEMORY_RULES.length);
     expect(await until(async () => ((await stage()) === 'done' ? 'done' : undefined), 'done')).toBe(
       'done',
     );
