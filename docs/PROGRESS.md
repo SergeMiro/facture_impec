@@ -1961,3 +1961,63 @@ Evidence (2026-10-25):
 - `apps/api/src/vies.test.ts` « answers a number it could not ask about at once, for a few minutes »,
   « remembers a member state down for all its numbers, and never VIES' answers ».
 - **Gate**: the same run as the section above.
+
+## Memory M0: the vault and its schema (started 2026-10-25)
+
+`docs/plans/memory.md` § M0, `docs/DECISIONS.md` D12. Criteria, written before the tests:
+
+- **A page** is a Markdown file a person can read: YAML frontmatter checked by its type's Zod schema
+  (amounts « 12400.00 » in the file, cents in code), the text, then a `## Liens` section code writes
+  from the links. The same page always gives the same bytes.
+- **`compile`** takes a patch of pages and writes all of it or nothing: a frontmatter that breaks its
+  schema, a page in the wrong folder, `rh/` while it is off, a source that does not exist, a link to
+  no page: nothing is written at all. Links are written both ways; the section indexes, the root
+  index, the log and the open questions follow in the same write. A patch that changes nothing
+  writes nothing.
+- **A crash** (`SIGKILL`) at any moment of a compile never leaves a damaged file; after recovery the
+  patch is there whole or not at all, and the hashes of what was written match the files.
+- **A person's edit wins**: a page edited in the last minute is not written by an agent's patch (an
+  open question says so instead); an agent never replaces a text a person wrote in, it may only add
+  a paragraph.
+- **A person's edit is read**: the page checked and indexed, its backlinks written on the other
+  pages, a line in the log, the person's file left as they typed it; an unreadable page leaves the
+  index with an open question; a deleted page leaves the index.
+- **`rebuild`** reads every page again: indexes, `_schema.md` and backlinks written from them; an
+  invalid or misnamed page out of the index with a question; a synchronisation's conflict copy moved
+  to `_conflicts/`; a vault of a newer schema refused. 1 000 pages in under 60 s.
+- **One writer**: a second runner is refused while the lock is held; a lock past its time, or left
+  by a process of this machine that is gone, is taken over.
+
+Evidence (2026-10-25), `packages/memory` (33 tests):
+
+- **A page**: `page.test.ts` « writes amounts as euros, reads them back as cents, and gives the same
+  bytes twice », « reads an amount a person typed as a number, and drops what they wrote under
+  « Liens » », « says why a page cannot be read »; paths: « puts each page where its type lives, and
+  a second one beside it ».
+- **`compile`**: `compile.test.ts` « writes the pages, their links both ways, the indexes, the log and
+  what it wrote », « writes nothing for a patch that changes nothing », « refuses the whole patch for
+  one bad page, and writes nothing » (the vault stays empty), « refuses a page in the wrong folder,
+  rh/ while it is off, a missing source, a link to nothing », « takes a link away from its target when
+  the page drops it ».
+- **A crash**: `journal.test.ts` « killed at %s: after recovery, round %i is there whole », seven
+  cases: a writer process kills itself with `SIGKILL` before its 1st, 12th or 24th file opened and
+  before its 1st, 2nd, 13th or 24th rename of a 23-file write; after `recover` every page reads, all
+  20 carry the same round (the old one when cut before the journal, the new one after), the hashes
+  match the files, the index has 20 lines, the log one line per write.
+- **A person's edit wins**: « leaves a page a person edited a minute ago as it is, and asks
+  instead », « never replaces the text a person wrote; adds to it once they are done ».
+- **A person's edit is read**: `watch.test.ts` « reads, checks and indexes the page, relinks the
+  others, and leaves their file as typed » (and its own writes, heard back, do nothing), « takes an
+  unreadable page out of the index, and a deleted one with its backlinks », « hears a file saved in
+  the vault ».
+- **`rebuild`**: `rebuild.test.ts` « reads 1 000 pages again in well under a minute, and gives the
+  same vault » (**0.94 s** on the VPS), « leaves out of the index a page that cannot be read, a
+  misnamed one, one in the wrong folder », « sets a synchronisation conflict copy aside », « writes
+  the backlinks again from the links a person changed, and reads their edit », « asks about a link to
+  a page that does not exist », « refuses a vault written by a newer schema ».
+- **One writer**: « refuses a second runner, takes over a lock past its time or left by a dead
+  process », « opens the vault, writes one thing after another, and lets it go ».
+- `raw/`: « keeps each original once, never replaces one, and its text beside it ».
+- **Gate**: `pnpm verify` green on 2026-10-25: memory 33, api 387, add-in 120, agents 162, core 713 +
+  oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, connectors 13, domain 8,
+  scripts 11; boundaries: 12 packages, no violation.

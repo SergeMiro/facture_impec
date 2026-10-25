@@ -294,3 +294,14 @@ Each line says where it came from and what would bring it back.
 |---|---|---|
 | A firm's brand and the archive check in `pnpm org` | Two curls in `docs/RUNBOOK.md` › Pilot | A firm brings several pilots, or the archive is checked more than monthly: `pnpm org brand`, `pnpm org archive`. |
 | A company's API key replaced or revoked | Done 2026-10-24: `pnpm org key` (`POST /admin/tenants/:id/api-keys`), a new key and every older one revoked, the SIREN typed again, audited | A company holds several keys (one per ERP or script) and one is revoked alone: a label per key and `pnpm org keys`. |
+
+## Memory: the vault (M0, 2026-10-25)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| The business tables rebuilt from the vault | The memory's own index is rebuilt from the pages; invoices, platform states, chasing come back from the daily dump in `_system/` (D12) | Two sources of truth have drifted once in a pilot, or a person restores a vault without its dump. |
+| Relinking after a person's edit | Every page read again (1 000 pages in 0.94 s, `rebuild.test.ts`) | The vault passes about 10 000 pages: the links from `memory_links` (M1) instead of a scan. |
+| A section's index past a few hundred lines | One `index.md` per section, one line per page | An index passes 300 lines: one index per year or per letter, linked from the section's. |
+| Backlinks on a page a person is editing | Skipped while they edit (one minute); written at the next rebuild or the next write that relinks | A person reports stale « Liens »: a pass a minute after their last save. |
+| A model choosing in recall, vectors | Not in M0 (D12: levels 1–4 by code) | M1's golden questions show where code alone misses. |
+

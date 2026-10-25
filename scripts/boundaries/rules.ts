@@ -44,6 +44,8 @@ export const RULES: Record<string, PackageRule> = {
   },
   'packages/pdp-adapter': { imports: ['core', 'shared', 'domain'], forbid: [...SERVER, ...MODELS] },
   'packages/agents': { imports: ['core', 'shared', 'domain'], forbid: SERVER },
+  // The memory's vault: files only, no database or model of its own (docs/DECISIONS.md D12).
+  'packages/memory': { imports: ['core', 'shared', 'domain'], forbid: [...SERVER, ...MODELS] },
   // The connectors read ERPs and give rows (docs/DECISIONS.md D9); the API writes what they map.
   'packages/connectors': { imports: ['core', 'domain'], forbid: [...SERVER, ...MODELS] },
   // The pane streams the API's chat with the client half of `ai` (R8); it never holds a provider.

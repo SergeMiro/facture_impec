@@ -308,6 +308,35 @@ Left from stage 7 for later (2026-10-24):
       for `GET /invoices` after its database closed, a pane's timer firing late. The test now waits
       for the requests in flight and unplugs the network before closing the database.
 
+## Memory (`docs/plans/memory.md`, `docs/DECISIONS.md` D12), started 2026-10-25
+
+The owner's questions (memory doc §12), each decided before the stage that needs it:
+
+- [ ] **Mode A or mode B first**: the runner on the company's PC (Windows) or on a server of theirs
+      (Docker). M3 builds both on the same code; the first pilot uses one.
+- [ ] **Google Drive or OneDrive** for the vault, and **conflict copies, TODO(verify)**: the names
+      Drive for desktop and OneDrive give a copy they could not merge, read on a real account.
+      `copyOf` (`packages/memory/src/rebuild.ts`) reads « page (1) » and « (… conflict …) »; a copy
+      named otherwise is reported as a misnamed page, never lost.
+- [ ] **Git in the vault** (a history a person can roll back), or the log and `_system/` dumps only.
+- [ ] **`rh/` on or off** by default (salariés: personal data, RGPD register) and who turns it on.
+- [ ] **Thresholds**: how sure a link or a reading must be before `prepare` uses it; the memory doc's
+      numbers until the owner says otherwise.
+- [ ] **Vectors** (`sqlite-vec` in the doc; pgvector for PGlite here) once the golden questions show
+      full-text misses.
+- [ ] **Who signs the zero-retention contract** with the model's provider, before any page's text
+      reaches a model.
+
+Needs a machine or a pilot:
+
+- [ ] **The runner as a Windows service**, and the memory doc's 48 hours on a PC switched off and on.
+- [ ] **50 real chains** (quote → invoice, purchase → sale) linked by M2's rules, from a pilot's vault.
+- [ ] **« Vos données restent chez vous »** on the site or in the pane only once a pilot runs the
+      runner (D12).
+- [ ] **The pane over HTTPS on localhost** when it talks to a runner (Office add-ins need HTTPS).
+- [ ] **A vault in a synchronised folder**: the lock's time to live against the real sync delay of
+      Drive or OneDrive between two machines (`packages/memory/src/lock.ts`).
+
 ## Excel on the web E2E
 
 - [ ] A Microsoft account that can upload an add-in in Excel on the web, then
