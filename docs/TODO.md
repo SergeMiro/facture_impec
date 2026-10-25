@@ -251,11 +251,12 @@ Owner questions (BTP plan §13 and what stage 0 found):
 
 Left from stage 1 for later (2026-10-24):
 
-- [ ] **Légifrance, read in a browser**: loi n° 71-584 art. 1 and 2 (the retenue's 5 % of the TTC, its
-      release after a year), `TODO(verify)` in `docs/research/BTP_RULES.md`: Légifrance answered 403
-      to WebFetch and curl, and in neo (2026-10-24) it asks a human to tick its Cloudflare check.
-      The Code du travail part is done: L8222-1, R8222-1 (5 000 € HT, not « D8222-1 »), D8222-5,
-      read 2026-10-24 on code.travail.gouv.fr.
+- [x] **Légifrance, read in a browser**: loi n° 71-584 art. 1 to 4 read on Légifrance on 2026-10-25
+      (browser: local, neo; the owner ticked its Cloudflare check), and L8222-1, R8222-1 (5 000 € HT,
+      not « D8222-1 »), D8222-5 on code.travail.gouv.fr on 2026-10-24 (`docs/research/BTP_RULES.md`).
+- [ ] **A retenue on a public contract**: loi 71-584 covers private works; if a pilot works for public
+      buyers, read the Code de la commande publique's retenue de garantie (its ceiling and its base)
+      before BTP-RG-01 speaks on those invoices.
 - [x] **OneDrive folders watched** (BTP plan stage 1 `drive` adapter): done 2026-10-24, stage 1D
       (`docs/plans/phase-1.md` › 1D; `apps/api/src/connectors.test.ts` › a watched OneDrive folder).
 - [ ] **OneDrive's picker in folder mode, on real accounts** (owner, with the app registration):
@@ -345,4 +346,4 @@ Left from stage 3A for later (2026-10-24):
       Gmail and in Outlook (whose Safe Links open every link first) from a phone: the page shows, the
       scanner's visit decides nothing, « Envoyer » sends once.
 - [ ] **The requests' letters read by a pilot**: the six `request.body.*` in `fr.json` (the
-      retenue's cites loi n° 71-584 art. 2, `TODO(verify)` with Légifrance above).
+      retenue's cites loi n° 71-584 art. 2, read on Légifrance 2026-10-25).

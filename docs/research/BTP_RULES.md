@@ -9,7 +9,8 @@ normative standard on that day; **inferred** = a third party or our own deductio
 2026-10-17; its articles below are cited from the sources named. **browser: local** (BrowserOS neo,
 2026-10-24) for the Code du travail: Légifrance asked a human to tick its check, so the articles were
 read on the Ministry of Labour's Code du travail numérique (code.travail.gouv.fr), which gives
-Légifrance's text with its version date and article id.
+Légifrance's text with its version date and article id. **browser: local** (neo, 2026-10-25, the
+owner ticked Légifrance's check) for loi n° 71-584, read on Légifrance itself.
 
 ## Sous-traitance: reverse charge (autoliquidation)
 
@@ -34,15 +35,30 @@ Légifrance's text with its version date and article id.
 
 ## Retenue de garantie
 
-- **Ceiling.** Loi n° 71-584 du 16 juillet 1971, art. 1: payments on account of private works
-  contracts « peuvent être amputés d'une retenue égale au plus à 5 % de leur montant », guaranteeing
-  the works and the reserves made at the réception. **inferred** from secondary sources quoting the
-  article (bjavocat.com 2023-02-01; Dalloz actualité on Cass. 3e civ. 17 juin 2015 n° 14-19.863);
-  Légifrance could not be read. `TODO(verify)` the official text. « Leur montant » is the amount of
-  the payments, so the ceiling applies to what the invoice asks to be paid (BT-112, TTC), not to HT
-  as the BTP plan wrote: the stricter HT base would call a lawful 5 % of TTC an error.
-- **Release.** Art. 2: the sums are released one year after the réception, with or without reserves,
-  unless the maître d'ouvrage notified a reasoned opposition. **inferred**, same sources.
+- **Ceiling.** Loi n° 71-584 du 16 juillet 1971 (JORFTEXT000000687670), art. 1, in force since
+  2020-01-01 (ordonnance n° 2019-964, art. 35; LEGIARTI000039280616): « Les paiements des acomptes
+  sur la valeur définitive des marchés de travaux privés visés à l'article 1779-3° du code civil
+  peuvent être amputés d'une retenue égale au plus à 5 p. 100 de leur montant et garantissant
+  contractuellement l'exécution des travaux, pour satisfaire, le cas échéant, aux réserves faites à
+  la réception par le maître de l'ouvrage. » **verified** (Légifrance, read 2026-10-25). « Leur
+  montant » is the amount of the payments, so the ceiling applies to what the invoice asks to be
+  paid (BT-112, TTC), not to HT as the BTP plan wrote: the stricter HT base would call a lawful 5 %
+  of TTC an error. **inferred** (our reading of « paiements »; the text does not say TTC).
+- **Caution instead.** Art. 1, last paragraph: no retenue is made if the entrepreneur gives, for the
+  same amount, a « caution personnelle et solidaire » of a financial institution on a list fixed by
+  decree; the maître d'ouvrage consigns the sums it holds back (paragraphs 2 and 3). **verified.**
+  So an invoice without retenue on a chantier that agreed one is not an error, and no rule says so.
+- **Release.** Art. 2, in force since 1971-07-17 (LEGIARTI000006474230): « A l'expiration du délai
+  d'une année à compter de la date de réception, faite avec ou sans réserve, des travaux … la caution
+  est libérée ou les sommes consignées sont versées à l'entrepreneur, même en l'absence de mainlevée,
+  si le maître de l'ouvrage n'a pas notifié à la caution ou au consignataire, par lettre
+  recommandée, son opposition motivée par l'inexécution des obligations de l'entrepreneur. »
+  **verified.** The deadline `retenue_garantie_liberation` (réception + 1 year) and the letter
+  `request.body.demande_liberation_retenue` follow it.
+- **Scope.** Art. 3: a clause that defeats art. 1 and 2 is void. Art. 4 (since 1972-12-28): the law
+  applies to sous-traitance agreements too. **verified.** It covers private works (C. civ. 1779-3°);
+  public contracts have their own retenue in the Code de la commande publique, not read
+  (`docs/TODO.md`).
 - **In the XML.** XP Z12-014 annexe A V1.2, cas n°26 « Factures avec clause de réserve
   contractuelle », p. 104, normative: the invoice bills the whole amount; « Les profils EN16931 et
   EXTENDED-CTC-FR ne permettent pas de renseigner un échéancier de paiement avec un montant sous clause
