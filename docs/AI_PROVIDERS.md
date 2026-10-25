@@ -121,8 +121,9 @@ from $0.035 / $0.011 per million tokens in and out (fp4) or $0.112 / $0.336 (fp8
 
 ### Eval results so far
 
-MappingAgent, 20 messy sheets of `evals/mapping.fixtures.ts`, the 8 core fields, and since 2026-10-24
-the « Remise % » column of the one sheet that has it (161 points; gate: ≥ 95 %).
+MappingAgent, 21 messy sheets of `evals/mapping.fixtures.ts`, the 8 core fields, since 2026-10-24
+the « Remise % » column of the one sheet that has it, and since 2026-10-25 the BTP columns of the
+sheet of situations (174 points; gate: ≥ 95 %).
 Recorded with `pnpm --filter @fi/agents eval:record` on synthetic data only; replayed by `pnpm verify`.
 
 | Date | Provider / model | Core fields | Notes |
@@ -131,6 +132,8 @@ Recorded with `pnpm --filter @fi/agents eval:record` on synthetic data only; rep
 | 2026-10-18 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 98.1 % | 15/20 answered by the model, 5 fell back to the dictionary after 3 retries (free routing has no JSON schema mode); `mapping.llmfp-smart.json`, not a gate |
 | 2026-10-24 | none (dictionary only), with « Remise % » | 91.9 % (148/161) | the floor again, on the new points |
 | 2026-10-24 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 99.4 % (160/161) | « Remise % » found; `17-line-number-column` took the line number for the invoice number; `mapping.llmfp-smart.json`, not a gate |
+| 2026-10-25 | none (dictionary only), with the BTP columns and « Maître d'ouvrage » | 92.5 % (161/174) | `21-btp-situations` 13/13 by the dictionary alone |
+| 2026-10-25 | llmfp `auto - Smart models - Hermes` (free models, dev proxy) | 100 % (174/174) | `21-btp-situations` 13/13; `19-totals-and-blank-rows` had no answer after 3 retries this time and fell back to the dictionary (8/8), so its recording is null; `mapping.llmfp-smart.json`, not a gate |
 
 MonitorAgent, 13 customer refusals of `evals/monitor.fixtures.ts` (the proposal among fix and resend /
 credit note / contact the customer; gate when one is set: ≥ 85 %, and never a wrong amount in a draft):

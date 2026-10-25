@@ -133,9 +133,11 @@ Each closes with a call or two on the owner's sandbox key (`docs/RUNBOOK.md` § 
       `apps/api/src/vies.ts`.
 - [ ] From the prod server, watch the sweep's log for a week: VIES never answering `IP_BLOCKED` or
       `GLOBAL_MAX_CONCURRENT_REQ` to our traffic.
-- [ ] « Vérifier dans VIES » (2026-10-24): each click on a number VIES cannot answer asks again (once
-      today's answer exists, never). If users click in a loop during an outage, remember the failure
-      for a few minutes per number (DEFERRED § VIES, « Remembering that a member state is down »).
+- [x] « Vérifier dans VIES » (2026-10-24): each click on a number VIES cannot answer asked again —
+      done 2026-10-25: `RememberingVies` (`apps/api/src/vies.ts`) answers the same failure for 3 minutes
+      per number, per member state when its service is down; the sweep shares it.
+- [ ] Several API processes behind a load balancer: each remembers its own VIES failures, so a click
+      may still reach VIES once per process. Fine at one process; revisit if VIES complains.
 - [ ] Look at the fiche with a real answer from a country that gives no name (Germany, Spain): only
       « Valide selon le service européen VIES » shows; check users understand that VIES has no name to
       give, not that the check failed.
@@ -176,7 +178,7 @@ Each closes with a call or two on the owner's sandbox key (`docs/RUNBOOK.md` § 
       instalment is reported with its amount, and the platform's `paid` is taken as it comes.
 - [ ] **Accountant:** the wording of the reminders after an instalment (« Nous avons bien reçu un
       règlement de… ; il reste … à régler ») and of the formal notice, which now demands the balance.
-- [ ] **Weekly report:** count the instalments received in the week (`docs/DEFERRED.md` › Instalments).
+- [x] **Weekly report:** count the instalments received in the week — done 2026-10-25 (`apps/api/src/report.ts` `received`: « Encaissé : {montant}, sur {n} facture(s) »).
 
 ## Finding an invoice, built on 2026-10-24
 
@@ -268,8 +270,14 @@ Left from stage 1 for later (2026-10-24):
       `setSelectFolderEnabled` lets `drive.file` list and read the files inside it (`docs/GOOGLE.md`
       §2). If yes, the same `checkFolder` over Drive; if no, Google Drive stays files only
       (`docs/DEFERRED.md`).
-- [ ] **Retenue and situation columns on the sheet** (`docs/DEFERRED.md` › BTP rules): needed before
-      BTP-RG-* and BTP-SIT-* speak on the company's own invoices.
+- [x] **Retenue and situation columns on the sheet** (`docs/DEFERRED.md` › BTP rules): 2026-10-25,
+      `docs/DECISIONS.md` D11.
+- [ ] **The situation's note AAI through a PDP**: send one situation in the B2Brouter sandbox and see
+      the note AAI « Situation de travaux n° … » reach the customer's side unchanged (`TODO(verify)`
+      in `packages/core/src/sheet/build.ts`). Needs the owner's sandbox key.
+- [ ] **A BTP pilot's real sheet**: check the headers it uses for the chantier, the situation, the
+      cumul and the retenue against `packages/core/src/sheet/detect.ts`, and whether its chantier
+      column holds the ERP's code (the link to its contract's retenue) or a free name.
 
 Left from stage 2A for later (2026-10-24):
 

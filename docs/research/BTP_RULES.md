@@ -79,6 +79,10 @@ owner ticked Légifrance's check) for loi n° 71-584, read on Légifrance itself
   cumulative amount does not go down) are our own consistency checks, not legal rules: an error,
   because a situation out of sequence or below the previous cumulative is a mistake to fix (or an
   avoir to issue) before it leaves.
+- **From the sheet** (2026-10-25, `docs/DECISIONS.md` D11): the chantier is BT-11, the retenue a note
+  ABU, the situation a note AAI; the previous situation is the same number in the same BT-11, else
+  the highest below. The chantier's agreed retenue comes from its ERP: 0 is « none agreed », an
+  unknown rate says nothing.
 
 ## Attestation de vigilance (for stage 2 and 3)
 

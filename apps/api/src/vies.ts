@@ -129,6 +129,53 @@ export class ViesClient implements Vies {
   }
 }
 
+/**
+ * One member state's service is busy or down: none of its numbers can be asked about now. Any other
+ * refusal is about VIES itself or about this one number.
+ */
+export const MEMBER_STATE = new Set([
+  'MS_UNAVAILABLE',
+  'MS_MAX_CONCURRENT_REQ',
+  'MS_MAX_CONCURRENT_REQ_TIME',
+  'TIMEOUT',
+]);
+
+/** How long VIES not answering about a number (or a member state) is taken as its answer. */
+export const VIES_FAILURE_MEMORY_MS = 3 * 60_000;
+
+/**
+ * VIES that remembers, for a few minutes, that it could not answer: « Vérifier dans VIES » clicked in a
+ * loop during an outage gets the same answer at once instead of another request, and so does the
+ * sweep. A member state down is remembered for all its numbers. Kept in memory: each API process
+ * remembers its own failures, and a restart forgets them.
+ */
+export class RememberingVies implements Vies {
+  readonly #failures = new Map<string, { code: string; until: number }>();
+
+  constructor(
+    private readonly vies: Vies,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
+
+  async check(number: ViesNumber, requester: string | null): Promise<ViesAnswer> {
+    const at = this.now().getTime();
+    for (const [key, failure] of this.#failures) {
+      if (failure.until <= at) this.#failures.delete(key);
+    }
+    const failure = this.#failures.get(number.vatId) ?? this.#failures.get(number.country);
+    if (failure) throw new ViesUnavailable(failure.code);
+    try {
+      return await this.vies.check(number, requester);
+    } catch (e) {
+      if (e instanceof ViesUnavailable) {
+        const key = MEMBER_STATE.has(e.code) ? number.country : number.vatId;
+        this.#failures.set(key, { code: e.code, until: at + VIES_FAILURE_MEMORY_MS });
+      }
+      throw e;
+    }
+  }
+}
+
 /** VIES' last answer on each number a company's customers use (core RuleContext.buyer.vat). */
 export type ViesBook = ReadonlyMap<string, ViesVerdict>;
 

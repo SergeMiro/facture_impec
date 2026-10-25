@@ -4,7 +4,7 @@
 import { t } from '@fi/shared';
 import type { SheetCheck } from '../checks/types';
 import { computeInvoice } from '../compute';
-import type { AllowanceCharge, InvoiceDraft, Line } from '../model';
+import type { AllowanceCharge, BtpFacts, InvoiceDraft, Line, Note } from '../model';
 import { divRound, formatAmount, isDecimal, lineAmount, percentOf, roundToCents } from '../money';
 import { frDecimal, frMoney } from '../pdf/format';
 import { cellAddress, isBlank, type RawCell, type SheetSnapshot } from './cells';
@@ -28,7 +28,7 @@ import {
 } from './values';
 
 export interface SheetProblem {
-  code: 'group_conflict' | 'line_total_mismatch' | 'total_mismatch';
+  code: 'group_conflict' | 'line_total_mismatch' | 'total_mismatch' | 'unreadable';
   cell: string;
   messageFr: string;
   /** When the contradiction is a mistake a check names (A1–A3, R2): kept with the invoice. */
@@ -153,6 +153,11 @@ const READERS: Readonly<Record<InvoiceField, (cell: RawCell | undefined) => stri
   vatCategory: (c) => textOf(c)?.toUpperCase(),
   nature: natureOf,
   totalInclVat: decimalOf,
+  chantier: textOf,
+  retenue: amountOf,
+  retenueRate: percentValueOf,
+  situation: decimalOf,
+  cumulative: decimalOf,
 };
 
 /** Where each invoice-level field lands in the model (for the cell map). */
@@ -173,6 +178,11 @@ const INVOICE_PATHS: Partial<Record<InvoiceField, readonly string[]>> = {
   purchaseOrder: ['purchaseOrderReference'],
   paymentTerms: ['paymentTerms'],
   currency: ['currency'],
+  chantier: ['projectReference'],
+  retenue: ['btp.retenue.amount'],
+  retenueRate: ['btp.retenue.rateBps'],
+  situation: ['btp.situation.number'],
+  cumulative: ['btp.situation.cumulative'],
 };
 
 const LINE_PATHS: Partial<Record<InvoiceField, string>> = {
@@ -366,6 +376,14 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
   const purchaseOrder = head('purchaseOrder');
   const buyerName = head('buyerName');
   const buyerVatId = head('buyerVatId');
+  const chantier = head('chantier');
+  const btp = btpFacts(head, cells, problems);
+
+  const notes: Note[] = [
+    { subjectCode: 'PMT', text: defaults.recoveryFeeNote ?? t('invoice.default.note.PMT') },
+    { subjectCode: 'PMD', text: defaults.latePenaltyNote ?? t('invoice.default.note.PMD') },
+    { subjectCode: 'AAB', text: defaults.discountNote ?? t('invoice.default.note.AAB') },
+  ];
 
   const lineRows = group.filter(ctx.hasLine);
   const lines = lineRows.map((row, i): Omit<Line, 'netAmount'> => {
@@ -492,11 +510,8 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
     dueDate,
     paymentTerms,
     purchaseOrderReference: purchaseOrder,
-    notes: [
-      { subjectCode: 'PMT', text: defaults.recoveryFeeNote ?? t('invoice.default.note.PMT') },
-      { subjectCode: 'PMD', text: defaults.latePenaltyNote ?? t('invoice.default.note.PMD') },
-      { subjectCode: 'AAB', text: defaults.discountNote ?? t('invoice.default.note.AAB') },
-    ],
+    ...(chantier && { projectReference: chantier }),
+    notes,
     seller: {
       name: seller.name,
       ids: defaults.siret ? [{ id: defaults.siret, scheme: '0009' }] : [],
@@ -527,6 +542,30 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
     },
     lines,
   };
+  if (btp) {
+    const { retenue, situation } = btp;
+    // A rate alone holds that share of the TTC (loi n° 71-584, art. 1: « leur montant »).
+    const ttc = retenue?.rateBps && retenue.amount === undefined ? taxInclusive(draft) : undefined;
+    if (retenue && ttc !== undefined)
+      retenue.amount = Math.round((ttc * (retenue.rateBps ?? 0)) / 10_000);
+    // XP Z12-014 annexe A cas n°26: the retenue is a note ABU; a situation has no field at all, so a
+    // note AAI. TODO(verify) that a PDP passes AAI through unchanged (docs/TODO.md).
+    if (retenue) notes.push({ subjectCode: 'ABU', text: retenueNote(retenue, currency) });
+    if (situation) {
+      const number = String(situation.number);
+      notes.push({
+        subjectCode: 'AAI',
+        text:
+          situation.cumulative === undefined
+            ? t('invoice.default.note.AAI.situation', { number })
+            : t('invoice.default.note.AAI.cumulative', {
+                number,
+                cumulative: frMoney(situation.cumulative, currency),
+              }),
+      });
+    }
+    draft.btp = btp;
+  }
 
   const total = sheetTotal(group, ctx);
   if (total) {
@@ -562,6 +601,80 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
   }
 
   return { rowKey, rows: group.map((r) => r.row), draft, cells, problems };
+}
+
+/**
+ * The BTP columns: a retenue in euros (or a percent cell in that column) or in %, a situation's
+ * number and cumulative works HT. What cannot be read is left out, on a warning that names its cell.
+ * A retenue of 0 is none.
+ */
+function btpFacts(
+  head: (field: InvoiceField) => string | undefined,
+  cells: Record<string, string>,
+  problems: SheetProblem[],
+): BtpFacts | undefined {
+  const unreadable = (field: InvoiceField, path: string, value: string) => {
+    problems.push({
+      code: 'unreadable',
+      cell: cells[path] ?? '',
+      messageFr: t('sheet.problem.unreadable', { field: t(`sheet.field.${field}`), value }),
+    });
+    return undefined;
+  };
+  const centsOf = (field: InvoiceField, path: string, text: string | undefined) => {
+    if (text === undefined) return undefined;
+    const cents = isDecimal(text) ? roundToCents(text) : null;
+    return cents === null ? unreadable(field, path, text) : Math.abs(cents);
+  };
+
+  const retenueText = head('retenue');
+  const inPercent = retenueText?.endsWith('%');
+  const amount = centsOf('retenue', 'btp.retenue.amount', inPercent ? undefined : retenueText);
+  const rateText =
+    head('retenueRate') ??
+    (inPercent && retenueText
+      ? (decimalFromText(retenueText.slice(0, -1)) ?? retenueText)
+      : undefined);
+  let rateBps: number | undefined;
+  if (rateText !== undefined) {
+    const percent = isDecimal(rateText) ? Math.abs(Number(rateText)) : Number.NaN;
+    if (percent <= 100) rateBps = Math.round(percent * 100);
+    else
+      unreadable(
+        inPercent ? 'retenue' : 'retenueRate',
+        inPercent ? 'btp.retenue.amount' : 'btp.retenue.rateBps',
+        rateText,
+      );
+  }
+  const retenue =
+    (amount ?? 0) > 0 || (rateBps ?? 0) > 0
+      ? { ...(rateBps !== undefined && { rateBps }), ...(amount !== undefined && { amount }) }
+      : undefined;
+
+  // « 3 », « S3 », « Situation n° 3 »: the one number it holds.
+  const situationText = head('situation');
+  const digits =
+    situationText === undefined ? undefined : /^\D*(\d{1,4})$/.exec(situationText)?.[1];
+  const number = digits === undefined ? undefined : Number(digits);
+  if (situationText !== undefined && !number) {
+    unreadable('situation', 'btp.situation.number', situationText);
+  }
+  const cumulative = centsOf('cumulative', 'btp.situation.cumulative', head('cumulative'));
+  const situation = number
+    ? { number, ...(cumulative !== undefined && { cumulative }) }
+    : undefined;
+
+  if (!retenue && !situation) return undefined;
+  return { ...(retenue && { retenue }), ...(situation && { situation }) };
+}
+
+function retenueNote(retenue: NonNullable<BtpFacts['retenue']>, currency: string | undefined) {
+  const amount = retenue.amount === undefined ? undefined : frMoney(retenue.amount, currency);
+  if (!retenue.rateBps) return t('invoice.default.note.ABU.amount', { amount: amount ?? '' });
+  const rate = frDecimal(String(retenue.rateBps / 100));
+  return amount === undefined
+    ? t('invoice.default.note.ABU.rateOnly', { rate })
+    : t('invoice.default.note.ABU.rate', { rate, amount });
 }
 
 /**

@@ -1,7 +1,8 @@
 // The weekly report (plan §6 ReportAgent, phase 9): the facts of the last 7 days counted here, worded
 // by @fi/agents weeklyReport. The task pane shows it on demand (GET /report); every ISO week, from
 // Monday 8:00 Paris, it is mailed once to the company's owners where the deployment can send mail.
-// Test invoices never count. R7: the money the checks found billed short in the week, still open.
+// Test invoices never count; « Encaissé » is the money received in the week, a part payment included.
+// R7: the money the checks found billed short in the week, still open.
 // BTP stage 3C: the requests waiting in « À valider » are counted, and the e-mail lists them, each
 // with its links for that owner (src/action-links.ts).
 import { approvalLines, type WeekFacts, type WeeklyReport, weeklyReport } from '@fi/agents';
@@ -21,6 +22,7 @@ import {
   between,
   chasePlans,
   count,
+  countDistinct,
   eq,
   findings,
   gte,
@@ -28,6 +30,7 @@ import {
   invoiceEvents,
   invoices,
   isNull,
+  or,
   sql,
   type TenantRow,
   tenants,
@@ -48,6 +51,16 @@ const AMOUNT = {
   owed: sql<string>`coalesce(sum(${invoices.payable} - ${invoices.amountPaid}), 0)`,
 };
 
+/** The company's real business: its own invoices, not a test, not a credit note. */
+const business = (tenantId: string) =>
+  and(
+    eq(invoices.tenantId, tenantId),
+    eq(invoices.direction, 'out'),
+    eq(invoices.isTest, false),
+    // A credit note (381) is neither sent nor paid business: its amount would add, not subtract.
+    sql`coalesce(${invoices.document}->>'typeCode', '380') <> '381'`,
+  );
+
 async function tally(
   deps: Deps,
   tenantId: string,
@@ -57,16 +70,7 @@ async function tally(
   const [row] = await deps.db
     .select({ count: count(), amount: AMOUNT[amount] })
     .from(invoices)
-    .where(
-      and(
-        eq(invoices.tenantId, tenantId),
-        eq(invoices.direction, 'out'),
-        eq(invoices.isTest, false),
-        // A credit note (381) is neither sent nor paid business: its amount would add, not subtract.
-        sql`coalesce(${invoices.document}->>'typeCode', '380') <> '381'`,
-        where,
-      ),
-    );
+    .where(and(business(tenantId), where));
   return { count: row?.count ?? 0, amount: Number(row?.amount ?? 0) };
 }
 
@@ -83,6 +87,32 @@ async function reached(deps: Deps, tenantId: string, status: string, since: Date
       ),
     );
   return tally(deps, tenantId, inArray(invoices.id, ids));
+}
+
+/**
+ * The money received since `since`, and on how many invoices: every payment the user recorded, a part
+ * or the rest, and what was left on an invoice the platform reported paid (its event has no amount).
+ */
+async function received(deps: Deps, tenantId: string, since: Date) {
+  const [row] = await deps.db
+    .select({
+      count: countDistinct(invoiceEvents.invoiceId),
+      amount: sql<string>`coalesce(sum(coalesce((${invoiceEvents.payload}->>'amount')::bigint,
+        ${invoices.payable} - ${invoices.amountPaid})), 0)`,
+    })
+    .from(invoiceEvents)
+    .innerJoin(invoices, eq(invoices.id, invoiceEvents.invoiceId))
+    .where(
+      and(
+        business(tenantId),
+        gte(invoiceEvents.at, since),
+        or(
+          and(eq(invoiceEvents.type, 'note'), eq(invoiceEvents.event, 'payment_partial')),
+          and(eq(invoiceEvents.type, 'transition'), eq(invoiceEvents.toStatus, 'paid')),
+        ),
+      ),
+    );
+  return { count: row?.count ?? 0, amount: Number(row?.amount ?? 0) };
 }
 
 export async function weekFacts(deps: Deps, tenant: TenantRow, now: Date): Promise<WeekFacts> {
@@ -140,7 +170,7 @@ export async function weekFacts(deps: Deps, tenant: TenantRow, now: Date): Promi
     to: today,
     currency: 'EUR',
     sent: await reached(deps, tenant.id, 'deposited', since),
-    paid: await reached(deps, tenant.id, 'paid', since),
+    paid: await received(deps, tenant.id, since),
     overdue: await tally(deps, tenant.id, inArray(invoices.status, ['overdue', 'chasing']), 'owed'),
     notInvoiced: { count: short?.count ?? 0, amount: Number(short?.amount ?? 0) },
     atRisk: await tally(

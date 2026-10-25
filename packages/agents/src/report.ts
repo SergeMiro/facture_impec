@@ -18,7 +18,7 @@ export interface WeekFacts {
   currency: string;
   /** Reached the platform during the window. */
   sent: Tally;
-  /** Recorded as paid during the window. */
+  /** The money received during the window (a part payment included), and on how many invoices. */
   paid: Tally;
   /** Unpaid past their due date, today. */
   overdue: Tally;

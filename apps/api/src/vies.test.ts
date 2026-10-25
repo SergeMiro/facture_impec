@@ -19,7 +19,7 @@ import {
   testDatabase,
 } from './test-helpers';
 import { runVatChecks, VAT_CHECKS_PER_SWEEP } from './vat-checks';
-import { ViesClient, ViesUnavailable } from './vies';
+import { RememberingVies, VIES_FAILURE_MEMORY_MS, ViesClient, ViesUnavailable } from './vies';
 
 const number = (vatId: string) => {
   const n = viesNumber(vatId);
@@ -157,6 +157,63 @@ describe('the VIES client', () => {
       const asked = new ViesClient(base, fetcher).check(number('DE129273398'), null);
       await expect(asked).rejects.toEqual(new ViesUnavailable(code));
     }
+  });
+});
+
+describe('VIES remembering it could not answer', () => {
+  /** VIES failing with `codes[vatId]`, else valid; counts the questions. */
+  function failing(codes: Record<string, string>) {
+    const asked: string[] = [];
+    let clock = new Date('2026-10-25T09:00:00Z');
+    const vies = new RememberingVies(
+      {
+        check: async (n) => {
+          asked.push(n.vatId);
+          const code = codes[n.vatId];
+          if (code) throw new ViesUnavailable(code);
+          return {
+            valid: true,
+            name: null,
+            address: null,
+            requestIdentifier: null,
+            requestDate: clock,
+          };
+        },
+      },
+      () => clock,
+    );
+    const later = (ms: number) => {
+      clock = new Date(clock.getTime() + ms);
+    };
+    return { vies, asked, later };
+  }
+
+  it('answers a number it could not ask about at once, for a few minutes', async () => {
+    const { vies, asked, later } = failing({ DE129273398: 'VAT_BLOCKED' });
+    const de = number('DE129273398');
+    await expect(vies.check(de, null)).rejects.toEqual(new ViesUnavailable('VAT_BLOCKED'));
+    later(VIES_FAILURE_MEMORY_MS - 1);
+    await expect(vies.check(de, null)).rejects.toEqual(new ViesUnavailable('VAT_BLOCKED'));
+    // Another number of the same country is asked.
+    await expect(vies.check(number('DE811115368'), null)).resolves.toMatchObject({ valid: true });
+    later(1);
+    await expect(vies.check(de, null)).rejects.toEqual(new ViesUnavailable('VAT_BLOCKED'));
+    expect(asked).toEqual(['DE129273398', 'DE811115368', 'DE129273398']);
+  });
+
+  it("remembers a member state down for all its numbers, and never VIES' answers", async () => {
+    const { vies, asked, later } = failing({ IT00743110157: 'MS_UNAVAILABLE' });
+    await expect(vies.check(number('IT00743110157'), null)).rejects.toEqual(
+      new ViesUnavailable('MS_UNAVAILABLE'),
+    );
+    await expect(vies.check(number('IT01234567897'), null)).rejects.toEqual(
+      new ViesUnavailable('MS_UNAVAILABLE'),
+    );
+    await vies.check(number('DE129273398'), null);
+    await vies.check(number('DE129273398'), null);
+    later(VIES_FAILURE_MEMORY_MS);
+    await vies.check(number('IT01234567897'), null);
+    expect(asked).toEqual(['IT00743110157', 'DE129273398', 'DE129273398', 'IT01234567897']);
   });
 });
 

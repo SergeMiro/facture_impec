@@ -24,7 +24,7 @@ describe('ReportAgent', () => {
     expect(r.subject).toContain('12/10/2026');
     expect(r.numbers).toEqual([
       `Envoyées : 4 facture(s), 5${NBSP}120,00${NBSP}€`,
-      `Encaissées : 2 facture(s), 1${NBSP}800,00${NBSP}€`,
+      `Encaissé : 1${NBSP}800,00${NBSP}€, sur 2 facture(s)`,
       `En retard : 0 facture(s), 0,00${NBSP}€`,
       `À échéance dans les 7 jours : 1 facture(s), 990,00${NBSP}€`,
     ]);

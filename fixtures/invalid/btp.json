@@ -89,7 +89,7 @@
             "amount": 132000
           },
           "chantier": {
-            "retenueBps": null
+            "retenueBps": 0
           },
           "situation": {
             "number": 3,

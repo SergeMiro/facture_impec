@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeGolden, golden, TODAY } from '../../test/fixtures';
 import type { ContextInput } from './index';
-import { validate } from './index';
+import { SituationBook, validate } from './index';
 
 const situation = golden('26-btp-situation-retenue');
 const btp = situation.context?.btp ?? {};
@@ -64,5 +64,31 @@ describe('BTP rules', () => {
     expect(ids(situation, { btp: { ...btp, situation: { number: 1 } } })).toEqual([]);
     const { chantier: _chantier, ...unlinked } = btp;
     expect(ids(situation, { btp: unlinked })).toEqual([]);
+  });
+});
+
+describe('SituationBook', () => {
+  const book = new SituationBook([
+    { id: 'a', chantier: 'CH-12', number: 1, cumulative: 2_000_000 },
+    { id: 'b', chantier: 'ch 12', number: 2, cumulative: 4_000_000 },
+    { id: 'c', chantier: 'CH-12', number: 4 },
+    { id: 'd', chantier: 'Les Tilleuls', number: 7 },
+  ]);
+  const invoice = (number: number, projectReference = 'CH-12') => ({
+    projectReference,
+    btp: { situation: { number } },
+  });
+
+  it('finds the highest number below, in the same chantier whatever its case or dashes', () => {
+    expect(book.previous(invoice(3))).toEqual({ number: 2, cumulative: 4_000_000 });
+    expect(book.previous(invoice(6))).toEqual({ number: 4 });
+    expect(book.previous(invoice(1), 'a')).toBeUndefined();
+    expect(book.previous(invoice(3, 'Autre chantier'))).toBeUndefined();
+    expect(book.previous({ projectReference: 'CH-12' })).toBeUndefined();
+  });
+
+  it('calls a repeated number its own previous, but never the invoice itself', () => {
+    expect(book.previous(invoice(2))).toEqual({ number: 2, cumulative: 4_000_000 });
+    expect(book.previous(invoice(2), 'b')).toEqual({ number: 1, cumulative: 2_000_000 });
   });
 });

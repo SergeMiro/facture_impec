@@ -748,6 +748,121 @@ describe('readSheet', () => {
   });
 });
 
+describe('BTP columns', () => {
+  const spaces = (text: string | undefined) => text?.replace(/\s/g, ' ');
+  const situations = grid('Situations', [
+    [
+      'N° facture',
+      'Client',
+      'Chantier',
+      'Situation n°',
+      'Cumul des travaux HT',
+      'Désignation',
+      'Qté',
+      'PU HT',
+      'Taux TVA',
+      'RG %',
+    ],
+    ['S-003', 'SCI Les Tilleuls', 'CH-12', 3, 62000, 'Gros œuvre', 1, 22000, 20, 5],
+    ['S-004', 'SCI Les Tilleuls', 'CH-12', 'trois', 70000, 'Gros œuvre', 1, 8000, 20, ''],
+    ['S-005', 'SCI Les Tilleuls', 'CH-12', 'S5', 80000, 'Gros œuvre', 1, 10000, 20, 6],
+  ]);
+
+  it('maps the chantier, the situation, its cumul and the retenue by their usual headers', () => {
+    expect(detectMapping(situations).mapping).toMatchObject({
+      chantier: { column: 'C' },
+      situation: { column: 'D' },
+      cumulative: { column: 'E' },
+      retenueRate: { column: 'J' },
+    });
+    for (const [header, field] of [
+      ['Adresse du chantier', 'chantier'],
+      ['Cumul situation', 'situation'],
+      ['Montant de la situation', 'situation'],
+      ['RG %', 'retenue'],
+      ['Montant RG', 'retenueRate'],
+      ['Libération de la retenue', 'retenue'],
+      ['Cumul TTC', 'cumulative'],
+    ] as const)
+      expect(headerScore(header, field), header).toBe(0);
+    // « Retenue de garantie » over euros is an amount; over percent cells, a rate.
+    const euros = grid('S', [
+      ['N° facture', 'Désignation', 'Qté', 'PU HT', 'Taux TVA', 'Retenue de garantie'],
+      ['F1', 'Pose', 1, 1000, 20, 60],
+    ]);
+    const percents = grid('S', [
+      ['N° facture', 'Désignation', 'Qté', 'PU HT', 'Taux TVA', 'Retenue de garantie'],
+      ['F1', 'Pose', 1, 1000, 20, { v: 0.05, t: '5%', f: '0%' }],
+    ]);
+    expect(detectMapping(euros).mapping).toMatchObject({ retenue: { column: 'F' } });
+    expect(detectMapping(euros).mapping.retenueRate).toBeUndefined();
+    expect(detectMapping(percents).mapping).toMatchObject({ retenueRate: { column: 'F' } });
+    expect(detectMapping(percents).mapping.retenue).toBeUndefined();
+    const [amount] = readSheet(euros, detectMapping(euros), SELLER).invoices;
+    const [rate] = readSheet(percents, detectMapping(percents), SELLER).invoices;
+    expect(amount?.draft.btp).toEqual({ retenue: { amount: 6_000 } });
+    expect(spaces(amount?.draft.notes?.[3]?.text)).toMatch(
+      /^Clause de réserve : retenue de garantie de 60,00 € sur le montant TTC/,
+    );
+    expect(rate?.draft.btp).toEqual({ retenue: { rateBps: 500, amount: 6_000 } });
+  });
+
+  it('writes the chantier as BT-11, the retenue as a note ABU and the situation as a note AAI', () => {
+    const [s3] = readSheet(situations, detectMapping(situations), SELLER).invoices;
+    const draft = one(s3).draft;
+    // 22 000 € HT at 20 %: 26 400 € TTC, 5 % of it held back.
+    expect(draft).toMatchObject({
+      projectReference: 'CH-12',
+      btp: {
+        retenue: { rateBps: 500, amount: 132_000 },
+        situation: { number: 3, cumulative: 6_200_000 },
+      },
+    });
+    expect(draft.notes?.slice(3).map((n) => [n.subjectCode, spaces(n.text)])).toEqual([
+      [
+        'ABU',
+        "Clause de réserve : retenue de garantie de 5 % sur le montant TTC, soit 1 320,00 €, libérée un an après la réception des travaux sauf opposition motivée du maître d'ouvrage (loi n° 71-584 du 16 juillet 1971).",
+      ],
+      ['AAI', 'Situation de travaux n° 3. Cumul des travaux à ce jour : 62 000,00 € HT.'],
+    ]);
+    expect(one(s3).cells).toMatchObject({
+      projectReference: 'Situations!C2',
+      'btp.situation.number': 'Situations!D2',
+      'btp.situation.cumulative': 'Situations!E2',
+      'btp.retenue.rateBps': 'Situations!J2',
+    });
+    expect(one(s3).problems).toEqual([]);
+    // The notes are well formed (the buyer's SIREN and address are another column's business).
+    expect(errors(draft).filter((i) => i.path.startsWith('notes'))).toEqual([]);
+    // The note is there: BTP-RG-03 has nothing to say.
+    const btp = { retenue: draft.btp?.retenue };
+    expect(validate(computeInvoice(draft), { ...ctx, btp }).map((i) => i.ruleId)).not.toContain(
+      'BTP-RG-03',
+    );
+  });
+
+  it('names a cell it cannot read, and points a retenue over 5 % at its cell', () => {
+    const [, s4, s5] = readSheet(situations, detectMapping(situations), SELLER).invoices;
+    expect(one(s4).problems.map((p) => [p.code, p.cell, p.messageFr])).toEqual([
+      [
+        'unreadable',
+        'Situations!D3',
+        "La colonne « N° de situation » contient « trois », que nous ne savons pas lire. Cette valeur n'est pas reprise dans la facture électronique : corrigez la cellule.",
+      ],
+    ]);
+    expect(one(s4).draft.btp).toBeUndefined();
+    expect(one(s4).draft.notes).toHaveLength(3);
+    // « S5 » is situation 5; 6 % is over the law's 5 %.
+    const draft = one(s5).draft;
+    expect(draft.btp?.situation).toEqual({ number: 5, cumulative: 8_000_000 });
+    const issue = validate(computeInvoice(draft), {
+      ...ctx,
+      btp: { retenue: draft.btp?.retenue },
+    }).find((i) => i.ruleId === 'BTP-RG-01');
+    expect(cellForPath(one(s5).cells, one(issue).path)).toBe('Situations!J4');
+  });
+});
+
 describe('cellForPath', () => {
   const cells = { 'buyer.address.line1': 'S!B2', 'lines[0].price.net': 'S!D2', number: 'S!A2' };
   it('finds the cell itself, a mapped parent, or a mapped child', () => {

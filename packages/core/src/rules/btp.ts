@@ -68,7 +68,8 @@ export const BTP_RULES: Rule[] = [
           total !== undefined &&
           total > 0 &&
           retenue.amount * 10_000 > total * RETENUE_MAX_BPS);
-      return when(over, 'totals.taxInclusive');
+      // The sheet's retenue cell when it gave one, else the total it is a share of.
+      return when(over, inv.btp?.retenue ? 'btp.retenue' : 'totals.taxInclusive');
     },
   }),
   rule({
@@ -78,10 +79,13 @@ export const BTP_RULES: Rule[] = [
     scope: 'notes',
     bt: ['BT-22'],
     summary: 'A retenue de garantie on an invoice of a chantier whose contract agreed none.',
-    check: (_inv, ctx) => {
+    check: (inv, ctx) => {
       const retenue = ctx.btp?.retenue;
       const held = (retenue?.rateBps ?? 0) > 0 || (retenue?.amount ?? 0) > 0;
-      return when(held && ctx.btp?.chantier?.retenueBps === null, 'notes');
+      return when(
+        held && ctx.btp?.chantier?.retenueBps === 0,
+        inv.btp?.retenue ? 'btp.retenue' : 'notes',
+      );
     },
   }),
   rule({
@@ -105,12 +109,12 @@ export const BTP_RULES: Rule[] = [
     scope: 'document',
     bt: ['BT-1'],
     summary: "A situation's number follows the previous situation of the same chantier.",
-    check: (_inv, ctx) => {
+    check: (inv, ctx) => {
       const situation = ctx.btp?.situation;
       const previous = situation?.previous;
       if (!situation || !previous || situation.number === previous.number + 1) return [];
       return [
-        finding('number', {
+        finding(inv.btp?.situation ? 'btp.situation.number' : 'number', {
           numero: situation.number,
           precedent: previous.number,
           attendu: previous.number + 1,
@@ -126,13 +130,17 @@ export const BTP_RULES: Rule[] = [
     bt: ['BT-109'],
     summary:
       "A situation's cumulative works are not below the previous situation's of the same chantier.",
-    check: (_inv, ctx) => {
+    check: (inv, ctx) => {
       const situation = ctx.btp?.situation;
       const before = situation?.previous?.cumulative;
       if (situation?.cumulative === undefined || before === undefined) return [];
+      const path =
+        inv.btp?.situation?.cumulative === undefined
+          ? 'totals.taxExclusive'
+          : 'btp.situation.cumulative';
       return situation.cumulative < before
         ? [
-            finding('totals.taxExclusive', {
+            finding(path, {
               cumul: euros(situation.cumulative),
               precedent: euros(before),
             }),

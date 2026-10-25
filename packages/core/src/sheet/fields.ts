@@ -32,6 +32,12 @@ export const INVOICE_FIELDS = [
   'vatCategory',
   'nature',
   'totalInclVat',
+  // BTP: the chantier (BT-11), its retenue de garantie and the situation (model.ts BtpFacts).
+  'chantier',
+  'retenue',
+  'retenueRate',
+  'situation',
+  'cumulative',
 ] as const;
 export type InvoiceField = (typeof INVOICE_FIELDS)[number];
 
@@ -65,6 +71,11 @@ export const INVOICE_LEVEL_FIELDS: ReadonlySet<InvoiceField> = new Set([
   'purchaseOrder',
   'paymentTerms',
   'currency',
+  'chantier',
+  'retenue',
+  'retenueRate',
+  'situation',
+  'cumulative',
 ]);
 
 /** Below this, a proposed column is shown as « à confirmer » (plan §6 guardrail). */

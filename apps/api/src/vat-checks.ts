@@ -24,21 +24,11 @@ import {
 } from '@fi/db';
 import { ApiError } from './errors';
 import { EDITABLE, recheckBuyerVat } from './invoices';
-import { type Vies, type ViesAnswer, ViesUnavailable } from './vies';
+import { MEMBER_STATE, type Vies, type ViesAnswer, ViesUnavailable } from './vies';
 
 /** Questions per sweep (every PDP_SYNC_INTERVAL_SECONDS, 5 minutes by default). */
 export const VAT_CHECKS_PER_SWEEP = 20;
 
-/**
- * One member state's service is busy or down: its other numbers wait for the next sweep. Any other
- * refusal (VIES itself busy or out of reach) ends this sweep's questions: the rest would fail too.
- */
-const MEMBER_STATE = new Set([
-  'MS_UNAVAILABLE',
-  'MS_MAX_CONCURRENT_REQ',
-  'MS_MAX_CONCURRENT_REQ_TIME',
-  'TIMEOUT',
-]);
 /** Only this number cannot be asked about now. */
 const THIS_NUMBER = new Set(['VAT_BLOCKED', 'INVALID_REQUESTER_INFO']);
 
@@ -198,6 +188,7 @@ export async function runVatChecks(
         continue;
       }
       log(`vat check ${vatId}: VIES did not answer (${e.code}), asked again next sweep`);
+      // A member state down: its other numbers wait for the next sweep. VIES itself: the rest too.
       if (MEMBER_STATE.has(e.code)) skipped.add(number.country);
       else if (!THIS_NUMBER.has(e.code)) break;
     }

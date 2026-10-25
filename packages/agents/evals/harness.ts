@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { CORE_FIELDS, KEY_LAYOUT_FIELDS, type LayoutMapping, type SheetMapping } from '@fi/core';
 import { z } from 'zod';
 import type { LayoutFixture } from './layout.fixtures';
-import type { MappingFixture } from './mapping.fixtures';
+import { BTP_FIELDS, type MappingFixture } from './mapping.fixtures';
 
 export const RECORDINGS = new URL('./recordings/', import.meta.url);
 
@@ -44,7 +44,7 @@ export interface MappingScore {
 
 /**
  * Core fields mapped to the expected column, a field the sheet lacks counting as right when left out;
- * a sheet with a « Remise % » column scores it too.
+ * a sheet with a « Remise % » column scores it too, a building firm's sheet its BTP columns.
  */
 export function scoreMapping(f: MappingFixture, m: SheetMapping): MappingScore {
   const misses = CORE_FIELDS.filter(
@@ -56,7 +56,14 @@ export function scoreMapping(f: MappingFixture, m: SheetMapping): MappingScore {
   const found = m.mapping.lineDiscountPercent?.column;
   if (discount && found !== discount)
     misses.push(`lineDiscountPercent: ${found ?? '—'} ≠ ${discount}`);
-  const total = CORE_FIELDS.length + (discount ? 1 : 0);
+  const btp = f.expected.btp;
+  if (btp)
+    for (const field of BTP_FIELDS) {
+      const column = m.mapping[field]?.column;
+      if ((column ?? null) !== (btp[field] ?? null))
+        misses.push(`${field}: ${column ?? '—'} ≠ ${btp[field] ?? '—'}`);
+    }
+  const total = CORE_FIELDS.length + (discount ? 1 : 0) + (btp ? BTP_FIELDS.length : 0);
   return {
     correct: total - misses.length,
     total,

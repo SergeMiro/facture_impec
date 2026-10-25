@@ -43,6 +43,7 @@ import {
 import { t } from '@fi/shared';
 import { planAutopilot } from './autopilot';
 import { assertMaySend } from './billing';
+import { type BtpBook, btpContext, loadBtpBook } from './btp-book';
 import { blockingFindings, checkNow, invoiceFindings } from './checks';
 import { chasePlanOf } from './collect';
 import type { ApiDeps } from './deps';
@@ -160,23 +161,29 @@ export interface Check {
   run: () => Issue[];
 }
 
-/** What a check reads besides the invoice: the numbers issued, VIES' answers on customers' numbers. */
+/**
+ * What a check reads besides the invoice: the numbers issued, VIES' answers on customers' numbers, and
+ * for a building firm its situations and chantiers.
+ */
 export interface Known {
   history: NumberingHistory;
   vies: ViesBook;
+  btp: BtpBook | undefined;
 }
 
 export async function loadKnown(db: DbOrTx, tenant: TenantRow, isTest: boolean): Promise<Known> {
   return {
     history: new NumberingHistory(await loadHistory(db, tenant, isTest)),
     vies: await loadViesBook(db, tenant.id),
+    btp: await loadBtpBook(db, tenant, isTest),
   };
 }
 
 /**
  * One check of an invoice: the rules' code, the content, the day, the company's and the customer's
- * settings, the few issued numbers that decide the history rules, and VIES' last answer on the
- * customer's VAT number. `self` is the invoice in `history`, left out of its own.
+ * settings, the few issued numbers that decide the history rules, VIES' last answer on the
+ * customer's VAT number, and a building firm's situation before this one and chantier's retenue.
+ * `self` is the invoice in `history` and among the situations, left out of its own.
  */
 export function checkOf(
   tenant: TenantRow,
@@ -196,7 +203,9 @@ export function checkOf(
     buyer: { ...buyerSettings(buyer), ...(vat && { vat }) },
     // The BTP rules speak only to a building firm (docs/research/BTP_RULES.md): « sous-traitance »
     // on the customer says the company works for it as its sous-traitant.
-    ...(tenant.btp && { btp: { subcontracting: buyer?.subcontracting ?? false } }),
+    ...(tenant.btp && {
+      btp: btpContext(computed.document, buyer?.subcontracting ?? false, known.btp, self),
+    }),
   };
   return {
     key: hashOf({ ruleset: RULESET, fingerprint: computed.fingerprint, ...context }),

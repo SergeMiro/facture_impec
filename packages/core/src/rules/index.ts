@@ -11,6 +11,12 @@ import type { Finding, Issue, Rule, RuleContext } from './types';
 import { VAT_RULES } from './vat';
 
 export { type HistoryEntry, type HistorySubject, NumberingHistory } from './history';
+export {
+  chantierKey,
+  SituationBook,
+  type SituationEntry,
+  type SituationSubject,
+} from './situations';
 export type * from './types';
 
 export const RULES: readonly Rule[] = [
@@ -91,7 +97,7 @@ export const ContextInput = z.object({
     .object({
       subcontracting: z.boolean(),
       retenue: z.object({ rateBps: z.int().min(0), amount: z.int().min(0) }).partial(),
-      chantier: z.object({ retenueBps: z.int().min(0).nullable() }),
+      chantier: z.object({ retenueBps: z.int().min(0) }),
       situation: z.object({
         number: z.int().min(1),
         cumulative: z.int().optional(),

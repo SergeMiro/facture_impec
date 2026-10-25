@@ -66,8 +66,11 @@ export interface BtpContext {
   subcontracting?: boolean | undefined;
   /** The retenue de garantie this invoice is under: a rate in basis points (500 = 5 %), an amount. */
   retenue?: { rateBps?: number | undefined; amount?: number | undefined } | undefined;
-  /** The chantier's contract, when the invoice is linked to one: its retenue rate, null if none. */
-  chantier?: { retenueBps: number | null } | undefined;
+  /**
+   * The chantier's contract, when the invoice is linked to one and its retenue is known: the rate in
+   * basis points, 0 when the contract agreed none.
+   */
+  chantier?: { retenueBps: number } | undefined;
   /** A situation: its number and cumulative works (cents, HT), and the chantier's previous one. */
   situation?:
     | {

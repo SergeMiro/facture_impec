@@ -1911,3 +1911,53 @@ Evidence (2026-10-24):
 - **Gate**: `pnpm verify` green on 2026-10-24: api 377, add-in 119, agents 162 (evals included),
   core 708 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, connectors 13,
   domain 8, scripts 10.
+
+## BTP: the retenue and the situation from the company's sheet (2026-10-25)
+
+`docs/DEFERRED.md` › BTP rules, `docs/DECISIONS.md` D11. Criteria, written before the code:
+
+- **Five optional columns** detected by their headers: « Chantier » (and « Affaire », « Code
+  chantier »…), « Retenue de garantie » in euros, « RG % » / « Taux de retenue » or a column of
+  percent cells, « Situation n° », « Cumul des travaux HT »; never « Adresse du chantier », « Cumul
+  situation » as the number, « Montant RG » as the rate. « Maître d'ouvrage » is the customer.
+- **On the invoice**: the chantier as BT-11; the retenue as the note ABU of annex A cas n°26 (a rate
+  alone holds that share of the TTC); the situation as a note AAI with its cumul; the facts kept in
+  the draft (`btp`). A cell that cannot be read is named, and left out.
+- **Checked**: for a building firm, BTP-RG-01/02/03 and BTP-SIT-01/02 read the sheet's facts; the
+  previous situation is the company's own of the same chantier (a sheet's sync sees its own rows);
+  the contract's retenue comes from the ERP's chantier, 0 = none. A finding selects the cell to fix.
+- **The mapping eval** has a sheet of situations, scored on the BTP columns too.
+
+Evidence (2026-10-25):
+
+- `packages/core/src/sheet/sheet.test.ts` › BTP columns: « maps the chantier, the situation, its cumul and the retenue by their usual headers », « writes the chantier as BT-11, the retenue as a note ABU and the situation as a note AAI », « names a cell it cannot read, and points a retenue over 5 % at its cell »; `packages/core/src/rules/btp.test.ts` › SituationBook
+  (the highest number below in the same chantier, case and dashes aside; a repeat; never itself).
+- `apps/api/src/parties.test.ts` « follows a chantier's situations through the sheet, and its
+  contract's retenue »: situation 3 after 1 is refused with BTP-SIT-01, fixed to 2 it passes; BT-11
+  and the notes ABU and AAI are in the stored invoice.
+- Mapping eval: the dictionary alone 92.5 % (161/174), `21-btp-situations` 13/13; llmfp 100 %
+  (`docs/AI_PROVIDERS.md`).
+- **Gate**: `pnpm verify` green on 2026-10-25 (with the two items below): api 387, add-in 120, agents
+  162 (evals included), core 713 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13,
+  connectors 13, domain 8, scripts 11.
+
+## The weekly report's « Encaissé » and VIES failures remembered (2026-10-25)
+
+`docs/DEFERRED.md` › Instalments and § VIES. Criteria, written before the code:
+
+- **« Encaissé »** is the money received in the 7 days: each payment the user recorded (a part or
+  the rest), and what was left on an invoice the platform reported paid; the count is the invoices
+  that received some. Test invoices and credit notes never count.
+- **VIES** not answering about a number is its answer for 3 minutes: « Vérifier dans VIES » clicked
+  again gets « VIES ne répond pas » at once, with no new request; a member state down (`MS_*`,
+  `TIMEOUT`) holds for all its numbers; another number, or after 3 minutes, is asked.
+
+Evidence (2026-10-25):
+
+- `apps/api/src/report.test.ts` « counts the money received in the week: a part, the rest of an
+  older one, the platform paid » (3 invoices, the part paid ten days ago left out; the old count gave
+  2 invoices at their full amount); `packages/agents/src/report.test.ts` reads « Encaissé : 1 800,00 €,
+  sur 2 facture(s) ».
+- `apps/api/src/vies.test.ts` « answers a number it could not ask about at once, for a few minutes »,
+  « remembers a member state down for all its numbers, and never VIES' answers ».
+- **Gate**: the same run as the section above.

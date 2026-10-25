@@ -81,8 +81,8 @@ folder picked grants its files (`docs/GOOGLE.md` §2), so Google Drive waits for
   but not a block, since a sous-traitant selling materials alone charges VAT.
 - The supplier's switch is in Réception, on each invoice of a supplier with a SIREN: the pane has no
   supplier list, and that is where the question arises.
-- BTP-RG-* and BTP-SIT-* speak only where the caller gives the retenue and the situation; the sheet
-  does not yet (`docs/DEFERRED.md` › BTP rules).
+- BTP-RG-* and BTP-SIT-* speak only where the caller gives the retenue and the situation; since
+  2026-10-25 the sheet does (`docs/DECISIONS.md` D11).
 
 **1B** (2026-10-24):
 

@@ -124,8 +124,21 @@ export const SYNONYMS: Readonly<Record<InvoiceField, Synonyms>> = {
       'acheteur',
       'customer',
       'nom',
+      // A building firm's customer: the owner it builds for, or the firm it works for as sous-traitant.
+      'maitre d ouvrage',
+      'maitre de l ouvrage',
+      'donneur d ordre',
     ],
-    contains: ['client', 'raison sociale', 'destinataire', 'acheteur', 'customer'],
+    contains: [
+      'client',
+      'raison sociale',
+      'destinataire',
+      'acheteur',
+      'customer',
+      'maitre d ouvrage',
+      'maitre de l ouvrage',
+      'donneur d ordre',
+    ],
   },
   buyerSiren: {
     exact: [
@@ -380,6 +393,106 @@ export const SYNONYMS: Readonly<Record<InvoiceField, Synonyms>> = {
     ],
     contains: ['ttc', 'net a payer'],
   },
+  // The BTP columns; the labels are the ones the ERP exports use (packages/connectors columns.ts).
+  chantier: {
+    exact: [
+      'chantier',
+      'code chantier',
+      'n chantier',
+      'no chantier',
+      'numero chantier',
+      'numero de chantier',
+      'ref chantier',
+      'reference chantier',
+      'nom du chantier',
+      'libelle chantier',
+      'affaire',
+      'code affaire',
+      'n affaire',
+      'reference affaire',
+      'projet',
+      'reference projet',
+      'project',
+    ],
+    contains: ['chantier', 'affaire'],
+    // « Adresse du chantier », « Date de réception du chantier »: where or when, not which one.
+    never: (header) =>
+      ['adresse', 'ville', 'code postal', 'cp', 'date', 'reception', 'retenue', 'situation'].some(
+        (w) => hasWords(normalizeHeader(header), w),
+      ),
+  },
+  retenue: {
+    exact: [
+      'retenue de garantie',
+      'retenue garantie',
+      'retenue',
+      'rg',
+      'montant rg',
+      'rg ttc',
+      'montant retenue',
+      'montant de la retenue',
+      'montant retenue de garantie',
+      'retenue de garantie ttc',
+    ],
+    contains: ['retenue de garantie', 'retenue garantie', 'retenue'],
+    never: (header) =>
+      percentHeader(header) ||
+      ['liberation', 'levee', 'date'].some((w) => hasWords(normalizeHeader(header), w)),
+  },
+  retenueRate: {
+    exact: [
+      'retenue de garantie %',
+      'retenue %',
+      '% retenue',
+      '% rg',
+      'rg %',
+      'taux rg',
+      'taux de rg',
+      'taux retenue',
+      'taux retenue de garantie',
+      'taux de retenue de garantie',
+      'pourcentage rg',
+    ],
+    // A retenue column counts only when it is a percentage, by its header or its values (below).
+    contains: ['retenue de garantie', 'retenue garantie', 'retenue', 'rg'],
+    never: (header) =>
+      ['montant', 'liberation', 'levee', 'date'].some((w) => hasWords(normalizeHeader(header), w)),
+  },
+  situation: {
+    exact: [
+      'situation',
+      'n situation',
+      'no situation',
+      'n de situation',
+      'numero situation',
+      'numero de situation',
+      'situation n',
+      'situation no',
+    ],
+    contains: ['situation'],
+    // « Cumul situation », « Montant de la situation »: an amount, not its number.
+    never: (header) =>
+      ['cumul', 'cumule', 'montant', 'total', 'date', 'ht', 'ttc'].some((w) =>
+        hasWords(normalizeHeader(header), w),
+      ),
+  },
+  cumulative: {
+    exact: [
+      'cumul',
+      'cumul ht',
+      'cumul des travaux',
+      'cumul travaux',
+      'cumul des travaux ht',
+      'montant cumule',
+      'montant cumule ht',
+      'travaux cumules',
+      'cumul situation',
+      'cumul situations',
+      'cumul a date',
+    ],
+    contains: ['cumul', 'cumule', 'cumules'],
+    never: (header) => percentHeader(header) || hasWords(normalizeHeader(header), 'ttc'),
+  },
 };
 
 /** « Total », « Sous-total », « Net à payer » rows sum the invoices above; they are not invoices. */
@@ -440,8 +553,8 @@ function holdsPercents(values: readonly RawCell[]): boolean {
 }
 
 /**
- * A percentage by its header or most of its values: the discount goes to `lineDiscountPercent`,
- * never to the euros `lineDiscount` takes.
+ * A percentage by its header or most of its values: the discount goes to `lineDiscountPercent` (the
+ * retenue to `retenueRate`), never to the euros `lineDiscount` (`retenue`) takes.
  */
 export const notAnAmount = (header: string, values: readonly RawCell[]) =>
   percentHeader(header) || holdsPercents(values);
@@ -471,8 +584,13 @@ export function detectMapping(snapshot: SheetSnapshot): SheetMapping {
       // « TVA » alone may be the VAT amount: the values decide. « Taux TVA » is a rate whatever it holds.
       const bare = ['tva', 'vat', 'taux'].includes(normalizeHeader(text)) || confidence < 0.85;
       if (field === 'vatRate' && bare && !holdsRates(columnValues(cell.col))) continue;
-      if (field === 'lineDiscount' && holdsPercents(columnValues(cell.col))) continue;
-      if (field === 'lineDiscountPercent' && !notAnAmount(text, columnValues(cell.col))) continue;
+      const percents = field === 'lineDiscountPercent' || field === 'retenueRate';
+      if (
+        (field === 'lineDiscount' || field === 'retenue') &&
+        holdsPercents(columnValues(cell.col))
+      )
+        continue;
+      if (percents && !notAnAmount(text, columnValues(cell.col))) continue;
       if (field === 'buyerSiren' || field === 'buyerSiret') {
         const h = normalizeHeader(text);
         if (hasWords(h, 'siren') && hasWords(h, 'siret')) {

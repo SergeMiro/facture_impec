@@ -4,6 +4,7 @@ export {
   asc,
   between,
   count,
+  countDistinct,
   desc,
   eq,
   gt,

@@ -2,7 +2,7 @@
 // filling what the sheet leaves empty, against the directory stand-in and a scripted platform.
 import { detectMapping, type GridCell, grid } from '@fi/core';
 import type { Database } from '@fi/db';
-import { agentRuns, auditEvents, desc, eq, invoices } from '@fi/db';
+import { agentRuns, auditEvents, chantiers, desc, eq, invoices } from '@fi/db';
 import { namesFor, SIRENE_CASES, sirenFor } from '@fi/mock-pdp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { fakeAdapter, newTenant, testApi, testDatabase } from './test-helpers';
@@ -413,5 +413,74 @@ describe('sync: the sheet completed from the customer', () => {
     await send(`/parties/${party.id}`, { subcontracting: true });
     await send('/settings', { btp: false });
     expect(await status()).toBe('validated');
+  });
+
+  it("follows a chantier's situations through the sheet, and its contract's retenue", async () => {
+    const t = await tenant();
+    await confirm(t.apiKey, MARTIN_SIREN, 'Martin');
+    const res = await request('/settings', {
+      method: 'PATCH',
+      token: t.apiKey,
+      body: { btp: true },
+    });
+    expect(res.status).toBe(200);
+    // Its ERP says the contract of « Les Tilleuls » agreed no retenue.
+    await database.db
+      .insert(chantiers)
+      .values({ tenantId: t.id, name: 'Les Tilleuls', erpRef: 'CH-12', retenueBps: 0 });
+    const situation = (
+      number: string,
+      n: number | string,
+      cumul: number,
+      price: number,
+      rg: number | null = null,
+    ): GridCell[] => {
+      // The usual line at its price, then the chantier as the sheet writes it, not as the ERP does.
+      const cells = line(number, 'MARTIN');
+      cells[6] = price;
+      return [...cells, 'ch 12', n, cumul, rg];
+    };
+    const btpSheet = (...rows: GridCell[][]) =>
+      grid('Factures', [
+        [...HEADER, 'Chantier', 'Situation n°', 'Cumul des travaux HT', 'RG %'],
+        ...rows,
+      ]);
+    const first = await sync(
+      t.apiKey,
+      btpSheet(situation('S-1', 1, 4500, 4500), situation('S-2', 3, 4000, 1000, 5)),
+    );
+    const [one, two] = first.rows;
+    // Both lack a delivery date (one warning); the first situation has nothing else to say.
+    expect(one).toMatchObject({ status: 'validated', errors: 0, warnings: 1 });
+    // Situation 3 after 1, its cumul below the one before, and a retenue the contract did not agree.
+    expect(two).toMatchObject({ status: 'needs_fix', errors: 2, warnings: 2 });
+    expect(two?.detail).toContain(
+      'Cette situation porte le n° 3, alors que la précédente de ce chantier était la n° 1.',
+    );
+    const [stored] = await database.db
+      .select()
+      .from(invoices)
+      .where(eq(invoices.id, two?.invoiceId ?? ''));
+    expect(stored?.document).toMatchObject({
+      projectReference: 'ch 12',
+      btp: {
+        retenue: { rateBps: 500, amount: 6_000 },
+        situation: { number: 3, cumulative: 400_000 },
+      },
+    });
+    expect(stored?.document.notes.map((n) => n.subjectCode)).toEqual([
+      'PMT',
+      'PMD',
+      'AAB',
+      'ABU',
+      'AAI',
+    ]);
+
+    // Numbered 2, with the works since: only the retenue is left to look at.
+    const fixed = await sync(
+      t.apiKey,
+      btpSheet(situation('S-1', 1, 4500, 4500), situation('S-2', 'Situation 2', 5500, 1000, 5)),
+    );
+    expect(fixed.rows[1]).toMatchObject({ status: 'validated', errors: 0, warnings: 2 });
   });
 });

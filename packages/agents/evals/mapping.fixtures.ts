@@ -1,9 +1,18 @@
-// 20 messy invoice sheets for the MappingAgent eval (plan §9: ≥ 95 % on the 8 core fields). Every
+// 21 messy invoice sheets for the MappingAgent eval (plan §9: ≥ 95 % on the 8 core fields). Every
 // name and number is invented. `expected` lists each core field's column; a field left out means the
-// sheet has no such column and mapping one is an error. A « Remise % » column is scored with them.
+// sheet has no such column and mapping one is an error. A « Remise % » column and the BTP columns of
+// a building firm's situations are scored with them.
 import { type CORE_FIELDS, type GridCell, grid, type SheetSnapshot } from '@fi/core';
 
 type CoreField = (typeof CORE_FIELDS)[number];
+export const BTP_FIELDS = [
+  'chantier',
+  'retenue',
+  'retenueRate',
+  'situation',
+  'cumulative',
+] as const;
+type BtpField = (typeof BTP_FIELDS)[number];
 
 export interface MappingFixture {
   name: string;
@@ -16,6 +25,8 @@ export interface MappingFixture {
     grouping: string | null;
     /** The column of a percentage discount per line (`lineDiscountPercent`), when the sheet has one. */
     discountPercent?: string;
+    /** A building firm's columns, when the sheet has them; scored only then. */
+    btp?: Partial<Record<BtpField, string>>;
   };
 }
 
@@ -734,5 +745,75 @@ export const MAPPING_FIXTURES: MappingFixture[] = [
       grouping: null,
     },
     'Mes factures',
+  ),
+  fixture(
+    '21-btp-situations',
+    "a building firm's situations: chantier, situation number, cumul HT and the retenue in %, next to « Montant situation HT » and the net to pay",
+    [
+      [
+        'N° facture',
+        'Date',
+        "Maître d'ouvrage",
+        'SIREN',
+        'Chantier',
+        'Situation',
+        'Désignation',
+        'Qté',
+        'PU HT',
+        'TVA',
+        'Montant situation HT',
+        'Cumul HT',
+        'RG %',
+        'Net à payer',
+      ],
+      [
+        'SIT-2026-031',
+        OCT1,
+        'SCI Les Tilleuls',
+        '640000007',
+        'CH-12 Les Tilleuls',
+        3,
+        'Gros œuvre, lot 2',
+        1,
+        22000,
+        pct(0.2, '20%'),
+        22000,
+        62000,
+        pct(0.05, '5%'),
+        25080,
+      ],
+      [
+        'SIT-2026-032',
+        OCT15,
+        'Mairie de Talant',
+        '650000008',
+        'CH-15 École',
+        1,
+        'Terrassement',
+        1,
+        9500,
+        pct(0.2, '20%'),
+        9500,
+        9500,
+        null,
+        11400,
+      ],
+    ],
+    {
+      headerRow: 1,
+      fields: {
+        number: 'A',
+        issueDate: 'B',
+        buyerName: 'C',
+        buyerSiren: 'D',
+        itemName: 'G',
+        quantity: 'H',
+        unitPrice: 'I',
+        vatRate: 'J',
+      },
+      grouping: null,
+      btp: { chantier: 'E', situation: 'F', cumulative: 'L', retenueRate: 'M' },
+    },
+    'Situations',
   ),
 ];

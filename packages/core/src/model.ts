@@ -48,6 +48,19 @@ export const PrecedingInvoice = z.object({ number: opt, issueDate: opt }); // BG
 
 export const Period = z.object({ start: opt, end: opt }); // BG-14 / BG-26
 
+/**
+ * Not EN 16931: the building-trade facts no BT carries (docs/research/BTP_RULES.md), as the company's
+ * sheet gives them. The BTP rules read them; the XML shows them only as the notes ABU and AAI.
+ */
+export const BtpFacts = z.object({
+  /** The retenue de garantie held on this invoice: its rate (basis points, 500 = 5 %), its amount. */
+  retenue: z
+    .object({ rateBps: z.number().int().min(0).optional(), amount: Cents.optional() })
+    .optional(),
+  /** A situation de travaux: its number in its chantier (BT-11), the cumulative works HT. */
+  situation: z.object({ number: z.number().int().min(1), cumulative: Cents.optional() }).optional(),
+});
+
 export const AllowanceCharge = z.object({
   amount: Cents.optional(), // BT-92 / BT-99 / BT-136 / BT-141
   baseAmount: Cents.optional(), // BT-93 / BT-100 / BT-137 / BT-142
@@ -155,6 +168,7 @@ export const Invoice = z.object({
   totals: Totals, // BG-22
   vatBreakdown: z.array(VatBreakdown).default([]), // BG-23
   lines: z.array(Line).default([]), // BG-25
+  btp: BtpFacts.optional(),
 });
 
 export type Identifier = z.infer<typeof Identifier>;
@@ -168,6 +182,7 @@ export type Line = z.infer<typeof Line>;
 export type VatBreakdown = z.infer<typeof VatBreakdown>;
 export type Totals = z.infer<typeof Totals>;
 export type Invoice = z.infer<typeof Invoice>;
+export type BtpFacts = z.infer<typeof BtpFacts>;
 /** What a user or the mapping step provides: line amounts, totals and the VAT breakdown are computed. */
 export const InvoiceDraft = Invoice.omit({
   totals: true,

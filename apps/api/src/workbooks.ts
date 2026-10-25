@@ -14,6 +14,7 @@ import {
   type SheetInvoice,
   SheetMapping,
   SheetSnapshot,
+  SituationBook,
 } from '@fi/core';
 import {
   and,
@@ -31,6 +32,7 @@ import { t } from '@fi/shared';
 import { z } from 'zod';
 import { tenantAi } from './ai';
 import { autopilotNote, planAutopilot } from './autopilot';
+import { type BtpBook, loadBtpBook } from './btp-book';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
 import {
@@ -293,6 +295,28 @@ function historyOf(
   return new NumberingHistory(entries.values());
 }
 
+/** The situations as they will be after this sync, the same way: the sheet's rows replace theirs. */
+function situationsOf(
+  book: BtpBook | undefined,
+  rows: readonly SheetRow[],
+  matched: readonly (SheetBound | undefined)[],
+  removed: ReadonlySet<string>,
+): BtpBook | undefined {
+  if (!book) return undefined;
+  const entries = new Map(book.situations.entries.map((e) => [e.id, e]));
+  for (const id of removed) entries.delete(id);
+  rows.forEach((r, i) => {
+    const target = matched[i];
+    if (target && !EDITABLE.includes(target.status)) return;
+    if (!r.computed) return;
+    const id = target?.id ?? `new:${i}`;
+    const entry = SituationBook.entryOf(id, r.computed.document);
+    if (entry) entries.set(id, entry);
+    else entries.delete(id);
+  });
+  return { ...book, situations: new SituationBook(entries.values()) };
+}
+
 export async function syncSheet(
   deps: ApiDeps,
   tenant: TenantRow,
@@ -341,6 +365,12 @@ export async function syncSheet(
     tenant,
   );
   const vies = await loadViesBook(deps.db, tenant.id);
+  const btp = situationsOf(
+    await loadBtpBook(deps.db, tenant, isTest),
+    rows,
+    matched,
+    new Set(removed.map((b) => b.id)),
+  );
   const known = matched.filter((b): b is SheetBound => b !== undefined);
   const last = await latestIssues(
     deps.db,
@@ -370,7 +400,7 @@ export async function syncSheet(
           excelBinding: row.binding,
           isTest,
           parties: book,
-          known: { history, vies, self: `new:${i}` },
+          known: { history, vies, btp, self: `new:${i}` },
         });
         changed = true;
         if (created.issues) {
@@ -384,7 +414,7 @@ export async function syncSheet(
       const check = checkOf(
         tenant,
         row.computed,
-        { history, vies },
+        { history, vies, btp },
         row.enriched.party,
         now,
         target.id,

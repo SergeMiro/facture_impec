@@ -2,7 +2,7 @@
 // the owners once per ISO week from Monday 8:00 Paris.
 import { addDays, isoWeekday, parisToday } from '@fi/core';
 import type { Database } from '@fi/db';
-import { eq, tenants, weeklyReports } from '@fi/db';
+import { and, applyTransition, eq, invoiceEvents, invoices, tenants, weeklyReports } from '@fi/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runWeeklyReports, weekFacts } from './report';
 import {
@@ -69,6 +69,56 @@ describe('weekly report', () => {
     const report = (await res.json()) as { numbers: string[]; actions: string[]; text: string };
     expect(report.numbers[0]).toMatch(/^Envoyées : 2 facture\(s\)/);
     expect(report.actions).toEqual(['Envoyez 1 facture(s) prête(s).']);
+  });
+
+  it('counts the money received in the week: a part, the rest of an older one, the platform paid', async () => {
+    clock = new Date();
+    const t = await newTenant(api.request);
+    const pay = (id: string, amount?: number) =>
+      api.request(`/invoices/${id}/payment`, {
+        method: 'POST',
+        token: t.apiKey,
+        body: amount === undefined ? {} : { amount },
+      });
+    const payable = async (id: string) => {
+      const [row] = await database.db
+        .select({ payable: invoices.payable })
+        .from(invoices)
+        .where(eq(invoices.id, id));
+      return row?.payable ?? 0;
+    };
+
+    // 100 € received ten days ago, the rest this week.
+    const older = await deliveredInvoice(api, t, draft(1));
+    await pay(older.id, 10_000);
+    await database.db
+      .update(invoiceEvents)
+      .set({ at: new Date(clock.getTime() - 10 * 86_400_000) })
+      .where(
+        and(eq(invoiceEvents.invoiceId, older.id), eq(invoiceEvents.event, 'payment_partial')),
+      );
+    await pay(older.id);
+    // 250 € of an invoice still open.
+    const part = await deliveredInvoice(api, t, draft(2));
+    await pay(part.id, 25_000);
+    // 50 € recorded, then the platform reports the invoice paid: the rest came with it.
+    const platform = await deliveredInvoice(api, t, draft(3));
+    await pay(platform.id, 5_000);
+    await database.db.transaction((tx) =>
+      applyTransition(tx, {
+        invoiceId: platform.id,
+        event: 'paid',
+        actor: 'pdp',
+        payload: { pdpStatus: 'PAID' },
+        at: clock,
+      }),
+    );
+
+    const facts = await weekFacts(api.deps, await tenantRow(t.id), clock);
+    expect(facts.paid).toEqual({
+      count: 3,
+      amount: (await payable(older.id)) - 10_000 + 25_000 + (await payable(platform.id)),
+    });
   });
 
   it('mails the owners once per week, from Monday 8:00 Paris', async () => {
