@@ -2125,3 +2125,52 @@ Evidence (2026-10-25), `packages/memory` (50 tests):
   scripts 11; boundaries: no violation.
 - The memory doc's « 50 real chains » and where real invoices carry a quote's number wait for a
   pilot (`docs/TODO.md` › Memory); what M2 leaves for later is in `docs/DEFERRED.md` › Memory: links.
+
+## Memory M3: the runner (started 2026-10-25)
+
+`docs/plans/memory.md` § M3, memory doc §5–§6. Criteria, written before the code:
+
+- **Runner mode**: `apps/api` started with `VAULT_DIR` is the runner, on the same code. It listens on
+  the machine only (`API_HOST` a loopback address; in a container, `RUNNER_CONTAINER=true` with the
+  port published on the host's loopback); its database is PGlite in `PGLITE_DIR`, outside the vault
+  (a synchronised folder would break a live database), never a Postgres of its own yet; it serves
+  one company. Each refusal says what to change.
+- **The vault's lock**: the runner takes the vault at start (`MemoryVault`, `_system/runner.lock`)
+  and gives it back at stop; a second runner on the same vault does not start.
+- **Schedules caught up**: each periodic task's last run is kept in the database
+  (`schedule_runs`); after a stop, a task that missed its time runs once at start, however many
+  times it was missed; the daily dump at 03:00 (Paris) is one of them.
+- **Daily dump**: the database as one file in `vault/_system/dumps/` (never the live folder), the
+  last 7 kept, written whole or not at all; a dump restores into an empty folder.
+- **Mode B**: a Docker Compose file runs the runner with the vault and the database as volumes,
+  reachable on the host's loopback only.
+- **Done when**: stopped for 30 hours (a test clock) and started again, every schedule runs once and
+  no document is left without a status. The memory doc's 48 hours on a machine switched off and on,
+  and the Windows service, need a Windows machine (`docs/TODO.md`).
+
+Evidence (2026-10-25):
+
+- [x] Runner mode: `packages/shared/src/shared.test.ts` › « keeps the runner on its machine, its
+      database out of the vault and in PGlite » (`DATABASE_URL`, `PGLITE_DIR` inside the vault or the
+      vault inside it, `API_HOST=0.0.0.0` refused; `RUNNER_CONTAINER=true` accepted; prod without
+      `DATABASE_URL`). `apps/api/src/runner.test.ts` › « serves one company », « is none without
+      VAULT_DIR ».
+- [x] The vault's lock: `runner.test.ts` › « holds its vault alone, and lets it go when it stops »
+      (`VaultLocked`, then a start after the first stops). In Docker: a second container on the same
+      vault exits with « VaultLocked: the vault is held by … »; `docker compose stop` removes
+      `_system/runner.lock`.
+- [x] Schedules caught up: `schedule_runs` (migration `0028`); `runner.test.ts` › « a daily task is
+      due once its hour has passed since its last run, once however many days were missed ».
+- [x] Daily dump: `runner.test.ts` › « keeps the last seven, leaves no half-written file, and restores
+      into an empty folder » (a `.tmp-` file of a cut write removed; restore into a non-empty folder
+      refused; the restored tenant found). `pnpm runner:restore` on a dump the container wrote.
+- [x] Mode B: `deploy/runner/compose.yaml` built and started on the VPS: `/health` answers on
+      127.0.0.1:4091 only (`ss -ltn`), the vault gets its sections, `_system/runner.lock` and
+      `_system/dumps/base-2026-10-25.tar.gz`; a restart within the day dumps nothing more; RUNBOOK's
+      mode B restore run as written (the live folder set aside, the dump in its place, the company
+      created after the dump gone).
+- [x] Done when: `runner.test.ts` › « stopped 30 hours, runs every schedule once at start and leaves no
+      document half way »: a document received before the stop and never read (`ingested`) is `done`
+      after the start 30 hours later; `sweep`, `chasing`, `watchers`, `weekly`, `purge` and `dump` each
+      ran once more, and one more catch-up dumps nothing.
+- [ ] The Windows service and the 48 hours on a PC: `docs/TODO.md` › Memory.

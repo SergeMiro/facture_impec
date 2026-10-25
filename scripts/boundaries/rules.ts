@@ -64,7 +64,7 @@ export const RULES: Record<string, PackageRule> = {
     forbid: ['pg', 'pg-boss', 'drizzle-orm', 'drizzle-orm/*', '@electric-sql/*', ...MODELS],
   },
   'apps/api': {
-    imports: ['agents', 'connectors', 'core', 'db', 'domain', 'pdp-adapter', 'shared'],
+    imports: ['agents', 'connectors', 'core', 'db', 'domain', 'memory', 'pdp-adapter', 'shared'],
   },
 };
 

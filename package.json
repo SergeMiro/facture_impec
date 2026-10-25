@@ -25,6 +25,7 @@
     "org": "tsx scripts/org/run.ts",
     "accounting:check": "tsx scripts/accounting/check.ts",
     "vault:demo": "tsx scripts/vault-demo.ts",
+    "runner:restore": "tsx apps/api/scripts/runner-restore.ts",
     "test:e2e": "pnpm --filter @fi/addin test:e2e",
     "seed:demo": "pnpm --filter @fi/addin seed:demo",
     "addin:icons": "pnpm --filter @fi/addin icons",

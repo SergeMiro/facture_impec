@@ -26,6 +26,7 @@ import { type Listening, listen } from './listen';
 import { log as jsonLog } from './log';
 import { OutboxMailer, SmtpMailer } from './mail';
 import { createMicrosoftClient, MICROSOFT_HOSTS } from './microsoft';
+import { openRunner, type Runner } from './runner';
 import { type Directory, RechercheEntreprises } from './sirene';
 import { RememberingVies, type Vies, ViesClient } from './vies';
 import { startWorkers } from './workers';
@@ -67,6 +68,8 @@ export interface RunningApi {
   database: Database;
   boss: PgBoss;
   deps: ApiDeps;
+  /** With VAULT_DIR: the runner, holding the vault (src/runner.ts). */
+  runner: Runner | null;
   close(): Promise<void>;
 }
 
@@ -298,6 +301,14 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
   const wakeups = bossWakeups(boss);
 
   const now = options.now ?? (() => new Date());
+  let runner: Runner | null;
+  try {
+    runner = await openRunner({ env, database, now, log });
+  } catch (e) {
+    await boss.stop({ graceful: false });
+    if (ownDatabase) await database.close();
+    throw e;
+  }
   const pdp = options.pdp ?? pdpFromEnv(env);
   const deps: ApiDeps = {
     env,
@@ -336,6 +347,9 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
           pollingIntervalSeconds: options.pollingIntervalSeconds,
         }),
         ...(options.collectEverySeconds && { collectEverySeconds: options.collectEverySeconds }),
+        // Alone on its vault, the runner sweeps at start whatever the time slot: it may come back
+        // from a stop within the slot of its last sweep, with documents left half way.
+        sweepAtStart: runner !== null,
         log,
       })
     : () => {};
@@ -346,6 +360,7 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
   } catch (e) {
     stopSweep();
     await boss.stop({ graceful: false });
+    await runner?.close();
     if (ownDatabase) await database.close();
     throw e;
   }
@@ -354,10 +369,12 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
     database,
     boss,
     deps,
+    runner,
     async close() {
       stopSweep();
       await server.close();
       await boss.stop({ graceful: true, timeout: 5_000 });
+      await runner?.close();
       if (ownDatabase) await database.close();
     },
   };

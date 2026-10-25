@@ -1,7 +1,7 @@
 // One schema, two drivers: node-postgres when DATABASE_URL is set (sandbox, prod, a local Docker
 // Postgres), PGlite otherwise (Postgres 17 compiled to WASM, in-process: dev without Docker, and
 // every test). Both run the same migrations and the same queries.
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { PGlite } from '@electric-sql/pglite';
 import type { Logger, SQL } from 'drizzle-orm';
@@ -35,6 +35,8 @@ export interface OpenOptions {
   url?: string;
   /** PGlite data directory; omitted = in memory. */
   dir?: string;
+  /** A PGlite dump (`pglite.dumpDataDir`) to start from, into an empty `dir`: the runner's restore. */
+  restore?: Blob;
   /** Sees every query: tests count the writes of a sync with it. */
   logger?: Logger;
 }
@@ -59,7 +61,12 @@ export async function openDatabase(options: OpenOptions = {}): Promise<Database>
   const { drizzle } = await import('drizzle-orm/pglite');
   const { migrate } = await import('drizzle-orm/pglite/migrator');
   if (options.dir) mkdirSync(options.dir, { recursive: true });
-  const pglite = new PGlite(options.dir);
+  if (options.restore && (!options.dir || readdirSync(options.dir).length > 0)) {
+    throw new Error('a dump is restored into an empty data directory');
+  }
+  const pglite = new PGlite(options.dir, {
+    ...(options.restore && { loadDataDir: options.restore }),
+  });
   const db = drizzle(pglite, { schema, ...(options.logger && { logger: options.logger }) });
   return {
     kind: 'pglite',

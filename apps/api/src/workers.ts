@@ -71,6 +71,7 @@ import { adapterFor, awaitsGoLive, routeFor } from './platform';
 import { registryBehind } from './registry';
 import { runWeeklyReports } from './report';
 import { purgeExpired } from './rgpd';
+import { ran } from './schedules';
 import { runVatChecks } from './vat-checks';
 import type { Vies } from './vies';
 import { runWatchers } from './watchers';
@@ -532,6 +533,8 @@ export interface WorkerOptions {
   collectEverySeconds?: number;
   /** The process's jobs wake these workers (src/jobs.ts); without it they only poll. */
   wakeups?: Wakeups;
+  /** Sweeps at start even within the time slot of the last sweep (the runner, src/runner.ts). */
+  sweepAtStart?: boolean;
   log?: (message: string) => void;
 }
 
@@ -577,6 +580,7 @@ export async function startWorkers(
     await runInboundPoll(deps, options.log);
     await runUsageReport(deps, options.log);
     await runVatChecks(deps, options.log);
+    await ran(deps.db, 'sweep', deps.now());
   });
   await work(QUEUES.monitor, 2, (data) => runMonitor(deps, InvoiceJob.parse(data).invoiceId));
   await work(QUEUES.reportPayment, 1, (data) =>
@@ -606,11 +610,11 @@ export async function startWorkers(
   await work(QUEUES.connector, 1, (data) =>
     checkConnection(deps, ConnectorJob.parse(data).connectionId, options.log),
   );
-  const tick = () =>
+  const tick = (slot = true) =>
     boss
-      .send(QUEUES.sweep, {}, { singletonSeconds: options.sweepEverySeconds })
+      .send(QUEUES.sweep, {}, slot ? { singletonSeconds: options.sweepEverySeconds } : {})
       .catch((e: unknown) => options.log?.(`sweep not queued: ${message(e)}`));
-  void tick();
+  void tick(!options.sweepAtStart);
   const timer = setInterval(tick, options.sweepEverySeconds * 1000);
   timer.unref();
 
@@ -626,6 +630,7 @@ export async function startWorkers(
     const seconds = () => (performance.now() - started) / 1000;
     try {
       await run();
+      await ran(deps.db, name, deps.now());
       metrics.periodic.observe({ task: name, outcome: 'ok' }, seconds());
     } catch (e) {
       metrics.periodic.observe({ task: name, outcome: 'failed' }, seconds());

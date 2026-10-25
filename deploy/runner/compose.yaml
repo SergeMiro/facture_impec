@@ -1,0 +1,34 @@
+# The runner in mode B (docs/RUNBOOK.md § Runner): the API on the company's own server, alone on its
+# vault, its database in PGlite on a volume of its own (never inside the vault: a synchronised folder
+# breaks a live database). Settings in deploy/runner/.env (never committed, chmod 600): ADMIN_TOKEN,
+# VAULT_HOST_DIR (the vault's folder on this server), and the keys the company uses.
+#   docker compose -f deploy/runner/compose.yaml up -d --build
+name: facture-impec-runner
+services:
+  runner:
+    # No fixed hostname: the vault's lock (vault/_system/runner.lock) names the container, and a
+    # process of the same host with another pid that has ended counts as gone. Two containers given
+    # one name would each see the other's process as ended and both take the vault.
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    env_file: .env
+    environment:
+      VAULT_DIR: /vault
+      PGLITE_DIR: /data/pglite
+      DATABASE_URL: ''
+      # The image listens on every interface; the port below is published on this machine only.
+      RUNNER_CONTAINER: 'true'
+    volumes:
+      - ${VAULT_HOST_DIR:?set VAULT_HOST_DIR in deploy/runner/.env}:/vault
+      - runnerdata:/data
+    ports:
+      - 127.0.0.1:${RUNNER_PUBLISHED_PORT:-4000}:4000
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '5' }
+    # Stopped, it lets the vault go; a second runner on the same vault does not start.
+    stop_grace_period: 30s
+    restart: unless-stopped
+volumes:
+  runnerdata:

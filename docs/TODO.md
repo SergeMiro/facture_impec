@@ -329,7 +329,10 @@ The owner's questions (memory doc §12), each decided before the stage that need
 
 Needs a machine or a pilot:
 
-- [ ] **The runner as a Windows service**, and the memory doc's 48 hours on a PC switched off and on.
+- [ ] **The runner as a Windows service**, and the memory doc's 48 hours on a PC switched off and on;
+      on it, a restore from `vault/_system/dumps/` (`pnpm runner:restore`, RUNBOOK § The runner).
+- [ ] **Mode B on a pilot's server**: the vault's folder writable by the container (uid 1000) while
+      their sync client (Drive, OneDrive, Syncthing) owns it; the dump's size in their sync quota.
 - [ ] **50 real chains** (quote → invoice, purchase → sale) linked by M2's rules, from a pilot's vault.
 - [ ] **Where a sale names its quote, TODO(verify)**: M2 reads the devis number in BT-13 or BT-14
       (`docs/DECISIONS.md` D12); check on a pilot's real invoices, and their ERP's export, which

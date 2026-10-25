@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
@@ -31,6 +31,14 @@ const priceList = z.preprocess(
     .max(5)
     .optional(),
 );
+/** A path of .env, read from the repository root when relative. */
+const fromRoot = (path: string) => (isAbsolute(path) ? path : resolve(REPO_ROOT, path));
+/** Whether `path` is `folder` or inside it. */
+const within = (path: string, folder: string) => {
+  const rel = relative(folder, path);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+};
+const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost']);
 const flag = (fallback: boolean) =>
   z.preprocess(
     (v) => (typeof v === 'string' ? !['false', '0', 'no', 'off'].includes(v.toLowerCase()) : v),
@@ -54,6 +62,13 @@ export const ServerEnvSchema = z
     MOCK_PDP_PORT: port(4010),
     DATABASE_URL: optionalText(),
     PGLITE_DIR: z.string().default('.data/pglite'),
+    /**
+     * The company's vault (docs/DECISIONS.md D12): set, this API is the runner on the company's
+     * machine or server, alone on its vault, its database in PGLITE_DIR outside it.
+     */
+    VAULT_DIR: optionalText(),
+    /** The runner in a container: it listens on every interface, its port published on 127.0.0.1. */
+    RUNNER_CONTAINER: flag(false),
     ADMIN_TOKEN: optionalText(24),
     /** Prometheus' scrape token for GET /metrics (docs/DECISIONS.md D10); unset, the route is off. */
     METRICS_TOKEN: optionalText(24),
@@ -193,9 +208,26 @@ export const ServerEnvSchema = z
         }
       }
     }
+    if (env.VAULT_DIR) {
+      const runner = (path: string, message: string) =>
+        ctx.addIssue({ code: 'custom', path: [path], message });
+      const vault = fromRoot(env.VAULT_DIR);
+      const data = fromRoot(env.PGLITE_DIR);
+      if (env.DATABASE_URL) {
+        runner('DATABASE_URL', 'the runner keeps its database in PGLITE_DIR: leave it empty');
+      } else if (within(data, vault) || within(vault, data)) {
+        runner('PGLITE_DIR', 'outside VAULT_DIR: a synchronised folder breaks a live database');
+      }
+      if (!env.RUNNER_CONTAINER && !LOOPBACK.has(env.API_HOST)) {
+        runner(
+          'API_HOST',
+          'the runner listens on this machine only (127.0.0.1); in a container, RUNNER_CONTAINER=true with the port published on 127.0.0.1',
+        );
+      }
+    }
     if (env.FI_ENV === 'local') return;
     const keys = [
-      'DATABASE_URL',
+      ...(env.VAULT_DIR ? [] : ['DATABASE_URL' as const]),
       'ADMIN_TOKEN',
       ...(env.FI_ENV === 'sandbox' ? ['B2BROUTER_API_KEY' as const] : []),
     ] as const;
@@ -219,7 +251,8 @@ export const ServerEnvSchema = z
   })
   .transform((env) => ({
     ...env,
-    PGLITE_DIR: isAbsolute(env.PGLITE_DIR) ? env.PGLITE_DIR : resolve(REPO_ROOT, env.PGLITE_DIR),
+    PGLITE_DIR: fromRoot(env.PGLITE_DIR),
+    VAULT_DIR: env.VAULT_DIR && fromRoot(env.VAULT_DIR),
     ADDIN_ORIGINS: env.ADDIN_ORIGINS.split(',')
       .map((o) => o.trim())
       .filter(Boolean),

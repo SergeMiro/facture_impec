@@ -327,3 +327,14 @@ Each line says where it came from and what would bring it back.
 | Recall through a guess | Level 2 follows every link, inferred ones too, and does not say the step was a guess | A wrong guess leads recall astray in a pilot: the answer says « par un lien à confirmer ». |
 | Partial invoices against one order or quote | An invoice matches by its whole amount; an advance or a delivery in parts links only by a number or a quoted sentence | A pilot's chains of partial invoices fall under 90 %: a rule summing a quote's invoices against it. |
 | Articles in a large catalogue | A line's article is found by scanning the catalogue (page, code, full name, then ≥ 60 % of its words as a guess) | A catalogue of thousands of articles: codes and names in the index (`memory_pages` keys) instead of a scan. |
+
+## Memory: the runner (M3, 2026-10-25)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| A runner on Postgres | Refused: `DATABASE_URL` with `VAULT_DIR` does not start | A company's volume misses BTP plan §11's budgets on PGlite (`pnpm perf` on PGlite first). |
+| The memory index of a company set up after the runner started | The index (`MemoryStore`) is attached at start, for the one company the database holds | The pane or the relay creates the company on a running runner (M4/M6): attach it then. |
+| A dump that outlives PGlite's Postgres version | PGlite's data folder as it is (`dumpDataDir`), restored by the same PGlite | Before moving `@electric-sql/pglite` to a new Postgres major: a logical dump (SQL) next to it, or a restore of last week's dumps tested on the new version. |
+| The business tables rebuilt from the vault | The daily dump restores them as of 03:00; what happened since is in the vault's pages but not in the tables (RUNBOOK § The runner) | A pilot loses a machine between two dumps, or the owner wants the vault alone to be enough. |
+| A crashed container's lock | Lapses after 5 minutes; the restarted container waits and starts (`restart: unless-stopped`) | A pilot's restarts show the wait matters: a holder identity that survives the container (a boot id in the data volume). |
+| The vault's owner in mode B | The container writes as uid 1000; the vault's folder must allow it | A pilot's sync client owns the folder as another user: a `user:` setting with the data volume's owner to match. |

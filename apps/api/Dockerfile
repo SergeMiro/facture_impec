@@ -12,6 +12,8 @@ WORKDIR /app
 RUN corepack enable
 COPY . .
 RUN pnpm install --frozen-lockfile --prod --filter "@fi/api..." && pnpm store prune
+# The runner's database volume (deploy/runner/): mounted here, it takes this folder's owner.
+RUN mkdir -p /data && chown node:node /data
 # Inside a container the API listens on every interface; the proxy in front terminates TLS.
 ENV NODE_ENV=production API_HOST=0.0.0.0 API_PORT=4000
 USER node

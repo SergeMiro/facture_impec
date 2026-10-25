@@ -12,6 +12,7 @@ describe('ServerEnvSchema', () => {
       API_HOST: '127.0.0.1',
       MOCK_PDP_PORT: 4010,
       PGLITE_DIR: `${REPO_ROOT}.data/pglite`,
+      RUNNER_CONTAINER: false,
       API_WORKERS: true,
       PDP_SYNC_INTERVAL_SECONDS: 300,
       MOCK_PDP_URL: 'http://localhost:4010',
@@ -83,6 +84,27 @@ describe('ServerEnvSchema', () => {
       ADMIN_TOKEN: 'x'.repeat(24),
     });
     expect(env.FI_ENV).toBe('prod');
+  });
+
+  it('keeps the runner on its machine, its database out of the vault and in PGlite', () => {
+    const runner = { VAULT_DIR: 'vault', PGLITE_DIR: '.data/pglite' };
+    const env = ServerEnvSchema.parse({ ...runner, FI_ENV: 'prod', ADMIN_TOKEN: 'x'.repeat(24) });
+    expect(env.VAULT_DIR).toBe(resolve(REPO_ROOT, 'vault'));
+    expect(env.DATABASE_URL).toBeUndefined();
+
+    const refused = (values: Record<string, string>, field: RegExp) =>
+      expect(() => ServerEnvSchema.parse({ ...runner, ...values })).toThrow(field);
+    refused({ DATABASE_URL: 'postgres://fi@db/fi' }, /DATABASE_URL/);
+    refused({ PGLITE_DIR: 'vault/_system/base' }, /outside VAULT_DIR/);
+    refused({ VAULT_DIR: '.data' }, /outside VAULT_DIR/);
+    refused({ API_HOST: '0.0.0.0' }, /this machine only/);
+    const boxed = ServerEnvSchema.parse({
+      ...runner,
+      API_HOST: '0.0.0.0',
+      RUNNER_CONTAINER: 'true',
+    });
+    expect(boxed.API_HOST).toBe('0.0.0.0');
+    expect(ServerEnvSchema.parse({ ...runner, API_HOST: 'localhost' }).API_HOST).toBe('localhost');
   });
 
   it('is what .env.example lists, with the variables Vite and Astro read', () => {

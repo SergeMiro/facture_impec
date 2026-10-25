@@ -19,6 +19,7 @@
     "@fi/core": "workspace:*",
     "@fi/db": "workspace:*",
     "@fi/domain": "workspace:*",
+    "@fi/memory": "workspace:*",
     "@fi/pdp-adapter": "workspace:*",
     "@fi/shared": "workspace:*",
     "@hono/node-server": "^2.1.5",

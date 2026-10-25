@@ -98,6 +98,7 @@ describe('migrations', () => {
       'payment_reports',
       'pdp_submissions',
       'rule_exceptions',
+      'schedule_runs',
       'sessions',
       'sheet_mappings',
       'signup_requests',

@@ -77,8 +77,8 @@ Before production: fill the publisher identity in `apps/site/src/content/site.ts
 
 Without `DATABASE_URL` the API opens an embedded PGlite database in `.data/pglite` (git-ignored) and
 migrates it at startup. To start over: stop the API, `rm -rf .data/pglite`. With
-`DATABASE_URL=postgres://…` it uses that Postgres instead (required in sandbox and prod); migrations
-run the same way. After changing `packages/db/src/schema.ts`: `pnpm --filter @fi/db generate`, read the
+`DATABASE_URL=postgres://…` it uses that Postgres instead (required in sandbox and prod, except for
+the runner: § The runner); migrations run the same way. After changing `packages/db/src/schema.ts`: `pnpm --filter @fi/db generate`, read the
 new SQL file in `packages/db/drizzle/`, commit it.
 
 ## Using the API by hand (local)
@@ -714,6 +714,65 @@ with the key's last four characters and the account. If a company's real sends s
 `pdp_not_configured` (« La connexion à votre plateforme… n'est pas encore configurée ») after a change
 of `PDP_KEY_SEALING_KEY`, the owner pastes the key again;
 « Revenir à notre connexion » is refused once the company is live (it can only replace the key).
+
+## The runner (memory M3)
+
+The API started with `VAULT_DIR` is the runner: one company's back end on its own machine (mode A)
+or server (mode B), its files in the company's vault (`docs/DECISIONS.md` D12). Same code as the
+hosted API. It serves one company, listens on the machine only, keeps its database in PGlite in
+`PGLITE_DIR` (outside the vault: a synchronised folder breaks a live database), holds the vault
+while it runs (`vault/_system/runner.lock`, renewed every 100 s, lapses 5 minutes after a crash) and
+dumps its database into `vault/_system/dumps/base-YYYY-MM-DD.tar.gz` once a day after 03:00 Paris,
+the last 7 kept.
+
+Mode A (the Windows service is `docs/TODO.md` › Memory): in `.env`, `VAULT_DIR=<the vault>` and
+`PGLITE_DIR=<a folder outside it>`, then `pnpm --filter @fi/api start`.
+
+Mode B (Docker), on the company's server:
+
+```bash
+# deploy/runner/.env (chmod 600, never committed): ADMIN_TOKEN, VAULT_HOST_DIR=<the vault's folder>,
+# the keys the company uses; RUNNER_PUBLISHED_PORT if 4000 is taken.
+docker compose -f deploy/runner/compose.yaml up -d --build
+curl -s http://127.0.0.1:4000/health
+```
+
+The container runs as `node` (uid 1000): the vault's folder must be writable by it. Its database is
+the `runnerdata` volume; the port is published on 127.0.0.1 only.
+
+What stops it from starting, each with the variable to change:
+
+| Refusal | Why |
+|---|---|
+| `DATABASE_URL`: leave it empty | The runner keeps its database in PGlite; a Postgres runner is `docs/DEFERRED.md` |
+| `PGLITE_DIR`: outside `VAULT_DIR` | The database's live files in a synchronised folder break it |
+| `API_HOST`: this machine only | Nothing outside the machine reaches the runner; in a container, `RUNNER_CONTAINER=true` and the port published on 127.0.0.1 |
+| « a runner serves one company » | Its database holds two companies: one runner per company |
+| `VaultLocked: the vault is held by …` | Another runner holds the vault (the host and process are named), or one crashed less than 5 minutes ago: wait, it lapses |
+
+**Schedules after a stop.** Each periodic task's last run and count are in `schedule_runs`
+(`sweep`, `chasing`, `watchers`, `weekly`, `purge`, `dump`). At start each runs once, however long
+the stop: the sweep queues again the documents left half way, chasing and the watchers see the days
+missed, the weekly report goes out once for the week, the dump is made if 03:00 passed since the
+last one.
+
+**Restore the database from a dump**, the runner stopped:
+
+```bash
+# Mode A: into an empty folder, then point PGLITE_DIR at it and start again.
+pnpm runner:restore <vault>/_system/dumps/base-YYYY-MM-DD.tar.gz <an empty folder>
+# Mode B: the live folder set aside, the dump put in its place.
+docker compose -f deploy/runner/compose.yaml stop
+docker compose -f deploy/runner/compose.yaml run --rm runner sh -c \
+  'mv /data/pglite /data/pglite.before && apps/api/node_modules/.bin/tsx apps/api/scripts/runner-restore.ts /vault/_system/dumps/base-YYYY-MM-DD.tar.gz /data/pglite'
+docker compose -f deploy/runner/compose.yaml up -d
+```
+
+It prints the companies the dump holds. What happened after the dump is not in it: the memory index
+is read again from the vault's pages at start, but the invoices, chasing and actions of that time are
+gone from the database (rebuilding them from the vault is `docs/DEFERRED.md`). Before anything is
+sent again, look in the platform's account for what left after the dump's time: the database no
+longer knows those sends, so the same invoice sent again is a second invoice.
 
 ## Observability
 

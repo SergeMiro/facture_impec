@@ -120,6 +120,9 @@ importers:
       '@fi/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@fi/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
       '@fi/pdp-adapter':
         specifier: workspace:*
         version: link:../../packages/pdp-adapter

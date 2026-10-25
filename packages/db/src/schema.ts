@@ -1719,6 +1719,16 @@ export const memoryRecalls = pgTable(
   (t) => [index('memory_recalls_at').on(t.tenantId, t.at)],
 );
 
+/**
+ * Each periodic task's last run (memory doc §5): after a stop, a task that missed its time runs once
+ * at start, however many times it was missed. Of the process, not of a company.
+ */
+export const scheduleRuns = pgTable('schedule_runs', {
+  name: text('name').primaryKey(),
+  lastRunAt: timestamp('last_run_at', { withTimezone: true }).notNull(),
+  runs: integer('runs').notNull().default(0),
+});
+
 export type TenantRow = typeof tenants.$inferSelect;
 export type UploadRow = typeof uploads.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
