@@ -11,6 +11,15 @@ date: 2026-05-16
 status: accepte
 ht: "45337.00"
 ttc: "54404.40"
+lines:
+  - label: Main-d'œuvre
+    quantity: 302
+    unit_price: "45.00"
+    amount: "13590.00"
+  - label: Fournitures et petit matériel
+    amount: "11334.25"
+  - label: Travaux selon descriptif
+    amount: "20412.75"
 links:
   - kind: belongs_to
     to: chantiers/2026-hotel-du-lac-kir-facade

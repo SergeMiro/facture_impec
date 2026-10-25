@@ -15,6 +15,7 @@ import { type Database, isNull, openDatabase, tenants } from '@fi/db';
 import { MemoryStore, MemoryVault } from '@fi/memory';
 import type { ServerEnv } from '@fi/shared/env';
 import { logLine } from './log';
+import { invoiceSources } from './prepare';
 import { LINT_HOUR, RULES_HOUR, runLint, runRules } from './rules';
 import { dailyDue, lastRun, ran } from './schedules';
 
@@ -97,10 +98,12 @@ export async function openRunner(options: {
   }
   // A company set up after the runner started gets its index at the next start (docs/DEFERRED.md).
   const store = companies[0] && new MemoryStore(database.db, companies[0].id);
+  // An invoice a page names is looked up; the other sources are vouched by what wrote them.
   const vault = await MemoryVault.open(root, {
     host: hostname(),
     clock: now,
     ...(store && { store }),
+    ...(companies[0] && { sourceExists: invoiceSources(database.db, companies[0].id) }),
   });
 
   // Each daily task once its hour has passed, one failing leaving the others to run: the lint

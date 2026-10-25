@@ -126,6 +126,8 @@ const Line = z.object({
   quantity: z.number().optional(),
   unit_price: Money.optional(),
   amount: Money,
+  /** Its VAT rate in percent (20, 10, 5.5), when the document gives it line by line. */
+  vat_rate: z.number().min(0).max(100).optional(),
   article: PagePath.optional(),
   /** The article's code as the document writes it (BT-155): the seller's own. */
   code: z.string().min(1).optional(),

@@ -306,6 +306,8 @@ export interface InvoiceInput {
   known?: (Known & { self: string }) | undefined;
   /** A credit note: the sent invoice it cancels (src/credits.ts). */
   creditOf?: string | undefined;
+  /** Held from the autopilot: only a person's « Envoyer » sends it (prepared by memory M6). */
+  held?: boolean | undefined;
 }
 
 /** The buyer completed from its confirmed customer (plan §6 phase 2): the sheet always wins. */
@@ -345,6 +347,7 @@ export async function createInvoice(
           excelBinding: input.excelBinding ?? null,
           partyId,
           creditOf: input.creditOf ?? null,
+          autopilotHeld: input.held ?? false,
         })
         .returning();
       if (!inserted) throw new Error('insert returned nothing');

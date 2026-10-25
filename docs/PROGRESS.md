@@ -2297,3 +2297,47 @@ e-mail, their drafts come with M6 and the pane's view after its redesign; BTP-AU
 run; `misplaced` and `no_deadline` are questions. Left for later: `docs/DEFERRED.md` § Memory: rules
 and lint, `docs/TODO.md` › Memory (TVA deadline with an accountant, a chantier's own margin threshold, the
 pane's « Mémoire » view).
+
+## Memory M6: prepare (started 2026-10-25)
+
+`docs/plans/memory.md` M6, memory doc §8 (« prepare »). Criteria, written before the code:
+
+- **An invoice from an accepted quote** (`packages/agents/src/prepare.ts`): the quote's lines become
+  the invoice's lines as they are (label, quantity, unit price, amount); the VAT from the quote (each
+  line's rate, else the one rate its HT and TTC give), autoliquidation (AE, VATEX-FR-AE, the mention)
+  when the company works for that customer as its sous-traitant, the chantier's retenue de garantie
+  (note ABU), the quote's number as BT-14 and the chantier's reference as BT-11, the seller, payment
+  and legal notes from the company's profile as the sheet makes them. Nothing is prepared from a
+  quote that is not accepted, has no lines, was read by OCR or a model, or whose lines, HT or TTC
+  the invoice would not repeat to the cent: the reason is said, no amount is ever changed.
+- **A situation n+1 from situation n and the progress**: the cumulative works HT to date (the ERP's
+  figure, or a percentage of the chantier's accepted quotes), minus the last situation's; its number
+  follows; VAT as the last situation; the retenue and the notes ABU and AAI as the sheet writes them.
+- **The validator before anything is shown**: the core rules run with what the company knows (the
+  numbers issued, the customer's settings, the BTP context); an error and nothing is prepared.
+- **The covering text** is a template (`fr.json`), no model.
+- **The API** (`POST /memory/prepare/quote`, `POST /memory/prepare/situation`): the next number of
+  the company's series, the invoice created as any invoice but held from the autopilot (it leaves
+  only by « Envoyer »), its page written into the vault when there is one, audited.
+- **Done when**: the 20 accepted demo quotes give 20 valid invoices with every amount the quote's;
+  two runs give the same frontmatter byte for byte.
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| An invoice from an accepted quote | ✅ | `packages/agents/src/prepare.test.ts` « keeps each line's own rate », « a line without its rate takes the quote's », « invoices a donneur d'ordre without VAT, under reverse charge » (AE, VATEX-FR-AE, the mention in the mail), « holds no retenue outside the building trade, or on a chantier without one »; refusals « a quote not accepted, or read by a model », « a quote without lines », « lines that do not make the quote's HT, or a line that is not quantity × price », « a VAT nothing gives », « VAT on a quote to a donneur d'ordre », « a TTC the invoice's rounding would not repeat » |
+| A situation n+1 | ✅ | `prepare.test.ts` › nextSituation « invoices the progress since the last situation » (number 5 after 4, the progress as its one line, ABU and AAI, the page `…_sit-5`), « refuses no progress, a read situation, or no VAT », « autoliquidation, no retenue, the title as the reference » |
+| The validator first | ✅ | « what the validator does not pass » (BTP-RG-01), « prepares nothing without a due date » (FF-DUE-01), « passes the history and the customer's settings to the validator » (FF-NUM-02, FF-PO-01) |
+| Covering text from a template | ✅ | « writes a mail that says the amount and the due date »; `prepare.text.*` in `fr.json` |
+| The API | ✅ | `apps/api/src/prepare.test.ts` « creates a checked invoice held for « Envoyer », its page in the vault; twice is once » (`validated`, `autopilot: { at: null, held: true }`, BT-14 and BT-11, retenue 5 %, the page's source `invoice:<id>` and its `fulfils` link to the quote, audit `memory.prepare`), « says why it prepares nothing, and creates nothing » (404, not a quote, not accepted, no fiche, invoiced, maybe invoiced), « invoices the progress since the last one; the same progress twice is once » (50 % of the accepted quotes, situation 2 then 3), « refuses a situation number taken with another progress », « says why it prepares nothing » (situation), « finds an invoice a page names » (the runner's source check) |
+| Done when | ✅ | « makes 20 valid invoices of the 20 accepted quotes, every amount the quote's » (HT, TTC and every line to the cent, no error) and « gives the same page byte for byte twice » (`writePage` of the 20) |
+
+The demo's quotes now carry lines (hours, supplies, works; the generator draws no more numbers, so
+the rest of the vault is unchanged). The sheet's seller, notes, terms and BTP code moved to
+`packages/core/src/sheet/company.ts`, shared by prepare; `nextInvoiceNumber`
+(`packages/core/src/numbering.ts`) gives the next number of the company's series. A bug found on the
+way: a retenue on a rate was rounded half up and could exceed the 5 % its own rule allows; it is
+rounded down now (« holds a retenue of an odd TTC under the 5 % »).
+
+Deviations (D12): prepare runs on a person's request only, the progress comes with the request, the
+runner checks `invoice:<id>` sources. Left for later: `docs/DEFERRED.md` § Memory: prepare,
+`docs/TODO.md` › Memory › Prepare.

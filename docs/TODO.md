@@ -376,6 +376,17 @@ Rules and lint (M5, built on 2026-10-25):
 - [ ] **The lint on a pilot's vault**: its findings for a week, to see which are noise before the
       e-mail counts them.
 
+Prepare (M6, built on 2026-10-25):
+
+- [ ] **TODO(verify) with an accountant**: the retenue de garantie on a rate computed on the TTC
+      (loi 71-584 art. 1, « montant des marchés »), rounded down; and the quote's number in BT-14 of
+      the invoice made from it.
+- [ ] **The pane's « Préparer la facture »** (Codex's redesign): on a « devis accepté non facturé »
+      hit, `POST /memory/prepare/quote`; on « situation due », the progress asked and
+      `POST /memory/prepare/situation`; the invoice shown with its covering text and « Envoyer ».
+- [ ] **A pilot's real quote and situation through prepare**: their lines and VAT rounding, the
+      mail template's wording, a chantier's retenue.
+
 ## Excel on the web E2E
 
 - [ ] A Microsoft account that can upload an add-in in Excel on the web, then

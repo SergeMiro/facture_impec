@@ -1,6 +1,7 @@
 // Agents (plan §6): providers, the pseudonymizer, the orchestrator, MappingAgent, ExplainAgent,
 // MonitorAgent, the document classifier (BTP stage 2), and the deterministic PartyAgent, TestAgent,
-// CollectAgent, ReportAgent, InboundAgent, document deadlines and the proactive rules (memory M5).
+// CollectAgent, ReportAgent, InboundAgent, document deadlines, the proactive rules (memory M5)
+// and prepare (memory M6).
 // Node only: the add-in never imports this package.
 export * from './ai';
 export * from './chat';
@@ -17,6 +18,7 @@ export * from './monitor';
 export * from './obligations';
 export * from './orchestrator';
 export * from './party';
+export * from './prepare';
 export * from './providers/env';
 export * from './providers/models';
 export * from './providers/net';

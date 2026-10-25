@@ -3,11 +3,20 @@
 // nothing the sheet lacks is invented, except what follows from the tenant's own settings.
 import { t } from '@fi/shared';
 import type { SheetCheck } from '../checks/types';
-import { computeInvoice } from '../compute';
-import type { AllowanceCharge, BtpFacts, InvoiceDraft, Line, Note } from '../model';
+import type { AllowanceCharge, BtpFacts, InvoiceDraft, Line } from '../model';
 import { divRound, formatAmount, isDecimal, lineAmount, percentOf, roundToCents } from '../money';
 import { frDecimal, frMoney } from '../pdf/format';
 import { cellAddress, isBlank, type RawCell, type SheetSnapshot } from './cells';
+import {
+  dueDateOf,
+  legalNotes,
+  PROCESS_TYPE,
+  paymentOf,
+  paymentTermsOf,
+  sellerParty,
+  taxInclusive,
+  withBtp,
+} from './company';
 import { isTotalRow } from './detect';
 import {
   InvoiceDefaults,
@@ -198,8 +207,6 @@ const LINE_PATHS: Partial<Record<InvoiceField, string>> = {
   lineDiscountPercent: 'allowances[0]',
 };
 
-const PROCESS_TYPE = { goods: 'B1', services: 'S1', mixed: 'M1' } as const;
-
 /**
  * The line before a discount of `percent` %, from the total after it: net × 100 / (100 − percent),
  * to the cent. The discount is then the difference, so the sheet's total stays exact.
@@ -355,11 +362,7 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
       cells['buyer.electronicAddress.id'] = cells['buyer.ids[0].id'];
     }
   }
-  let dueDate = head('dueDate');
-  if (dueDate === undefined && defaults.paymentDays !== undefined && issueDate?.length === 10) {
-    const ms = Date.parse(`${issueDate}T00:00:00Z`) + defaults.paymentDays * 86_400_000;
-    if (Number.isFinite(ms)) dueDate = new Date(ms).toISOString().slice(0, 10);
-  }
+  const dueDate = head('dueDate') ?? dueDateOf(issueDate, defaults);
   const line1 = head('buyerAddress');
   const postCode = head('buyerPostCode');
   const city = head('buyerCity');
@@ -367,23 +370,12 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
   const email = head('buyerEmail');
   const deliveryDate = head('deliveryDate');
   const currency = head('currency') ?? defaults.currency;
-  const paymentTerms =
-    head('paymentTerms') ??
-    defaults.paymentTerms ??
-    (defaults.paymentDays !== undefined
-      ? t('invoice.default.paymentTerms', { days: defaults.paymentDays })
-      : undefined);
+  const paymentTerms = head('paymentTerms') ?? paymentTermsOf(defaults);
   const purchaseOrder = head('purchaseOrder');
   const buyerName = head('buyerName');
   const buyerVatId = head('buyerVatId');
   const chantier = head('chantier');
   const btp = btpFacts(head, cells, problems);
-
-  const notes: Note[] = [
-    { subjectCode: 'PMT', text: defaults.recoveryFeeNote ?? t('invoice.default.note.PMT') },
-    { subjectCode: 'PMD', text: defaults.latePenaltyNote ?? t('invoice.default.note.PMD') },
-    { subjectCode: 'AAB', text: defaults.discountNote ?? t('invoice.default.note.AAB') },
-  ];
 
   const lineRows = group.filter(ctx.hasLine);
   const lines = lineRows.map((row, i): Omit<Line, 'netAmount'> => {
@@ -511,15 +503,8 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
     paymentTerms,
     purchaseOrderReference: purchaseOrder,
     ...(chantier && { projectReference: chantier }),
-    notes,
-    seller: {
-      name: seller.name,
-      ids: defaults.siret ? [{ id: defaults.siret, scheme: '0009' }] : [],
-      legalId: { id: seller.siren, scheme: '0002' },
-      ...(seller.vatId && { vatId: seller.vatId }),
-      electronicAddress: { id: seller.siren, scheme: '0225' },
-      ...(seller.address && { address: seller.address }),
-    },
+    notes: legalNotes(defaults),
+    seller: sellerParty(seller, defaults),
     buyer: {
       name: buyerName,
       ids: siret ? [{ id: siret, scheme: '0009' }] : [],
@@ -534,38 +519,10 @@ function buildInvoice(rowKey: string, group: Row[], ctx: BuildContext): SheetInv
       ...(email && { contact: { email } }),
     },
     ...(deliveryDate && { delivery: { date: deliveryDate } }),
-    payment: {
-      meansCode: defaults.paymentMeansCode,
-      accounts: defaults.iban
-        ? [{ iban: defaults.iban, name: seller.name, bic: defaults.bic }]
-        : [],
-    },
+    payment: paymentOf(seller, defaults),
     lines,
   };
-  if (btp) {
-    const { retenue, situation } = btp;
-    // A rate alone holds that share of the TTC (loi n° 71-584, art. 1: « leur montant »).
-    const ttc = retenue?.rateBps && retenue.amount === undefined ? taxInclusive(draft) : undefined;
-    if (retenue && ttc !== undefined)
-      retenue.amount = Math.round((ttc * (retenue.rateBps ?? 0)) / 10_000);
-    // XP Z12-014 annexe A cas n°26: the retenue is a note ABU; a situation has no field at all, so a
-    // note AAI. TODO(verify) that a PDP passes AAI through unchanged (docs/TODO.md).
-    if (retenue) notes.push({ subjectCode: 'ABU', text: retenueNote(retenue, currency) });
-    if (situation) {
-      const number = String(situation.number);
-      notes.push({
-        subjectCode: 'AAI',
-        text:
-          situation.cumulative === undefined
-            ? t('invoice.default.note.AAI.situation', { number })
-            : t('invoice.default.note.AAI.cumulative', {
-                number,
-                cumulative: frMoney(situation.cumulative, currency),
-              }),
-      });
-    }
-    draft.btp = btp;
-  }
+  if (btp) withBtp(draft, btp);
 
   const total = sheetTotal(group, ctx);
   if (total) {
@@ -668,15 +625,6 @@ function btpFacts(
   return { ...(retenue && { retenue }), ...(situation && { situation }) };
 }
 
-function retenueNote(retenue: NonNullable<BtpFacts['retenue']>, currency: string | undefined) {
-  const amount = retenue.amount === undefined ? undefined : frMoney(retenue.amount, currency);
-  if (!retenue.rateBps) return t('invoice.default.note.ABU.amount', { amount: amount ?? '' });
-  const rate = frDecimal(String(retenue.rateBps / 100));
-  return amount === undefined
-    ? t('invoice.default.note.ABU.rateOnly', { rate })
-    : t('invoice.default.note.ABU.rate', { rate, amount });
-}
-
 /**
  * A line whose amount the sheet contradicts, when a mistake explains it: the TTC in the HT column
  * (A1), the discount taken twice or a percentage typed as euros (A3), else a typed amount no formula
@@ -756,14 +704,6 @@ function sheetTotal(
   if (found.every((v) => v.value === first.value)) return { ...first, typed };
   const cents = found.map((v) => roundToCents(v.value) ?? 0).reduce((a, b) => a + b, 0);
   return { value: (cents / 100).toFixed(2), cell: first.cell, typed };
-}
-
-function taxInclusive(draft: InvoiceDraft): number | undefined {
-  try {
-    return computeInvoice(draft).totals.taxInclusive;
-  } catch {
-    return undefined;
-  }
 }
 
 /** The cell behind an issue path: itself, its nearest mapped parent, or its first mapped child. */

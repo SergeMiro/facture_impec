@@ -11,6 +11,15 @@ date: 2026-03-10
 status: accepte
 ht: "55351.00"
 ttc: "66421.20"
+lines:
+  - label: Main-d'œuvre
+    quantity: 369
+    unit_price: "45.00"
+    amount: "16605.00"
+  - label: Fournitures et petit matériel
+    amount: "13837.75"
+  - label: Travaux selon descriptif
+    amount: "24908.25"
 links:
   - kind: belongs_to
     to: chantiers/2026-renovation-le-parc-batiment-b

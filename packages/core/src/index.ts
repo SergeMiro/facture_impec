@@ -10,6 +10,7 @@ export * from './inbound';
 export * from './layout';
 export * from './model';
 export * from './money';
+export * from './numbering';
 export * from './party';
 export { frDate, frDecimal, frMoney, frPrice, NBSP } from './pdf/format';
 export * from './rules';

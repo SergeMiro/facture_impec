@@ -131,6 +131,13 @@ import {
 import { acceptFinding, decideSynonym, NormalBody, removeException, SynonymBody } from './patterns';
 import { PaymentBody, recordPayment } from './payments';
 import { awaitsGoLive } from './platform';
+import {
+  PrepareQuoteBody,
+  type PrepareResult,
+  PrepareSituationBody,
+  prepareFromQuote,
+  prepareSituation,
+} from './prepare';
 import { reportFor } from './report';
 import { DeleteBody, deleteTenant, exportTenant } from './rgpd';
 import { decideFinding, FindingDecision, openFindings, openRuleHits } from './rules';
@@ -814,6 +821,26 @@ export function createApp(deps: ApiDeps) {
     return c.json(
       await decideFinding(deps, tenant, c.get('principal'), c.req.param('id'), decision.data),
     );
+  });
+
+  // Prepare (memory M6, src/prepare.ts): an accepted quote, or a chantier's next situation, made an
+  // invoice held for « Envoyer »; the same request twice gives the same invoice.
+  const prepared = async (c: Context<TenantEnv>, done: Promise<PrepareResult>) => {
+    const { row, created, text, page } = await done;
+    const invoice = invoiceDetail(row, await invoiceDetailData(deps, row));
+    return c.json({ invoice, created, text, page }, created ? 201 : 200);
+  };
+  api.post('/memory/prepare/quote', async (c) => {
+    const input = await body(c, PrepareQuoteBody);
+    const tenant = c.get('tenant');
+    if (input.test) assertTestMode(deps, tenant);
+    return prepared(c, prepareFromQuote(deps, tenant, c.get('principal'), input));
+  });
+  api.post('/memory/prepare/situation', async (c) => {
+    const input = await body(c, PrepareSituationBody);
+    const tenant = c.get('tenant');
+    if (input.test) assertTestMode(deps, tenant);
+    return prepared(c, prepareSituation(deps, tenant, c.get('principal'), input));
   });
 
   // « C'est fait » or « Ignorer » on a deadline; its drafts are withdrawn.

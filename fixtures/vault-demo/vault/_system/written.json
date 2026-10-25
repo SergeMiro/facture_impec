@@ -75,19 +75,19 @@
   "sha": "3b0f89fd5ba0ad0241fd4cda7cdf869486c878105d19999255deaf793597c43e"
  },
  "finances/2025/2025-12-23_devis_sci-les-tilleuls_d-2026-001.md": {
-  "sha": "22f40d6793ede57738910e5c6ace69c31ec6a6bb152da41fec2161245c37a04e"
+  "sha": "f10ce3a0ccf19e1fad54cf18f09d7b132ab4cfea559b962e270cbc13d6647471"
  },
  "finances/2025/2025-12-28_devis_sci-les-tilleuls_d-2026-006.md": {
-  "sha": "974623a2ba142daea31a962d170a265971fec6d7eabe010769e775335dd64889"
+  "sha": "5f7bf4b65e63d2b6ff44932806c3fb061c0945b0794f93a3c99493ae4c42b2f2"
  },
  "finances/2026/2026-01-02_devis_sci-les-tilleuls_d-2026-011.md": {
-  "sha": "6433037f1500031161f9dde77735344b3306f4c9f6575b288a8c419f3193dc15"
+  "sha": "8bad4fcae79a88d6a8bcabfba40e336628f88db37fff8fbca0c9e58d2fbb2b41"
  },
  "finances/2026/2026-01-07_devis_sci-les-tilleuls_d-2026-016.md": {
-  "sha": "3c87a494749257c36b5aa009e5f52404cce8e59554a907f7561fe7b08fa58da7"
+  "sha": "9c344c617616e8cfa513fb90316c232da1d1f28726cd943382d554dbaeaec3d3"
  },
  "finances/2026/2026-01-12_devis_sci-les-tilleuls_d-2026-021.md": {
-  "sha": "f3ac9716fe7fecbb3760e0bb8b3711e5e545b3a9ecf7f699a1eb66ebbe1bd156"
+  "sha": "4306eaa12be32c4a51a2a56c5457f9711f8d18050e6af61f8c1f68e53ac1e8b0"
  },
  "finances/2026/2026-01-15_commande_materiaux-rousseau_bc-2026-013.md": {
   "sha": "2abd466bc8af4190647d9e813a468b932d2f49e2990be91732965cf901c1c329"
@@ -105,7 +105,7 @@
   "sha": "2b2dd49b1b78f319e3219d00e90a7d4b9083fe400a04156debf0265eb4c5405e"
  },
  "finances/2026/2026-01-28_devis_sci-clos-des-vignes_d-2026-002.md": {
-  "sha": "949b2d7202aa2b39da77beca5b4d55d00e04358d35529cc1abd37cab4b66537c"
+  "sha": "799da8c9ae468963d969d4a6790c4d368fc04279c7d162ef2c1c35f18388cb02"
  },
  "finances/2026/2026-02-01_achat_materiaux-rousseau_ma-37784.md": {
   "sha": "eb547b898b84c93c114cc5ca5d70b302d2b4cd079c1b5806bf071d589cf39057"
@@ -117,7 +117,7 @@
   "sha": "3fc861498b084fc1c4ba492073e22c3d46f27f306ebf10d94164f0cd9cec583d"
  },
  "finances/2026/2026-02-02_devis_sci-clos-des-vignes_d-2026-007.md": {
-  "sha": "832c34349fdcfaabebd5a4a0df40eccd7546a1726058eb92a8844809c71645b5"
+  "sha": "8535c2267c93e7524e1494b65290b630758edbc637fba22ef1e4f761705f2214"
  },
  "finances/2026/2026-02-03_facture_sci-les-tilleuls_f-2026-016.md": {
   "sha": "d5b69d1535447c03246680eb3181c1c4de277291ed0354f27ee6f49854dd6365"
@@ -129,7 +129,7 @@
   "sha": "a3b899afbd6c9b19f1a49f9a09103b534d5af71aefebe2665e21bc1565501364"
  },
  "finances/2026/2026-02-07_devis_sci-clos-des-vignes_d-2026-012.md": {
-  "sha": "952603c3f363695a1089a3b0a46679d5990199715dc2eeefb3bee486ee3d622e"
+  "sha": "7a0b9fd08b2ea6ca02dde66c614ca2b78b250eef025a0b20907492f52c1793d7"
  },
  "finances/2026/2026-02-07_facture_sci-les-tilleuls_f-2026-001.md": {
   "sha": "8eb3ecf6598d7059e3641db318141c5ccaa6a534cd2a647a60bf909533e61640"
@@ -141,7 +141,7 @@
   "sha": "fea2c9f1ee40a33bc5b31b60de564a48a8e5961e1664aff2d845d1f73946c7f9"
  },
  "finances/2026/2026-02-12_devis_sci-clos-des-vignes_d-2026-017.md": {
-  "sha": "21c650f7f486e262cd594e16f3737e4c01e0ceac23bd463acf3487f1b3914575"
+  "sha": "beb5e6d5af3254d66d26fd073154dae314f75ed4f6dd10b299c662f6d61f6e25"
  },
  "finances/2026/2026-02-13_achat_carrelages-fontaine_ca-78856.md": {
   "sha": "da84b18da574090bf2b2f87a1e1d673c8da45661cbb9d351c3def227e25cdb39"
@@ -150,7 +150,7 @@
   "sha": "80d94a76b5ff32376e0173052fb0159f10f4c72c7647a2496eaa16944b31ae8c"
  },
  "finances/2026/2026-02-17_devis_sci-clos-des-vignes_d-2026-022.md": {
-  "sha": "eae7d519d0e7a5b55f3e877cedcf4ac5e3ad359feb4116f1dfeb0a27f4fa2695"
+  "sha": "2eecf36031a88023b9f451d57066e602029c9d1f53a77741ca369d1eb8f6ff77"
  },
  "finances/2026/2026-02-20_commande_sanitaires-faure_bc-2026-017.md": {
   "sha": "eba18ea9933094a67511685135b9770efcf8546d9a9c17e55688122bd629c9a0"
@@ -171,7 +171,7 @@
   "sha": "de19e2dc4e6952d360c511835834dd806c8dae1deece5327c769bfbbd39973c3"
  },
  "finances/2026/2026-03-05_devis_residence-le-parc-sas_d-2026-003.md": {
-  "sha": "3741310f92760276b48831b4ef9097241254a586dcb38b5d04b631c4a706e9ed"
+  "sha": "e3ba94e24f04319150d2a11664aa3ab2ac8d234b696f8f2d814862daf22e15e0"
  },
  "finances/2026/2026-03-09_achat_sanitaires-faure_sa-87497.md": {
   "sha": "0dce8d01a6e9f828183452747be492e6859385e027327517ee86c0ce336b226d"
@@ -180,7 +180,7 @@
   "sha": "ddd5863fb7fe5abf9b47ca161ca1fc806322091893a347ea522c15e5a88c0222"
  },
  "finances/2026/2026-03-10_devis_residence-le-parc-sas_d-2026-008.md": {
-  "sha": "08f789b6382aec72d747bbbdf7018526aec54552f319cc112feedcabed40d115"
+  "sha": "a4fd7a78ffa251cb54a73a6b884e59aa57b4a29904157dec33ad37c353550022"
  },
  "finances/2026/2026-03-10_facture_sci-clos-des-vignes_f-2026-007.md": {
   "sha": "d90a42e279b4a9971c5dc51567f5c215892e58689c752502c28f421f47e2bfe6"
@@ -192,7 +192,7 @@
   "sha": "31ef257d925ffa15f2ce789034dc2579a35c4e0a6a3c0a2bf6a3c7d3be10b4c1"
  },
  "finances/2026/2026-03-15_devis_residence-le-parc-sas_d-2026-013.md": {
-  "sha": "97e35cb1b245d27efa9ca967e86f3efdbe714cc070c652d90b1dacd20a4d51bb"
+  "sha": "ff851e9b0ed638fc9cde340d382312bcfc03658f49c8c1dad7795341cdfdae55"
  },
  "finances/2026/2026-03-17_achat_electro-distribution-mul_el-15865.md": {
   "sha": "c42a04d24f15d8560ea16c92a6ae396c1427ad4462df67737046600aa55103a8"
@@ -201,7 +201,7 @@
   "sha": "61738f516f9bb0d29de3cf950a41eeac5eea85ac8950dca909d891d0ba31cc99"
  },
  "finances/2026/2026-03-20_devis_residence-le-parc-sas_d-2026-018.md": {
-  "sha": "cad661b80ae5a912e8ee5634ed0792ded64a926c5673e23e9136f4546795f6db"
+  "sha": "73fd886b7368e054f3bd18e17e244cab226a526d37341d00323c5096acd3100c"
  },
  "finances/2026/2026-03-21_achat_electro-distribution-mul_el-15101.md": {
   "sha": "c64b6ee5cdc6e80dcf021dec3eab9b38ecfae0810247a08b861f577e979a48a0"
@@ -213,7 +213,7 @@
   "sha": "646e7cb2a1eae429c49c85e1f1a14909922d2da01dc840416b9901f9011260bc"
  },
  "finances/2026/2026-03-25_devis_residence-le-parc-sas_d-2026-023.md": {
-  "sha": "87b22cb9fd21d29ba106d93b4aa271414ab74458bb65f983f021623b418ab10b"
+  "sha": "678534a8e3ff96edb3de549cc1f1bcb599ec000897b520ba826762123dba796b"
  },
  "finances/2026/2026-03-27_facture_sci-clos-des-vignes_f-2026-002.md": {
   "sha": "45a6e31e6200603ac3362bd996eedf9d631c8bde649832adeaaa81d8e1188520"
@@ -243,7 +243,7 @@
   "sha": "0c1b9d9d307e4707a078473df4815bc1760117d7866d58271c344e00fa8e4282"
  },
  "finances/2026/2026-04-10_devis_cabinet-medical-des-lila_d-2026-004.md": {
-  "sha": "c34a5c12af75ea2932df8301d7a52eb247733cab61449fc888ad76bc2be86fac"
+  "sha": "da6b1c10fcc63ae3e2fd9a9a637aebe64cb134a295faccf831557b4b5a07b94d"
  },
  "finances/2026/2026-04-10_facture_residence-le-parc-sas_f-2026-008.md": {
   "sha": "11226dbeee98d0b013c5cc9644bd3eed2fcc326b33bb694a7670ab42c7304a1d"
@@ -255,13 +255,13 @@
   "sha": "ccdc52d48e8e111b8121be470f4899c015ceff328adde6ca5d0c49573d74f09e"
  },
  "finances/2026/2026-04-15_devis_cabinet-medical-des-lila_d-2026-009.md": {
-  "sha": "8025e8e102ebcd1ecd00d8da2aacde223098dc38e526b427696b308da145a78d"
+  "sha": "e288ed7c8ffb1beed5710e8817c38994afcc820c1fdc430b06edd0068dfbff2d"
  },
  "finances/2026/2026-04-18_achat_materiaux-rousseau_ma-86593.md": {
   "sha": "a4258398243c93399aab12b27a301197ccdc90d7a9f3b7d89d0f96df6e6168fe"
  },
  "finances/2026/2026-04-20_devis_cabinet-medical-des-lila_d-2026-014.md": {
-  "sha": "378bd2f91b9050da04170cead1667885485b6959dbb5be0ed52e4136b86f6df2"
+  "sha": "0f12e82d9f1f7ae1943e3e7cc67ee14539f6a9c20301f40799dc2159f617c014"
  },
  "finances/2026/2026-04-22_achat_materiaux-rousseau_ma-77672.md": {
   "sha": "1acbb6d4c85d42d7cfaf3365b610d0a23d5efd83fe02ab252b1398089bf014a7"
@@ -273,7 +273,7 @@
   "sha": "39870ba95d042ab8b903eb94c49e08ad083e1c4cb8d2c2f974e802a718e8a6d2"
  },
  "finances/2026/2026-04-25_devis_cabinet-medical-des-lila_d-2026-019.md": {
-  "sha": "53c5bb02441d2a5e7b6b93a89775ba5275d49972a20e2df719a11ea30ef4ddee"
+  "sha": "e68204563dd1f5b33989067b075bf91796aae8d064ec41fbce98dafcd1b8d77c"
  },
  "finances/2026/2026-04-26_achat_bois-et-panneaux-girard_bo-90363.md": {
   "sha": "5306c0d8bc5dfca4e215ccd4aa2c3dd185fac69eea0f11edf12a80a44c636fb9"
@@ -282,7 +282,7 @@
   "sha": "d6c67bd9e5eadfcdb74e0ffda0d9f20e47c601a420a54635b0f28288842d8f64"
  },
  "finances/2026/2026-04-30_devis_cabinet-medical-des-lila_d-2026-024.md": {
-  "sha": "f8c1aaf84efbcac94766fc01330b992c436a27dbe201ae3e245152539f3eec25"
+  "sha": "b12860d1f6a61eac97aad47f54a7f8edee17c3329f631b917e84ec7c443c754c"
  },
  "finances/2026/2026-04-30_facture_cabinet-medical-des-lila_f-2026-004.md": {
   "sha": "66280f1f88882c207ae7c01e8af29e820a2c4d3372228c91680d28317c0abfa4"
@@ -312,7 +312,7 @@
   "sha": "de279309fb2b9e552585c1d89a80fd60c8790d1990e94031d7e5882fd6739808"
  },
  "finances/2026/2026-05-16_devis_hotel-du-lac-kir_d-2026-005.md": {
-  "sha": "4f38415276dad2d7c4f5eef9ead9aef9b60117cbab59b493d1d44165b72f7740"
+  "sha": "27aeb7eefbd51d32a4a38854f9d59d29c106465b182f92ee4b0aa4101408593a"
  },
  "finances/2026/2026-05-17_commande_platres-lambert_bc-2026-001.md": {
   "sha": "4c4d50339cfff1f317faae0648a0bf172d5467a565d2ce56717a743fefb1991a"
@@ -324,7 +324,7 @@
   "sha": "0c1394a2c41d4cbe0d111bb7609502239e6b981ee0a225babf49288c886c1d30"
  },
  "finances/2026/2026-05-21_devis_hotel-du-lac-kir_d-2026-010.md": {
-  "sha": "efc1561ed9f58ba46a65ce834cd92c0af9ce6fec614376a98ac0d1cbdccf6bf7"
+  "sha": "aae36dfdaf0fad84905b6db2fa62c9bc71a65d4e23196d5187af2e76e1af938e"
  },
  "finances/2026/2026-05-23_commande_electro-distribution-mul_bc-2026-005.md": {
   "sha": "e993b2fb2d97b7af55302084ca07f5f905c715e1708cb9077f028c921bacf3a2"
@@ -336,7 +336,7 @@
   "sha": "4f1eba1aa0905fec7dacc78ee1aa5531c0f66294b99651d1cab48a3d988e9f14"
  },
  "finances/2026/2026-05-26_devis_hotel-du-lac-kir_d-2026-015.md": {
-  "sha": "36ec651c88ad6cda3ca7d80d26c3faaff40e1ae9440fcacd9f9a38e2f1228916"
+  "sha": "edbc2582b0f1161e85901a42a3590d7c2b034fbc2e4c30488f67113370c5cd6a"
  },
  "finances/2026/2026-05-28_achat_sanitaires-faure_sa-29225.md": {
   "sha": "7b01b4ec1acf1546ce9a1906db35c6a0bdfa02ef3b2f652a8ab443ac0b145f77"
@@ -348,7 +348,7 @@
   "sha": "bb920cd1151e082b58b9e4aa49205fae04f4d85269405b90e0cff519584f8fcc"
  },
  "finances/2026/2026-05-31_devis_hotel-du-lac-kir_d-2026-020.md": {
-  "sha": "4e401ab9213343344233f3c9a565d77e72eac58a592e5b68d922750f8ef5c2ef"
+  "sha": "5f8da9d8b7f6a8dde49272aafd5082a2dcfdfaf36768d7ac947154c543692d91"
  },
  "finances/2026/2026-06-01_achat_sanitaires-faure_sa-93420.md": {
   "sha": "0e034dbdf83bc4c7dbef40fc4792fb97d1d77b71742a90a7bb683a733fb1c552"
@@ -363,7 +363,7 @@
   "sha": "ddf56a3d3e0165fced22c701d293214c5179abc3421f5361fec9353c7c13854a"
  },
  "finances/2026/2026-06-05_devis_hotel-du-lac-kir_d-2026-025.md": {
-  "sha": "f8cd38a115d5c3add6e2b6f6ea7418bfbc5b8b51f8fcf13851b9c2a88af00c7f"
+  "sha": "08081a6f59104ba9388741a0d7d1265ad9bff5c2e4bcbda715091b37f0206076"
  },
  "finances/2026/2026-06-08_facture_sci-clos-des-vignes_f-2026-022.md": {
   "sha": "b2fbae351ecea579bf3f7112a79c00ae142a496d015873239046276288af7641"

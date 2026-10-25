@@ -306,6 +306,17 @@ export function demoVault(seed = 2026) {
     const number = `D-2026-${String(i + 1).padStart(3, '0')}`;
     const date = day(site.start, -20 + i);
     const ht = rng.int(2_000, 60_000) * 100;
+    const work = rng.pick(WORKS);
+    // Its lines, made from its HT without drawing again, so that the rest of the vault stays the
+    // same: hours at 45 €, supplies at a quarter, the works for the rest (memory M6 invoices them).
+    // No line names an article or a work: a guessed link would only be noise here.
+    const hours = Math.floor((ht * 0.3) / 4_500);
+    const supplies = Math.round(ht * 0.25);
+    const lines = [
+      { label: "Main-d'œuvre", quantity: hours, unit_price: 4_500, amount: hours * 4_500 },
+      { label: 'Fournitures et petit matériel', amount: supplies },
+      { label: 'Travaux selon descriptif', amount: ht - hours * 4_500 - supplies },
+    ];
     const path = add(
       {
         type: 'devis',
@@ -318,8 +329,9 @@ export function demoVault(seed = 2026) {
         status: i < 20 ? 'accepte' : i < 23 ? 'envoye' : 'refuse',
         ht,
         ttc: Math.round(ht * 1.2),
+        lines,
       },
-      `Devis pour la ${rng.pick(WORKS)}.`,
+      `Devis pour la ${work}.`,
     );
     holds(path, 'belongs_to', site.path);
     quotes.push({ path, number, ht, date });

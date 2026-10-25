@@ -11,6 +11,15 @@ date: 2026-01-02
 status: accepte
 ht: "53191.00"
 ttc: "63829.20"
+lines:
+  - label: Main-d'œuvre
+    quantity: 354
+    unit_price: "45.00"
+    amount: "15930.00"
+  - label: Fournitures et petit matériel
+    amount: "13297.75"
+  - label: Travaux selon descriptif
+    amount: "23963.25"
 links:
   - kind: belongs_to
     to: chantiers/2026-residence-les-tilleuls-12-logements

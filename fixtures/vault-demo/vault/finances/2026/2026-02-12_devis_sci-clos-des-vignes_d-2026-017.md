@@ -11,6 +11,15 @@ date: 2026-02-12
 status: accepte
 ht: "57654.00"
 ttc: "69184.80"
+lines:
+  - label: Main-d'œuvre
+    quantity: 384
+    unit_price: "45.00"
+    amount: "17280.00"
+  - label: Fournitures et petit matériel
+    amount: "14413.50"
+  - label: Travaux selon descriptif
+    amount: "25960.50"
 links:
   - kind: belongs_to
     to: chantiers/2026-extension-clos-des-vignes

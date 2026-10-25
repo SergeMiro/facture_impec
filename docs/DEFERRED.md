@@ -366,3 +366,17 @@ Each line says where it came from and what would bring it back.
 | `preferences/autonomie.md` (a company's autonomy per rule) | Each rule's default autonomy; `autonomyOf` already takes a preference, refusing `execute` for anything that leaves the company | A pilot wants a rule quieter or more autonomous: the file read at start, written from the pane. |
 | Contradictions a model reads in the text | By code only (amounts, sums, dates, duplicates, an amount in the text) | A pilot's vault shows contradictions code misses: a model's reading with its eval. |
 | The rules on a hosted company | They run on the runner, for its one company | The hosted API keeps a company's pages (it does not: D12). |
+
+## Memory: prepare (M6, 2026-10-25)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| The runner prepares on a rule's firing | On a person's request only (D12) | A pilot wants the draft waiting when « devis accepté non facturé » fires: numbered only at « Envoyer », so an unseen draft holds no number of the series. |
+| The ERP's progress figure for a situation | The request gives the cumulative or a percent of the accepted quotes | A connector's export carries a chantier's progress (D9). |
+| A chantier's first situation from the memory | From the sheet | A chantier page knows its market and the ERP gives the progress. |
+| A quote at 0 % VAT outside autoliquidation (franchise en base, export) | Refused (`vat_unknown`) | A pilot invoices one: the exemption code and mention from the company's profile. |
+| A covering text written by a model | A template | A pilot finds the template stiff: a prompt in `packages/agents/prompts/` with its eval. |
+| A quote's numbers read by OCR or a model, confirmed by a person | Refused (`extracted`) | The pane shows a reading for a person to confirm; the confirmation clears `extracted`. |
+| A prepared invoice's own `source` | `api`; the audit says `memory.prepare` | The pane's list tells them apart. |
+| Prepare on the hosted API | Reads the pages the database holds, which only a runner fills; without a vault no page is written | The hosted API keeps a company's pages (it does not: D12). |
+

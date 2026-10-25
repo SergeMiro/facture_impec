@@ -11,6 +11,15 @@ date: 2026-04-20
 status: accepte
 ht: "33387.00"
 ttc: "40064.40"
+lines:
+  - label: Main-d'œuvre
+    quantity: 222
+    unit_price: "45.00"
+    amount: "9990.00"
+  - label: Fournitures et petit matériel
+    amount: "8346.75"
+  - label: Travaux selon descriptif
+    amount: "15050.25"
 links:
   - kind: belongs_to
     to: chantiers/2026-cabinet-medical-des-lilas

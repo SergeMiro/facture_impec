@@ -22,7 +22,8 @@ export function creditNoteDraft(
   };
 }
 
-const SERIES = /^AV(\d{4})-(\d+)$/;
+/** The credit notes' own series. */
+export const CREDIT_SERIES = /^AV(\d{4})-(\d+)$/;
 
 /**
  * The next number of the credit-note series of `year`, after `taken` (the series' numbers already
@@ -31,7 +32,7 @@ const SERIES = /^AV(\d{4})-(\d+)$/;
 export function nextCreditNumber(year: string, taken: Iterable<string>): string {
   let last = 0;
   for (const number of taken) {
-    const m = SERIES.exec(number.trim());
+    const m = CREDIT_SERIES.exec(number.trim());
     if (m && m[1] === year) last = Math.max(last, Number(m[2]));
   }
   return `AV${year}-${String(last + 1).padStart(4, '0')}`;
