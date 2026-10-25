@@ -41,6 +41,10 @@ import {
   links,
   lt,
   magicLinks,
+  memoryLinks,
+  memoryPages,
+  memoryRaw,
+  memoryRecalls,
   notInArray,
   obligations,
   or,
@@ -750,6 +754,11 @@ export async function deleteTenant(
     // VIES' answers name the customers' companies, a sole trader by name.
     await tx.delete(vatChecks).where(eq(vatChecks.tenantId, tenant.id));
     await tx.delete(agentRuns).where(eq(agentRuns.tenantId, tenant.id));
+    // The memory's index (D12) is a copy of the company's vault, which stays on its own disk.
+    await tx.delete(memoryLinks).where(eq(memoryLinks.tenantId, tenant.id));
+    await tx.delete(memoryPages).where(eq(memoryPages.tenantId, tenant.id));
+    await tx.delete(memoryRaw).where(eq(memoryRaw.tenantId, tenant.id));
+    await tx.delete(memoryRecalls).where(eq(memoryRecalls.tenantId, tenant.id));
     await tx
       .update(apiKeys)
       .set({ revokedAt: now })

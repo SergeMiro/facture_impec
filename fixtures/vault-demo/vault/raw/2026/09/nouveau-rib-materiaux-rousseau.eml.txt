@@ -1,0 +1,9 @@
+De : compta@materiaux-rousseau.example
+Objet : Changement de coordonnées bancaires
+
+Bonjour,
+Veuillez noter notre nouveau RIB pour vos prochains règlements.
+IBAN : FR39 9999 9637 0749 0713 4864 496
+BIC : DEMOFRPPXXX
+Cordialement,
+Matériaux Rousseau

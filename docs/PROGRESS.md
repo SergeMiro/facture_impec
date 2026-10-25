@@ -2021,3 +2021,49 @@ Evidence (2026-10-25), `packages/memory` (33 tests):
 - **Gate**: `pnpm verify` green on 2026-10-25: memory 33, api 387, add-in 120, agents 162, core 713 +
   oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, connectors 13, domain 8,
   scripts 11; boundaries: 12 packages, no violation.
+
+## Memory M1: index and recall (started 2026-10-25)
+
+`docs/plans/memory.md` § M1, `docs/DECISIONS.md` D12. Criteria, from the plan, written before the
+tests:
+
+- **The index** (`memory_pages`, `memory_links`, `memory_raw`, `memory_recalls`, migration 0027)
+  follows every write: an agent's patch, a person's edit (a changed fact found at once, a deleted page
+  gone), a rebuild (the whole index again, the texts of `raw/` with it). One company never reads
+  another's.
+- **`recall`** goes down six levels and stops at the first sure answer: 1 a page by its key (from
+  the query, or read in the question: SIREN, SIRET, VAT number, e-mail, document number, any name);
+  2 the pages one or two links away; 3 full-text in the section; 4 everywhere (marked « misplaced »);
+  5 the texts of `raw/`, the line found written back onto its page with the original as a source;
+  6 « nothing », with what was searched. « Not found » only after level 5.
+- **Before an action** (`mustBeExhaustive`, every `exists`): a page of the same type about the same
+  subject that says otherwise makes the answer ambiguous; a person is asked, the question blocks.
+- **A caller** accepts an answer only through `RecallAnswer` (Zod): no pages, no answer; no
+  `searched`, no « nothing ». Level, time and what was searched go to `memory_recalls`.
+- **Done when**: on a demo vault from a seeded generator (30 companies, 5 chantiers, 200 documents),
+  ≥ 80 of 100 golden questions answered at levels 1–2, none « not found » wrongly, each level within
+  its time budget (memory doc §6: 5 ms, 3 s, 8 s, 15 s, 40 s).
+
+Evidence (2026-10-25), `packages/memory` (41 tests):
+
+- **Done when**: `recall.golden.test.ts` « answers the golden questions: ≥ 80 % at levels 1–2, none
+  wrongly « not found », in budget »: **100/100 right, 87 at levels 1–2** (L1 67, L2 20, L3 3, L4 2,
+  L5 5, L6 3); p95 to the answer's level on the VPS: L1 3.0–3.7 ms, L2 6–7 ms, L3 5–6 ms,
+  L4 13–20 ms, L5 15–18 ms (three runs of the whole package, files in parallel).
+- **The demo vault**: « is what the generator makes, byte for byte » (`fixtures/vault-demo/`, made by
+  `pnpm vault:demo`: 255 pages, 25 mails in `raw/`, `golden.json`); it holds a company entered
+  twice under two SIRENs, facts only a mail knows (four IBANs, a padlock code nobody filed) and facts
+  written on a page of the wrong section.
+- **Writeback**: « writes an answer read in raw/ onto its page: asked again, it is found at level 1 ».
+- **Questions**: « asks a person about what it did not find, found twice, or found in a mail nobody
+  filed » (`open-questions.md`, the contradiction marked « bloque une action »; `memory_recalls`
+  rows).
+- **The index follows**: `recall.test.ts` « follows what a person changed in the vault, and forgets a
+  page they deleted », « never reads another company's memory », « refuses an answer without its
+  pages, and « nothing » without what was searched »; keys: « reads a SIREN, a SIRET, a VAT number,
+  an e-mail, a document number and every name ».
+- **RGPD**: `apps/api/src/settings.test.ts` « deletes what the law lets go… » also checks that the
+  memory's index rows are gone.
+- **Gate**: `pnpm verify` green on 2026-10-25: memory 41, api 387, add-in 120, agents 162, core 713 +
+  oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, connectors 13, domain 8,
+  scripts 11; boundaries: no violation (`@fi/memory` now imports `@fi/db`).

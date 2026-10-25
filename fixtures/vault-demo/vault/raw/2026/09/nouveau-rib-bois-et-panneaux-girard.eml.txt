@@ -1,0 +1,9 @@
+De : compta@bois-et-panneaux-girard.example
+Objet : Changement de coordonnées bancaires
+
+Bonjour,
+Veuillez noter notre nouveau RIB pour vos prochains règlements.
+IBAN : FR25 9999 9119 7422 4435 4249 587
+BIC : DEMOFRPPXXX
+Cordialement,
+Bois et Panneaux Girard

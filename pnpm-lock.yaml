@@ -17,6 +17,9 @@ importers:
       '@fi/core':
         specifier: workspace:*
         version: link:packages/core
+      '@fi/memory':
+        specifier: workspace:*
+        version: link:packages/memory
       '@fi/shared':
         specifier: workspace:*
         version: link:packages/shared
@@ -389,6 +392,9 @@ importers:
       '@fi/core':
         specifier: workspace:*
         version: link:../core
+      '@fi/db':
+        specifier: workspace:*
+        version: link:../db
       '@fi/domain':
         specifier: workspace:*
         version: link:../domain

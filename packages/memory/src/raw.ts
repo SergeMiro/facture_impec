@@ -1,8 +1,10 @@
 // The originals (memory doc §3 `raw/`): each file a document came in, under the month it arrived,
 // with the text read from it beside it (`<file>.txt`), so a search finds what no page says yet.
 // Append only: a file is never replaced; another file of the same name gets `-2`, `-3`…
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { parisToday } from '@fi/core';
-import { commitFiles, type FileContent } from './journal';
+import { commitFiles, type FileContent, walk } from './journal';
 import { slugify } from './slug';
 import { VaultFiles } from './vault';
 
@@ -32,4 +34,18 @@ export async function addRaw(root: string, file: RawFile, now: Date): Promise<st
     await commitFiles(root, out);
     return ref;
   }
+}
+
+/** The text read from each original (`<file>.txt` beside `<file>`), for full-text. */
+export async function readRawTexts(root: string): Promise<{ ref: string; text: string }[]> {
+  const files = (await walk(join(root, 'raw'), join(root, 'raw'))).map((f) => `raw/${f}`);
+  const kept = new Set(files);
+  const texts: { ref: string; text: string }[] = [];
+  for (const file of files.sort()) {
+    const ref = file.slice(0, -'.txt'.length);
+    if (file.endsWith('.txt') && kept.has(ref)) {
+      texts.push({ ref, text: await readFile(join(root, file), 'utf8') });
+    }
+  }
+  return texts;
 }

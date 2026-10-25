@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!!packages/core/vendor"]
+    "includes": ["**", "!!packages/core/vendor", "!!fixtures/vault-demo/vault"]
   },
   "formatter": {
     "indentStyle": "space",

@@ -190,6 +190,13 @@
       "when": 1792876545789,
       "tag": "0026_watched_folders",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792925413943,
+      "tag": "0027_memory",
+      "breakpoints": true
     }
   ]
 }

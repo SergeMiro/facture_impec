@@ -1,0 +1,1736 @@
+[
+  {
+    "id": "q001",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le SIREN de SCI Les Tilleuls ?",
+      "subject": {
+        "by": "name",
+        "value": "SCI Les Tilleuls"
+      },
+      "field": "siren"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/sci-les-tilleuls"],
+      "value": "536612682"
+    }
+  },
+  {
+    "id": "q002",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le SIREN de SCI Clos des Vignes ?",
+      "subject": {
+        "by": "name",
+        "value": "SCI Clos des Vignes"
+      },
+      "field": "siren"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/sci-clos-des-vignes"],
+      "value": "331134957"
+    }
+  },
+  {
+    "id": "q003",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le SIREN de Résidence Le Parc SAS ?",
+      "subject": {
+        "by": "name",
+        "value": "Résidence Le Parc SAS"
+      },
+      "field": "siren"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/residence-le-parc-sas"],
+      "value": "799722426"
+    }
+  },
+  {
+    "id": "q004",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le SIREN de Habitat Bourgogne Est ?",
+      "subject": {
+        "by": "name",
+        "value": "Habitat Bourgogne Est"
+      },
+      "field": "siren"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/habitat-bourgogne-est"],
+      "value": "700377393"
+    }
+  },
+  {
+    "id": "q005",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le SIREN de Cabinet Médical des Lilas ?",
+      "subject": {
+        "by": "name",
+        "value": "Cabinet Médical des Lilas"
+      },
+      "field": "siren"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/cabinet-medical-des-lilas"],
+      "value": "991982414"
+    }
+  },
+  {
+    "id": "q006",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le SIREN de Boulangerie Petit Frères ?",
+      "subject": {
+        "by": "name",
+        "value": "Boulangerie Petit Frères"
+      },
+      "field": "siren"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/boulangerie-petit-freres"],
+      "value": "954577565"
+    }
+  },
+  {
+    "id": "q007",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le SIREN de Hôtel du Lac Kir ?",
+      "subject": {
+        "by": "name",
+        "value": "Hôtel du Lac Kir"
+      },
+      "field": "siren"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/hotel-du-lac-kir"],
+      "value": "509911459"
+    }
+  },
+  {
+    "id": "q008",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le SIREN de Matériaux Rousseau ?",
+      "subject": {
+        "by": "name",
+        "value": "Matériaux Rousseau"
+      },
+      "field": "siren"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/materiaux-rousseau"],
+      "value": "996825501"
+    }
+  },
+  {
+    "id": "q009",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le SIREN de Bois et Panneaux Girard ?",
+      "subject": {
+        "by": "name",
+        "value": "Bois et Panneaux Girard"
+      },
+      "field": "siren"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/bois-et-panneaux-girard"],
+      "value": "809944028"
+    }
+  },
+  {
+    "id": "q010",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le SIREN de Carrelages Fontaine ?",
+      "subject": {
+        "by": "name",
+        "value": "Carrelages Fontaine"
+      },
+      "field": "siren"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/carrelages-fontaine"],
+      "value": "804982379"
+    }
+  },
+  {
+    "id": "q011",
+    "query": {
+      "intent": "fact",
+      "question": "Quelle est l'adresse e-mail de Quincaillerie Bonnet ?",
+      "field": "email"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/quincaillerie-bonnet"],
+      "value": "contact@quincaillerie-bonnet.example"
+    }
+  },
+  {
+    "id": "q012",
+    "query": {
+      "intent": "fact",
+      "question": "Quelle est l'adresse e-mail de Béton Prêt Vincent ?",
+      "field": "email"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/beton-pret-vincent"],
+      "value": "contact@beton-pret-vincent.example"
+    }
+  },
+  {
+    "id": "q013",
+    "query": {
+      "intent": "fact",
+      "question": "Quelle est l'adresse e-mail de Plâtres Lambert ?",
+      "field": "email"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/platres-lambert"],
+      "value": "contact@platres-lambert.example"
+    }
+  },
+  {
+    "id": "q014",
+    "query": {
+      "intent": "fact",
+      "question": "Quelle est l'adresse e-mail de Sanitaires Faure ?",
+      "field": "email"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/sanitaires-faure"],
+      "value": "contact@sanitaires-faure.example"
+    }
+  },
+  {
+    "id": "q015",
+    "query": {
+      "intent": "fact",
+      "question": "Quelle est l'adresse e-mail de Électro-Distribution Muller ?",
+      "field": "email"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/electro-distribution-muller"],
+      "value": "contact@electro-distribution-muller.example"
+    }
+  },
+  {
+    "id": "q016",
+    "query": {
+      "intent": "fact",
+      "question": "Quelle est l'adresse e-mail de Peintures Roux ?",
+      "field": "email"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/peintures-roux"],
+      "value": "contact@peintures-roux.example"
+    }
+  },
+  {
+    "id": "q017",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le numéro de TVA de Maçonnerie Bernard ?",
+      "subject": {
+        "by": "name",
+        "value": "Maçonnerie Bernard"
+      },
+      "field": "vat_id"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/maconnerie-bernard"],
+      "value": "FR60672505187"
+    }
+  },
+  {
+    "id": "q018",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le numéro de TVA de Couverture Lefèvre ?",
+      "subject": {
+        "by": "name",
+        "value": "Couverture Lefèvre"
+      },
+      "field": "vat_id"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/couverture-lefevre"],
+      "value": "FR10934998584"
+    }
+  },
+  {
+    "id": "q019",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le numéro de TVA de Chauffage Dupont ?",
+      "subject": {
+        "by": "name",
+        "value": "Chauffage Dupont"
+      },
+      "field": "vat_id"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/chauffage-dupont"],
+      "value": "FR30852141514"
+    }
+  },
+  {
+    "id": "q020",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le numéro de TVA de Isolation Garnier ?",
+      "subject": {
+        "by": "name",
+        "value": "Isolation Garnier"
+      },
+      "field": "vat_id"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/isolation-garnier"],
+      "value": "FR38511558835"
+    }
+  },
+  {
+    "id": "q021",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le numéro de TVA de Carrelage Chevalier ?",
+      "subject": {
+        "by": "name",
+        "value": "Carrelage Chevalier"
+      },
+      "field": "vat_id"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/carrelage-chevalier"],
+      "value": "FR76634163000"
+    }
+  },
+  {
+    "id": "q022",
+    "query": {
+      "intent": "fact",
+      "question": "À qui appartient le SIREN 536612682 ?",
+      "field": "title"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/sci-les-tilleuls"],
+      "value": "SCI Les Tilleuls"
+    }
+  },
+  {
+    "id": "q023",
+    "query": {
+      "intent": "fact",
+      "question": "À qui appartient le SIREN 331134957 ?",
+      "field": "title"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/sci-clos-des-vignes"],
+      "value": "SCI Clos des Vignes"
+    }
+  },
+  {
+    "id": "q024",
+    "query": {
+      "intent": "fact",
+      "question": "À qui appartient le SIREN 799722426 ?",
+      "field": "title"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/residence-le-parc-sas"],
+      "value": "Résidence Le Parc SAS"
+    }
+  },
+  {
+    "id": "q025",
+    "query": {
+      "intent": "fact",
+      "question": "À qui appartient le SIREN 700377393 ?",
+      "field": "title"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["tiers/habitat-bourgogne-est"],
+      "value": "Habitat Bourgogne Est"
+    }
+  },
+  {
+    "id": "q026",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le montant TTC de la facture F-2026-001 ?",
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-02-02_facture_sci-les-tilleuls_f-2026-001"],
+      "value": "9529.20"
+    }
+  },
+  {
+    "id": "q027",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le montant TTC de la facture F-2026-002 ?",
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-02-08_facture_sci-clos-des-vignes_f-2026-002"],
+      "value": "46159.20"
+    }
+  },
+  {
+    "id": "q028",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le montant TTC de la facture F-2026-003 ?",
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-02-14_facture_residence-le-parc-sas_f-2026-003"],
+      "value": "17914.80"
+    }
+  },
+  {
+    "id": "q029",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le montant TTC de la facture F-2026-004 ?",
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-02-20_facture_cabinet-medical-des-lila_f-2026-004"],
+      "value": "23534.40"
+    }
+  },
+  {
+    "id": "q030",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le montant TTC de la facture F-2026-005 ?",
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-02-26_facture_hotel-du-lac-kir_f-2026-005"],
+      "value": "28754.40"
+    }
+  },
+  {
+    "id": "q031",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le montant TTC de la facture F-2026-006 ?",
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-03-04_facture_sci-les-tilleuls_f-2026-006"],
+      "value": "27660.00"
+    }
+  },
+  {
+    "id": "q032",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le montant TTC de la facture F-2026-007 ?",
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-03-10_facture_sci-clos-des-vignes_f-2026-007"],
+      "value": "16584.00"
+    }
+  },
+  {
+    "id": "q033",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le montant TTC de la facture F-2026-008 ?",
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-03-16_facture_residence-le-parc-sas_f-2026-008"],
+      "value": "5984.40"
+    }
+  },
+  {
+    "id": "q034",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le montant TTC de la facture F-2026-009 ?",
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-03-22_facture_cabinet-medical-des-lila_f-2026-009"],
+      "value": "6682.80"
+    }
+  },
+  {
+    "id": "q035",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le montant TTC de la facture F-2026-010 ?",
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-03-28_facture_hotel-du-lac-kir_f-2026-010"],
+      "value": "7770.00"
+    }
+  },
+  {
+    "id": "q036",
+    "query": {
+      "intent": "fact",
+      "question": "Quand la facture F-2026-011 est-elle due ?",
+      "subject": {
+        "by": "number",
+        "value": "F-2026-011"
+      },
+      "field": "due_date"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-04-03_facture_sci-les-tilleuls_f-2026-011"],
+      "value": "2026-05-03"
+    }
+  },
+  {
+    "id": "q037",
+    "query": {
+      "intent": "fact",
+      "question": "Quand la facture F-2026-012 est-elle due ?",
+      "subject": {
+        "by": "number",
+        "value": "F-2026-012"
+      },
+      "field": "due_date"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-04-09_facture_sci-clos-des-vignes_f-2026-012"],
+      "value": "2026-05-09"
+    }
+  },
+  {
+    "id": "q038",
+    "query": {
+      "intent": "fact",
+      "question": "Quand la facture F-2026-013 est-elle due ?",
+      "subject": {
+        "by": "number",
+        "value": "F-2026-013"
+      },
+      "field": "due_date"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-04-15_facture_residence-le-parc-sas_f-2026-013"],
+      "value": "2026-05-15"
+    }
+  },
+  {
+    "id": "q039",
+    "query": {
+      "intent": "fact",
+      "question": "Quand la facture F-2026-014 est-elle due ?",
+      "subject": {
+        "by": "number",
+        "value": "F-2026-014"
+      },
+      "field": "due_date"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-04-21_facture_cabinet-medical-des-lila_f-2026-014"],
+      "value": "2026-05-21"
+    }
+  },
+  {
+    "id": "q040",
+    "query": {
+      "intent": "fact",
+      "question": "Quand la facture F-2026-015 est-elle due ?",
+      "subject": {
+        "by": "number",
+        "value": "F-2026-015"
+      },
+      "field": "due_date"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-04-27_facture_hotel-du-lac-kir_f-2026-015"],
+      "value": "2026-05-27"
+    }
+  },
+  {
+    "id": "q041",
+    "query": {
+      "intent": "fact",
+      "question": "Quand la facture F-2026-016 est-elle due ?",
+      "subject": {
+        "by": "number",
+        "value": "F-2026-016"
+      },
+      "field": "due_date"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-05-03_facture_sci-les-tilleuls_f-2026-016"],
+      "value": "2026-06-02"
+    }
+  },
+  {
+    "id": "q042",
+    "query": {
+      "intent": "fact",
+      "question": "Combien fait la facture MA-83068 de Matériaux Rousseau ?",
+      "subject": {
+        "by": "number",
+        "value": "MA-83068"
+      },
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-01-20_achat_materiaux-rousseau_ma-83068"],
+      "value": "907.20"
+    }
+  },
+  {
+    "id": "q043",
+    "query": {
+      "intent": "fact",
+      "question": "Combien fait la facture MA-53102 de Matériaux Rousseau ?",
+      "subject": {
+        "by": "number",
+        "value": "MA-53102"
+      },
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-01-24_achat_materiaux-rousseau_ma-53102"],
+      "value": "7507.20"
+    }
+  },
+  {
+    "id": "q044",
+    "query": {
+      "intent": "fact",
+      "question": "Combien fait la facture MA-76568 de Matériaux Rousseau ?",
+      "subject": {
+        "by": "number",
+        "value": "MA-76568"
+      },
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-01-28_achat_materiaux-rousseau_ma-76568"],
+      "value": "106.92"
+    }
+  },
+  {
+    "id": "q045",
+    "query": {
+      "intent": "fact",
+      "question": "Combien fait la facture MA-66404 de Matériaux Rousseau ?",
+      "subject": {
+        "by": "number",
+        "value": "MA-66404"
+      },
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-02-01_achat_materiaux-rousseau_ma-66404"],
+      "value": "1835.52"
+    }
+  },
+  {
+    "id": "q046",
+    "query": {
+      "intent": "fact",
+      "question": "Combien fait la facture BO-72703 de Bois et Panneaux Girard ?",
+      "subject": {
+        "by": "number",
+        "value": "BO-72703"
+      },
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-02-05_achat_bois-et-panneaux-girard_bo-72703"],
+      "value": "994.56"
+    }
+  },
+  {
+    "id": "q047",
+    "query": {
+      "intent": "fact",
+      "question": "Combien fait la facture BO-67587 de Bois et Panneaux Girard ?",
+      "subject": {
+        "by": "number",
+        "value": "BO-67587"
+      },
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-02-09_achat_bois-et-panneaux-girard_bo-67587"],
+      "value": "361.08"
+    }
+  },
+  {
+    "id": "q048",
+    "query": {
+      "intent": "fact",
+      "question": "Combien fait la facture CA-77095 de Carrelages Fontaine ?",
+      "subject": {
+        "by": "number",
+        "value": "CA-77095"
+      },
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-02-13_achat_carrelages-fontaine_ca-77095"],
+      "value": "4540.20"
+    }
+  },
+  {
+    "id": "q049",
+    "query": {
+      "intent": "fact",
+      "question": "Combien fait la facture CA-80326 de Carrelages Fontaine ?",
+      "subject": {
+        "by": "number",
+        "value": "CA-80326"
+      },
+      "field": "ttc"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-02-17_achat_carrelages-fontaine_ca-80326"],
+      "value": "1419.00"
+    }
+  },
+  {
+    "id": "q050",
+    "query": {
+      "intent": "fact",
+      "question": "Qui est le client du chantier Résidence Les Tilleuls 12 logements ?",
+      "subject": {
+        "by": "name",
+        "value": "Résidence Les Tilleuls 12 logements"
+      },
+      "field": "client"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["chantiers/2026-residence-les-tilleuls-12-logements"],
+      "value": "tiers/sci-les-tilleuls"
+    }
+  },
+  {
+    "id": "q051",
+    "query": {
+      "intent": "fact",
+      "question": "Qui est le client du chantier Extension Clos des Vignes ?",
+      "subject": {
+        "by": "name",
+        "value": "Extension Clos des Vignes"
+      },
+      "field": "client"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["chantiers/2026-extension-clos-des-vignes"],
+      "value": "tiers/sci-clos-des-vignes"
+    }
+  },
+  {
+    "id": "q052",
+    "query": {
+      "intent": "fact",
+      "question": "Qui est le client du chantier Rénovation Le Parc bâtiment B ?",
+      "subject": {
+        "by": "name",
+        "value": "Rénovation Le Parc bâtiment B"
+      },
+      "field": "client"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["chantiers/2026-renovation-le-parc-batiment-b"],
+      "value": "tiers/residence-le-parc-sas"
+    }
+  },
+  {
+    "id": "q053",
+    "query": {
+      "intent": "fact",
+      "question": "Qui est le client du chantier Cabinet médical des Lilas ?",
+      "subject": {
+        "by": "name",
+        "value": "Cabinet médical des Lilas"
+      },
+      "field": "client"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["chantiers/2026-cabinet-medical-des-lilas"],
+      "value": "tiers/cabinet-medical-des-lilas"
+    }
+  },
+  {
+    "id": "q054",
+    "query": {
+      "intent": "fact",
+      "question": "Qui est le client du chantier Hôtel du Lac Kir façade ?",
+      "subject": {
+        "by": "name",
+        "value": "Hôtel du Lac Kir façade"
+      },
+      "field": "client"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["chantiers/2026-hotel-du-lac-kir-facade"],
+      "value": "tiers/hotel-du-lac-kir"
+    }
+  },
+  {
+    "id": "q055",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le dernier prix de Ciment CEM II 35 kg ?",
+      "field": "last_price"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["catalogue/ciment-cem-ii-35-kg"],
+      "value": "9.45"
+    }
+  },
+  {
+    "id": "q056",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le dernier prix de Sable 0/4 big bag ?",
+      "field": "last_price"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["catalogue/sable-0-4-big-bag"],
+      "value": "68.00"
+    }
+  },
+  {
+    "id": "q057",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le dernier prix de Parpaing creux 20x20x50 ?",
+      "field": "last_price"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["catalogue/parpaing-creux-20x20x50"],
+      "value": "1.62"
+    }
+  },
+  {
+    "id": "q058",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le dernier prix de Enduit de façade 25 kg ?",
+      "field": "last_price"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["catalogue/enduit-de-facade-25-kg"],
+      "value": "23.90"
+    }
+  },
+  {
+    "id": "q059",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le cumul HT de la situation 3 du chantier Résidence Les Tilleuls 12 logements ?",
+      "subject": {
+        "by": "number",
+        "value": "2026-residence-les-tilleuls-12-logements 3"
+      },
+      "field": "cumul_ht"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/situations/2026-residence-les-tilleuls-12-logements_sit-3"],
+      "value": "96044.00"
+    }
+  },
+  {
+    "id": "q060",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le cumul HT de la situation 3 du chantier Extension Clos des Vignes ?",
+      "subject": {
+        "by": "number",
+        "value": "2026-extension-clos-des-vignes 3"
+      },
+      "field": "cumul_ht"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/situations/2026-extension-clos-des-vignes_sit-3"],
+      "value": "63892.00"
+    }
+  },
+  {
+    "id": "q061",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le cumul HT de la situation 3 du chantier Rénovation Le Parc bâtiment B ?",
+      "subject": {
+        "by": "number",
+        "value": "2026-renovation-le-parc-batiment-b 3"
+      },
+      "field": "cumul_ht"
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/situations/2026-renovation-le-parc-batiment-b_sit-3"],
+      "value": "58942.00"
+    }
+  },
+  {
+    "id": "q062",
+    "query": {
+      "intent": "exists",
+      "question": "La facture F-2026-021 est-elle déjà enregistrée ?",
+      "subject": {
+        "by": "number",
+        "value": "F-2026-021"
+      }
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-06-02_facture_sci-les-tilleuls_f-2026-021"]
+    }
+  },
+  {
+    "id": "q063",
+    "query": {
+      "intent": "exists",
+      "question": "La facture F-2026-022 est-elle déjà enregistrée ?",
+      "subject": {
+        "by": "number",
+        "value": "F-2026-022"
+      }
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-06-08_facture_sci-clos-des-vignes_f-2026-022"]
+    }
+  },
+  {
+    "id": "q064",
+    "query": {
+      "intent": "exists",
+      "question": "La facture F-2026-023 est-elle déjà enregistrée ?",
+      "subject": {
+        "by": "number",
+        "value": "F-2026-023"
+      }
+    },
+    "expect": {
+      "status": "found",
+      "level": 1,
+      "paths": ["finances/2026/2026-06-14_facture_residence-le-parc-sas_f-2026-023"]
+    }
+  },
+  {
+    "id": "q065",
+    "query": {
+      "intent": "exists",
+      "question": "Avons-nous déjà une page pour Électricité Moreau ?",
+      "subject": {
+        "by": "name",
+        "value": "Électricité Moreau"
+      },
+      "type": "tiers"
+    },
+    "expect": {
+      "status": "ambiguous",
+      "level": 1,
+      "paths": ["tiers/electricite-moreau", "tiers/electricite-moreau-sarl"]
+    }
+  },
+  {
+    "id": "q066",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le SIREN de Électricité Moreau ?",
+      "subject": {
+        "by": "name",
+        "value": "Électricité Moreau"
+      },
+      "field": "siren",
+      "mustBeExhaustive": true
+    },
+    "expect": {
+      "status": "ambiguous",
+      "level": 1,
+      "paths": ["tiers/electricite-moreau", "tiers/electricite-moreau-sarl"]
+    }
+  },
+  {
+    "id": "q067",
+    "query": {
+      "intent": "list",
+      "question": "Quelles factures avons-nous reçues de Matériaux Rousseau ?",
+      "subject": {
+        "by": "name",
+        "value": "Matériaux Rousseau"
+      },
+      "type": "facture_achat",
+      "via": ["issued_by"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": [
+        "finances/2026/2026-01-20_achat_materiaux-rousseau_ma-83068",
+        "finances/2026/2026-01-24_achat_materiaux-rousseau_ma-53102",
+        "finances/2026/2026-01-28_achat_materiaux-rousseau_ma-76568",
+        "finances/2026/2026-02-01_achat_materiaux-rousseau_ma-66404",
+        "finances/2026/2026-04-10_achat_materiaux-rousseau_ma-94982",
+        "finances/2026/2026-04-14_achat_materiaux-rousseau_ma-46222",
+        "finances/2026/2026-04-18_achat_materiaux-rousseau_ma-35400",
+        "finances/2026/2026-04-22_achat_materiaux-rousseau_ma-72651",
+        "finances/2026/2026-06-29_achat_materiaux-rousseau_ma-47304",
+        "finances/2026/2026-07-03_achat_materiaux-rousseau_ma-29229",
+        "finances/2026/2026-07-07_achat_materiaux-rousseau_ma-77334",
+        "finances/2026/2026-07-11_achat_materiaux-rousseau_ma-86196"
+      ]
+    }
+  },
+  {
+    "id": "q068",
+    "query": {
+      "intent": "list",
+      "question": "Quelles factures avons-nous reçues de Bois et Panneaux Girard ?",
+      "subject": {
+        "by": "name",
+        "value": "Bois et Panneaux Girard"
+      },
+      "type": "facture_achat",
+      "via": ["issued_by"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": [
+        "finances/2026/2026-02-05_achat_bois-et-panneaux-girard_bo-72703",
+        "finances/2026/2026-02-09_achat_bois-et-panneaux-girard_bo-67587",
+        "finances/2026/2026-04-26_achat_bois-et-panneaux-girard_bo-90578",
+        "finances/2026/2026-04-30_achat_bois-et-panneaux-girard_bo-75007",
+        "finances/2026/2026-07-15_achat_bois-et-panneaux-girard_bo-70749",
+        "finances/2026/2026-07-19_achat_bois-et-panneaux-girard_bo-73819"
+      ]
+    }
+  },
+  {
+    "id": "q069",
+    "query": {
+      "intent": "list",
+      "question": "Quelles factures avons-nous reçues de Carrelages Fontaine ?",
+      "subject": {
+        "by": "name",
+        "value": "Carrelages Fontaine"
+      },
+      "type": "facture_achat",
+      "via": ["issued_by"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": [
+        "finances/2026/2026-02-13_achat_carrelages-fontaine_ca-77095",
+        "finances/2026/2026-02-17_achat_carrelages-fontaine_ca-80326",
+        "finances/2026/2026-05-04_achat_carrelages-fontaine_ca-95279",
+        "finances/2026/2026-05-08_achat_carrelages-fontaine_ca-95813",
+        "finances/2026/2026-07-23_achat_carrelages-fontaine_ca-99602",
+        "finances/2026/2026-07-27_achat_carrelages-fontaine_ca-30453"
+      ]
+    }
+  },
+  {
+    "id": "q070",
+    "query": {
+      "intent": "list",
+      "question": "Quelles factures avons-nous reçues de Quincaillerie Bonnet ?",
+      "subject": {
+        "by": "name",
+        "value": "Quincaillerie Bonnet"
+      },
+      "type": "facture_achat",
+      "via": ["issued_by"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": [
+        "finances/2026/2026-02-21_achat_quincaillerie-bonnet_qu-75826",
+        "finances/2026/2026-05-12_achat_quincaillerie-bonnet_qu-38469",
+        "finances/2026/2026-07-31_achat_quincaillerie-bonnet_qu-66558"
+      ]
+    }
+  },
+  {
+    "id": "q071",
+    "query": {
+      "intent": "list",
+      "question": "Quelles situations pour le chantier Résidence Les Tilleuls 12 logements ?",
+      "subject": {
+        "by": "name",
+        "value": "Résidence Les Tilleuls 12 logements"
+      },
+      "type": "situation",
+      "via": ["belongs_to"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": [
+        "finances/situations/2026-residence-les-tilleuls-12-logements_sit-1",
+        "finances/situations/2026-residence-les-tilleuls-12-logements_sit-2",
+        "finances/situations/2026-residence-les-tilleuls-12-logements_sit-3",
+        "finances/situations/2026-residence-les-tilleuls-12-logements_sit-4"
+      ]
+    }
+  },
+  {
+    "id": "q072",
+    "query": {
+      "intent": "list",
+      "question": "Quels sous-traitants travaillent sur Résidence Les Tilleuls 12 logements ?",
+      "subject": {
+        "by": "name",
+        "value": "Résidence Les Tilleuls 12 logements"
+      },
+      "type": "tiers",
+      "via": ["works_on"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": ["tiers/electricite-moreau", "tiers/maconnerie-bernard"]
+    }
+  },
+  {
+    "id": "q073",
+    "query": {
+      "intent": "list",
+      "question": "Quelles situations pour le chantier Extension Clos des Vignes ?",
+      "subject": {
+        "by": "name",
+        "value": "Extension Clos des Vignes"
+      },
+      "type": "situation",
+      "via": ["belongs_to"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": [
+        "finances/situations/2026-extension-clos-des-vignes_sit-1",
+        "finances/situations/2026-extension-clos-des-vignes_sit-2",
+        "finances/situations/2026-extension-clos-des-vignes_sit-3",
+        "finances/situations/2026-extension-clos-des-vignes_sit-4"
+      ]
+    }
+  },
+  {
+    "id": "q074",
+    "query": {
+      "intent": "list",
+      "question": "Quels sous-traitants travaillent sur Extension Clos des Vignes ?",
+      "subject": {
+        "by": "name",
+        "value": "Extension Clos des Vignes"
+      },
+      "type": "tiers",
+      "via": ["works_on"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": ["tiers/plomberie-martin", "tiers/couverture-lefevre"]
+    }
+  },
+  {
+    "id": "q075",
+    "query": {
+      "intent": "list",
+      "question": "Quelles situations pour le chantier Rénovation Le Parc bâtiment B ?",
+      "subject": {
+        "by": "name",
+        "value": "Rénovation Le Parc bâtiment B"
+      },
+      "type": "situation",
+      "via": ["belongs_to"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": [
+        "finances/situations/2026-renovation-le-parc-batiment-b_sit-1",
+        "finances/situations/2026-renovation-le-parc-batiment-b_sit-2",
+        "finances/situations/2026-renovation-le-parc-batiment-b_sit-3",
+        "finances/situations/2026-renovation-le-parc-batiment-b_sit-4"
+      ]
+    }
+  },
+  {
+    "id": "q076",
+    "query": {
+      "intent": "list",
+      "question": "Quels sous-traitants travaillent sur Rénovation Le Parc bâtiment B ?",
+      "subject": {
+        "by": "name",
+        "value": "Rénovation Le Parc bâtiment B"
+      },
+      "type": "tiers",
+      "via": ["works_on"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": ["tiers/menuiserie-dubois", "tiers/chauffage-dupont"]
+    }
+  },
+  {
+    "id": "q077",
+    "query": {
+      "intent": "fact",
+      "question": "Jusqu'à quand l'attestation de vigilance de Plomberie Martin est-elle valable ?",
+      "subject": {
+        "by": "name",
+        "value": "Plomberie Martin"
+      },
+      "type": "attestation_vigilance",
+      "via": ["covers"],
+      "field": "valid_to"
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": ["juridique/plomberie-martin/attestation-vigilance_2026-07-08"],
+      "value": "2027-01-04"
+    }
+  },
+  {
+    "id": "q078",
+    "query": {
+      "intent": "fact",
+      "question": "Jusqu'à quand l'attestation de vigilance de Menuiserie Dubois est-elle valable ?",
+      "subject": {
+        "by": "name",
+        "value": "Menuiserie Dubois"
+      },
+      "type": "attestation_vigilance",
+      "via": ["covers"],
+      "field": "valid_to"
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": ["juridique/menuiserie-dubois/attestation-vigilance_2026-07-15"],
+      "value": "2027-01-11"
+    }
+  },
+  {
+    "id": "q079",
+    "query": {
+      "intent": "fact",
+      "question": "Jusqu'à quand l'attestation de vigilance de Peinture Laurent est-elle valable ?",
+      "subject": {
+        "by": "name",
+        "value": "Peinture Laurent"
+      },
+      "type": "attestation_vigilance",
+      "via": ["covers"],
+      "field": "valid_to"
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": ["juridique/peinture-laurent/attestation-vigilance_2026-07-22"],
+      "value": "2027-01-18"
+    }
+  },
+  {
+    "id": "q080",
+    "query": {
+      "intent": "fact",
+      "question": "Jusqu'à quand l'attestation de vigilance de Charpente Leroy est-elle valable ?",
+      "subject": {
+        "by": "name",
+        "value": "Charpente Leroy"
+      },
+      "type": "attestation_vigilance",
+      "via": ["covers"],
+      "field": "valid_to"
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": ["juridique/charpente-leroy/attestation-vigilance_2026-07-29"],
+      "value": "2027-01-25"
+    }
+  },
+  {
+    "id": "q081",
+    "query": {
+      "intent": "fact",
+      "question": "Quel devis la facture F-2026-001 exécute-t-elle ?",
+      "subject": {
+        "by": "number",
+        "value": "F-2026-001"
+      },
+      "type": "devis",
+      "via": ["fulfils"],
+      "field": "number"
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": ["finances/2025/2025-12-23_devis_sci-les-tilleuls_d-2026-001"],
+      "value": "D-2026-001"
+    }
+  },
+  {
+    "id": "q082",
+    "query": {
+      "intent": "fact",
+      "question": "Quel devis la facture F-2026-002 exécute-t-elle ?",
+      "subject": {
+        "by": "number",
+        "value": "F-2026-002"
+      },
+      "type": "devis",
+      "via": ["fulfils"],
+      "field": "number"
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": ["finances/2026/2026-01-28_devis_sci-clos-des-vignes_d-2026-002"],
+      "value": "D-2026-002"
+    }
+  },
+  {
+    "id": "q083",
+    "query": {
+      "intent": "fact",
+      "question": "Quel devis la facture F-2026-003 exécute-t-elle ?",
+      "subject": {
+        "by": "number",
+        "value": "F-2026-003"
+      },
+      "type": "devis",
+      "via": ["fulfils"],
+      "field": "number"
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": ["finances/2026/2026-03-05_devis_residence-le-parc-sas_d-2026-003"],
+      "value": "D-2026-003"
+    }
+  },
+  {
+    "id": "q084",
+    "query": {
+      "intent": "list",
+      "question": "Quelles factures de SCI Les Tilleuls restent impayées ?",
+      "subject": {
+        "by": "name",
+        "value": "SCI Les Tilleuls"
+      },
+      "type": "facture_vente",
+      "via": ["issued_to"],
+      "unset": ["paid_at"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": [
+        "finances/2026/2026-05-03_facture_sci-les-tilleuls_f-2026-016",
+        "finances/2026/2026-08-31_facture_sci-les-tilleuls_f-2026-036"
+      ]
+    }
+  },
+  {
+    "id": "q085",
+    "query": {
+      "intent": "list",
+      "question": "Quelles factures de SCI Clos des Vignes restent impayées ?",
+      "subject": {
+        "by": "name",
+        "value": "SCI Clos des Vignes"
+      },
+      "type": "facture_vente",
+      "via": ["issued_to"],
+      "unset": ["paid_at"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": [
+        "finances/2026/2026-04-09_facture_sci-clos-des-vignes_f-2026-012",
+        "finances/2026/2026-08-07_facture_sci-clos-des-vignes_f-2026-032",
+        "finances/2026/2026-09-06_facture_sci-clos-des-vignes_f-2026-037"
+      ]
+    }
+  },
+  {
+    "id": "q086",
+    "query": {
+      "intent": "list",
+      "question": "Sur quels chantiers travaillons-nous pour Résidence Le Parc SAS ?",
+      "subject": {
+        "by": "name",
+        "value": "Résidence Le Parc SAS"
+      },
+      "type": "chantier",
+      "via": ["issued_to", "belongs_to"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": ["chantiers/2026-renovation-le-parc-batiment-b"]
+    }
+  },
+  {
+    "id": "q087",
+    "query": {
+      "intent": "list",
+      "question": "Sur quels chantiers travaillons-nous pour Cabinet Médical des Lilas ?",
+      "subject": {
+        "by": "name",
+        "value": "Cabinet Médical des Lilas"
+      },
+      "type": "chantier",
+      "via": ["issued_to", "belongs_to"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 2,
+      "paths": ["chantiers/2026-cabinet-medical-des-lilas"]
+    }
+  },
+  {
+    "id": "q088",
+    "query": {
+      "intent": "fact",
+      "question": "Quelle facture d'achat parle d'une livraison de nuit ?",
+      "type": "facture_achat",
+      "match": ["livraison", "nuit"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 3,
+      "paths": ["finances/2026/2026-02-21_achat_quincaillerie-bonnet_qu-75826"]
+    }
+  },
+  {
+    "id": "q089",
+    "query": {
+      "intent": "fact",
+      "question": "Quelle facture d'achat mentionne palette consignee ?",
+      "type": "facture_achat",
+      "match": ["palette", "consignee"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 3,
+      "paths": ["finances/2026/2026-04-10_achat_materiaux-rousseau_ma-94982"]
+    }
+  },
+  {
+    "id": "q090",
+    "query": {
+      "intent": "fact",
+      "question": "Quelle facture d'achat mentionne camion grue ?",
+      "type": "facture_achat",
+      "match": ["camion", "grue"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 3,
+      "paths": ["finances/2026/2026-05-20_achat_platres-lambert_pl-93635"]
+    }
+  },
+  {
+    "id": "q091",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le code du portail du chantier Cabinet médical des Lilas ?",
+      "subject": {
+        "by": "name",
+        "value": "Cabinet médical des Lilas"
+      },
+      "match": ["code", "portail"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 4,
+      "paths": ["finances/2026/2026-03-13_achat_sanitaires-faure_sa-16013"]
+    }
+  },
+  {
+    "id": "q092",
+    "query": {
+      "intent": "fact",
+      "question": "Quand passe la benne à gravats du chantier Extension Clos des Vignes ?",
+      "subject": {
+        "by": "name",
+        "value": "Extension Clos des Vignes"
+      },
+      "match": ["benne", "gravats"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 4,
+      "paths": ["finances/2026/2026-05-08_achat_carrelages-fontaine_ca-95813"]
+    }
+  },
+  {
+    "id": "q093",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est l'IBAN de Matériaux Rousseau ?",
+      "subject": {
+        "by": "name",
+        "value": "Matériaux Rousseau"
+      },
+      "match": ["iban"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 5,
+      "paths": ["raw/2026/09/nouveau-rib-materiaux-rousseau.eml"]
+    }
+  },
+  {
+    "id": "q094",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est l'IBAN de Bois et Panneaux Girard ?",
+      "subject": {
+        "by": "name",
+        "value": "Bois et Panneaux Girard"
+      },
+      "match": ["iban"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 5,
+      "paths": ["raw/2026/09/nouveau-rib-bois-et-panneaux-girard.eml"]
+    }
+  },
+  {
+    "id": "q095",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est l'IBAN de Carrelages Fontaine ?",
+      "subject": {
+        "by": "name",
+        "value": "Carrelages Fontaine"
+      },
+      "match": ["iban"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 5,
+      "paths": ["raw/2026/09/nouveau-rib-carrelages-fontaine.eml"]
+    }
+  },
+  {
+    "id": "q096",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est l'IBAN de Quincaillerie Bonnet ?",
+      "subject": {
+        "by": "name",
+        "value": "Quincaillerie Bonnet"
+      },
+      "match": ["iban"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 5,
+      "paths": ["raw/2026/09/nouveau-rib-quincaillerie-bonnet.eml"]
+    }
+  },
+  {
+    "id": "q097",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le code du cadenas du dépôt de Chenôve ?",
+      "match": ["code", "cadenas"]
+    },
+    "expect": {
+      "status": "found",
+      "level": 5,
+      "paths": ["raw/2026/10/acces-depot.eml"]
+    }
+  },
+  {
+    "id": "q098",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est l'IBAN de Peintures Roux ?",
+      "subject": {
+        "by": "name",
+        "value": "Peintures Roux"
+      },
+      "match": ["iban"]
+    },
+    "expect": {
+      "status": "not_found",
+      "level": 6
+    }
+  },
+  {
+    "id": "q099",
+    "query": {
+      "intent": "fact",
+      "question": "Quel est le SIREN de Terrassements Inconnus ?",
+      "subject": {
+        "by": "name",
+        "value": "Terrassements Inconnus"
+      },
+      "field": "siren"
+    },
+    "expect": {
+      "status": "not_found",
+      "level": 6
+    }
+  },
+  {
+    "id": "q100",
+    "query": {
+      "intent": "list",
+      "question": "Quelles factures parlent de la piscine ?",
+      "type": "facture_vente",
+      "match": ["piscine"]
+    },
+    "expect": {
+      "status": "not_found",
+      "level": 6
+    }
+  }
+]

@@ -305,3 +305,15 @@ Each line says where it came from and what would bring it back.
 | Backlinks on a page a person is editing | Skipped while they edit (one minute); written at the next rebuild or the next write that relinks | A person reports stale « Liens »: a pass a minute after their last save. |
 | A model choosing in recall, vectors | Not in M0 (D12: levels 1–4 by code) | M1's golden questions show where code alone misses. |
 
+## Memory: index and recall (M1, 2026-10-25)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| A model in recall (choosing among candidates, vectors) and the memory doc's 60 k-token budget per recall | None: the six levels are code, 100 of 100 golden questions right (87 at levels 1–2); no model, so no tokens to budget | A pilot's questions miss where the golden set does not: their misses go into `golden.json` first, then a model with its eval. |
+| A person's French turned into a `RecallQuery` | The query is structured; identifiers and names are read from the question's words by code (`keysIn`); the field or words to look for are given by the caller | The pane or the relay asks memory questions in free text (M4): a model writes the query, with an eval on the golden questions. |
+| A `memory_questions` table | Open questions stay in the vault's `open-questions.md` (compile writes them, a person ticks them) | The pane shows the memory's questions, or one must be answered from the phone (M4). |
+| A contradiction across types (an invoice whose SIREN differs from its company's page) | Only pages of the same type about the same subject are compared before an action | Lint (M2) compares a document's facts with the pages it links to. |
+| An answer from `raw/` as a field | Written back as a quoted line with its source on the page (`« IBAN : … » (relevé dans [[raw/…]] …)`), found at level 1 next time | A field for it in the page schema (an `iban` on `tiers`) when a rule needs it as data (M5). |
+| Recall's budgets on Postgres over the network | Measured on PGlite in-process (L1 p95 ≈ 3–4 ms against 5 ms) | Mode B (M3) on a real Postgres: `pnpm perf` grows a recall case. |
+| One log line per ingest, however many pages | An ingest of 255 pages is one long line in `log.md` | A person finds the log hard to read: lines past ten pages say « et N autres » with the full list in `_system/`. |
+

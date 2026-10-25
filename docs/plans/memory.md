@@ -47,12 +47,16 @@ invalid frontmatter is refused, the whole patch with it.
 
 | What | Where |
 |---|---|
-| Tables `memory_pages` (facts, folded text for full-text), `memory_links`, `memory_questions`; loaded by compile and by rebuild | `packages/db` (migration), `packages/memory/src/store.ts` |
+| Tables `memory_pages` (facts, folded text for full-text), `memory_links`, `memory_raw` (the texts of `raw/`), `memory_recalls` (level, time, what was searched); loaded by compile, a person's edits and rebuild. Open questions stay in the vault's `open-questions.md` (no `memory_questions` table: `docs/DEFERRED.md`) | `packages/db` (migration 0027), `packages/memory/src/store.ts` |
 | `recall`: 1 a key, 2 links one or two steps away, 3 full-text in the section, 4 in the whole wiki, 5 in `raw/*.txt` (a hit there writes the fact back to its page), 6 « nothing » with what was searched and an open question; `mustBeExhaustive` looks for a contradicting page before an outward action; level and time logged | `packages/memory/src/recall.ts` |
 | A demo vault (30 companies, 5 chantiers, 200 documents) made by a seeded generator, and 100 golden questions | `fixtures/vault-demo/`, `scripts/vault-demo.ts`, `packages/memory/src/recall.golden.test.ts` |
 
 Done when: ≥ 80 % of the golden questions answered at levels 1–2, none « not found » wrongly, each
 level within its time budget.
+
+A query is structured (`RecallQuery`: intent, subject key, type, links to follow, field or words to
+match); keys are also read from the question's words (identifiers, any name). Turning a person's
+French into such a query is a model's job with its eval, later (`docs/DEFERRED.md`).
 
 ## M2 — links between documents
 

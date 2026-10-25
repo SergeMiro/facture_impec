@@ -53,6 +53,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -1622,6 +1623,102 @@ export const stripeEvents = pgTable('stripe_events', {
   receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Postgres full-text: a column the database computes from text code has folded. */
+const tsvector = customType<{ data: string; driverData: string }>({ dataType: () => 'tsvector' });
+/** Full-text of `folded`, French stemming (D12: accents are folded by code before). */
+const searchOf = () =>
+  tsvector('search').generatedAlwaysAs(sql`to_tsvector('french'::regconfig, "folded")`);
+
+/**
+ * The memory's pages as the vault holds them (memory doc §4, docs/DECISIONS.md D12), for recall:
+ * the vault is the truth and this its index, written by compile, rebuild and a person's edits and
+ * rebuilt from the vault at any time.
+ */
+export const memoryPages = pgTable(
+  'memory_pages',
+  {
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    path: text('path').notNull(),
+    type: text('type').notNull(),
+    section: text('section').notNull(),
+    title: text('title').notNull(),
+    /** Recall's level 1, folded: `siren:123456789`, `number:f-114`, `name:marc elec`. */
+    keys: text('keys').array().notNull(),
+    /** The frontmatter as the file writes it (amounts « 12400.00 »). */
+    facts: jsonb('facts_json').$type<Record<string, unknown>>().notNull(),
+    sources: text('sources').array().notNull(),
+    body: text('body').notNull(),
+    /** Title, facts and text, lower case and without accents: what full-text reads. */
+    folded: text('folded').notNull(),
+    search: searchOf(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.path] }),
+    index('memory_pages_keys').using('gin', t.keys),
+    index('memory_pages_search').using('gin', t.search),
+    index('memory_pages_type').on(t.tenantId, t.type),
+  ],
+);
+
+/** A link a page makes (its frontmatter's `links`); a backlink is the same row read the other way. */
+export const memoryLinks = pgTable(
+  'memory_links',
+  {
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    fromPath: text('from_path').notNull(),
+    kind: text('kind').notNull(),
+    toPath: text('to_path').notNull(),
+    confidence: text('confidence', { enum: ['exact', 'strong', 'inferred'] }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.fromPath, t.kind, t.toPath] }),
+    index('memory_links_to').on(t.tenantId, t.toPath),
+    check('memory_links_confidence', oneOf(t.confidence, ['exact', 'strong', 'inferred'])),
+  ],
+);
+
+/** The text read from each original of `raw/` (`<file>.txt`): recall's level 5. */
+export const memoryRaw = pgTable(
+  'memory_raw',
+  {
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    ref: text('ref').notNull(),
+    body: text('body').notNull(),
+    folded: text('folded').notNull(),
+    search: searchOf(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.ref] }),
+    index('memory_raw_search').using('gin', t.search),
+  ],
+);
+
+/** Each recall's level and time (memory doc §6: « levelHit et searched sont toujours journalisés »). */
+export const memoryRecalls = pgTable(
+  'memory_recalls',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    intent: text('intent').notNull(),
+    status: text('status').notNull(),
+    /** 1–6; 6 is « nothing ». */
+    level: integer('level').notNull(),
+    ms: integer('ms').notNull(),
+    searched: jsonb('searched_json').$type<unknown[]>().notNull(),
+  },
+  (t) => [index('memory_recalls_at').on(t.tenantId, t.at)],
+);
+
 export type TenantRow = typeof tenants.$inferSelect;
 export type UploadRow = typeof uploads.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
@@ -1657,3 +1754,5 @@ export type DocumentRow = typeof documents.$inferSelect;
 export type ObligationRow = typeof obligations.$inferSelect;
 export type ActionRow = typeof actions.$inferSelect;
 export type ConnectorSyncRow = typeof connectorSyncs.$inferSelect;
+export type MemoryPageRow = typeof memoryPages.$inferSelect;
+export type MemoryLinkRow = typeof memoryLinks.$inferSelect;

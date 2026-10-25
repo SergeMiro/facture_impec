@@ -1,0 +1,174 @@
+# Finances
+
+Factures, avoirs, situations, devis et commandes, une page par document.
+
+- [[finances/2025/2025-12-23_devis_sci-les-tilleuls_d-2026-001|Devis D-2026-001]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2025/2025-12-28_devis_sci-les-tilleuls_d-2026-006|Devis D-2026-006]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-01-02_devis_sci-les-tilleuls_d-2026-011|Devis D-2026-011]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-01-07_devis_sci-les-tilleuls_d-2026-016|Devis D-2026-016]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-01-12_devis_sci-les-tilleuls_d-2026-021|Devis D-2026-021]] · Devis · envoyé · mis à jour le 25/10/2026
+- [[finances/2026/2026-01-15_commande_materiaux-rousseau_bc-2026-001|Commande BC-2026-001]] · Commande · du 15/01/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-01-20_achat_materiaux-rousseau_ma-83068|Facture MA-83068 Matériaux Rousseau]] · Facture d'achat · 907,20 € TTC, échéance le 06/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-01-24_achat_materiaux-rousseau_ma-53102|Facture MA-53102 Matériaux Rousseau]] · Facture d'achat · 7 507,20 € TTC, échéance le 10/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-01-24_commande_materiaux-rousseau_bc-2026-002|Commande BC-2026-002]] · Commande · du 24/01/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-01-28_achat_materiaux-rousseau_ma-76568|Facture MA-76568 Matériaux Rousseau]] · Facture d'achat · 106,92 € TTC, échéance le 14/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-01-28_devis_sci-clos-des-vignes_d-2026-002|Devis D-2026-002]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-01_achat_materiaux-rousseau_ma-66404|Facture MA-66404 Matériaux Rousseau]] · Facture d'achat · 1 835,52 € TTC, échéance le 18/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-02_commande_carrelages-fontaine_bc-2026-003|Commande BC-2026-003]] · Commande · du 02/02/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-02_devis_sci-clos-des-vignes_d-2026-007|Devis D-2026-007]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-02_facture_sci-les-tilleuls_f-2026-001|Facture F-2026-001]] · Facture de vente · 9 529,20 € TTC, payée le 07/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-05_achat_bois-et-panneaux-girard_bo-72703|Facture BO-72703 Bois et Panneaux Girard]] · Facture d'achat · 994,56 € TTC, échéance le 22/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-07_devis_sci-clos-des-vignes_d-2026-012|Devis D-2026-012]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-08_facture_sci-clos-des-vignes_f-2026-002|Facture F-2026-002]] · Facture de vente · 46 159,20 € TTC, payée le 17/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-09_achat_bois-et-panneaux-girard_bo-67587|Facture BO-67587 Bois et Panneaux Girard]] · Facture d'achat · 361,08 € TTC, échéance le 26/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-11_commande_beton-pret-vincent_bc-2026-004|Commande BC-2026-004]] · Commande · du 11/02/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-12_devis_sci-clos-des-vignes_d-2026-017|Devis D-2026-017]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-13_achat_carrelages-fontaine_ca-77095|Facture CA-77095 Carrelages Fontaine]] · Facture d'achat · 4 540,20 € TTC, échéance le 30/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-14_facture_residence-le-parc-sas_f-2026-003|Facture F-2026-003]] · Facture de vente · 17 914,80 € TTC, payée le 07/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-17_achat_carrelages-fontaine_ca-80326|Facture CA-80326 Carrelages Fontaine]] · Facture d'achat · 1 419,00 € TTC, échéance le 03/04/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-17_devis_sci-clos-des-vignes_d-2026-022|Devis D-2026-022]] · Devis · envoyé · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-20_commande_sanitaires-faure_bc-2026-005|Commande BC-2026-005]] · Commande · du 20/02/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-20_facture_cabinet-medical-des-lila_f-2026-004|Facture F-2026-004]] · Facture de vente · 23 534,40 € TTC, échéance le 22/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-21_achat_quincaillerie-bonnet_qu-75826|Facture QU-75826 Quincaillerie Bonnet]] · Facture d'achat · 1 346,76 € TTC, échéance le 07/04/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-25_achat_beton-pret-vincent_be-72338|Facture BÉ-72338 Béton Prêt Vincent]] · Facture d'achat · 1 000,80 € TTC, échéance le 11/04/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-02-26_facture_hotel-du-lac-kir_f-2026-005|Facture F-2026-005]] · Facture de vente · 28 754,40 € TTC, payée le 04/04/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-01_achat_platres-lambert_pl-62549|Facture PL-62549 Plâtres Lambert]] · Facture d'achat · 174,72 € TTC, échéance le 15/04/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-01_commande_electro-distribution-mul_bc-2026-006|Commande BC-2026-006]] · Commande · du 01/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-04_facture_sci-les-tilleuls_f-2026-006|Facture F-2026-006]] · Facture de vente · 27 660,00 € TTC, payée le 29/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-05_achat_platres-lambert_pl-68814|Facture PL-68814 Plâtres Lambert]] · Facture d'achat · 409,20 € TTC, échéance le 19/04/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-05_devis_residence-le-parc-sas_d-2026-003|Devis D-2026-003]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-09_achat_sanitaires-faure_sa-44036|Facture SA-44036 Sanitaires Faure]] · Facture d'achat · 31 772,40 € TTC, échéance le 23/04/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-10_commande_location-engins-michel_bc-2026-007|Commande BC-2026-007]] · Commande · du 10/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-10_devis_residence-le-parc-sas_d-2026-008|Devis D-2026-008]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-10_facture_sci-clos-des-vignes_f-2026-007|Facture F-2026-007]] · Facture de vente · 16 584,00 € TTC, payée le 07/04/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-13_achat_sanitaires-faure_sa-16013|Facture SA-16013 Sanitaires Faure]] · Facture d'achat · 73,44 € TTC, échéance le 27/04/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-15_devis_residence-le-parc-sas_d-2026-013|Devis D-2026-013]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-16_facture_residence-le-parc-sas_f-2026-008|Facture F-2026-008]] · Facture de vente · 5 984,40 € TTC, échéance le 15/04/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-17_achat_electro-distribution-mul_el-38611|Facture ÉL-38611 Électro-Distribution Muller]] · Facture d'achat · 20,88 € TTC, échéance le 01/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-19_commande_materiaux-rousseau_bc-2026-008|Commande BC-2026-008]] · Commande · du 19/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-20_devis_residence-le-parc-sas_d-2026-018|Devis D-2026-018]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-21_achat_electro-distribution-mul_el-34954|Facture ÉL-34954 Électro-Distribution Muller]] · Facture d'achat · 23 133,60 € TTC, échéance le 05/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-22_facture_cabinet-medical-des-lila_f-2026-009|Facture F-2026-009]] · Facture de vente · 6 682,80 € TTC, payée le 27/04/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-25_achat_peintures-roux_pe-63205|Facture PE-63205 Peintures Roux]] · Facture d'achat · 9 169,80 € TTC, échéance le 09/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-25_devis_residence-le-parc-sas_d-2026-023|Devis D-2026-023]] · Devis · envoyé · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-28_commande_bois-et-panneaux-girard_bc-2026-009|Commande BC-2026-009]] · Commande · du 28/03/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-28_facture_hotel-du-lac-kir_f-2026-010|Facture F-2026-010]] · Facture de vente · 7 770,00 € TTC, payée le 08/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-03-29_achat_isolants-fournier_is-47681|Facture IS-47681 Isolants Fournier]] · Facture d'achat · 861,12 € TTC, échéance le 13/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-02_achat_location-engins-michel_lo-96990|Facture LO-96990 Location Engins Michel]] · Facture d'achat · 9 324,00 € TTC, échéance le 17/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-03_facture_sci-les-tilleuls_f-2026-011|Facture F-2026-011]] · Facture de vente · 5 202,00 € TTC, payée le 01/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-06_achat_tuiles-simon_tu-43602|Facture TU-43602 Tuiles Simon]] · Facture d'achat · 2 649,60 € TTC, échéance le 21/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-06_commande_carrelages-fontaine_bc-2026-010|Commande BC-2026-010]] · Commande · du 06/04/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-09_facture_sci-clos-des-vignes_f-2026-012|Facture F-2026-012]] · Facture de vente · 10 704,00 € TTC, échéance le 09/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-10_achat_materiaux-rousseau_ma-94982|Facture MA-94982 Matériaux Rousseau]] · Facture d'achat · 1 020,60 € TTC, échéance le 25/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-10_devis_cabinet-medical-des-lila_d-2026-004|Devis D-2026-004]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-14_achat_materiaux-rousseau_ma-46222|Facture MA-46222 Matériaux Rousseau]] · Facture d'achat · 1 060,80 € TTC, échéance le 29/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-15_commande_platres-lambert_bc-2026-011|Commande BC-2026-011]] · Commande · du 15/04/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-15_devis_cabinet-medical-des-lila_d-2026-009|Devis D-2026-009]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-15_facture_residence-le-parc-sas_f-2026-013|Facture F-2026-013]] · Facture de vente · 39 164,40 € TTC, payée le 22/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-18_achat_materiaux-rousseau_ma-35400|Facture MA-35400 Matériaux Rousseau]] · Facture d'achat · 120,53 € TTC, échéance le 02/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-20_devis_cabinet-medical-des-lila_d-2026-014|Devis D-2026-014]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-21_facture_cabinet-medical-des-lila_f-2026-014|Facture F-2026-014]] · Facture de vente · 53 946,00 € TTC, payée le 17/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-22_achat_materiaux-rousseau_ma-72651|Facture MA-72651 Matériaux Rousseau]] · Facture d'achat · 2 896,68 € TTC, échéance le 06/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-24_commande_sanitaires-faure_bc-2026-012|Commande BC-2026-012]] · Commande · du 24/04/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-25_devis_cabinet-medical-des-lila_d-2026-019|Devis D-2026-019]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-26_achat_bois-et-panneaux-girard_bo-90578|Facture BO-90578 Bois et Panneaux Girard]] · Facture d'achat · 2 042,40 € TTC, échéance le 10/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-27_facture_hotel-du-lac-kir_f-2026-015|Facture F-2026-015]] · Facture de vente · 26 002,80 € TTC, payée le 03/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-30_achat_bois-et-panneaux-girard_bo-75007|Facture BO-75007 Bois et Panneaux Girard]] · Facture d'achat · 169,92 € TTC, échéance le 14/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-04-30_devis_cabinet-medical-des-lila_d-2026-024|Devis D-2026-024]] · Devis · refusé · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-03_commande_peintures-roux_bc-2026-013|Commande BC-2026-013]] · Commande · du 03/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-03_facture_sci-les-tilleuls_f-2026-016|Facture F-2026-016]] · Facture de vente · 32 266,80 € TTC, échéance le 02/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-04_achat_carrelages-fontaine_ca-95279|Facture CA-95279 Carrelages Fontaine]] · Facture d'achat · 2 289,84 € TTC, échéance le 18/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-08_achat_carrelages-fontaine_ca-95813|Facture CA-95813 Carrelages Fontaine]] · Facture d'achat · 748,20 € TTC, échéance le 22/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-09_facture_sci-clos-des-vignes_f-2026-017|Facture F-2026-017]] · Facture de vente · 46 225,20 € TTC, payée le 07/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-12_achat_quincaillerie-bonnet_qu-38469|Facture QU-38469 Quincaillerie Bonnet]] · Facture d'achat · 572,76 € TTC, échéance le 26/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-12_commande_tuiles-simon_bc-2026-014|Commande BC-2026-014]] · Commande · du 12/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-15_facture_residence-le-parc-sas_f-2026-018|Facture F-2026-018]] · Facture de vente · 23 727,60 € TTC, payée le 24/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-16_achat_beton-pret-vincent_be-91892|Facture BÉ-91892 Béton Prêt Vincent]] · Facture d'achat · 11 175,60 € TTC, échéance le 30/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-16_devis_hotel-du-lac-kir_d-2026-005|Devis D-2026-005]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-20_achat_platres-lambert_pl-93635|Facture PL-93635 Plâtres Lambert]] · Facture d'achat · 393,12 € TTC, échéance le 04/07/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-21_commande_materiaux-rousseau_bc-2026-015|Commande BC-2026-015]] · Commande · du 21/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-21_devis_hotel-du-lac-kir_d-2026-010|Devis D-2026-010]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-21_facture_cabinet-medical-des-lila_f-2026-019|Facture F-2026-019]] · Facture de vente · 21 531,60 € TTC, payée le 11/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-24_achat_platres-lambert_pl-44357|Facture PL-44357 Plâtres Lambert]] · Facture d'achat · 85,56 € TTC, échéance le 08/07/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-26_devis_hotel-du-lac-kir_d-2026-015|Devis D-2026-015]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-27_facture_hotel-du-lac-kir_f-2026-020|Facture F-2026-020]] · Facture de vente · 48 133,20 € TTC, échéance le 26/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-28_achat_sanitaires-faure_sa-17912|Facture SA-17912 Sanitaires Faure]] · Facture d'achat · 27 944,40 € TTC, échéance le 12/07/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-30_commande_bois-et-panneaux-girard_bc-2026-016|Commande BC-2026-016]] · Commande · du 30/05/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-05-31_devis_hotel-du-lac-kir_d-2026-020|Devis D-2026-020]] · Devis · accepté · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-01_achat_sanitaires-faure_sa-35593|Facture SA-35593 Sanitaires Faure]] · Facture d'achat · 172,80 € TTC, échéance le 16/07/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-02_facture_sci-les-tilleuls_f-2026-021|Facture F-2026-021]] · Facture de vente · 29 001,60 € TTC, payée le 12/07/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-05_achat_electro-distribution-mul_el-95853|Facture ÉL-95853 Électro-Distribution Muller]] · Facture d'achat · 34,80 € TTC, échéance le 20/07/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-05_devis_hotel-du-lac-kir_d-2026-025|Devis D-2026-025]] · Devis · refusé · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-08_commande_quincaillerie-bonnet_bc-2026-017|Commande BC-2026-017]] · Commande · du 08/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-08_facture_sci-clos-des-vignes_f-2026-022|Facture F-2026-022]] · Facture de vente · 5 724,00 € TTC, payée le 17/07/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-09_achat_electro-distribution-mul_el-96893|Facture ÉL-96893 Électro-Distribution Muller]] · Facture d'achat · 18 597,60 € TTC, échéance le 24/07/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-13_achat_peintures-roux_pe-41253|Facture PE-41253 Peintures Roux]] · Facture d'achat · 2 373,36 € TTC, échéance le 28/07/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-14_facture_residence-le-parc-sas_f-2026-023|Facture F-2026-023]] · Facture de vente · 8 611,20 € TTC, payée le 04/07/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-17_achat_isolants-fournier_is-80890|Facture IS-80890 Isolants Fournier]] · Facture d'achat · 952,20 € TTC, échéance le 01/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-17_commande_platres-lambert_bc-2026-018|Commande BC-2026-018]] · Commande · du 17/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-20_facture_cabinet-medical-des-lila_f-2026-024|Facture F-2026-024]] · Facture de vente · 2 296,80 € TTC, échéance le 20/07/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-21_achat_location-engins-michel_lo-30290|Facture LO-30290 Location Engins Michel]] · Facture d'achat · 2 520,00 € TTC, échéance le 05/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-25_achat_tuiles-simon_tu-47144|Facture TU-47144 Tuiles Simon]] · Facture d'achat · 1 780,20 € TTC, échéance le 09/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-26_commande_electro-distribution-mul_bc-2026-019|Commande BC-2026-019]] · Commande · du 26/06/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-26_facture_hotel-du-lac-kir_f-2026-025|Facture F-2026-025]] · Facture de vente · 12 950,40 € TTC, payée le 05/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-06-29_achat_materiaux-rousseau_ma-47304|Facture MA-47304 Matériaux Rousseau]] · Facture d'achat · 226,80 € TTC, échéance le 13/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-02_facture_sci-les-tilleuls_f-2026-026|Facture F-2026-026]] · Facture de vente · 50 184,00 € TTC, payée le 07/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-03_achat_materiaux-rousseau_ma-29229|Facture MA-29229 Matériaux Rousseau]] · Facture d'achat · 3 100,80 € TTC, échéance le 17/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-05_commande_isolants-fournier_bc-2026-020|Commande BC-2026-020]] · Commande · du 05/07/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-07_achat_materiaux-rousseau_ma-77334|Facture MA-77334 Matériaux Rousseau]] · Facture d'achat · 19,44 € TTC, échéance le 21/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-08_facture_sci-clos-des-vignes_f-2026-027|Facture F-2026-027]] · Facture de vente · 21 550,80 € TTC, payée le 13/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-11_achat_materiaux-rousseau_ma-86196|Facture MA-86196 Matériaux Rousseau]] · Facture d'achat · 3 298,20 € TTC, échéance le 25/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-14_commande_materiaux-rousseau_bc-2026-021|Commande BC-2026-021]] · Commande · du 14/07/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-14_facture_residence-le-parc-sas_f-2026-028|Facture F-2026-028]] · Facture de vente · 43 144,80 € TTC, échéance le 13/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-15_achat_bois-et-panneaux-girard_bo-70749|Facture BO-70749 Bois et Panneaux Girard]] · Facture d'achat · 870,24 € TTC, échéance le 29/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-19_achat_bois-et-panneaux-girard_bo-73819|Facture BO-73819 Bois et Panneaux Girard]] · Facture d'achat · 665,52 € TTC, échéance le 02/09/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-20_facture_cabinet-medical-des-lila_f-2026-029|Facture F-2026-029]] · Facture de vente · 50 916,00 € TTC, payée le 31/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-23_achat_carrelages-fontaine_ca-99602|Facture CA-99602 Carrelages Fontaine]] · Facture d'achat · 1 105,44 € TTC, échéance le 06/09/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-23_commande_materiaux-rousseau_bc-2026-022|Commande BC-2026-022]] · Commande · du 23/07/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-26_facture_hotel-du-lac-kir_f-2026-030|Facture F-2026-030]] · Facture de vente · 21 916,80 € TTC, payée le 22/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-27_achat_carrelages-fontaine_ca-30453|Facture CA-30453 Carrelages Fontaine]] · Facture d'achat · 2 915,40 € TTC, échéance le 10/09/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-07-31_achat_quincaillerie-bonnet_qu-66558|Facture QU-66558 Quincaillerie Bonnet]] · Facture d'achat · 402,48 € TTC, échéance le 14/09/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-01_commande_carrelages-fontaine_bc-2026-023|Commande BC-2026-023]] · Commande · du 01/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-01_facture_sci-les-tilleuls_f-2026-031|Facture F-2026-031]] · Facture de vente · 51 530,40 € TTC, payée le 27/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-04_achat_beton-pret-vincent_be-43810|Facture BÉ-43810 Béton Prêt Vincent]] · Facture d'achat · 8 840,40 € TTC, échéance le 18/09/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-07_facture_sci-clos-des-vignes_f-2026-032|Facture F-2026-032]] · Facture de vente · 6 636,00 € TTC, échéance le 06/09/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-08_achat_platres-lambert_pl-31716|Facture PL-31716 Plâtres Lambert]] · Facture d'achat · 449,28 € TTC, échéance le 22/09/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-10_commande_beton-pret-vincent_bc-2026-024|Commande BC-2026-024]] · Commande · du 10/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-12_achat_platres-lambert_pl-75251|Facture PL-75251 Plâtres Lambert]] · Facture d'achat · 141,36 € TTC, échéance le 26/09/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-13_facture_residence-le-parc-sas_f-2026-033|Facture F-2026-033]] · Facture de vente · 45 822,00 € TTC, échéance le 12/09/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-16_achat_sanitaires-faure_sa-35832|Facture SA-35832 Sanitaires Faure]] · Facture d'achat · 29 475,60 € TTC, échéance le 30/09/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-19_commande_sanitaires-faure_bc-2026-025|Commande BC-2026-025]] · Commande · du 19/08/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-19_facture_cabinet-medical-des-lila_f-2026-034|Facture F-2026-034]] · Facture de vente · 16 206,00 € TTC, échéance le 18/09/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-20_achat_sanitaires-faure_sa-16836|Facture SA-16836 Sanitaires Faure]] · Facture d'achat · 167,04 € TTC, échéance le 04/10/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-24_achat_electro-distribution-mul_el-75029|Facture ÉL-75029 Électro-Distribution Muller]] · Facture d'achat · 62,64 € TTC, échéance le 08/10/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-25_facture_hotel-du-lac-kir_f-2026-035|Facture F-2026-035]] · Facture de vente · 27 745,20 € TTC, échéance le 24/09/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-28_achat_electro-distribution-mul_el-31412|Facture ÉL-31412 Électro-Distribution Muller]] · Facture d'achat · 6 804,00 € TTC, échéance le 12/10/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-08-31_facture_sci-les-tilleuls_f-2026-036|Facture F-2026-036]] · Facture de vente · 20 161,20 € TTC, échéance le 30/09/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-09-01_achat_peintures-roux_pe-42953|Facture PE-42953 Peintures Roux]] · Facture d'achat · 8 846,16 € TTC, échéance le 16/10/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-09-05_achat_isolants-fournier_is-27906|Facture IS-27906 Isolants Fournier]] · Facture d'achat · 107,64 € TTC, échéance le 20/10/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-09-06_facture_sci-clos-des-vignes_f-2026-037|Facture F-2026-037]] · Facture de vente · 23 962,80 € TTC, échéance le 06/10/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-09-09_achat_location-engins-michel_lo-21736|Facture LO-21736 Location Engins Michel]] · Facture d'achat · 27 720,00 € TTC, échéance le 24/10/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-09-12_facture_residence-le-parc-sas_f-2026-038|Facture F-2026-038]] · Facture de vente · 44 432,40 € TTC, échéance le 12/10/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-09-13_achat_tuiles-simon_tu-22213|Facture TU-22213 Tuiles Simon]] · Facture d'achat · 538,20 € TTC, échéance le 28/10/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-09-18_facture_cabinet-medical-des-lila_f-2026-039|Facture F-2026-039]] · Facture de vente · 22 803,60 € TTC, échéance le 18/10/2026 · mis à jour le 25/10/2026
+- [[finances/2026/2026-09-24_facture_hotel-du-lac-kir_f-2026-040|Facture F-2026-040]] · Facture de vente · 11 466,00 € TTC, échéance le 24/10/2026 · mis à jour le 25/10/2026
+- [[finances/situations/2026-cabinet-medical-des-lilas_sit-1|Situation n°1 Cabinet médical des Lilas]] · Situation de travaux · n° 1, cumul 14 256,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-cabinet-medical-des-lilas_sit-2|Situation n°2 Cabinet médical des Lilas]] · Situation de travaux · n° 2, cumul 50 843,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-cabinet-medical-des-lilas_sit-3|Situation n°3 Cabinet médical des Lilas]] · Situation de travaux · n° 3, cumul 62 559,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-cabinet-medical-des-lilas_sit-4|Situation n°4 Cabinet médical des Lilas]] · Situation de travaux · n° 4, cumul 73 795,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-extension-clos-des-vignes_sit-1|Situation n°1 Extension Clos des Vignes]] · Situation de travaux · n° 1, cumul 25 001,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-extension-clos-des-vignes_sit-2|Situation n°2 Extension Clos des Vignes]] · Situation de travaux · n° 2, cumul 37 802,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-extension-clos-des-vignes_sit-3|Situation n°3 Extension Clos des Vignes]] · Situation de travaux · n° 3, cumul 63 892,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-extension-clos-des-vignes_sit-4|Situation n°4 Extension Clos des Vignes]] · Situation de travaux · n° 4, cumul 78 767,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-hotel-du-lac-kir-facade_sit-1|Situation n°1 Hôtel du Lac Kir façade]] · Situation de travaux · n° 1, cumul 36 484,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-hotel-du-lac-kir-facade_sit-2|Situation n°2 Hôtel du Lac Kir façade]] · Situation de travaux · n° 2, cumul 68 119,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-hotel-du-lac-kir-facade_sit-3|Situation n°3 Hôtel du Lac Kir façade]] · Situation de travaux · n° 3, cumul 89 184,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-hotel-du-lac-kir-facade_sit-4|Situation n°4 Hôtel du Lac Kir façade]] · Situation de travaux · n° 4, cumul 110 807,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-renovation-le-parc-batiment-b_sit-1|Situation n°1 Rénovation Le Parc bâtiment B]] · Situation de travaux · n° 1, cumul 10 496,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-renovation-le-parc-batiment-b_sit-2|Situation n°2 Rénovation Le Parc bâtiment B]] · Situation de travaux · n° 2, cumul 48 821,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-renovation-le-parc-batiment-b_sit-3|Situation n°3 Rénovation Le Parc bâtiment B]] · Situation de travaux · n° 3, cumul 58 942,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-renovation-le-parc-batiment-b_sit-4|Situation n°4 Rénovation Le Parc bâtiment B]] · Situation de travaux · n° 4, cumul 80 493,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-residence-les-tilleuls-12-logements_sit-1|Situation n°1 Résidence Les Tilleuls 12 logements]] · Situation de travaux · n° 1, cumul 31 325,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-residence-les-tilleuls-12-logements_sit-2|Situation n°2 Résidence Les Tilleuls 12 logements]] · Situation de travaux · n° 2, cumul 58 275,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-residence-les-tilleuls-12-logements_sit-3|Situation n°3 Résidence Les Tilleuls 12 logements]] · Situation de travaux · n° 3, cumul 96 044,00 € HT · mis à jour le 25/10/2026
+- [[finances/situations/2026-residence-les-tilleuls-12-logements_sit-4|Situation n°4 Résidence Les Tilleuls 12 logements]] · Situation de travaux · n° 4, cumul 132 551,00 € HT · mis à jour le 25/10/2026

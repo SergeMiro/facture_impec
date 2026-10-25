@@ -3,7 +3,17 @@
 import { randomBytes } from 'node:crypto';
 import type { ResolvedAi } from '@fi/agents';
 import type { Database } from '@fi/db';
-import { auditEvents, chasePlans, eq, invoiceEvents, invoices, tenants, users } from '@fi/db';
+import {
+  auditEvents,
+  chasePlans,
+  eq,
+  invoiceEvents,
+  invoices,
+  memoryPages,
+  memoryRecalls,
+  tenants,
+  users,
+} from '@fi/db';
 import { createMockPdpAdapter } from '@fi/pdp-adapter';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { resolveAi } from './ai';
@@ -310,6 +320,21 @@ describe('RGPD', () => {
   it('deletes what the law lets go, keeps the transmitted invoices, and locks every way in', async () => {
     const t = await tenantWithData();
     const session = await signIn(request, api.mailer, t.email);
+    await database.db.insert(memoryPages).values({
+      tenantId: t.id,
+      path: 'tiers/client',
+      type: 'tiers',
+      section: 'tiers',
+      title: 'Client',
+      keys: ['name:client'],
+      facts: { email: 'compta@client.test' },
+      sources: ['erp:1'],
+      body: '',
+      folded: 'client compta client test',
+    });
+    await database.db
+      .insert(memoryRecalls)
+      .values({ tenantId: t.id, intent: 'fact', status: 'found', level: 1, ms: 1, searched: [] });
 
     const mismatch = await request('/tenant', {
       method: 'DELETE',
@@ -340,6 +365,9 @@ describe('RGPD', () => {
     });
     expect(JSON.stringify(notes)).not.toContain('compta@client.test');
     expect(await database.db.select().from(users).where(eq(users.tenantId, t.id))).toEqual([]);
+    for (const table of [memoryPages, memoryRecalls]) {
+      expect(await database.db.select().from(table).where(eq(table.tenantId, t.id))).toEqual([]);
+    }
     expect((await request('/tenant', { token: t.apiKey })).status).toBe(401);
     expect((await request('/tenant', { token: session })).status).toBe(401);
     const log = await database.db.select().from(auditEvents).where(eq(auditEvents.tenantId, t.id));

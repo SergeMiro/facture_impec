@@ -140,6 +140,7 @@ export function parisMinute(at: Date): string {
 export type LogReason =
   | 'ingest'
   | 'query_writeback'
+  | 'query'
   | 'lint'
   | 'user_edit'
   | 'action_result'
