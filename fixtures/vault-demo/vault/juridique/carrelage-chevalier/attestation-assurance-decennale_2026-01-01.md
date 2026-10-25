@@ -11,7 +11,8 @@ links:
   - kind: covers
     to: tiers/carrelage-chevalier
     confidence: exact
-    evidence: SIREN de l’attestation
+    evidence: Tiers du document (champ « party »)
+    rule: party
 ---
 
 Assurance décennale de Carrelage Chevalier pour 2026.

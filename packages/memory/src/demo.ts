@@ -1,13 +1,17 @@
-// The demo vault (docs/plans/memory.md M1): a small BTP company's memory made by a seeded generator,
-// 30 companies, 5 chantiers, 200 documents, 20 articles and the mails they came with, and 100
-// questions whose answers the generator knows. Every name, number and IBAN is made up (the IBANs
-// use bank code 99999, which no French bank has). Recall is measured on it; lint (M2) will be too.
-// `pnpm vault:demo` writes it to `fixtures/vault-demo/`; a test makes it again and compares.
+// The demo vault (docs/plans/memory.md M1, M2): a small BTP company's memory made by a seeded
+// generator, 30 companies, 5 chantiers, 200 documents, 20 articles and the mails they came with, and
+// 100 questions whose answers the generator knows. Every name, number and IBAN is made up (the IBANs
+// use bank code 99999, which no French bank has). The documents carry what real ones do (a company,
+// sometimes a chantier or its reference, an order's or a quote's number, lines with a code or only a
+// name, a sentence) and no links: the link rules find them, and the generator knows which are true.
+// Recall and the link rules are measured on it. `pnpm vault:demo` writes it to
+// `fixtures/vault-demo/`; a test makes it again and compares.
 import { compile, type PageFacts, type PageWrite } from './compile';
+import { relink } from './link-rules';
 import { addRaw } from './raw';
 import type { RecallQuery } from './recall';
 import { pagePath, slugify } from './slug';
-import type { Link } from './types';
+import type { LinkKind } from './types';
 
 export const DEMO_NOW = new Date('2026-10-25T10:00:00Z');
 const TODAY = '2026-10-25';
@@ -24,6 +28,19 @@ export interface Golden {
     paths?: string[];
     value?: unknown;
   };
+}
+
+/** A link the generator knows is true. */
+export interface TrueLink {
+  from: string;
+  kind: LinkKind;
+  to: string;
+}
+
+/** Two documents and the links that tie them (quote → invoice, purchase → sale). */
+export interface Chain {
+  kind: 'quote_invoice' | 'purchase_sale';
+  links: TrueLink[];
 }
 
 interface Original {
@@ -156,19 +173,6 @@ const WORKS = [
   'terrassement et fondations',
 ];
 
-const exact = (kind: Link['kind'], to: string, evidence: string): Link => ({
-  kind,
-  to,
-  confidence: 'exact',
-  evidence,
-});
-const strong = (kind: Link['kind'], to: string, evidence: string): Link => ({
-  kind,
-  to,
-  confidence: 'strong',
-  evidence,
-});
-
 /** The demo company's memory and the questions asked of it. */
 export function demoVault(seed = 2026) {
   const rng = random(seed);
@@ -190,6 +194,13 @@ export function demoVault(seed = 2026) {
   };
   const ask = (query: RecallQuery, expect: Golden['expect']) =>
     golden.push({ id: `q${String(golden.length + 1).padStart(3, '0')}`, query, expect });
+  const truth: TrueLink[] = [];
+  const chains: Chain[] = [];
+  const holds = (from: string, kind: LinkKind, to: string): TrueLink => {
+    const link = { from, kind, to };
+    truth.push(link);
+    return link;
+  };
 
   // Companies.
   interface Company {
@@ -229,8 +240,11 @@ export function demoVault(seed = 2026) {
   const moreau = subs[0] as Company;
 
   // Articles.
-  const articles = ARTICLES.map(([title, s, unit, price]) => {
+  const articles = ARTICLES.map(([title, s, unit, price], i) => {
     const supplier = suppliers[s] as Company;
+    // The supplier's code and the company's own.
+    const supplierCode = `${slugify(supplier.name).slice(0, 3).toUpperCase()}-${1000 + i}`;
+    const ownCode = `ART-${String(i + 1).padStart(3, '0')}`;
     const path = add(
       {
         type: 'article',
@@ -238,12 +252,12 @@ export function demoVault(seed = 2026) {
         sources: [`erp:article-${slugify(title)}`],
         unit,
         suppliers: [supplier.path],
+        codes: [supplierCode, ownCode],
         last_price: price,
-        links: [strong('supplied_by', supplier.path, 'Fournisseur habituel')],
       },
       `${title}, vendu au ${unit} par ${supplier.name}.`,
     );
-    return { title, path, supplier, unit, price };
+    return { title, path, supplier, unit, price, supplierCode, ownCode };
   });
 
   // Chantiers and who works on them.
@@ -251,6 +265,7 @@ export function demoVault(seed = 2026) {
     const client = clients[c] as Company;
     const start = day('2026-01-12', i * 35);
     const status = i < 2 ? 'receptionne' : 'en_cours';
+    const erp = `CH-${2026}-${String(i + 1).padStart(2, '0')}`;
     const path = add(
       {
         type: 'chantier',
@@ -261,43 +276,33 @@ export function demoVault(seed = 2026) {
         start,
         ...(status === 'receptionne' && { reception_date: day(start, 180) }),
         retenue_pct: 5,
-        erp_ref: `CH-${2026}-${String(i + 1).padStart(2, '0')}`,
+        erp_ref: erp,
       },
       `Chantier pour ${client.name}, commencé le ${start}.`,
     );
-    return { title, path, client, start, status, crew: [] as Company[] };
+    return { title, path, client, start, status, erp, crew: [] as Company[] };
   });
+  type Site = (typeof sites)[number];
+  type Article = (typeof articles)[number];
+  // Where each sous-traitant works: its contract says so, or its invoices do (below).
   subs.forEach((s, i) => {
-    const site = sites[i % sites.length] as (typeof sites)[number];
+    const site = sites[i % sites.length] as Site;
     site.crew.push(s);
+    holds(s.path, 'works_on', site.path);
   });
-  // A sous-traitant's page says where it works (the page is rewritten with its links).
-  for (const s of subs) {
-    const page = pages.find((p) => p.path === s.path) as PageWrite;
-    const where = sites.filter((site) => site.crew.includes(s));
-    page.frontmatter = {
-      ...page.frontmatter,
-      links: where.map((site) => strong('works_on', site.path, 'Contrat de sous-traitance')),
-    };
-  }
 
   // Documents: 200 of them.
   const docs = { vente: [] as string[], achat: [] as string[] };
-  interface Sale {
+  // 25 quotes; the first 20 accepted.
+  interface Quote {
     path: string;
     number: string;
-    client: Company;
-    site: string;
-    paid: boolean;
-    ttc: number;
-    due: string;
-    devis?: { path: string; number: string };
+    ht: number;
+    date: string;
   }
-  const sales: Sale[] = [];
-  const quotes: { path: string; number: string }[] = [];
-  // 25 quotes.
+  const quotes: Quote[] = [];
   for (let i = 0; i < 25; i++) {
-    const site = sites[i % sites.length] as (typeof sites)[number];
+    const site = sites[i % sites.length] as Site;
     const number = `D-2026-${String(i + 1).padStart(3, '0')}`;
     const date = day(site.start, -20 + i);
     const ht = rng.int(2_000, 60_000) * 100;
@@ -313,104 +318,35 @@ export function demoVault(seed = 2026) {
         status: i < 20 ? 'accepte' : i < 23 ? 'envoye' : 'refuse',
         ht,
         ttc: Math.round(ht * 1.2),
-        links: [
-          exact('issued_to', site.client.path, 'Client du devis'),
-          exact('belongs_to', site.path, 'Chantier du devis'),
-        ],
       },
       `Devis pour la ${rng.pick(WORKS)}.`,
     );
-    quotes.push({ path, number });
+    holds(path, 'belongs_to', site.path);
+    quotes.push({ path, number, ht, date });
   }
-  // 40 sales invoices; the first 15 carry out a quote.
-  for (let i = 0; i < 40; i++) {
-    const site = sites[i % sites.length] as (typeof sites)[number];
-    const number = `F-2026-${String(i + 1).padStart(3, '0')}`;
-    const issue = day('2026-02-02', i * 6);
-    const due = day(issue, 30);
-    const ht = rng.int(1_500, 45_000) * 100;
-    const tva = Math.round(ht * 0.2);
-    const paid = due < '2026-09-01' && i % 4 !== 3;
-    const quote = i < 15 ? quotes[i] : undefined;
-    const path = add(
-      {
-        type: 'facture_vente',
-        title: `Facture ${number}`,
-        sources: [`invoice:sale-${i + 1}`],
-        number,
-        party: site.client.path,
-        issue_date: issue,
-        due_date: due,
-        ht,
-        tva,
-        ttc: ht + tva,
-        chantier: site.path,
-        ...(paid && { paid_at: day(due, rng.int(-10, 12)) }),
-        links: [
-          exact('issued_to', site.client.path, 'SIREN de la facture'),
-          exact('belongs_to', site.path, 'Référence chantier (BT-11)'),
-          ...(quote ? [exact('fulfils', quote.path, `Devis ${quote.number} (BT-13)`)] : []),
-        ],
-      },
-      `Facture de ${rng.pick(WORKS)} pour ${site.client.name}.`,
-    );
-    docs.vente.push(path);
-    sales.push({
-      path,
-      number,
-      client: site.client,
-      site: site.path,
-      paid,
-      ttc: ht + tva,
-      due,
-      ...(quote && { devis: quote }),
-    });
-  }
-  // 20 situations: 4 per chantier.
-  const situations: { path: string; site: string; n: number; cumul: number }[] = [];
-  for (const site of sites) {
-    let cumul = 0;
-    for (let n = 1; n <= 4; n++) {
-      const ht = rng.int(8_000, 40_000) * 100;
-      cumul += ht;
-      const issue = day(site.start, n * 30);
-      const path = add(
-        {
-          type: 'situation',
-          title: `Situation n°${n} ${site.title}`,
-          sources: [`sheet:situation-${slugify(site.title)}-${n}`],
-          chantier: site.path,
-          number: n,
-          cumul_ht: cumul,
-          party: site.client.path,
-          issue_date: issue,
-          due_date: day(issue, 45),
-          ht,
-          ttc: Math.round(ht * 1.2),
-          retenue: Math.round(ht * 0.05),
-          links: [
-            exact('belongs_to', site.path, 'Chantier de la situation'),
-            exact('issued_to', site.client.path, 'Client du chantier'),
-          ],
-        },
-        `Situation de travaux n°${n} : avancement ${n * 22} %.`,
-      );
-      situations.push({ path, site: site.path, n, cumul });
-    }
-  }
-  // 60 purchase invoices: the first 20 came by mail and keep it in raw/.
+  // 60 purchase invoices. The first 20 came by mail and keep it in raw/. Their chantier is a field
+  // (the ERP knew it), a BT-11 reference, or only a sentence; their article a page, the supplier's
+  // code, or its name. Purchases 30 to 41 carry out an order made just before, half saying its
+  // number. The last two are sous-traitants' works.
   interface Purchase {
     path: string;
     number: string;
     supplier: Company;
     ttc: number;
-    site?: string;
+    issue: string;
+    quantity: number;
+    article: Article;
+    site?: Site;
+    /** Its chantier is a field or a reference, not only a sentence. */
+    filed: boolean;
   }
   const purchases: Purchase[] = [];
-  for (let i = 0; i < 60; i++) {
-    const article = articles[i % articles.length] as (typeof articles)[number];
+  let orders = 0;
+  const orderNumber = () => `BC-2026-${String(++orders).padStart(3, '0')}`;
+  for (let i = 0; i < 58; i++) {
+    const article = articles[i % articles.length] as Article;
     const supplier = article.supplier;
-    const site = i % 7 === 6 ? undefined : (sites[i % sites.length] as (typeof sites)[number]);
+    const site = i % 7 === 6 ? undefined : (sites[i % sites.length] as Site);
     const number = `${supplier.name.slice(0, 2).toUpperCase()}-${rng.int(10000, 99999)}`;
     const issue = day('2026-01-20', i * 4);
     const quantity = rng.int(5, 120);
@@ -435,12 +371,37 @@ export function demoVault(seed = 2026) {
         ),
       );
     }
+    let order: { path: string; number: string; said: boolean } | undefined;
+    if (i >= 30 && i < 42) {
+      const n = orderNumber();
+      const path = add(
+        {
+          type: 'commande',
+          title: `Commande ${n}`,
+          sources: [`document:commande-${orders}`],
+          number: n,
+          party: supplier.path,
+          ...(site && { chantier: site.path }),
+          date: day(issue, -rng.int(3, 20)),
+          ht,
+        },
+        `Commande de ${article.title}${site ? ` pour ${site.title}` : ''}.`,
+      );
+      if (site) holds(path, 'belongs_to', site.path);
+      order = { path, number: n, said: i % 2 === 0 };
+    }
+    const filed = site !== undefined && i % 10 !== 9;
+    const where =
+      !site || !filed ? {} : i % 2 === 0 ? { chantier: site.path } : { project_ref: site.erp };
+    const named =
+      i % 4 === 0 ? { article: article.path } : i % 4 === 1 ? { code: article.supplierCode } : {};
+    const told = site && !filed ? ` Livraison sur le chantier ${site.title}.` : '';
     const extra =
       {
         8: ' Livraison de nuit à la demande du chef de chantier.',
-        13: ` Livraison au dépôt ; code du portail du chantier ${(sites[3] as (typeof sites)[number]).title} : 4512.`,
+        13: ` Livraison au dépôt ; code du portail du chantier ${(sites[3] as Site).title} : 4512.`,
         20: ' Palette consignée, à rendre au fournisseur.',
-        27: ` Pour le chantier ${(sites[1] as (typeof sites)[number]).title}, la benne à gravats passe le lundi matin.`,
+        27: ` Pour le chantier ${(sites[1] as Site).title}, la benne à gravats passe le lundi matin.`,
         30: ' Déchargement par camion-grue.',
       }[i] ?? '';
     const path = add(
@@ -455,49 +416,239 @@ export function demoVault(seed = 2026) {
         ht,
         tva,
         ttc: ht + tva,
-        ...(site && { chantier: site.path }),
+        ...where,
+        ...(order?.said && { order_ref: order.number }),
         lines: [
           {
             label: article.title,
             quantity,
             unit_price: article.price,
             amount: ht,
-            article: article.path,
+            ...named,
           },
         ],
-        links: [
-          exact('issued_by', supplier.path, 'SIREN du vendeur'),
-          ...(site ? [strong('belongs_to', site.path, 'Adresse de livraison')] : []),
-          strong('uses', article.path, 'Désignation de la ligne'),
-        ],
       },
-      `${quantity} ${article.unit} de ${article.title}.${extra}`,
+      `${quantity} ${article.unit} de ${article.title}.${told}${extra}`,
     );
+    if (site) holds(path, 'belongs_to', site.path);
+    holds(path, 'uses', article.path);
+    if (order) holds(path, 'fulfils', order.path);
     docs.achat.push(path);
-    purchases.push({ path, number, supplier, ttc: ht + tva, ...(site && { site: site.path }) });
+    purchases.push({
+      path,
+      number,
+      supplier,
+      ttc: ht + tva,
+      issue,
+      quantity,
+      article,
+      filed,
+      ...(site && { site }),
+    });
   }
-  // 25 purchase orders.
-  for (let i = 0; i < 25; i++) {
-    const article = articles[(i * 3) % articles.length] as (typeof articles)[number];
-    const site = sites[i % sites.length] as (typeof sites)[number];
-    const number = `BC-2026-${String(i + 1).padStart(3, '0')}`;
-    add(
+  for (const s of subs.slice(8)) {
+    const site = sites.find((x) => x.crew.includes(s)) as Site;
+    const issue = day(site.start, 60);
+    const ht = rng.int(3_000, 25_000) * 100;
+    const tva = Math.round(ht * 0.2);
+    const number = `ST-${rng.int(1000, 9999)}`;
+    const path = add(
+      {
+        type: 'facture_achat',
+        title: `Facture ${number} ${s.name}`,
+        sources: [`invoice:purchase-${docs.achat.length + 1}`],
+        number,
+        party: s.path,
+        issue_date: issue,
+        due_date: day(issue, 45),
+        ht,
+        tva,
+        ttc: ht + tva,
+        chantier: site.path,
+        lines: [{ label: `Travaux de ${rng.pick(WORKS)}`, amount: ht }],
+      },
+      `Travaux de sous-traitance de ${s.name} pour ${site.title}.`,
+    );
+    holds(path, 'belongs_to', site.path);
+    docs.achat.push(path);
+  }
+  // 40 sales invoices. The first 20 carry out a quote: 12 say its number (BT-13 or BT-14), 6 bill
+  // its amount, 2 bill an advance that only a sentence ties to it. The other 20 bill works and
+  // re-bill a purchase's materials, the article named by its page, its code, its name, or most of
+  // its name.
+  interface Sale {
+    path: string;
+    number: string;
+    client: Company;
+    site: string;
+    paid: boolean;
+    ttc: number;
+    due: string;
+    devis?: { path: string; number: string };
+  }
+  const sales: Sale[] = [];
+  const rebilled = new Set<Purchase>();
+  for (let i = 0; i < 40; i++) {
+    const site = sites[i % sites.length] as Site;
+    const number = `F-2026-${String(i + 1).padStart(3, '0')}`;
+    const quote = i < 20 ? (quotes[i] as Quote) : undefined;
+    // An invoice that only its amount ties to its quote comes within a month of it.
+    const after = i >= 12 && i < 18 ? rng.int(5, 28) : rng.int(20, 60);
+    const issue = quote ? day(quote.date, after) : day('2026-02-02', i * 6);
+    const due = day(issue, 30);
+    const paid = due < '2026-09-01' && i % 4 !== 3;
+    const where = i % 4 === 1 ? { project_ref: site.erp } : { chantier: site.path };
+    let text = `Facture de ${rng.pick(WORKS)} pour ${site.client.name}.`;
+    let ht: number;
+    let refs = {};
+    let lines: NonNullable<Extract<PageFacts, { type: 'facture_vente' }>['lines']> | undefined;
+    let purchase: Purchase | undefined;
+    if (quote && i < 12) {
+      // An amendment changes the amount of every other one: only the number ties it.
+      ht = i % 2 === 0 ? quote.ht : Math.round(quote.ht * 1.08);
+      refs = i % 3 === 0 ? { order_ref: quote.number } : { sales_order_ref: quote.number };
+    } else if (quote && i < 18) {
+      ht = quote.ht;
+    } else if (quote) {
+      ht = Math.round(quote.ht * 0.3);
+      text = `Acompte de 30 % sur notre devis ${quote.number}.`;
+    } else {
+      const j = i - 20;
+      const guess = j % 10 === 9;
+      purchase = purchases.find(
+        (p) =>
+          !rebilled.has(p) &&
+          p.site === site &&
+          p.filed &&
+          p.issue < issue &&
+          (!guess || p.article.title.split(' ').length >= 3),
+      );
+      if (!purchase) throw new Error(`demo vault: no purchase to re-bill on ${number}`);
+      rebilled.add(purchase);
+      const a = purchase.article;
+      const unit = Math.round(a.price * 1.15);
+      const amount = purchase.quantity * unit;
+      const works = rng.int(1_500, 40_000) * 100;
+      ht = works + amount;
+      const named =
+        j % 10 < 3
+          ? { label: a.title, article: a.path }
+          : j % 10 < 6
+            ? { label: a.title, code: a.ownCode }
+            : guess
+              ? { label: `Fourniture ${a.title.split(' ').slice(0, -1).join(' ')}` }
+              : { label: `Fourniture : ${a.title}` };
+      lines = [
+        { label: `Travaux : ${rng.pick(WORKS)}`, amount: works },
+        { quantity: purchase.quantity, unit_price: unit, amount, ...named },
+      ];
+    }
+    const tva = Math.round(ht * 0.2);
+    const path = add(
+      {
+        type: 'facture_vente',
+        title: `Facture ${number}`,
+        sources: [`invoice:sale-${i + 1}`],
+        number,
+        party: site.client.path,
+        issue_date: issue,
+        due_date: due,
+        ht,
+        tva,
+        ttc: ht + tva,
+        ...where,
+        ...refs,
+        ...(lines && { lines }),
+        ...(paid && { paid_at: day(due, rng.int(-10, 12)) }),
+      },
+      text,
+    );
+    holds(path, 'belongs_to', site.path);
+    if (quote) chains.push({ kind: 'quote_invoice', links: [holds(path, 'fulfils', quote.path)] });
+    if (purchase) {
+      const a = purchase.article.path;
+      chains.push({
+        kind: 'purchase_sale',
+        links: [
+          { from: purchase.path, kind: 'belongs_to', to: site.path },
+          { from: purchase.path, kind: 'uses', to: a },
+          { from: path, kind: 'belongs_to', to: site.path },
+          holds(path, 'uses', a),
+        ],
+      });
+    }
+    docs.vente.push(path);
+    sales.push({
+      path,
+      number,
+      client: site.client,
+      site: site.path,
+      paid,
+      ttc: ht + tva,
+      due,
+      ...(quote && { devis: { path: quote.path, number: quote.number } }),
+    });
+  }
+  // 20 situations: 4 per chantier.
+  const situations: { path: string; site: string; n: number; cumul: number }[] = [];
+  for (const site of sites) {
+    let cumul = 0;
+    for (let n = 1; n <= 4; n++) {
+      const ht = rng.int(8_000, 40_000) * 100;
+      cumul += ht;
+      const issue = day(site.start, n * 30);
+      const path = add(
+        {
+          type: 'situation',
+          title: `Situation n°${n} ${site.title}`,
+          sources: [`sheet:situation-${slugify(site.title)}-${n}`],
+          chantier: site.path,
+          number: n,
+          cumul_ht: cumul,
+          party: site.client.path,
+          issue_date: issue,
+          due_date: day(issue, 45),
+          ht,
+          ttc: Math.round(ht * 1.2),
+          retenue: Math.round(ht * 0.05),
+        },
+        `Situation de travaux n°${n} : avancement ${n * 22} %.`,
+      );
+      holds(path, 'belongs_to', site.path);
+      situations.push({ path, site: site.path, n, cumul });
+    }
+  }
+  // 13 more orders, not invoiced yet. None may look invoiced: a purchase of its supplier within 2 %
+  // and 30 days after it is what the amount rule rightly ties, so such an order is made larger.
+  const looksInvoiced = (article: Article, date: string, ht: number) =>
+    purchases.some(
+      (p) =>
+        p.supplier === article.supplier &&
+        Math.abs(p.quantity * p.article.price - ht) <= ht * 0.02 &&
+        p.issue >= date &&
+        p.issue <= day(date, 30),
+    );
+  for (let i = 0; i < 13; i++) {
+    const article = articles[(i * 3) % articles.length] as Article;
+    const site = sites[i % sites.length] as Site;
+    const number = orderNumber();
+    const date = day('2026-01-15', i * 9);
+    let ht = rng.int(10, 80) * article.price;
+    while (looksInvoiced(article, date, ht)) ht += 7 * article.price;
+    const path = add(
       {
         type: 'commande',
         title: `Commande ${number}`,
-        sources: [`document:commande-${i + 1}`],
+        sources: [`document:commande-${orders}`],
         number,
         party: article.supplier.path,
         chantier: site.path,
-        date: day('2026-01-15', i * 9),
-        ht: rng.int(10, 80) * article.price,
-        links: [
-          exact('issued_to', article.supplier.path, 'Fournisseur de la commande'),
-          exact('belongs_to', site.path, 'Chantier de la commande'),
-        ],
+        date,
+        ht,
       },
       `Commande de ${article.title} pour ${site.title}.`,
     );
+    holds(path, 'belongs_to', site.path);
   }
   // 20 standing documents: vigilance and decennale for each sous-traitant.
   const vigilance = new Map<string, { path: string; to: string }>();
@@ -512,7 +663,6 @@ export function demoVault(seed = 2026) {
         party: s.path,
         valid_from: from,
         valid_to: to,
-        links: [exact('covers', s.path, 'SIREN de l’attestation')],
       },
       `Attestation URSSAF de ${s.name}.`,
     );
@@ -525,14 +675,13 @@ export function demoVault(seed = 2026) {
         party: s.path,
         valid_from: '2026-01-01',
         valid_to: '2026-12-31',
-        links: [exact('covers', s.path, 'SIREN de l’attestation')],
       },
       `Assurance décennale de ${s.name} pour 2026.`,
     );
   }
   // 10 other documents: a PV de réception for the two finished chantiers, 8 sous-traitance contracts.
   for (const site of sites.filter((s) => s.status === 'receptionne')) {
-    add(
+    const path = add(
       {
         type: 'document',
         title: `PV de réception ${site.title}`,
@@ -541,14 +690,14 @@ export function demoVault(seed = 2026) {
         party: site.client.path,
         chantier: site.path,
         date: day(site.start, 180),
-        links: [exact('belongs_to', site.path, 'Chantier du PV')],
       },
       'Réception prononcée sans réserve.',
     );
+    holds(path, 'belongs_to', site.path);
   }
   for (const s of subs.slice(0, 8)) {
-    const site = sites.find((x) => x.crew.includes(s)) as (typeof sites)[number];
-    add(
+    const site = sites.find((x) => x.crew.includes(s)) as Site;
+    const path = add(
       {
         type: 'document',
         title: `Contrat de sous-traitance ${s.name}`,
@@ -557,13 +706,10 @@ export function demoVault(seed = 2026) {
         party: s.path,
         chantier: site.path,
         date: day(site.start, -5),
-        links: [
-          exact('belongs_to', site.path, 'Chantier du contrat'),
-          exact('issued_to', s.path, 'Sous-traitant du contrat'),
-        ],
       },
       `Contrat de sous-traitance pour ${site.title}.`,
     );
+    holds(path, 'belongs_to', site.path);
   }
 
   // Mails no page cites yet: new bank details from four suppliers, and one nobody filed.
@@ -680,7 +826,7 @@ export function demoVault(seed = 2026) {
     );
   }
   for (const sit of situations.filter((x) => x.n === 3).slice(0, 3)) {
-    const site = sites.find((s) => s.path === sit.site) as (typeof sites)[number];
+    const site = sites.find((s) => s.path === sit.site) as Site;
     const leaf = site.path.slice(site.path.indexOf('/') + 1);
     fact(
       `Quel est le cumul HT de la situation 3 du chantier ${site.title} ?`,
@@ -848,7 +994,7 @@ export function demoVault(seed = 2026) {
       { status: 'found', level: 3, paths: [docs.achat[i] as string] },
     );
   }
-  const lilas = sites[3] as (typeof sites)[number];
+  const lilas = sites[3] as Site;
   ask(
     {
       intent: 'fact',
@@ -858,7 +1004,7 @@ export function demoVault(seed = 2026) {
     },
     { status: 'found', level: 4, paths: [docs.achat[13] as string] },
   );
-  const vignes = sites[1] as (typeof sites)[number];
+  const vignes = sites[1] as Site;
   ask(
     {
       intent: 'fact',
@@ -919,7 +1065,8 @@ export function demoVault(seed = 2026) {
     { status: 'not_found', level: 6 },
   );
 
-  return { pages, originals, golden, today: TODAY };
+  const linked = relink(pages.map((p) => ({ ...p, text: p.text ?? '' })));
+  return { pages: linked, originals, golden, truth, chains, today: TODAY };
 }
 
 /** Writes the demo vault into the empty folder `root`. */

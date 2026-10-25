@@ -11,7 +11,8 @@ links:
   - kind: covers
     to: tiers/peinture-laurent
     confidence: exact
-    evidence: SIREN de l’attestation
+    evidence: Tiers du document (champ « party »)
+    rule: party
 ---
 
 Attestation URSSAF de Peinture Laurent.

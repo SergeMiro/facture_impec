@@ -19,17 +19,17 @@ backlinks:
   - kind: issued_to
     from: finances/2026/2026-02-07_devis_sci-clos-des-vignes_d-2026-012
   - kind: issued_to
-    from: finances/2026/2026-02-08_facture_sci-clos-des-vignes_f-2026-002
-  - kind: issued_to
     from: finances/2026/2026-02-12_devis_sci-clos-des-vignes_d-2026-017
   - kind: issued_to
     from: finances/2026/2026-02-17_devis_sci-clos-des-vignes_d-2026-022
   - kind: issued_to
     from: finances/2026/2026-03-10_facture_sci-clos-des-vignes_f-2026-007
   - kind: issued_to
-    from: finances/2026/2026-04-09_facture_sci-clos-des-vignes_f-2026-012
+    from: finances/2026/2026-03-11_facture_sci-clos-des-vignes_f-2026-017
   - kind: issued_to
-    from: finances/2026/2026-05-09_facture_sci-clos-des-vignes_f-2026-017
+    from: finances/2026/2026-03-27_facture_sci-clos-des-vignes_f-2026-002
+  - kind: issued_to
+    from: finances/2026/2026-03-29_facture_sci-clos-des-vignes_f-2026-012
   - kind: issued_to
     from: finances/2026/2026-06-08_facture_sci-clos-des-vignes_f-2026-022
   - kind: issued_to
@@ -46,6 +46,8 @@ backlinks:
     from: finances/situations/2026-extension-clos-des-vignes_sit-3
   - kind: issued_to
     from: finances/situations/2026-extension-clos-des-vignes_sit-4
+  - kind: issued_to
+    from: juridique/sci-clos-des-vignes/2026-08-15_pv-reception_pv-de-reception-extension-clos
 ---
 
 SCI Clos des Vignes, client de l'entreprise depuis 2018.
@@ -57,12 +59,12 @@ Cette section est réécrite par Facture Impec à chaque mise à jour de la page
 - A reçu [[finances/2026/2026-01-28_devis_sci-clos-des-vignes_d-2026-002]]
 - A reçu [[finances/2026/2026-02-02_devis_sci-clos-des-vignes_d-2026-007]]
 - A reçu [[finances/2026/2026-02-07_devis_sci-clos-des-vignes_d-2026-012]]
-- A reçu [[finances/2026/2026-02-08_facture_sci-clos-des-vignes_f-2026-002]]
 - A reçu [[finances/2026/2026-02-12_devis_sci-clos-des-vignes_d-2026-017]]
 - A reçu [[finances/2026/2026-02-17_devis_sci-clos-des-vignes_d-2026-022]]
 - A reçu [[finances/2026/2026-03-10_facture_sci-clos-des-vignes_f-2026-007]]
-- A reçu [[finances/2026/2026-04-09_facture_sci-clos-des-vignes_f-2026-012]]
-- A reçu [[finances/2026/2026-05-09_facture_sci-clos-des-vignes_f-2026-017]]
+- A reçu [[finances/2026/2026-03-11_facture_sci-clos-des-vignes_f-2026-017]]
+- A reçu [[finances/2026/2026-03-27_facture_sci-clos-des-vignes_f-2026-002]]
+- A reçu [[finances/2026/2026-03-29_facture_sci-clos-des-vignes_f-2026-012]]
 - A reçu [[finances/2026/2026-06-08_facture_sci-clos-des-vignes_f-2026-022]]
 - A reçu [[finances/2026/2026-07-08_facture_sci-clos-des-vignes_f-2026-027]]
 - A reçu [[finances/2026/2026-08-07_facture_sci-clos-des-vignes_f-2026-032]]
@@ -71,3 +73,4 @@ Cette section est réécrite par Facture Impec à chaque mise à jour de la page
 - A reçu [[finances/situations/2026-extension-clos-des-vignes_sit-2]]
 - A reçu [[finances/situations/2026-extension-clos-des-vignes_sit-3]]
 - A reçu [[finances/situations/2026-extension-clos-des-vignes_sit-4]]
+- A reçu [[juridique/sci-clos-des-vignes/2026-08-15_pv-reception_pv-de-reception-extension-clos]]

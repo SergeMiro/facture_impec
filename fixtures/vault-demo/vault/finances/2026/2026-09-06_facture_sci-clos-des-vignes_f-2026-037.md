@@ -8,26 +8,41 @@ number: F-2026-037
 party: tiers/sci-clos-des-vignes
 issue_date: 2026-09-06
 due_date: 2026-10-06
-ht: "19969.00"
-tva: "3993.80"
-ttc: "23962.80"
+ht: "26395.60"
+tva: "5279.12"
+ttc: "31674.72"
 chantier: chantiers/2026-extension-clos-des-vignes
+lines:
+  - label: "Travaux : création des cloisons du premier étage"
+    amount: "21860.00"
+  - label: "Fourniture : Sable 0/4 big bag"
+    quantity: 58
+    unit_price: "78.20"
+    amount: "4535.60"
 links:
-  - kind: issued_to
-    to: tiers/sci-clos-des-vignes
-    confidence: exact
-    evidence: SIREN de la facture
   - kind: belongs_to
     to: chantiers/2026-extension-clos-des-vignes
     confidence: exact
-    evidence: Référence chantier (BT-11)
+    evidence: Chantier du document (champ « chantier »)
+    rule: chantier
+  - kind: issued_to
+    to: tiers/sci-clos-des-vignes
+    confidence: exact
+    evidence: Tiers du document (champ « party »)
+    rule: party
+  - kind: uses
+    to: catalogue/sable-0-4-big-bag
+    confidence: strong
+    evidence: "Ligne « Fourniture : Sable 0/4 big bag »"
+    rule: line_name
 ---
 
-Facture de réfection de la toiture côté cour pour SCI Clos des Vignes.
+Facture de isolation des combles perdus pour SCI Clos des Vignes.
 
 ## Liens
 
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
-- Adressé à [[tiers/sci-clos-des-vignes]]
 - Fait partie de [[chantiers/2026-extension-clos-des-vignes]]
+- Adressé à [[tiers/sci-clos-des-vignes]]
+- Utilise [[catalogue/sable-0-4-big-bag]]

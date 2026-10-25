@@ -317,3 +317,13 @@ Each line says where it came from and what would bring it back.
 | Recall's budgets on Postgres over the network | Measured on PGlite in-process (L1 p95 ≈ 3–4 ms against 5 ms) | Mode B (M3) on a real Postgres: `pnpm perf` grows a recall case. |
 | One log line per ingest, however many pages | An ingest of 255 pages is one long line in `log.md` | A person finds the log hard to read: lines past ten pages say « et N autres » with the full list in `_system/`. |
 
+## Memory: links between documents (M2, 2026-10-25)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| A person deleting a rule's link in Obsidian | The next write makes it again (rules read facts, not links); « this is not it » is `reviewLink(…, 'refuse')`, kept in `refused_links` | The pane or the relay offers « confirmer / écarter » (M4), or people delete links by hand in a pilot: a rule's link removed by hand read as a refusal. |
+| The links of a page a person just edited | The pages around it are relinked at once; the page itself at the next write or opening (a write in the minute after a person's edit is refused, `compile.ts`) | A person reports a missing link right after an edit: a pass a minute after their last save. |
+| Rules reading `raw/` | Rules read the pages' facts and text; a mail in `raw/` links nothing until its facts reach a page | A pilot's chains miss because the proof sits only in a mail. |
+| Recall through a guess | Level 2 follows every link, inferred ones too, and does not say the step was a guess | A wrong guess leads recall astray in a pilot: the answer says « par un lien à confirmer ». |
+| Partial invoices against one order or quote | An invoice matches by its whole amount; an advance or a delivery in parts links only by a number or a quoted sentence | A pilot's chains of partial invoices fall under 90 %: a rule summing a quote's invoices against it. |
+| Articles in a large catalogue | A line's article is found by scanning the catalogue (page, code, full name, then ≥ 60 % of its words as a guess) | A catalogue of thousands of articles: codes and names in the index (`memory_pages` keys) instead of a scan. |

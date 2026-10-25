@@ -14,8 +14,9 @@ erp_ref: T0025
 links:
   - kind: works_on
     to: chantiers/2026-residence-les-tilleuls-12-logements
-    confidence: strong
-    evidence: Contrat de sous-traitance
+    confidence: exact
+    evidence: Contrat de sous-traitance [[juridique/maconnerie-bernard/2026-01-07_contrat-sous-traitance_contrat-de-sous-traitance-maco]]
+    rule: contract_site
 backlinks:
   - kind: issued_to
     from: juridique/maconnerie-bernard/2026-01-07_contrat-sous-traitance_contrat-de-sous-traitance-maco

@@ -11,7 +11,8 @@ links:
   - kind: covers
     to: tiers/maconnerie-bernard
     confidence: exact
-    evidence: SIREN de l’attestation
+    evidence: Tiers du document (champ « party »)
+    rule: party
 ---
 
 Attestation URSSAF de Maçonnerie Bernard.

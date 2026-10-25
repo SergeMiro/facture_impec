@@ -23,13 +23,13 @@ backlinks:
   - kind: issued_to
     from: finances/2026/2026-01-12_devis_sci-les-tilleuls_d-2026-021
   - kind: issued_to
-    from: finances/2026/2026-02-02_facture_sci-les-tilleuls_f-2026-001
+    from: finances/2026/2026-02-01_facture_sci-les-tilleuls_f-2026-006
   - kind: issued_to
-    from: finances/2026/2026-03-04_facture_sci-les-tilleuls_f-2026-006
+    from: finances/2026/2026-02-03_facture_sci-les-tilleuls_f-2026-016
   - kind: issued_to
-    from: finances/2026/2026-04-03_facture_sci-les-tilleuls_f-2026-011
+    from: finances/2026/2026-02-06_facture_sci-les-tilleuls_f-2026-011
   - kind: issued_to
-    from: finances/2026/2026-05-03_facture_sci-les-tilleuls_f-2026-016
+    from: finances/2026/2026-02-07_facture_sci-les-tilleuls_f-2026-001
   - kind: issued_to
     from: finances/2026/2026-06-02_facture_sci-les-tilleuls_f-2026-021
   - kind: issued_to
@@ -46,6 +46,8 @@ backlinks:
     from: finances/situations/2026-residence-les-tilleuls-12-logements_sit-3
   - kind: issued_to
     from: finances/situations/2026-residence-les-tilleuls-12-logements_sit-4
+  - kind: issued_to
+    from: juridique/sci-les-tilleuls/2026-07-11_pv-reception_pv-de-reception-residence-les
 ---
 
 SCI Les Tilleuls, client de l'entreprise depuis 2015.
@@ -59,10 +61,10 @@ Cette section est réécrite par Facture Impec à chaque mise à jour de la page
 - A reçu [[finances/2026/2026-01-02_devis_sci-les-tilleuls_d-2026-011]]
 - A reçu [[finances/2026/2026-01-07_devis_sci-les-tilleuls_d-2026-016]]
 - A reçu [[finances/2026/2026-01-12_devis_sci-les-tilleuls_d-2026-021]]
-- A reçu [[finances/2026/2026-02-02_facture_sci-les-tilleuls_f-2026-001]]
-- A reçu [[finances/2026/2026-03-04_facture_sci-les-tilleuls_f-2026-006]]
-- A reçu [[finances/2026/2026-04-03_facture_sci-les-tilleuls_f-2026-011]]
-- A reçu [[finances/2026/2026-05-03_facture_sci-les-tilleuls_f-2026-016]]
+- A reçu [[finances/2026/2026-02-01_facture_sci-les-tilleuls_f-2026-006]]
+- A reçu [[finances/2026/2026-02-03_facture_sci-les-tilleuls_f-2026-016]]
+- A reçu [[finances/2026/2026-02-06_facture_sci-les-tilleuls_f-2026-011]]
+- A reçu [[finances/2026/2026-02-07_facture_sci-les-tilleuls_f-2026-001]]
 - A reçu [[finances/2026/2026-06-02_facture_sci-les-tilleuls_f-2026-021]]
 - A reçu [[finances/2026/2026-07-02_facture_sci-les-tilleuls_f-2026-026]]
 - A reçu [[finances/2026/2026-08-01_facture_sci-les-tilleuls_f-2026-031]]
@@ -71,3 +73,4 @@ Cette section est réécrite par Facture Impec à chaque mise à jour de la page
 - A reçu [[finances/situations/2026-residence-les-tilleuls-12-logements_sit-2]]
 - A reçu [[finances/situations/2026-residence-les-tilleuls-12-logements_sit-3]]
 - A reçu [[finances/situations/2026-residence-les-tilleuls-12-logements_sit-4]]
+- A reçu [[juridique/sci-les-tilleuls/2026-07-11_pv-reception_pv-de-reception-residence-les]]

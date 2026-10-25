@@ -7,19 +7,23 @@ updated: 2026-10-25
 unit: jour
 suppliers:
   - tiers/location-engins-michel
+codes:
+  - LOC-1018
+  - ART-019
 last_price: "210.00"
 links:
   - kind: supplied_by
     to: tiers/location-engins-michel
-    confidence: strong
-    evidence: Fournisseur habituel
+    confidence: exact
+    evidence: Fournisseur de l'article
+    rule: supplier
 backlinks:
   - kind: uses
-    from: finances/2026/2026-04-02_achat_location-engins-michel_lo-96990
+    from: finances/2026/2026-04-02_achat_location-engins-michel_lo-99906
   - kind: uses
-    from: finances/2026/2026-06-21_achat_location-engins-michel_lo-30290
+    from: finances/2026/2026-06-21_achat_location-engins-michel_lo-37369
   - kind: uses
-    from: finances/2026/2026-09-09_achat_location-engins-michel_lo-21736
+    from: finances/2026/2026-08-19_facture_cabinet-medical-des-lila_f-2026-034
 ---
 
 Mini-pelle à la journée, vendu au jour par Location Engins Michel.
@@ -29,6 +33,6 @@ Mini-pelle à la journée, vendu au jour par Location Engins Michel.
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
 - Fourni par [[tiers/location-engins-michel]]
-- Utilisé par [[finances/2026/2026-04-02_achat_location-engins-michel_lo-96990]]
-- Utilisé par [[finances/2026/2026-06-21_achat_location-engins-michel_lo-30290]]
-- Utilisé par [[finances/2026/2026-09-09_achat_location-engins-michel_lo-21736]]
+- Utilisé par [[finances/2026/2026-04-02_achat_location-engins-michel_lo-99906]]
+- Utilisé par [[finances/2026/2026-06-21_achat_location-engins-michel_lo-37369]]
+- Utilisé par [[finances/2026/2026-08-19_facture_cabinet-medical-des-lila_f-2026-034]]

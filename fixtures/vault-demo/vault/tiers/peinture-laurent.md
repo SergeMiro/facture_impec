@@ -14,8 +14,9 @@ erp_ref: T0023
 links:
   - kind: works_on
     to: chantiers/2026-cabinet-medical-des-lilas
-    confidence: strong
-    evidence: Contrat de sous-traitance
+    confidence: exact
+    evidence: Contrat de sous-traitance [[juridique/peinture-laurent/2026-04-22_contrat-sous-traitance_contrat-de-sous-traitance-pein]]
+    rule: contract_site
 backlinks:
   - kind: issued_to
     from: juridique/peinture-laurent/2026-04-22_contrat-sous-traitance_contrat-de-sous-traitance-pein

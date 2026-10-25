@@ -12,17 +12,19 @@ status: accepte
 ht: "39027.00"
 ttc: "46832.40"
 links:
-  - kind: issued_to
-    to: tiers/hotel-du-lac-kir
-    confidence: exact
-    evidence: Client du devis
   - kind: belongs_to
     to: chantiers/2026-hotel-du-lac-kir-facade
     confidence: exact
-    evidence: Chantier du devis
+    evidence: Chantier du document (champ « chantier »)
+    rule: chantier
+  - kind: issued_to
+    to: tiers/hotel-du-lac-kir
+    confidence: exact
+    evidence: Tiers du document (champ « party »)
+    rule: party
 backlinks:
   - kind: fulfils
-    from: finances/2026/2026-04-27_facture_hotel-du-lac-kir_f-2026-015
+    from: finances/2026/2026-06-22_facture_hotel-du-lac-kir_f-2026-015
 ---
 
 Devis pour la pose des menuiseries du rez-de-chaussée.
@@ -31,6 +33,6 @@ Devis pour la pose des menuiseries du rez-de-chaussée.
 
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
-- Adressé à [[tiers/hotel-du-lac-kir]]
 - Fait partie de [[chantiers/2026-hotel-du-lac-kir-facade]]
-- Exécuté par [[finances/2026/2026-04-27_facture_hotel-du-lac-kir_f-2026-015]]
+- Adressé à [[tiers/hotel-du-lac-kir]]
+- Exécuté par [[finances/2026/2026-06-22_facture_hotel-du-lac-kir_f-2026-015]]

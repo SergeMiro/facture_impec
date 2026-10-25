@@ -11,7 +11,8 @@ links:
   - kind: covers
     to: tiers/chauffage-dupont
     confidence: exact
-    evidence: SIREN de l’attestation
+    evidence: Tiers du document (champ « party »)
+    rule: party
 ---
 
 Assurance décennale de Chauffage Dupont pour 2026.

@@ -331,6 +331,9 @@ Needs a machine or a pilot:
 
 - [ ] **The runner as a Windows service**, and the memory doc's 48 hours on a PC switched off and on.
 - [ ] **50 real chains** (quote → invoice, purchase → sale) linked by M2's rules, from a pilot's vault.
+- [ ] **Where a sale names its quote, TODO(verify)**: M2 reads the devis number in BT-13 or BT-14
+      (`docs/DECISIONS.md` D12); check on a pilot's real invoices, and their ERP's export, which
+      field carries it, or whether it is only in a note (BT-22).
 - [ ] **« Vos données restent chez vous »** on the site or in the pane only once a pilot runs the
       runner (D12).
 - [ ] **The pane over HTTPS on localhost** when it talks to a runner (Office add-ins need HTTPS).

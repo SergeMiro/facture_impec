@@ -12,11 +12,13 @@ links:
   - kind: belongs_to
     to: chantiers/2026-residence-les-tilleuls-12-logements
     confidence: exact
-    evidence: Chantier du contrat
+    evidence: Chantier du document (champ « chantier »)
+    rule: chantier
   - kind: issued_to
     to: tiers/electricite-moreau
     confidence: exact
-    evidence: Sous-traitant du contrat
+    evidence: Tiers du document (champ « party »)
+    rule: party
 ---
 
 Contrat de sous-traitance pour Résidence Les Tilleuls 12 logements.

@@ -8,26 +8,41 @@ number: F-2026-028
 party: tiers/residence-le-parc-sas
 issue_date: 2026-07-14
 due_date: 2026-08-13
-ht: "35954.00"
-tva: "7190.80"
-ttc: "43144.80"
+ht: "24874.82"
+tva: "4974.96"
+ttc: "29849.78"
 chantier: chantiers/2026-renovation-le-parc-batiment-b
+lines:
+  - label: "Travaux : peinture des parties communes"
+    amount: "24034.00"
+  - label: "Fourniture : Colle carrelage C2"
+    quantity: 34
+    unit_price: "24.73"
+    amount: "840.82"
 links:
-  - kind: issued_to
-    to: tiers/residence-le-parc-sas
-    confidence: exact
-    evidence: SIREN de la facture
   - kind: belongs_to
     to: chantiers/2026-renovation-le-parc-batiment-b
     confidence: exact
-    evidence: Référence chantier (BT-11)
+    evidence: Chantier du document (champ « chantier »)
+    rule: chantier
+  - kind: issued_to
+    to: tiers/residence-le-parc-sas
+    confidence: exact
+    evidence: Tiers du document (champ « party »)
+    rule: party
+  - kind: uses
+    to: catalogue/colle-carrelage-c2
+    confidence: strong
+    evidence: "Ligne « Fourniture : Colle carrelage C2 »"
+    rule: line_name
 ---
 
-Facture de création des cloisons du premier étage pour Résidence Le Parc SAS.
+Facture de réfection de la toiture côté cour pour Résidence Le Parc SAS.
 
 ## Liens
 
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
-- Adressé à [[tiers/residence-le-parc-sas]]
 - Fait partie de [[chantiers/2026-renovation-le-parc-batiment-b]]
+- Adressé à [[tiers/residence-le-parc-sas]]
+- Utilise [[catalogue/colle-carrelage-c2]]

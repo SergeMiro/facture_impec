@@ -11,7 +11,8 @@ links:
   - kind: covers
     to: tiers/charpente-leroy
     confidence: exact
-    evidence: SIREN de l’attestation
+    evidence: Tiers du document (champ « party »)
+    rule: party
 ---
 
 Assurance décennale de Charpente Leroy pour 2026.

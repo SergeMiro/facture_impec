@@ -12,14 +12,19 @@ status: accepte
 ht: "38385.00"
 ttc: "46062.00"
 links:
-  - kind: issued_to
-    to: tiers/hotel-du-lac-kir
-    confidence: exact
-    evidence: Client du devis
   - kind: belongs_to
     to: chantiers/2026-hotel-du-lac-kir-facade
     confidence: exact
-    evidence: Chantier du devis
+    evidence: Chantier du document (champ « chantier »)
+    rule: chantier
+  - kind: issued_to
+    to: tiers/hotel-du-lac-kir
+    confidence: exact
+    evidence: Tiers du document (champ « party »)
+    rule: party
+backlinks:
+  - kind: fulfils
+    from: finances/2026/2026-06-26_facture_hotel-du-lac-kir_f-2026-020
 ---
 
 Devis pour la raccordement du tableau électrique.
@@ -28,5 +33,6 @@ Devis pour la raccordement du tableau électrique.
 
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
-- Adressé à [[tiers/hotel-du-lac-kir]]
 - Fait partie de [[chantiers/2026-hotel-du-lac-kir-facade]]
+- Adressé à [[tiers/hotel-du-lac-kir]]
+- Exécuté par [[finances/2026/2026-06-26_facture_hotel-du-lac-kir_f-2026-020]]

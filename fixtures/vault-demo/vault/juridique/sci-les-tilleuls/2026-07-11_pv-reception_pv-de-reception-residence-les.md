@@ -12,7 +12,13 @@ links:
   - kind: belongs_to
     to: chantiers/2026-residence-les-tilleuls-12-logements
     confidence: exact
-    evidence: Chantier du PV
+    evidence: Chantier du document (champ « chantier »)
+    rule: chantier
+  - kind: issued_to
+    to: tiers/sci-les-tilleuls
+    confidence: exact
+    evidence: Tiers du document (champ « party »)
+    rule: party
 ---
 
 Réception prononcée sans réserve.
@@ -22,3 +28,4 @@ Réception prononcée sans réserve.
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
 - Fait partie de [[chantiers/2026-residence-les-tilleuls-12-logements]]
+- Adressé à [[tiers/sci-les-tilleuls]]

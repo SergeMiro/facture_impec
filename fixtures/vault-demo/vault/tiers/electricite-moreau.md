@@ -14,8 +14,9 @@ erp_ref: T0020
 links:
   - kind: works_on
     to: chantiers/2026-residence-les-tilleuls-12-logements
-    confidence: strong
-    evidence: Contrat de sous-traitance
+    confidence: exact
+    evidence: Contrat de sous-traitance [[juridique/electricite-moreau/2026-01-07_contrat-sous-traitance_contrat-de-sous-traitance-elec]]
+    rule: contract_site
 backlinks:
   - kind: issued_to
     from: juridique/electricite-moreau/2026-01-07_contrat-sous-traitance_contrat-de-sous-traitance-elec

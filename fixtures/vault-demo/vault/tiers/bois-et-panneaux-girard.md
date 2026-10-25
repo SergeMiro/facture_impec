@@ -17,21 +17,19 @@ backlinks:
   - kind: supplied_by
     from: catalogue/panneau-osb-18-mm
   - kind: issued_by
-    from: finances/2026/2026-02-05_achat_bois-et-panneaux-girard_bo-72703
+    from: finances/2026/2026-02-05_achat_bois-et-panneaux-girard_bo-46019
   - kind: issued_by
-    from: finances/2026/2026-02-09_achat_bois-et-panneaux-girard_bo-67587
+    from: finances/2026/2026-02-09_achat_bois-et-panneaux-girard_bo-39408
   - kind: issued_to
-    from: finances/2026/2026-03-28_commande_bois-et-panneaux-girard_bc-2026-009
+    from: finances/2026/2026-03-28_commande_bois-et-panneaux-girard_bc-2026-021
   - kind: issued_by
-    from: finances/2026/2026-04-26_achat_bois-et-panneaux-girard_bo-90578
+    from: finances/2026/2026-04-26_achat_bois-et-panneaux-girard_bo-90363
   - kind: issued_by
-    from: finances/2026/2026-04-30_achat_bois-et-panneaux-girard_bo-75007
-  - kind: issued_to
-    from: finances/2026/2026-05-30_commande_bois-et-panneaux-girard_bc-2026-016
+    from: finances/2026/2026-04-30_achat_bois-et-panneaux-girard_bo-44019
   - kind: issued_by
-    from: finances/2026/2026-07-15_achat_bois-et-panneaux-girard_bo-70749
+    from: finances/2026/2026-07-15_achat_bois-et-panneaux-girard_bo-46212
   - kind: issued_by
-    from: finances/2026/2026-07-19_achat_bois-et-panneaux-girard_bo-73819
+    from: finances/2026/2026-07-19_achat_bois-et-panneaux-girard_bo-26665
 ---
 
 Bois et Panneaux Girard, fournisseur de l'entreprise depuis 2021.
@@ -42,11 +40,10 @@ Cette section est réécrite par Facture Impec à chaque mise à jour de la page
 
 - Fournit [[catalogue/chevron-sapin-63x75]]
 - Fournit [[catalogue/panneau-osb-18-mm]]
-- A émis [[finances/2026/2026-02-05_achat_bois-et-panneaux-girard_bo-72703]]
-- A émis [[finances/2026/2026-02-09_achat_bois-et-panneaux-girard_bo-67587]]
-- A reçu [[finances/2026/2026-03-28_commande_bois-et-panneaux-girard_bc-2026-009]]
-- A émis [[finances/2026/2026-04-26_achat_bois-et-panneaux-girard_bo-90578]]
-- A émis [[finances/2026/2026-04-30_achat_bois-et-panneaux-girard_bo-75007]]
-- A reçu [[finances/2026/2026-05-30_commande_bois-et-panneaux-girard_bc-2026-016]]
-- A émis [[finances/2026/2026-07-15_achat_bois-et-panneaux-girard_bo-70749]]
-- A émis [[finances/2026/2026-07-19_achat_bois-et-panneaux-girard_bo-73819]]
+- A émis [[finances/2026/2026-02-05_achat_bois-et-panneaux-girard_bo-46019]]
+- A émis [[finances/2026/2026-02-09_achat_bois-et-panneaux-girard_bo-39408]]
+- A reçu [[finances/2026/2026-03-28_commande_bois-et-panneaux-girard_bc-2026-021]]
+- A émis [[finances/2026/2026-04-26_achat_bois-et-panneaux-girard_bo-90363]]
+- A émis [[finances/2026/2026-04-30_achat_bois-et-panneaux-girard_bo-44019]]
+- A émis [[finances/2026/2026-07-15_achat_bois-et-panneaux-girard_bo-46212]]
+- A émis [[finances/2026/2026-07-19_achat_bois-et-panneaux-girard_bo-26665]]

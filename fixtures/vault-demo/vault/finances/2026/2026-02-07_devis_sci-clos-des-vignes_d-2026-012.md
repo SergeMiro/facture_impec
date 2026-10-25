@@ -12,17 +12,19 @@ status: accepte
 ht: "25418.00"
 ttc: "30501.60"
 links:
-  - kind: issued_to
-    to: tiers/sci-clos-des-vignes
-    confidence: exact
-    evidence: Client du devis
   - kind: belongs_to
     to: chantiers/2026-extension-clos-des-vignes
     confidence: exact
-    evidence: Chantier du devis
+    evidence: Chantier du document (champ « chantier »)
+    rule: chantier
+  - kind: issued_to
+    to: tiers/sci-clos-des-vignes
+    confidence: exact
+    evidence: Tiers du document (champ « party »)
+    rule: party
 backlinks:
   - kind: fulfils
-    from: finances/2026/2026-04-09_facture_sci-clos-des-vignes_f-2026-012
+    from: finances/2026/2026-03-29_facture_sci-clos-des-vignes_f-2026-012
 ---
 
 Devis pour la raccordement du tableau électrique.
@@ -31,6 +33,6 @@ Devis pour la raccordement du tableau électrique.
 
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
-- Adressé à [[tiers/sci-clos-des-vignes]]
 - Fait partie de [[chantiers/2026-extension-clos-des-vignes]]
-- Exécuté par [[finances/2026/2026-04-09_facture_sci-clos-des-vignes_f-2026-012]]
+- Adressé à [[tiers/sci-clos-des-vignes]]
+- Exécuté par [[finances/2026/2026-03-29_facture_sci-clos-des-vignes_f-2026-012]]

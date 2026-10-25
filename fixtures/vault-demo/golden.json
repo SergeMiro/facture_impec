@@ -419,8 +419,8 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-02-02_facture_sci-les-tilleuls_f-2026-001"],
-      "value": "9529.20"
+      "paths": ["finances/2026/2026-02-07_facture_sci-les-tilleuls_f-2026-001"],
+      "value": "51295.20"
     }
   },
   {
@@ -433,8 +433,8 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-02-08_facture_sci-clos-des-vignes_f-2026-002"],
-      "value": "46159.20"
+      "paths": ["finances/2026/2026-03-27_facture_sci-clos-des-vignes_f-2026-002"],
+      "value": "8786.88"
     }
   },
   {
@@ -447,8 +447,8 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-02-14_facture_residence-le-parc-sas_f-2026-003"],
-      "value": "17914.80"
+      "paths": ["finances/2026/2026-04-23_facture_residence-le-parc-sas_f-2026-003"],
+      "value": "54597.60"
     }
   },
   {
@@ -461,8 +461,8 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-02-20_facture_cabinet-medical-des-lila_f-2026-004"],
-      "value": "23534.40"
+      "paths": ["finances/2026/2026-04-30_facture_cabinet-medical-des-lila_f-2026-004"],
+      "value": "57570.91"
     }
   },
   {
@@ -475,8 +475,8 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-02-26_facture_hotel-du-lac-kir_f-2026-005"],
-      "value": "28754.40"
+      "paths": ["finances/2026/2026-06-13_facture_hotel-du-lac-kir_f-2026-005"],
+      "value": "54404.40"
     }
   },
   {
@@ -489,8 +489,8 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-03-04_facture_sci-les-tilleuls_f-2026-006"],
-      "value": "27660.00"
+      "paths": ["finances/2026/2026-02-01_facture_sci-les-tilleuls_f-2026-006"],
+      "value": "17947.01"
     }
   },
   {
@@ -504,7 +504,7 @@
       "status": "found",
       "level": 1,
       "paths": ["finances/2026/2026-03-10_facture_sci-clos-des-vignes_f-2026-007"],
-      "value": "16584.00"
+      "value": "13106.40"
     }
   },
   {
@@ -517,8 +517,8 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-03-16_facture_residence-le-parc-sas_f-2026-008"],
-      "value": "5984.40"
+      "paths": ["finances/2026/2026-04-10_facture_residence-le-parc-sas_f-2026-008"],
+      "value": "71734.90"
     }
   },
   {
@@ -531,8 +531,8 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-03-22_facture_cabinet-medical-des-lila_f-2026-009"],
-      "value": "6682.80"
+      "paths": ["finances/2026/2026-05-29_facture_cabinet-medical-des-lila_f-2026-009"],
+      "value": "44037.60"
     }
   },
   {
@@ -545,8 +545,8 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-03-28_facture_hotel-du-lac-kir_f-2026-010"],
-      "value": "7770.00"
+      "paths": ["finances/2026/2026-07-15_facture_hotel-du-lac-kir_f-2026-010"],
+      "value": "35252.50"
     }
   },
   {
@@ -563,8 +563,8 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-04-03_facture_sci-les-tilleuls_f-2026-011"],
-      "value": "2026-05-03"
+      "paths": ["finances/2026/2026-02-06_facture_sci-les-tilleuls_f-2026-011"],
+      "value": "2026-03-08"
     }
   },
   {
@@ -581,8 +581,8 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-04-09_facture_sci-clos-des-vignes_f-2026-012"],
-      "value": "2026-05-09"
+      "paths": ["finances/2026/2026-03-29_facture_sci-clos-des-vignes_f-2026-012"],
+      "value": "2026-04-28"
     }
   },
   {
@@ -599,8 +599,8 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-04-15_facture_residence-le-parc-sas_f-2026-013"],
-      "value": "2026-05-15"
+      "paths": ["finances/2026/2026-03-21_facture_residence-le-parc-sas_f-2026-013"],
+      "value": "2026-04-20"
     }
   },
   {
@@ -617,8 +617,8 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-04-21_facture_cabinet-medical-des-lila_f-2026-014"],
-      "value": "2026-05-21"
+      "paths": ["finances/2026/2026-05-11_facture_cabinet-medical-des-lila_f-2026-014"],
+      "value": "2026-06-10"
     }
   },
   {
@@ -635,8 +635,8 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-04-27_facture_hotel-du-lac-kir_f-2026-015"],
-      "value": "2026-05-27"
+      "paths": ["finances/2026/2026-06-22_facture_hotel-du-lac-kir_f-2026-015"],
+      "value": "2026-07-22"
     }
   },
   {
@@ -653,152 +653,152 @@
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-05-03_facture_sci-les-tilleuls_f-2026-016"],
-      "value": "2026-06-02"
+      "paths": ["finances/2026/2026-02-03_facture_sci-les-tilleuls_f-2026-016"],
+      "value": "2026-03-05"
     }
   },
   {
     "id": "q042",
     "query": {
       "intent": "fact",
-      "question": "Combien fait la facture MA-83068 de Matériaux Rousseau ?",
+      "question": "Combien fait la facture MA-23327 de Matériaux Rousseau ?",
       "subject": {
         "by": "number",
-        "value": "MA-83068"
+        "value": "MA-23327"
       },
       "field": "ttc"
     },
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-01-20_achat_materiaux-rousseau_ma-83068"],
-      "value": "907.20"
+      "paths": ["finances/2026/2026-01-20_achat_materiaux-rousseau_ma-23327"],
+      "value": "816.48"
     }
   },
   {
     "id": "q043",
     "query": {
       "intent": "fact",
-      "question": "Combien fait la facture MA-53102 de Matériaux Rousseau ?",
+      "question": "Combien fait la facture MA-52856 de Matériaux Rousseau ?",
       "subject": {
         "by": "number",
-        "value": "MA-53102"
+        "value": "MA-52856"
       },
       "field": "ttc"
     },
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-01-24_achat_materiaux-rousseau_ma-53102"],
-      "value": "7507.20"
+      "paths": ["finances/2026/2026-01-24_achat_materiaux-rousseau_ma-52856"],
+      "value": "8404.80"
     }
   },
   {
     "id": "q044",
     "query": {
       "intent": "fact",
-      "question": "Combien fait la facture MA-76568 de Matériaux Rousseau ?",
+      "question": "Combien fait la facture MA-77665 de Matériaux Rousseau ?",
       "subject": {
         "by": "number",
-        "value": "MA-76568"
+        "value": "MA-77665"
       },
       "field": "ttc"
     },
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-01-28_achat_materiaux-rousseau_ma-76568"],
-      "value": "106.92"
+      "paths": ["finances/2026/2026-01-28_achat_materiaux-rousseau_ma-77665"],
+      "value": "167.18"
     }
   },
   {
     "id": "q045",
     "query": {
       "intent": "fact",
-      "question": "Combien fait la facture MA-66404 de Matériaux Rousseau ?",
+      "question": "Combien fait la facture MA-37784 de Matériaux Rousseau ?",
       "subject": {
         "by": "number",
-        "value": "MA-66404"
+        "value": "MA-37784"
       },
       "field": "ttc"
     },
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-02-01_achat_materiaux-rousseau_ma-66404"],
-      "value": "1835.52"
+      "paths": ["finances/2026/2026-02-01_achat_materiaux-rousseau_ma-37784"],
+      "value": "315.48"
     }
   },
   {
     "id": "q046",
     "query": {
       "intent": "fact",
-      "question": "Combien fait la facture BO-72703 de Bois et Panneaux Girard ?",
+      "question": "Combien fait la facture BO-46019 de Bois et Panneaux Girard ?",
       "subject": {
         "by": "number",
-        "value": "BO-72703"
+        "value": "BO-46019"
       },
       "field": "ttc"
     },
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-02-05_achat_bois-et-panneaux-girard_bo-72703"],
-      "value": "994.56"
+      "paths": ["finances/2026/2026-02-05_achat_bois-et-panneaux-girard_bo-46019"],
+      "value": "941.28"
     }
   },
   {
     "id": "q047",
     "query": {
       "intent": "fact",
-      "question": "Combien fait la facture BO-67587 de Bois et Panneaux Girard ?",
+      "question": "Combien fait la facture BO-39408 de Bois et Panneaux Girard ?",
       "subject": {
         "by": "number",
-        "value": "BO-67587"
+        "value": "BO-39408"
       },
       "field": "ttc"
     },
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-02-09_achat_bois-et-panneaux-girard_bo-67587"],
-      "value": "361.08"
+      "paths": ["finances/2026/2026-02-09_achat_bois-et-panneaux-girard_bo-39408"],
+      "value": "453.12"
     }
   },
   {
     "id": "q048",
     "query": {
       "intent": "fact",
-      "question": "Combien fait la facture CA-77095 de Carrelages Fontaine ?",
+      "question": "Combien fait la facture CA-78856 de Carrelages Fontaine ?",
       "subject": {
         "by": "number",
-        "value": "CA-77095"
+        "value": "CA-78856"
       },
       "field": "ttc"
     },
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-02-13_achat_carrelages-fontaine_ca-77095"],
-      "value": "4540.20"
+      "paths": ["finances/2026/2026-02-13_achat_carrelages-fontaine_ca-78856"],
+      "value": "631.68"
     }
   },
   {
     "id": "q049",
     "query": {
       "intent": "fact",
-      "question": "Combien fait la facture CA-80326 de Carrelages Fontaine ?",
+      "question": "Combien fait la facture CA-54585 de Carrelages Fontaine ?",
       "subject": {
         "by": "number",
-        "value": "CA-80326"
+        "value": "CA-54585"
       },
       "field": "ttc"
     },
     "expect": {
       "status": "found",
       "level": 1,
-      "paths": ["finances/2026/2026-02-17_achat_carrelages-fontaine_ca-80326"],
-      "value": "1419.00"
+      "paths": ["finances/2026/2026-02-17_achat_carrelages-fontaine_ca-54585"],
+      "value": "877.20"
     }
   },
   {
@@ -962,7 +962,7 @@
       "status": "found",
       "level": 1,
       "paths": ["finances/situations/2026-residence-les-tilleuls-12-logements_sit-3"],
-      "value": "96044.00"
+      "value": "101131.00"
     }
   },
   {
@@ -980,7 +980,7 @@
       "status": "found",
       "level": 1,
       "paths": ["finances/situations/2026-extension-clos-des-vignes_sit-3"],
-      "value": "63892.00"
+      "value": "61085.00"
     }
   },
   {
@@ -998,7 +998,7 @@
       "status": "found",
       "level": 1,
       "paths": ["finances/situations/2026-renovation-le-parc-batiment-b_sit-3"],
-      "value": "58942.00"
+      "value": "87141.00"
     }
   },
   {
@@ -1100,18 +1100,18 @@
       "status": "found",
       "level": 2,
       "paths": [
-        "finances/2026/2026-01-20_achat_materiaux-rousseau_ma-83068",
-        "finances/2026/2026-01-24_achat_materiaux-rousseau_ma-53102",
-        "finances/2026/2026-01-28_achat_materiaux-rousseau_ma-76568",
-        "finances/2026/2026-02-01_achat_materiaux-rousseau_ma-66404",
-        "finances/2026/2026-04-10_achat_materiaux-rousseau_ma-94982",
-        "finances/2026/2026-04-14_achat_materiaux-rousseau_ma-46222",
-        "finances/2026/2026-04-18_achat_materiaux-rousseau_ma-35400",
-        "finances/2026/2026-04-22_achat_materiaux-rousseau_ma-72651",
-        "finances/2026/2026-06-29_achat_materiaux-rousseau_ma-47304",
-        "finances/2026/2026-07-03_achat_materiaux-rousseau_ma-29229",
-        "finances/2026/2026-07-07_achat_materiaux-rousseau_ma-77334",
-        "finances/2026/2026-07-11_achat_materiaux-rousseau_ma-86196"
+        "finances/2026/2026-01-20_achat_materiaux-rousseau_ma-23327",
+        "finances/2026/2026-01-24_achat_materiaux-rousseau_ma-52856",
+        "finances/2026/2026-01-28_achat_materiaux-rousseau_ma-77665",
+        "finances/2026/2026-02-01_achat_materiaux-rousseau_ma-37784",
+        "finances/2026/2026-04-10_achat_materiaux-rousseau_ma-78023",
+        "finances/2026/2026-04-14_achat_materiaux-rousseau_ma-62528",
+        "finances/2026/2026-04-18_achat_materiaux-rousseau_ma-86593",
+        "finances/2026/2026-04-22_achat_materiaux-rousseau_ma-77672",
+        "finances/2026/2026-06-29_achat_materiaux-rousseau_ma-34838",
+        "finances/2026/2026-07-03_achat_materiaux-rousseau_ma-53156",
+        "finances/2026/2026-07-07_achat_materiaux-rousseau_ma-48212",
+        "finances/2026/2026-07-11_achat_materiaux-rousseau_ma-83503"
       ]
     }
   },
@@ -1131,12 +1131,12 @@
       "status": "found",
       "level": 2,
       "paths": [
-        "finances/2026/2026-02-05_achat_bois-et-panneaux-girard_bo-72703",
-        "finances/2026/2026-02-09_achat_bois-et-panneaux-girard_bo-67587",
-        "finances/2026/2026-04-26_achat_bois-et-panneaux-girard_bo-90578",
-        "finances/2026/2026-04-30_achat_bois-et-panneaux-girard_bo-75007",
-        "finances/2026/2026-07-15_achat_bois-et-panneaux-girard_bo-70749",
-        "finances/2026/2026-07-19_achat_bois-et-panneaux-girard_bo-73819"
+        "finances/2026/2026-02-05_achat_bois-et-panneaux-girard_bo-46019",
+        "finances/2026/2026-02-09_achat_bois-et-panneaux-girard_bo-39408",
+        "finances/2026/2026-04-26_achat_bois-et-panneaux-girard_bo-90363",
+        "finances/2026/2026-04-30_achat_bois-et-panneaux-girard_bo-44019",
+        "finances/2026/2026-07-15_achat_bois-et-panneaux-girard_bo-46212",
+        "finances/2026/2026-07-19_achat_bois-et-panneaux-girard_bo-26665"
       ]
     }
   },
@@ -1156,12 +1156,12 @@
       "status": "found",
       "level": 2,
       "paths": [
-        "finances/2026/2026-02-13_achat_carrelages-fontaine_ca-77095",
-        "finances/2026/2026-02-17_achat_carrelages-fontaine_ca-80326",
-        "finances/2026/2026-05-04_achat_carrelages-fontaine_ca-95279",
-        "finances/2026/2026-05-08_achat_carrelages-fontaine_ca-95813",
-        "finances/2026/2026-07-23_achat_carrelages-fontaine_ca-99602",
-        "finances/2026/2026-07-27_achat_carrelages-fontaine_ca-30453"
+        "finances/2026/2026-02-13_achat_carrelages-fontaine_ca-78856",
+        "finances/2026/2026-02-17_achat_carrelages-fontaine_ca-54585",
+        "finances/2026/2026-05-04_achat_carrelages-fontaine_ca-67818",
+        "finances/2026/2026-05-08_achat_carrelages-fontaine_ca-45330",
+        "finances/2026/2026-07-23_achat_carrelages-fontaine_ca-75601",
+        "finances/2026/2026-07-27_achat_carrelages-fontaine_ca-93725"
       ]
     }
   },
@@ -1181,9 +1181,9 @@
       "status": "found",
       "level": 2,
       "paths": [
-        "finances/2026/2026-02-21_achat_quincaillerie-bonnet_qu-75826",
-        "finances/2026/2026-05-12_achat_quincaillerie-bonnet_qu-38469",
-        "finances/2026/2026-07-31_achat_quincaillerie-bonnet_qu-66558"
+        "finances/2026/2026-02-21_achat_quincaillerie-bonnet_qu-86759",
+        "finances/2026/2026-05-12_achat_quincaillerie-bonnet_qu-90349",
+        "finances/2026/2026-07-31_achat_quincaillerie-bonnet_qu-57814"
       ]
     }
   },
@@ -1467,7 +1467,7 @@
       "status": "found",
       "level": 2,
       "paths": [
-        "finances/2026/2026-05-03_facture_sci-les-tilleuls_f-2026-016",
+        "finances/2026/2026-02-03_facture_sci-les-tilleuls_f-2026-016",
         "finances/2026/2026-08-31_facture_sci-les-tilleuls_f-2026-036"
       ]
     }
@@ -1489,7 +1489,7 @@
       "status": "found",
       "level": 2,
       "paths": [
-        "finances/2026/2026-04-09_facture_sci-clos-des-vignes_f-2026-012",
+        "finances/2026/2026-03-29_facture_sci-clos-des-vignes_f-2026-012",
         "finances/2026/2026-08-07_facture_sci-clos-des-vignes_f-2026-032",
         "finances/2026/2026-09-06_facture_sci-clos-des-vignes_f-2026-037"
       ]
@@ -1542,7 +1542,7 @@
     "expect": {
       "status": "found",
       "level": 3,
-      "paths": ["finances/2026/2026-02-21_achat_quincaillerie-bonnet_qu-75826"]
+      "paths": ["finances/2026/2026-02-21_achat_quincaillerie-bonnet_qu-86759"]
     }
   },
   {
@@ -1556,7 +1556,7 @@
     "expect": {
       "status": "found",
       "level": 3,
-      "paths": ["finances/2026/2026-04-10_achat_materiaux-rousseau_ma-94982"]
+      "paths": ["finances/2026/2026-04-10_achat_materiaux-rousseau_ma-78023"]
     }
   },
   {
@@ -1570,7 +1570,7 @@
     "expect": {
       "status": "found",
       "level": 3,
-      "paths": ["finances/2026/2026-05-20_achat_platres-lambert_pl-93635"]
+      "paths": ["finances/2026/2026-05-20_achat_platres-lambert_pl-44245"]
     }
   },
   {
@@ -1587,7 +1587,7 @@
     "expect": {
       "status": "found",
       "level": 4,
-      "paths": ["finances/2026/2026-03-13_achat_sanitaires-faure_sa-16013"]
+      "paths": ["finances/2026/2026-03-13_achat_sanitaires-faure_sa-94986"]
     }
   },
   {
@@ -1604,7 +1604,7 @@
     "expect": {
       "status": "found",
       "level": 4,
-      "paths": ["finances/2026/2026-05-08_achat_carrelages-fontaine_ca-95813"]
+      "paths": ["finances/2026/2026-05-08_achat_carrelages-fontaine_ca-45330"]
     }
   },
   {

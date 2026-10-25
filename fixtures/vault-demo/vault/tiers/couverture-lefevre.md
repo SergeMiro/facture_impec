@@ -14,8 +14,9 @@ erp_ref: T0026
 links:
   - kind: works_on
     to: chantiers/2026-extension-clos-des-vignes
-    confidence: strong
-    evidence: Contrat de sous-traitance
+    confidence: exact
+    evidence: Contrat de sous-traitance [[juridique/couverture-lefevre/2026-02-11_contrat-sous-traitance_contrat-de-sous-traitance-couv]]
+    rule: contract_site
 backlinks:
   - kind: issued_to
     from: juridique/couverture-lefevre/2026-02-11_contrat-sous-traitance_contrat-de-sous-traitance-couv

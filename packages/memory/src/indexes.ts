@@ -141,6 +141,8 @@ export type LogReason =
   | 'ingest'
   | 'query_writeback'
   | 'query'
+  | 'relink'
+  | 'link_review'
   | 'lint'
   | 'user_edit'
   | 'action_result'

@@ -13,23 +13,23 @@ email: contact@residence-le-parc-sas.example
 erp_ref: T0003
 backlinks:
   - kind: issued_to
-    from: finances/2026/2026-02-14_facture_residence-le-parc-sas_f-2026-003
-  - kind: issued_to
     from: finances/2026/2026-03-05_devis_residence-le-parc-sas_d-2026-003
   - kind: issued_to
     from: finances/2026/2026-03-10_devis_residence-le-parc-sas_d-2026-008
   - kind: issued_to
     from: finances/2026/2026-03-15_devis_residence-le-parc-sas_d-2026-013
   - kind: issued_to
-    from: finances/2026/2026-03-16_facture_residence-le-parc-sas_f-2026-008
-  - kind: issued_to
     from: finances/2026/2026-03-20_devis_residence-le-parc-sas_d-2026-018
+  - kind: issued_to
+    from: finances/2026/2026-03-21_facture_residence-le-parc-sas_f-2026-013
   - kind: issued_to
     from: finances/2026/2026-03-25_devis_residence-le-parc-sas_d-2026-023
   - kind: issued_to
-    from: finances/2026/2026-04-15_facture_residence-le-parc-sas_f-2026-013
+    from: finances/2026/2026-03-31_facture_residence-le-parc-sas_f-2026-018
   - kind: issued_to
-    from: finances/2026/2026-05-15_facture_residence-le-parc-sas_f-2026-018
+    from: finances/2026/2026-04-10_facture_residence-le-parc-sas_f-2026-008
+  - kind: issued_to
+    from: finances/2026/2026-04-23_facture_residence-le-parc-sas_f-2026-003
   - kind: issued_to
     from: finances/2026/2026-06-14_facture_residence-le-parc-sas_f-2026-023
   - kind: issued_to
@@ -54,15 +54,15 @@ Résidence Le Parc SAS, client de l'entreprise depuis 2018.
 
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
-- A reçu [[finances/2026/2026-02-14_facture_residence-le-parc-sas_f-2026-003]]
 - A reçu [[finances/2026/2026-03-05_devis_residence-le-parc-sas_d-2026-003]]
 - A reçu [[finances/2026/2026-03-10_devis_residence-le-parc-sas_d-2026-008]]
 - A reçu [[finances/2026/2026-03-15_devis_residence-le-parc-sas_d-2026-013]]
-- A reçu [[finances/2026/2026-03-16_facture_residence-le-parc-sas_f-2026-008]]
 - A reçu [[finances/2026/2026-03-20_devis_residence-le-parc-sas_d-2026-018]]
+- A reçu [[finances/2026/2026-03-21_facture_residence-le-parc-sas_f-2026-013]]
 - A reçu [[finances/2026/2026-03-25_devis_residence-le-parc-sas_d-2026-023]]
-- A reçu [[finances/2026/2026-04-15_facture_residence-le-parc-sas_f-2026-013]]
-- A reçu [[finances/2026/2026-05-15_facture_residence-le-parc-sas_f-2026-018]]
+- A reçu [[finances/2026/2026-03-31_facture_residence-le-parc-sas_f-2026-018]]
+- A reçu [[finances/2026/2026-04-10_facture_residence-le-parc-sas_f-2026-008]]
+- A reçu [[finances/2026/2026-04-23_facture_residence-le-parc-sas_f-2026-003]]
 - A reçu [[finances/2026/2026-06-14_facture_residence-le-parc-sas_f-2026-023]]
 - A reçu [[finances/2026/2026-07-14_facture_residence-le-parc-sas_f-2026-028]]
 - A reçu [[finances/2026/2026-08-13_facture_residence-le-parc-sas_f-2026-033]]

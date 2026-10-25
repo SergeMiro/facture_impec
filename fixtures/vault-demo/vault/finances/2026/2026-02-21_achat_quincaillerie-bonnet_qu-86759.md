@@ -1,0 +1,48 @@
+---
+type: facture_achat
+title: Facture QU-86759 Quincaillerie Bonnet
+sources:
+  - invoice:purchase-9
+  - raw/2026/02/facture-qu-86759.eml
+updated: 2026-10-25
+number: QU-86759
+party: tiers/quincaillerie-bonnet
+issue_date: 2026-02-21
+due_date: 2026-04-07
+ht: "477.30"
+tva: "95.46"
+ttc: "572.76"
+chantier: chantiers/2026-cabinet-medical-des-lilas
+lines:
+  - label: Vis à bois 5x60
+    quantity: 37
+    unit_price: "12.90"
+    amount: "477.30"
+    article: catalogue/vis-a-bois-5x60
+links:
+  - kind: belongs_to
+    to: chantiers/2026-cabinet-medical-des-lilas
+    confidence: exact
+    evidence: Chantier du document (champ « chantier »)
+    rule: chantier
+  - kind: issued_by
+    to: tiers/quincaillerie-bonnet
+    confidence: exact
+    evidence: Tiers du document (champ « party »)
+    rule: party
+  - kind: uses
+    to: catalogue/vis-a-bois-5x60
+    confidence: exact
+    evidence: Ligne « Vis à bois 5x60 »
+    rule: line_article
+---
+
+37 boîte de Vis à bois 5x60. Livraison de nuit à la demande du chef de chantier.
+
+## Liens
+
+Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
+
+- Fait partie de [[chantiers/2026-cabinet-medical-des-lilas]]
+- Émis par [[tiers/quincaillerie-bonnet]]
+- Utilise [[catalogue/vis-a-bois-5x60]]

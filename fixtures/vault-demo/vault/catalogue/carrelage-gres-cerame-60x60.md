@@ -7,19 +7,23 @@ updated: 2026-10-25
 unit: m²
 suppliers:
   - tiers/carrelages-fontaine
+codes:
+  - CAR-1006
+  - ART-007
 last_price: "32.90"
 links:
   - kind: supplied_by
     to: tiers/carrelages-fontaine
-    confidence: strong
-    evidence: Fournisseur habituel
+    confidence: exact
+    evidence: Fournisseur de l'article
+    rule: supplier
 backlinks:
   - kind: uses
-    from: finances/2026/2026-02-13_achat_carrelages-fontaine_ca-77095
+    from: finances/2026/2026-02-13_achat_carrelages-fontaine_ca-78856
   - kind: uses
-    from: finances/2026/2026-05-04_achat_carrelages-fontaine_ca-95279
+    from: finances/2026/2026-05-04_achat_carrelages-fontaine_ca-67818
   - kind: uses
-    from: finances/2026/2026-07-23_achat_carrelages-fontaine_ca-99602
+    from: finances/2026/2026-07-23_achat_carrelages-fontaine_ca-75601
 ---
 
 Carrelage grès cérame 60x60, vendu au m² par Carrelages Fontaine.
@@ -29,6 +33,6 @@ Carrelage grès cérame 60x60, vendu au m² par Carrelages Fontaine.
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
 - Fourni par [[tiers/carrelages-fontaine]]
-- Utilisé par [[finances/2026/2026-02-13_achat_carrelages-fontaine_ca-77095]]
-- Utilisé par [[finances/2026/2026-05-04_achat_carrelages-fontaine_ca-95279]]
-- Utilisé par [[finances/2026/2026-07-23_achat_carrelages-fontaine_ca-99602]]
+- Utilisé par [[finances/2026/2026-02-13_achat_carrelages-fontaine_ca-78856]]
+- Utilisé par [[finances/2026/2026-05-04_achat_carrelages-fontaine_ca-67818]]
+- Utilisé par [[finances/2026/2026-07-23_achat_carrelages-fontaine_ca-75601]]

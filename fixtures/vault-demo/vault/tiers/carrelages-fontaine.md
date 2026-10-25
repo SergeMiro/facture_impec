@@ -17,23 +17,21 @@ backlinks:
   - kind: supplied_by
     from: catalogue/colle-carrelage-c2
   - kind: issued_to
-    from: finances/2026/2026-02-02_commande_carrelages-fontaine_bc-2026-003
+    from: finances/2026/2026-02-02_commande_carrelages-fontaine_bc-2026-015
   - kind: issued_by
-    from: finances/2026/2026-02-13_achat_carrelages-fontaine_ca-77095
+    from: finances/2026/2026-02-13_achat_carrelages-fontaine_ca-78856
   - kind: issued_by
-    from: finances/2026/2026-02-17_achat_carrelages-fontaine_ca-80326
+    from: finances/2026/2026-02-17_achat_carrelages-fontaine_ca-54585
   - kind: issued_to
-    from: finances/2026/2026-04-06_commande_carrelages-fontaine_bc-2026-010
+    from: finances/2026/2026-04-06_commande_carrelages-fontaine_bc-2026-022
   - kind: issued_by
-    from: finances/2026/2026-05-04_achat_carrelages-fontaine_ca-95279
+    from: finances/2026/2026-05-04_achat_carrelages-fontaine_ca-67818
   - kind: issued_by
-    from: finances/2026/2026-05-08_achat_carrelages-fontaine_ca-95813
+    from: finances/2026/2026-05-08_achat_carrelages-fontaine_ca-45330
   - kind: issued_by
-    from: finances/2026/2026-07-23_achat_carrelages-fontaine_ca-99602
+    from: finances/2026/2026-07-23_achat_carrelages-fontaine_ca-75601
   - kind: issued_by
-    from: finances/2026/2026-07-27_achat_carrelages-fontaine_ca-30453
-  - kind: issued_to
-    from: finances/2026/2026-08-01_commande_carrelages-fontaine_bc-2026-023
+    from: finances/2026/2026-07-27_achat_carrelages-fontaine_ca-93725
 ---
 
 Carrelages Fontaine, fournisseur de l'entreprise depuis 2021.
@@ -44,12 +42,11 @@ Cette section est réécrite par Facture Impec à chaque mise à jour de la page
 
 - Fournit [[catalogue/carrelage-gres-cerame-60x60]]
 - Fournit [[catalogue/colle-carrelage-c2]]
-- A reçu [[finances/2026/2026-02-02_commande_carrelages-fontaine_bc-2026-003]]
-- A émis [[finances/2026/2026-02-13_achat_carrelages-fontaine_ca-77095]]
-- A émis [[finances/2026/2026-02-17_achat_carrelages-fontaine_ca-80326]]
-- A reçu [[finances/2026/2026-04-06_commande_carrelages-fontaine_bc-2026-010]]
-- A émis [[finances/2026/2026-05-04_achat_carrelages-fontaine_ca-95279]]
-- A émis [[finances/2026/2026-05-08_achat_carrelages-fontaine_ca-95813]]
-- A émis [[finances/2026/2026-07-23_achat_carrelages-fontaine_ca-99602]]
-- A émis [[finances/2026/2026-07-27_achat_carrelages-fontaine_ca-30453]]
-- A reçu [[finances/2026/2026-08-01_commande_carrelages-fontaine_bc-2026-023]]
+- A reçu [[finances/2026/2026-02-02_commande_carrelages-fontaine_bc-2026-015]]
+- A émis [[finances/2026/2026-02-13_achat_carrelages-fontaine_ca-78856]]
+- A émis [[finances/2026/2026-02-17_achat_carrelages-fontaine_ca-54585]]
+- A reçu [[finances/2026/2026-04-06_commande_carrelages-fontaine_bc-2026-022]]
+- A émis [[finances/2026/2026-05-04_achat_carrelages-fontaine_ca-67818]]
+- A émis [[finances/2026/2026-05-08_achat_carrelages-fontaine_ca-45330]]
+- A émis [[finances/2026/2026-07-23_achat_carrelages-fontaine_ca-75601]]
+- A émis [[finances/2026/2026-07-27_achat_carrelages-fontaine_ca-93725]]

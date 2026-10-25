@@ -8,26 +8,42 @@ number: F-2026-036
 party: tiers/sci-les-tilleuls
 issue_date: 2026-08-31
 due_date: 2026-09-30
-ht: "16801.00"
-tva: "3360.20"
-ttc: "20161.20"
+ht: "44308.40"
+tva: "8861.68"
+ttc: "53170.08"
 chantier: chantiers/2026-residence-les-tilleuls-12-logements
+lines:
+  - label: "Travaux : isolation des combles perdus"
+    amount: "39092.00"
+  - label: Tableau électrique 3 rangées
+    quantity: 24
+    unit_price: "217.35"
+    amount: "5216.40"
+    code: ART-016
 links:
-  - kind: issued_to
-    to: tiers/sci-les-tilleuls
-    confidence: exact
-    evidence: SIREN de la facture
   - kind: belongs_to
     to: chantiers/2026-residence-les-tilleuls-12-logements
     confidence: exact
-    evidence: Référence chantier (BT-11)
+    evidence: Chantier du document (champ « chantier »)
+    rule: chantier
+  - kind: issued_to
+    to: tiers/sci-les-tilleuls
+    confidence: exact
+    evidence: Tiers du document (champ « party »)
+    rule: party
+  - kind: uses
+    to: catalogue/tableau-electrique-3-rangees
+    confidence: strong
+    evidence: Code article « ART-016 » de la ligne « Tableau électrique 3 rangées »
+    rule: line_code
 ---
 
-Facture de raccordement du tableau électrique pour SCI Les Tilleuls.
+Facture de isolation des combles perdus pour SCI Les Tilleuls.
 
 ## Liens
 
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
-- Adressé à [[tiers/sci-les-tilleuls]]
 - Fait partie de [[chantiers/2026-residence-les-tilleuls-12-logements]]
+- Adressé à [[tiers/sci-les-tilleuls]]
+- Utilise [[catalogue/tableau-electrique-3-rangees]]

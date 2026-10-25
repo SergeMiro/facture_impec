@@ -67,6 +67,16 @@ describe('the demo vault', () => {
     expect(await golden()).toEqual(demo.golden);
     expect(demo.golden).toHaveLength(100);
   });
+
+  it('is linked as the rules link it: opening it rewrites no page', async () => {
+    // The lock, the log line and the schema are what any opening writes.
+    const pages = (files: Record<string, string>) =>
+      Object.entries(files).filter(
+        ([f]) => f.endsWith('.md') && f !== 'log.md' && f !== '_schema.md',
+      );
+    expect(pages(await snapshot(root))).toEqual(pages(await snapshot(join(FIXTURE, 'vault'))));
+    expect(await read(root, 'log.md')).not.toContain('liens recalculés');
+  });
 });
 
 describe('recall on the demo vault', () => {

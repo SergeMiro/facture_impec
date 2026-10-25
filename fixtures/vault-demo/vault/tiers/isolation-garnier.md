@@ -15,8 +15,11 @@ links:
   - kind: works_on
     to: chantiers/2026-cabinet-medical-des-lilas
     confidence: strong
-    evidence: Contrat de sous-traitance
+    evidence: Facture [[finances/2026/2026-06-26_achat_isolation-garnier_st-4939]] sur ce chantier
+    rule: invoice_site
 backlinks:
+  - kind: issued_by
+    from: finances/2026/2026-06-26_achat_isolation-garnier_st-4939
   - kind: covers
     from: juridique/isolation-garnier/attestation-assurance-decennale_2026-01-01
   - kind: covers
@@ -30,5 +33,6 @@ Isolation Garnier, sous-traitant de l'entreprise depuis 2018.
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
 - Travaille sur [[chantiers/2026-cabinet-medical-des-lilas]]
+- A émis [[finances/2026/2026-06-26_achat_isolation-garnier_st-4939]]
 - Couvert par [[juridique/isolation-garnier/attestation-assurance-decennale_2026-01-01]]
 - Couvert par [[juridique/isolation-garnier/attestation-vigilance_2026-08-26]]

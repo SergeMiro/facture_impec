@@ -15,13 +15,13 @@ backlinks:
   - kind: supplied_by
     from: catalogue/laine-de-verre-100-mm
   - kind: issued_by
-    from: finances/2026/2026-03-29_achat_isolants-fournier_is-47681
-  - kind: issued_by
-    from: finances/2026/2026-06-17_achat_isolants-fournier_is-80890
+    from: finances/2026/2026-03-29_achat_isolants-fournier_is-76902
   - kind: issued_to
-    from: finances/2026/2026-07-05_commande_isolants-fournier_bc-2026-020
+    from: finances/2026/2026-05-28_commande_isolants-fournier_bc-2026-008
   - kind: issued_by
-    from: finances/2026/2026-09-05_achat_isolants-fournier_is-27906
+    from: finances/2026/2026-06-17_achat_isolants-fournier_is-37566
+  - kind: issued_by
+    from: finances/2026/2026-09-05_achat_isolants-fournier_is-53102
 ---
 
 Isolants Fournier, fournisseur de l'entreprise depuis 2018.
@@ -31,7 +31,7 @@ Isolants Fournier, fournisseur de l'entreprise depuis 2018.
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
 - Fournit [[catalogue/laine-de-verre-100-mm]]
-- A émis [[finances/2026/2026-03-29_achat_isolants-fournier_is-47681]]
-- A émis [[finances/2026/2026-06-17_achat_isolants-fournier_is-80890]]
-- A reçu [[finances/2026/2026-07-05_commande_isolants-fournier_bc-2026-020]]
-- A émis [[finances/2026/2026-09-05_achat_isolants-fournier_is-27906]]
+- A émis [[finances/2026/2026-03-29_achat_isolants-fournier_is-76902]]
+- A reçu [[finances/2026/2026-05-28_commande_isolants-fournier_bc-2026-008]]
+- A émis [[finances/2026/2026-06-17_achat_isolants-fournier_is-37566]]
+- A émis [[finances/2026/2026-09-05_achat_isolants-fournier_is-53102]]

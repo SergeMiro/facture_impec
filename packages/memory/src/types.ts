@@ -61,13 +61,45 @@ export type LinkKind = z.infer<typeof LinkKind>;
  * model's reading, which a person confirms before anything relies on it.
  */
 export const LinkConfidence = z.enum(['exact', 'strong', 'inferred']);
+export type LinkConfidence = z.infer<typeof LinkConfidence>;
 
-/** A link this page makes: its kind, its target, how sure, and on what (a field or a quote). */
+/** The rules that find links by code (`link-rules.ts`), and how sure each one is. */
+export const LINK_RULES = {
+  party: 'exact',
+  chantier: 'exact',
+  project_ref: 'exact',
+  order_ref: 'exact',
+  quote_ref: 'exact',
+  previous_situation: 'exact',
+  line_article: 'exact',
+  supplier: 'exact',
+  contract_site: 'exact',
+  line_code: 'strong',
+  line_name: 'strong',
+  order_match: 'strong',
+  quote_match: 'strong',
+  invoice_site: 'strong',
+  order_near: 'inferred',
+  quote_near: 'inferred',
+  text_chantier: 'inferred',
+  text_quote: 'inferred',
+  line_words: 'inferred',
+} as const satisfies Record<string, LinkConfidence>;
+export type LinkRule = keyof typeof LINK_RULES;
+export const LinkRule = z.enum(Object.keys(LINK_RULES) as [LinkRule, ...LinkRule[]]);
+
+/**
+ * A link this page makes: its kind, its target, how sure, and on what (a field or a quote). A rule's
+ * link names its rule and is made again at every write; a model's has none; a person's confirmation
+ * says who and when.
+ */
 export const Link = z.object({
   kind: LinkKind,
   to: PagePath,
   confidence: LinkConfidence,
   evidence: z.string().min(1),
+  rule: LinkRule.optional(),
+  confirmed_by: z.string().min(1).optional(),
 });
 export type Link = z.infer<typeof Link>;
 
@@ -85,6 +117,8 @@ const tail = {
   extracted: z.object({ confidence: z.number().min(0).max(1) }).optional(),
   links: z.array(Link).optional(),
   backlinks: z.array(Backlink).optional(),
+  /** Links a person said were wrong: no rule makes them again. */
+  refused_links: z.array(z.object({ kind: LinkKind, to: PagePath })).optional(),
 };
 
 const Line = z.object({
@@ -93,6 +127,8 @@ const Line = z.object({
   unit_price: Money.optional(),
   amount: Money,
   article: PagePath.optional(),
+  /** The article's code as the document writes it (BT-155): the seller's own. */
+  code: z.string().min(1).optional(),
 });
 
 const Tiers = z.object({
@@ -137,6 +173,13 @@ const invoiceLike = <T extends 'facture_vente' | 'facture_achat' | 'avoir'>(type
     tva: Money,
     ttc: Money,
     chantier: PagePath.optional(),
+    /**
+     * References as the document writes them: BT-11 the chantier's, BT-13 the buyer's order (a
+     * purchase order, or our quote's number copied there), BT-14 the seller's order.
+     */
+    project_ref: z.string().min(1).optional(),
+    order_ref: z.string().min(1).optional(),
+    sales_order_ref: z.string().min(1).optional(),
     lines: z.array(Line).optional(),
     paid_at: IsoDate.optional(),
     ...tail,
@@ -188,6 +231,8 @@ const Article = z.object({
   ...head,
   unit: z.string().optional(),
   suppliers: z.array(PagePath).optional(),
+  /** Its codes: the suppliers' and the company's own. */
+  codes: z.array(z.string().min(1)).optional(),
   last_price: Money.optional(),
   stock: z.number().optional(),
   ...tail,

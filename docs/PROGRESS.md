@@ -2067,3 +2067,61 @@ Evidence (2026-10-25), `packages/memory` (41 tests):
 - **Gate**: `pnpm verify` green on 2026-10-25: memory 41, api 387, add-in 120, agents 162, core 713 +
   oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, connectors 13, domain 8,
   scripts 11; boundaries: no violation (`@fi/memory` now imports `@fi/db`).
+
+## Memory M2: links between documents (started 2026-10-25)
+
+`docs/plans/memory.md` § M2, memory doc §7. Criteria, written before the code:
+
+- **Link rules, by code** (`link-rules.ts`), each with how sure it is: *exact* from an identifier the
+  document carries (its company, its chantier, BT-11 a chantier's reference, BT-13/BT-14 an order's or
+  a quote's number, the situation before it, a line's article); *strong* from a match on the data
+  (same company, amount within 2 %, dates within 30 days or the same chantier; an article by its
+  code or its name); *inferred* from a reading of the text, its sentence quoted. A rule links only to
+  a page that exists and only when one page fits; a company's work on a chantier comes from its
+  contract or its invoices.
+- **At every write** the writer runs the rules on the pages written, then on the pages that were
+  waiting for them (an invoice whose order arrives after it); opening the vault runs them on every
+  page. A model's link (inferred, with its quote) and a person's confirmation are kept; a person's
+  « this is not it » is kept too, and no rule makes that link again.
+- **A person confirms an inferred link once**, it becomes strong; nothing that prepares a document
+  relies on an inferred link (M6).
+- **Lint of the links**: a link its target does not show back (and the reverse), a link to a page
+  that is not there, a rule's link whose fact is gone, a link no rule makes and nobody confirmed, a
+  guess whose quote is not in its page.
+- **Done when**: on the demo vault's chains (quote → invoice, purchase → sale, made by the generator
+  without links) ≥ 90 % are exact or strong, the rest inferred, none missing, and no exact or strong
+  link points to a wrong page. The memory doc's « 50 real chains » need a pilot (`docs/TODO.md`).
+
+Evidence (2026-10-25), `packages/memory` (50 tests):
+
+- **Done when**: `link-rules.golden.test.ts` « tie ≥ 90 % of the chains by exact or strong links,
+  the rest by inferred ones, none missing »: **quote → invoice 18/20, purchase → sale 18/20** exact
+  or strong, the four others inferred by design (two advances that name their quote only in a
+  sentence; two re-billed lines that name the article by part of its name). « never makes an exact
+  or strong link to a wrong page » on the generator's truth (`belongs_to`, `fulfils`, `uses`,
+  `works_on`); the five wrong guesses it prints are inferred, for a person to refuse.
+- **The demo vault is built without links**: the generator records the truth apart and the rules
+  link it (`demo.ts`: purchases name their chantier by field, BT-11 reference or a sentence, their
+  article by page, supplier code or name; 12 have an order, half by number; sales name their quote
+  by BT-13, BT-14, amount or sentence). « is linked as the rules link it: opening it rewrites no
+  page » (`recall.golden.test.ts`); recall on it: 100/100 right, 89 at levels 1–2.
+- **Narrowed while building**: « 30 days or the same chantier » tied an invoice to a wrong quote,
+  so the window is the doc's 30 days. Two quotes of one client 1.6 % apart left a coin toss: the
+  only candidate equal to the cent is sure, otherwise the closest is a guess (`quote_near`,
+  `order_near`) and a tie gives nothing (D12).
+- **At every write**: `links.test.ts` « ties an invoice to its order once the order is filed, and
+  shows it back on the order » (relinked as `liens recalculés` in the log), « makes no sure link
+  when two quotes fit the amount: the closest is a guess, a tie nothing ».
+- **A person's word**: « keeps a person's word: a confirmed guess stays sure, a refused link never
+  comes back » (strong with `confirmed_by: user:… le 25/10/2026`; kept when an agent writes the page
+  again and a third quote arrives; refused: gone with its backlink, in `refused_links`; only a
+  `user:` actor may do either); « keeps a model's guess the rules cannot make, and lints the links
+  clean ».
+- **Lint**: `lint.test.ts` « finds nothing in the demo vault », « finds each planted defect, and
+  nothing else » (a backlink taken away, a backlink no link makes, a link to nowhere, a rule's link
+  whose field is gone, a guess whose quote is not in its page, a strong link nobody accounts for).
+- **Gate**: `pnpm verify` green on 2026-10-25: memory 50, api 387, add-in 120, agents 162, core
+  713 + oracle 278, mock-pdp 68, pdp-adapter 41, db 14, shared 17, site 13, connectors 13, domain 8,
+  scripts 11; boundaries: no violation.
+- The memory doc's « 50 real chains » and where real invoices carry a quote's number wait for a
+  pilot (`docs/TODO.md` › Memory); what M2 leaves for later is in `docs/DEFERRED.md` › Memory: links.

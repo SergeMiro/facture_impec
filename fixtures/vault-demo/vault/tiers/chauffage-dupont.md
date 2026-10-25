@@ -14,8 +14,9 @@ erp_ref: T0027
 links:
   - kind: works_on
     to: chantiers/2026-renovation-le-parc-batiment-b
-    confidence: strong
-    evidence: Contrat de sous-traitance
+    confidence: exact
+    evidence: Contrat de sous-traitance [[juridique/chauffage-dupont/2026-03-18_contrat-sous-traitance_contrat-de-sous-traitance-chau]]
+    rule: contract_site
 backlinks:
   - kind: issued_to
     from: juridique/chauffage-dupont/2026-03-18_contrat-sous-traitance_contrat-de-sous-traitance-chau

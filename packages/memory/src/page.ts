@@ -85,6 +85,7 @@ function linkLines(links: readonly Link[], backlinks: readonly Backlink[]): stri
       t(l.confidence === 'inferred' ? 'memory.link.inferred' : 'memory.link.line', {
         label: t(`memory.link.${l.kind}`),
         path: l.to,
+        evidence: l.evidence,
       }),
     ),
     ...backlinks.map((b) =>

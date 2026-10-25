@@ -11,7 +11,8 @@ links:
   - kind: covers
     to: tiers/plomberie-martin
     confidence: exact
-    evidence: SIREN de l’attestation
+    evidence: Tiers du document (champ « party »)
+    rule: party
 ---
 
 Assurance décennale de Plomberie Martin pour 2026.

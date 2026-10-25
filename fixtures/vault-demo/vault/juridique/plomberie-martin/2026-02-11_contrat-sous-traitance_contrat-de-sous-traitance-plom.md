@@ -12,11 +12,13 @@ links:
   - kind: belongs_to
     to: chantiers/2026-extension-clos-des-vignes
     confidence: exact
-    evidence: Chantier du contrat
+    evidence: Chantier du document (champ « chantier »)
+    rule: chantier
   - kind: issued_to
     to: tiers/plomberie-martin
     confidence: exact
-    evidence: Sous-traitant du contrat
+    evidence: Tiers du document (champ « party »)
+    rule: party
 ---
 
 Contrat de sous-traitance pour Extension Clos des Vignes.

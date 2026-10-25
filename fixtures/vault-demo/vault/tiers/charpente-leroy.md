@@ -14,8 +14,9 @@ erp_ref: T0024
 links:
   - kind: works_on
     to: chantiers/2026-hotel-du-lac-kir-facade
-    confidence: strong
-    evidence: Contrat de sous-traitance
+    confidence: exact
+    evidence: Contrat de sous-traitance [[juridique/charpente-leroy/2026-05-27_contrat-sous-traitance_contrat-de-sous-traitance-char]]
+    rule: contract_site
 backlinks:
   - kind: issued_to
     from: juridique/charpente-leroy/2026-05-27_contrat-sous-traitance_contrat-de-sous-traitance-char

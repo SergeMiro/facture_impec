@@ -15,15 +15,13 @@ backlinks:
   - kind: supplied_by
     from: catalogue/beton-c25-30
   - kind: issued_to
-    from: finances/2026/2026-02-11_commande_beton-pret-vincent_bc-2026-004
+    from: finances/2026/2026-02-11_commande_beton-pret-vincent_bc-2026-016
   - kind: issued_by
-    from: finances/2026/2026-02-25_achat_beton-pret-vincent_be-72338
+    from: finances/2026/2026-02-25_achat_beton-pret-vincent_be-42807
   - kind: issued_by
-    from: finances/2026/2026-05-16_achat_beton-pret-vincent_be-91892
+    from: finances/2026/2026-05-16_achat_beton-pret-vincent_be-16766
   - kind: issued_by
-    from: finances/2026/2026-08-04_achat_beton-pret-vincent_be-43810
-  - kind: issued_to
-    from: finances/2026/2026-08-10_commande_beton-pret-vincent_bc-2026-024
+    from: finances/2026/2026-08-04_achat_beton-pret-vincent_be-60877
 ---
 
 Béton Prêt Vincent, fournisseur de l'entreprise depuis 2020.
@@ -33,8 +31,7 @@ Béton Prêt Vincent, fournisseur de l'entreprise depuis 2020.
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
 - Fournit [[catalogue/beton-c25-30]]
-- A reçu [[finances/2026/2026-02-11_commande_beton-pret-vincent_bc-2026-004]]
-- A émis [[finances/2026/2026-02-25_achat_beton-pret-vincent_be-72338]]
-- A émis [[finances/2026/2026-05-16_achat_beton-pret-vincent_be-91892]]
-- A émis [[finances/2026/2026-08-04_achat_beton-pret-vincent_be-43810]]
-- A reçu [[finances/2026/2026-08-10_commande_beton-pret-vincent_bc-2026-024]]
+- A reçu [[finances/2026/2026-02-11_commande_beton-pret-vincent_bc-2026-016]]
+- A émis [[finances/2026/2026-02-25_achat_beton-pret-vincent_be-42807]]
+- A émis [[finances/2026/2026-05-16_achat_beton-pret-vincent_be-16766]]
+- A émis [[finances/2026/2026-08-04_achat_beton-pret-vincent_be-60877]]

@@ -3,7 +3,7 @@ Objet : Changement de coordonnées bancaires
 
 Bonjour,
 Veuillez noter notre nouveau RIB pour vos prochains règlements.
-IBAN : FR96 9999 9296 9368 7817 2582 893
+IBAN : FR42 9999 9743 4210 6150 1223 693
 BIC : DEMOFRPPXXX
 Cordialement,
 Carrelages Fontaine

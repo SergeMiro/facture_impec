@@ -20,6 +20,18 @@ export {
 } from './indexes';
 export { recover } from './journal';
 export {
+  confirmed,
+  keepWord,
+  type Linkable,
+  LinkIndex,
+  linksOf,
+  relink,
+  ruleLinks,
+  sameLinks,
+  withLinks,
+} from './link-rules';
+export { type LintCode, type LintFinding, lintLinks } from './lint';
+export {
   acquireLock,
   LOCK,
   LOCK_TTL_MS,

@@ -8,32 +8,36 @@ number: F-2026-007
 party: tiers/sci-clos-des-vignes
 issue_date: 2026-03-10
 due_date: 2026-04-09
-ht: "13820.00"
-tva: "2764.00"
-ttc: "16584.00"
+ht: "10922.00"
+tva: "2184.40"
+ttc: "13106.40"
 chantier: chantiers/2026-extension-clos-des-vignes
-paid_at: 2026-04-07
+order_ref: D-2026-007
+paid_at: 2026-03-31
 links:
-  - kind: issued_to
-    to: tiers/sci-clos-des-vignes
-    confidence: exact
-    evidence: SIREN de la facture
   - kind: belongs_to
     to: chantiers/2026-extension-clos-des-vignes
     confidence: exact
-    evidence: Référence chantier (BT-11)
+    evidence: Chantier du document (champ « chantier »)
+    rule: chantier
   - kind: fulfils
     to: finances/2026/2026-02-02_devis_sci-clos-des-vignes_d-2026-007
     confidence: exact
-    evidence: Devis D-2026-007 (BT-13)
+    evidence: Numéro de devis « D-2026-007 » (BT-13)
+    rule: quote_ref
+  - kind: issued_to
+    to: tiers/sci-clos-des-vignes
+    confidence: exact
+    evidence: Tiers du document (champ « party »)
+    rule: party
 ---
 
-Facture de reprise des fissures en façade nord pour SCI Clos des Vignes.
+Facture de création des cloisons du premier étage pour SCI Clos des Vignes.
 
 ## Liens
 
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
-- Adressé à [[tiers/sci-clos-des-vignes]]
 - Fait partie de [[chantiers/2026-extension-clos-des-vignes]]
 - Exécute [[finances/2026/2026-02-02_devis_sci-clos-des-vignes_d-2026-007]]
+- Adressé à [[tiers/sci-clos-des-vignes]]

@@ -15,8 +15,11 @@ links:
   - kind: works_on
     to: chantiers/2026-hotel-du-lac-kir-facade
     confidence: strong
-    evidence: Contrat de sous-traitance
+    evidence: Facture [[finances/2026/2026-07-31_achat_carrelage-chevalier_st-7270]] sur ce chantier
+    rule: invoice_site
 backlinks:
+  - kind: issued_by
+    from: finances/2026/2026-07-31_achat_carrelage-chevalier_st-7270
   - kind: covers
     from: juridique/carrelage-chevalier/attestation-assurance-decennale_2026-01-01
   - kind: covers
@@ -30,5 +33,6 @@ Carrelage Chevalier, sous-traitant de l'entreprise depuis 2018.
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
 - Travaille sur [[chantiers/2026-hotel-du-lac-kir-facade]]
+- A émis [[finances/2026/2026-07-31_achat_carrelage-chevalier_st-7270]]
 - Couvert par [[juridique/carrelage-chevalier/attestation-assurance-decennale_2026-01-01]]
 - Couvert par [[juridique/carrelage-chevalier/attestation-vigilance_2026-09-02]]

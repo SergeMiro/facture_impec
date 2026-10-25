@@ -8,26 +8,41 @@ number: F-2026-039
 party: tiers/cabinet-medical-des-lilas
 issue_date: 2026-09-18
 due_date: 2026-10-18
-ht: "19003.00"
-tva: "3800.60"
-ttc: "22803.60"
+ht: "40617.97"
+tva: "8123.59"
+ttc: "48741.56"
 chantier: chantiers/2026-cabinet-medical-des-lilas
+lines:
+  - label: "Travaux : reprise des fissures en façade nord"
+    amount: "39161.00"
+  - label: "Fourniture : Enduit de façade 25 kg"
+    quantity: 53
+    unit_price: "27.49"
+    amount: "1456.97"
 links:
-  - kind: issued_to
-    to: tiers/cabinet-medical-des-lilas
-    confidence: exact
-    evidence: SIREN de la facture
   - kind: belongs_to
     to: chantiers/2026-cabinet-medical-des-lilas
     confidence: exact
-    evidence: Référence chantier (BT-11)
+    evidence: Chantier du document (champ « chantier »)
+    rule: chantier
+  - kind: issued_to
+    to: tiers/cabinet-medical-des-lilas
+    confidence: exact
+    evidence: Tiers du document (champ « party »)
+    rule: party
+  - kind: uses
+    to: catalogue/enduit-de-facade-25-kg
+    confidence: strong
+    evidence: "Ligne « Fourniture : Enduit de façade 25 kg »"
+    rule: line_name
 ---
 
-Facture de création des cloisons du premier étage pour Cabinet Médical des Lilas.
+Facture de isolation des combles perdus pour Cabinet Médical des Lilas.
 
 ## Liens
 
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
-- Adressé à [[tiers/cabinet-medical-des-lilas]]
 - Fait partie de [[chantiers/2026-cabinet-medical-des-lilas]]
+- Adressé à [[tiers/cabinet-medical-des-lilas]]
+- Utilise [[catalogue/enduit-de-facade-25-kg]]

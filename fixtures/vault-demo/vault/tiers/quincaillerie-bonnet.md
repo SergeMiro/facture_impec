@@ -15,13 +15,11 @@ backlinks:
   - kind: supplied_by
     from: catalogue/vis-a-bois-5x60
   - kind: issued_by
-    from: finances/2026/2026-02-21_achat_quincaillerie-bonnet_qu-75826
+    from: finances/2026/2026-02-21_achat_quincaillerie-bonnet_qu-86759
   - kind: issued_by
-    from: finances/2026/2026-05-12_achat_quincaillerie-bonnet_qu-38469
-  - kind: issued_to
-    from: finances/2026/2026-06-08_commande_quincaillerie-bonnet_bc-2026-017
+    from: finances/2026/2026-05-12_achat_quincaillerie-bonnet_qu-90349
   - kind: issued_by
-    from: finances/2026/2026-07-31_achat_quincaillerie-bonnet_qu-66558
+    from: finances/2026/2026-07-31_achat_quincaillerie-bonnet_qu-57814
 ---
 
 Quincaillerie Bonnet, fournisseur de l'entreprise depuis 2024.
@@ -31,7 +29,6 @@ Quincaillerie Bonnet, fournisseur de l'entreprise depuis 2024.
 Cette section est réécrite par Facture Impec à chaque mise à jour de la page.
 
 - Fournit [[catalogue/vis-a-bois-5x60]]
-- A émis [[finances/2026/2026-02-21_achat_quincaillerie-bonnet_qu-75826]]
-- A émis [[finances/2026/2026-05-12_achat_quincaillerie-bonnet_qu-38469]]
-- A reçu [[finances/2026/2026-06-08_commande_quincaillerie-bonnet_bc-2026-017]]
-- A émis [[finances/2026/2026-07-31_achat_quincaillerie-bonnet_qu-66558]]
+- A émis [[finances/2026/2026-02-21_achat_quincaillerie-bonnet_qu-86759]]
+- A émis [[finances/2026/2026-05-12_achat_quincaillerie-bonnet_qu-90349]]
+- A émis [[finances/2026/2026-07-31_achat_quincaillerie-bonnet_qu-57814]]

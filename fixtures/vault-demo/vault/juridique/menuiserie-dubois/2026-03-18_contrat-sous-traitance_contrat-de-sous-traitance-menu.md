@@ -12,11 +12,13 @@ links:
   - kind: belongs_to
     to: chantiers/2026-renovation-le-parc-batiment-b
     confidence: exact
-    evidence: Chantier du contrat
+    evidence: Chantier du document (champ « chantier »)
+    rule: chantier
   - kind: issued_to
     to: tiers/menuiserie-dubois
     confidence: exact
-    evidence: Sous-traitant du contrat
+    evidence: Tiers du document (champ « party »)
+    rule: party
 ---
 
 Contrat de sous-traitance pour Rénovation Le Parc bâtiment B.

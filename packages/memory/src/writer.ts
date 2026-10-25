@@ -1,17 +1,29 @@
 // The vault as its one writer holds it (memory doc §6): the lock taken and renewed, the vault read
 // again at opening, then every write (an agent's patch, a person's edits, a rebuild) one after the
 // other, never two at once, each followed by the index in the database when there is one (M1).
-// Recall reads that index; what it finds in `raw/` is written back onto its page, and what it does
-// not find, or finds twice, becomes an open question. The runner (M3) opens it once and keeps it.
-import { parisToday } from '@fi/core';
+// Every page written gets its links from the rules (link-rules.ts), and the pages that were waiting
+// for it get theirs again (M2). Recall reads the index; what it finds in `raw/` is written back onto
+// its page, and what it does not find, or finds twice, becomes an open question. The runner (M3)
+// opens it once and keeps it.
+import { frDate, parisToday } from '@fi/core';
 import { t } from '@fi/shared';
-import { compile, type MemoryPatch, type PageFacts, type VaultOptions } from './compile';
+import {
+  type CompileResult,
+  compile,
+  type MemoryPatch,
+  type PageFacts,
+  type PageWrite,
+  type VaultOptions,
+} from './compile';
+import { keepWord, type Linkable, LinkIndex, linksOf, sameLinks, withLinks } from './link-rules';
+import { type LintFinding, lintLinks } from './lint';
 import { acquireLock, LOCK_TTL_MS, type LockFile, releaseLock, renewLock } from './lock';
 import type { Page } from './page';
 import { addRaw, type RawFile, readRawTexts } from './raw';
 import { classify, pageFiles, rebuild } from './rebuild';
 import { type RecallAnswer, type RecallQuery, recall } from './recall';
 import type { MemoryStore } from './store';
+import type { LinkKind } from './types';
 import { VaultFiles } from './vault';
 import { applyUserEdits, watchVault } from './watch';
 
@@ -25,6 +37,15 @@ export interface MemoryVaultOptions extends Omit<VaultOptions, 'now'> {
 }
 
 const RECALL_ACTOR = 'agent:recall';
+const SYSTEM_ACTOR = 'system';
+
+const pathOf = (file: string) => file.replace(/\.md$/, '');
+
+/** A page's facts as a patch gives them: without the date and the backlinks compile writes. */
+function factsOf(page: Linkable): PageFacts {
+  const { updated: _u, backlinks: _b, ...facts } = page.frontmatter as Page['frontmatter'];
+  return facts as PageFacts;
+}
 
 export class MemoryVault {
   #queue: Promise<unknown> = Promise.resolve();
@@ -32,6 +53,8 @@ export class MemoryVault {
   #lost: Error | null = null;
   #renew: NodeJS.Timeout;
   #stopWatch: (() => void) | null = null;
+  /** Every page as last written, for the link rules. */
+  #links = new LinkIndex();
 
   private constructor(
     readonly root: string,
@@ -113,24 +136,70 @@ export class MemoryVault {
     return pages;
   }
 
-  compile(patch: MemoryPatch) {
-    return this.#serial(async () => {
-      const done = await this.#compile(patch);
-      if (done.ok) await this.options.store?.upsert(await this.#pages(done.written));
-      return done;
+  /** The pages at `paths` read again into the link index and the store. */
+  async #took(paths: readonly string[]): Promise<void> {
+    const pages = await this.#pages(paths);
+    for (const p of pages) this.#links.put(p);
+    await this.options.store?.upsert(pages);
+  }
+
+  /** A patch with the rules' links on its pages, then the pages that were waiting for them. */
+  async #write(patch: MemoryPatch): Promise<CompileResult> {
+    const index = this.#links;
+    const before = patch.pages.flatMap((w) => index.get(w.path) ?? []);
+    // The pages as they will read, so that the patch's pages find each other.
+    for (const w of patch.pages) {
+      const was = index.get(w.path);
+      const text = [w.text ?? was?.text ?? '', w.append?.trim()].filter(Boolean).join('\n\n');
+      index.put({ path: w.path, frontmatter: keepWord(w.frontmatter, was), text });
+    }
+    const pages = patch.pages.map((w) => {
+      const page = index.get(w.path) as Linkable;
+      return { ...w, frontmatter: withLinks(page.frontmatter, linksOf(page, index)) };
     });
+    for (const w of patch.pages) index.remove(w.path);
+    for (const p of before) index.put(p);
+    const done = await this.#compile({ ...patch, pages });
+    if (!done.ok) return done;
+    await this.#took(done.written);
+    const after = done.written.flatMap((p) => index.get(p) ?? []);
+    await this.#relink(index.dependents([...before, ...after]));
+    return done;
+  }
+
+  /**
+   * The rules again on `paths`, and those whose links changed written. Rules read facts, never
+   * links, so the pages written here make no other page wait.
+   */
+  async #relink(paths: Iterable<string>): Promise<void> {
+    const pages: PageWrite[] = [];
+    for (const path of paths) {
+      const page = this.#links.get(path);
+      if (!page) continue;
+      const links = linksOf(page, this.#links);
+      if (sameLinks(links, page.frontmatter.links ?? [])) continue;
+      pages.push({ path, frontmatter: withLinks(factsOf(page), links) });
+    }
+    if (!pages.length) return;
+    // Refused when a person is editing one of them: the next write, or the next opening, tries again.
+    const done = await this.#compile({ reason: 'relink', actor: SYSTEM_ACTOR, pages });
+    if (done.ok) await this.#took(done.written);
+  }
+
+  compile(patch: MemoryPatch) {
+    return this.#serial(() => this.#write(patch));
   }
 
   rebuild() {
     return this.#serial(async () => {
       const done = await rebuild(this.root, { now: this.#now() });
-      const { store } = this.options;
-      if (store) {
-        const invalid = new Set(done.invalid);
-        const files = (await pageFiles(this.root)).filter((f) => !invalid.has(f));
-        const pages = await this.#pages(files.map((f) => f.replace(/\.md$/, '')));
-        await store.replace(pages, await readRawTexts(this.root));
-      }
+      const invalid = new Set(done.invalid);
+      const files = (await pageFiles(this.root)).filter((f) => !invalid.has(f));
+      this.#links = new LinkIndex(await this.#pages(files.map(pathOf)));
+      await this.#relink([...this.#links.values()].map((p) => p.path));
+      // Every page of the index was read from its file, the relinked ones again.
+      const pages = [...this.#links.values()] as Page[];
+      await this.options.store?.replace(pages, await readRawTexts(this.root));
       return done;
     });
   }
@@ -138,12 +207,81 @@ export class MemoryVault {
   userEdits(files: readonly string[]) {
     return this.#serial(async () => {
       const done = await applyUserEdits(this.root, files, { now: this.#now() });
+      const gone = [...done.removed, ...done.invalid.map(pathOf)];
+      const before = [...done.accepted, ...gone].flatMap((p) => this.#links.get(p) ?? []);
+      const accepted = await this.#pages(done.accepted);
+      for (const p of accepted) this.#links.put(p);
+      for (const p of gone) this.#links.remove(p);
       const { store } = this.options;
       if (store) {
-        await store.upsert(await this.#pages(done.accepted));
-        await store.remove([...done.removed, ...done.invalid.map((f) => f.replace(/\.md$/, ''))]);
+        await store.upsert(accepted);
+        await store.remove(gone);
       }
+      // The pages a person edited keep their links until the next write: one written in the minute
+      // after a person's edit would be refused (compile.ts).
+      await this.#relink(this.#links.dependents([...before, ...accepted]));
       return done;
+    });
+  }
+
+  /**
+   * A person's word on one of a page's links: confirmed (an inferred link becomes strong, and no
+   * rule takes it back), or refused (gone, and no rule makes it again).
+   */
+  reviewLink(
+    path: string,
+    link: { kind: LinkKind; to: string },
+    verdict: 'confirm' | 'refuse',
+    actor: string,
+  ): Promise<CompileResult> {
+    if (!actor.startsWith('user:')) throw new Error('only a person confirms or refuses a link');
+    return this.#serial(async () => {
+      const [page] = await this.#pages([path]);
+      const links = page?.frontmatter.links ?? [];
+      const target = links.find((l) => l.kind === link.kind && l.to === link.to);
+      if (!page || !target) {
+        return { ok: false, code: 'link', detail: `${path}: no ${link.kind} link to ${link.to}` };
+      }
+      const facts = factsOf(page);
+      const by = t('memory.evidence.confirmed', {
+        who: actor,
+        date: frDate(parisToday(this.#now())),
+      });
+      const frontmatter =
+        verdict === 'confirm'
+          ? withLinks(
+              facts,
+              links.map((l) =>
+                l === target
+                  ? {
+                      ...l,
+                      confidence: l.confidence === 'inferred' ? 'strong' : l.confidence,
+                      confirmed_by: by,
+                    }
+                  : l,
+              ),
+            )
+          : ({
+              ...withLinks(
+                facts,
+                links.filter((l) => l !== target),
+              ),
+              refused_links: [...(facts.refused_links ?? []), link],
+            } as PageFacts);
+      return this.#write({
+        reason: 'link_review',
+        actor,
+        pages: [{ path, frontmatter }],
+        note: `${link.kind} ${link.to}`,
+      });
+    });
+  }
+
+  /** What is wrong with the links, as the files say now (lint.ts). */
+  lint(): Promise<LintFinding[]> {
+    return this.#serial(async () => {
+      const files = await pageFiles(this.root);
+      return lintLinks(await this.#pages(files.map(pathOf)));
     });
   }
 
@@ -171,9 +309,9 @@ export class MemoryVault {
       answer.writeback.written = await this.#serial(async () => {
         const [page] = await this.#pages([path]);
         if (!page) return false;
-        const { updated: _u, backlinks: _b, ...facts } = page.frontmatter;
+        const facts = factsOf(page);
         const sources = [...new Set([...facts.sources, ref])];
-        const done = await this.#compile({
+        const done = await this.#write({
           reason: 'query_writeback',
           actor: RECALL_ACTOR,
           pages: [
@@ -185,7 +323,6 @@ export class MemoryVault {
           ],
           note: asked,
         });
-        if (done.ok) await store.upsert(await this.#pages(done.written));
         return done.ok;
       });
     } else if (answer.writeback) {

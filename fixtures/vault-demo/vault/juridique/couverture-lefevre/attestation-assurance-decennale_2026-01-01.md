@@ -11,7 +11,8 @@ links:
   - kind: covers
     to: tiers/couverture-lefevre
     confidence: exact
-    evidence: SIREN de l’attestation
+    evidence: Tiers du document (champ « party »)
+    rule: party
 ---
 
 Assurance décennale de Couverture Lefèvre pour 2026.
