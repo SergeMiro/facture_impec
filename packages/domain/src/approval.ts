@@ -20,6 +20,9 @@ export type ApprovalChannel = z.infer<typeof ApprovalChannel>;
 /** What a link in the weekly e-mail can decide (stage 3C): the others need the pane (a text, a date). */
 export const LINK_DECISIONS = ['approve', 'reject'] as const;
 export type LinkDecision = (typeof LINK_DECISIONS)[number];
+/** Where a one-time link was given: the weekly e-mail, or a Telegram button (memory M4). */
+export const LINK_CHANNELS = ['email', 'telegram'] as const;
+export type LinkChannel = (typeof LINK_CHANNELS)[number];
 
 /** The longest a person can put an action aside: past it, the deadline it serves is gone anyway. */
 export const MAX_SNOOZE_DAYS = 30;

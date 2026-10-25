@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { runnerKey } from './relay';
 
 // Node-only: import from '@fi/shared/env', never from the add-in bundle.
 
@@ -157,6 +158,30 @@ export const ServerEnvSchema = z
         .refine((v) => Buffer.from(v, 'base64').length === 32, '32 bytes in base64')
         .optional(),
     ),
+    // A runner's relay (memory M4, docs/RUNBOOK.md § Relay): Telegram reaches the company's people
+    // through it. Empty URL: no Telegram. The key signs every request; it never leaves this machine.
+    RELAY_URL: z.preprocess(blank, z.url().optional()),
+    RELAY_LICENCE: optionalText(24),
+    RELAY_RUNNER_KEY: optionalText(),
+    RELAY_POLL_SECONDS: z.coerce.number().int().min(1).default(15),
+    // The relay itself (apps/relay): its admin token, its database (empty URL: PGlite in its folder),
+    // the bot it speaks as. Telegram stays paused (docs/DECISIONS.md D3): no bot yet.
+    RELAY_PORT: port(4020),
+    RELAY_ADMIN_TOKEN: optionalText(24),
+    RELAY_DATABASE_URL: optionalText(),
+    RELAY_PGLITE_DIR: z.string().default('.data/relay'),
+    TELEGRAM_BOT_TOKEN: optionalText(),
+    TELEGRAM_BOT_USERNAME: optionalText(),
+    // setWebhook's secret_token (docs/TELEGRAM.md): 1–256 of A-Z a-z 0-9 _ -; we take 16 at least.
+    TELEGRAM_WEBHOOK_SECRET: z.preprocess(
+      blank,
+      z
+        .string()
+        .regex(/^[\w-]{16,256}$/, '16 to 256 characters of A-Z a-z 0-9 _ -')
+        .optional(),
+    ),
+    // Telegram's host; tests put the stand-in there (apps/mock-pdp/src/telegram.ts).
+    TELEGRAM_API_URL: z.url().default('https://api.telegram.org'),
     AI_RUN_TOKENS: z.coerce.number().int().positive().default(30_000),
     AI_DAILY_TOKENS: z.coerce.number().int().positive().default(300_000),
   })
@@ -225,6 +250,26 @@ export const ServerEnvSchema = z
         );
       }
     }
+    if (env.RELAY_URL) {
+      const relay = (path: string, message: string) =>
+        ctx.addIssue({ code: 'custom', path: [path], message });
+      if (!env.VAULT_DIR) {
+        relay(
+          'RELAY_URL',
+          'only a runner (VAULT_DIR) speaks to a relay; the hosted API mails its links',
+        );
+      }
+      if (!env.RELAY_LICENCE) relay('RELAY_LICENCE', 'required with RELAY_URL');
+      if (!env.RELAY_RUNNER_KEY) {
+        relay('RELAY_RUNNER_KEY', 'required with RELAY_URL (pnpm runner:key)');
+      } else {
+        try {
+          runnerKey(env.RELAY_RUNNER_KEY);
+        } catch {
+          relay('RELAY_RUNNER_KEY', 'an Ed25519 key in base64url (pnpm runner:key)');
+        }
+      }
+    }
     if (env.FI_ENV === 'local') return;
     const keys = [
       ...(env.VAULT_DIR ? [] : ['DATABASE_URL' as const]),
@@ -253,6 +298,7 @@ export const ServerEnvSchema = z
     ...env,
     PGLITE_DIR: fromRoot(env.PGLITE_DIR),
     VAULT_DIR: env.VAULT_DIR && fromRoot(env.VAULT_DIR),
+    RELAY_PGLITE_DIR: fromRoot(env.RELAY_PGLITE_DIR),
     ADDIN_ORIGINS: env.ADDIN_ORIGINS.split(',')
       .map((o) => o.trim())
       .filter(Boolean),

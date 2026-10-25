@@ -63,6 +63,11 @@ export const RULES: Record<string, PackageRule> = {
     imports: ['core', 'shared', 'pdp-adapter', 'domain'],
     forbid: ['pg', 'pg-boss', 'drizzle-orm', 'drizzle-orm/*', '@electric-sql/*', ...MODELS],
   },
+  // The relay (memory M4): Telegram for the runners; no business logic, no model, no queue.
+  'apps/relay': {
+    imports: ['db', 'shared'],
+    forbid: ['pg-boss', ...MODELS],
+  },
   'apps/api': {
     imports: ['agents', 'connectors', 'core', 'db', 'domain', 'memory', 'pdp-adapter', 'shared'],
   },

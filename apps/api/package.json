@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@fi/mock-pdp": "workspace:*",
+    "@fi/relay": "workspace:*",
     "@types/node": "^22.19.0"
   }
 }

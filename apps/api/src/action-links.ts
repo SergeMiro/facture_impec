@@ -3,9 +3,11 @@
 // The link opens a page that says what will happen; only its button decides (a mail scanner opens
 // links), as that person, through the pane's `decideAction`, with `channel: 'email'`. A link serves
 // once, for 7 days, and only for the revision the e-mail showed: a text edited since, or a request
-// someone already decided, is not touched.
+// someone already decided, is not touched. The same links are the buttons of a request in the
+// person's Telegram (memory M4, src/telegram.ts), with `channel: 'telegram'`: a link serves only on
+// the channel it was given on, and a press decides (nothing in Telegram presses a button for you).
 import { randomBytes } from 'node:crypto';
-import type { ApprovalItem } from '@fi/agents';
+import { type ApprovalItem, approvalSummary } from '@fi/agents';
 import {
   actionLinks,
   actions,
@@ -19,9 +21,10 @@ import {
   tenants,
   users,
 } from '@fi/db';
-import type { LinkDecision } from '@fi/domain';
+import type { LinkChannel, LinkDecision } from '@fi/domain';
 import { type MessageKey, t } from '@fi/shared';
 import { Hono } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { actionView, type Decider, decideAction, listActions } from './actions';
 import type { ApiDeps } from './deps';
 import { ApiError } from './errors';
@@ -83,10 +86,83 @@ export async function approvalItems(
   return { items, more: waiting.length - listed.length };
 }
 
+/** A request as Telegram shows it: its text, and its buttons, each a fresh one-time link. */
+export interface TelegramRequest {
+  text: string;
+  buttons: { text: string; data: string }[][];
+  /** The links made for it: removed again when the message could not be sent. */
+  linkIds: string[];
+}
+
+/**
+ * The buttons of one request waiting for this person, in their Telegram: « Envoyer » (« Ajouter comme
+ * fournisseur »), unless the address is missing, and « Ignorer ». Each carries a link's secret (43
+ * characters: Telegram's callback data takes 64 bytes), stored as SHA-256 like the e-mail's.
+ */
+export async function telegramRequest(
+  db: Db,
+  tenant: Pick<TenantRow, 'id'>,
+  userId: string,
+  action: Awaited<ReturnType<typeof listActions>>['actions'][number],
+  now: Date,
+): Promise<TelegramRequest> {
+  const item = {
+    kind: action.kind,
+    company: action.party?.name ?? null,
+    siren: action.siren,
+    dueOn: action.obligation?.dueOn ?? null,
+    to: action.email?.to ?? null,
+  };
+  const unknown = action.kind === 'confirmer_tiers';
+  const decisions: LinkDecision[] = unknown || item.to ? ['approve', 'reject'] : ['reject'];
+  const tokens = decisions.map(() => secret());
+  const links = await db
+    .insert(actionLinks)
+    .values(
+      decisions.map((decision, i) => ({
+        tenantId: tenant.id,
+        actionId: action.id,
+        userId,
+        decision,
+        revision: action.revision,
+        channel: 'telegram' as const,
+        linkHash: sha256(tokens[i] ?? ''),
+        expiresAt: new Date(now.getTime() + LINK_DAYS * 86_400_000),
+        createdAt: now,
+      })),
+    )
+    .returning({ id: actionLinks.id });
+  const label = (decision: LinkDecision) =>
+    decision === 'reject'
+      ? t('decide.button.reject')
+      : t(unknown ? 'decide.button.add' : 'decide.button.send');
+  return {
+    text: [...approvalSummary(item), '', t('telegram.request.note')].join('\n'),
+    buttons: [decisions.map((d, i) => ({ text: label(d), data: tokens[i] ?? '' }))],
+    linkIds: links.map((l) => l.id),
+  };
+}
+
 type Found = NonNullable<Awaited<ReturnType<typeof find>>>;
 
-/** A link still usable: unused, not expired, its company and person still there. */
-async function find(deps: Pick<ApiDeps, 'db' | 'now'>, token: string | undefined) {
+/** Where a link is used: the channel it was given on, and for Telegram the chat's person and time. */
+export interface LinkUse {
+  channel: LinkChannel;
+  /** The person the chat is bound to: another person's button decides nothing there. */
+  userId?: string;
+  /** When it was pressed (the relay kept the press while the runner was off); default now. */
+  at?: Date;
+}
+
+/**
+ * A link still usable: unused, not expired when used, its company and person still there, used on
+ * the channel it was given on (and in Telegram, by the person it was given to).
+ */
+async function find(
+  deps: Pick<ApiDeps, 'db' | 'now'>,
+  token: string | undefined,
+  use: LinkUse = { channel: 'email' },
+) {
   if (!token || token.length > 100) return undefined;
   const [row] = await deps.db
     .select({
@@ -102,10 +178,68 @@ async function find(deps: Pick<ApiDeps, 'db' | 'now'>, token: string | undefined
     .innerJoin(tenants, eq(tenants.id, actionLinks.tenantId))
     .innerJoin(users, and(eq(users.id, actionLinks.userId), eq(users.tenantId, tenants.id)))
     .where(eq(actionLinks.linkHash, sha256(token)));
-  if (!row || row.link.usedAt || row.link.expiresAt <= deps.now() || row.tenant.deletedAt) {
-    return undefined;
-  }
+  const at = use.at ?? deps.now();
+  if (!row || row.link.usedAt || row.link.expiresAt <= at || row.tenant.deletedAt) return undefined;
+  if (row.link.channel !== use.channel) return undefined;
+  if (use.userId !== undefined && row.link.userId !== use.userId) return undefined;
   return row;
+}
+
+const stale = ({ link, action }: Found) =>
+  action.status !== 'draft' || action.revision !== link.revision;
+
+/** What a link did: nothing (gone, or the request changed), or the decision, or why it failed. */
+export type LinkOutcome =
+  | { kind: 'expired' }
+  | { kind: 'changed' }
+  | { kind: 'decided'; decision: LinkDecision; unknown: boolean; to: string }
+  | { kind: 'failed'; status: ContentfulStatusCode; message: string };
+
+/**
+ * Decides through a link, once: as the person it was given to, on its channel, for the revision it
+ * showed. The link is claimed first (the same link used twice decides once) and given back when the
+ * directory or the database was out, so it serves again.
+ */
+export async function decideByLink(
+  deps: ApiDeps,
+  token: string | undefined,
+  use: LinkUse,
+): Promise<LinkOutcome> {
+  const found = await find(deps, token, use);
+  if (!found) return { kind: 'expired' };
+  if (stale(found)) return { kind: 'changed' };
+  const [claimed] = await deps.db
+    .update(actionLinks)
+    .set({ usedAt: deps.now() })
+    .where(and(eq(actionLinks.id, found.link.id), isNull(actionLinks.usedAt)))
+    .returning({ id: actionLinks.id });
+  if (!claimed) return { kind: 'expired' };
+  const decider: Decider = {
+    actor: `user:${found.user.id}`,
+    by: found.user.id,
+    email: found.user.email,
+    channel: use.channel,
+  };
+  try {
+    const decided = await decideAction(deps, found.tenant, decider, {
+      actionId: found.action.id,
+      revision: found.link.revision,
+      decision: found.link.decision,
+      channel: use.channel,
+    });
+    return {
+      kind: 'decided',
+      decision: found.link.decision,
+      unknown: found.action.kind === 'confirmer_tiers',
+      to: decided.email?.to ?? '',
+    };
+  } catch (e) {
+    if (!(e instanceof ApiError) || e.status >= 500) {
+      await deps.db.update(actionLinks).set({ usedAt: null }).where(eq(actionLinks.id, claimed.id));
+    }
+    if (!(e instanceof ApiError)) throw e;
+    return { kind: 'failed', status: e.status, message: e.body.error.message };
+  }
 }
 
 /** What the page says the button will do, and the button. */
@@ -133,8 +267,6 @@ export function actionLinkRoutes(deps: ApiDeps) {
   const app = new Hono();
   const title = t('decide.page.title');
   const expired = () => page(title, t('decide.page.expired'));
-  const stale = ({ link, action }: Found) =>
-    action.status !== 'draft' || action.revision !== link.revision;
 
   app.get('/', async (c) => {
     const token = c.req.query('token');
@@ -148,47 +280,23 @@ export function actionLinkRoutes(deps: ApiDeps) {
   });
 
   app.post('/', async (c) => {
-    const found = await find(deps, c.req.query('token'));
-    if (!found) return c.html(expired(), 410);
-    if (stale(found)) return c.html(page(title, t('decide.page.changed')));
-    const now = deps.now();
-    // Claimed first: the same link posted twice decides once.
-    const [claimed] = await deps.db
-      .update(actionLinks)
-      .set({ usedAt: now })
-      .where(and(eq(actionLinks.id, found.link.id), isNull(actionLinks.usedAt)))
-      .returning({ id: actionLinks.id });
-    if (!claimed) return c.html(expired(), 410);
-    const decider: Decider = {
-      actor: `user:${found.user.id}`,
-      by: found.user.id,
-      email: found.user.email,
-      channel: 'email',
-    };
-    try {
-      const decided = await decideAction(deps, found.tenant, decider, {
-        actionId: found.action.id,
-        revision: found.link.revision,
-        decision: found.link.decision,
-        channel: 'email',
-      });
-      const done =
-        found.link.decision === 'reject'
-          ? t('decide.done.rejected')
-          : found.action.kind === 'confirmer_tiers'
-            ? t('decide.done.added')
-            : t('decide.done.sent', { to: decided.email?.to ?? '' });
-      return c.html(page(title, done));
-    } catch (e) {
-      // The directory or the database was out: nothing was decided, the link serves again.
-      if (!(e instanceof ApiError) || e.status >= 500) {
-        await deps.db
-          .update(actionLinks)
-          .set({ usedAt: null })
-          .where(eq(actionLinks.id, claimed.id));
+    const outcome = await decideByLink(deps, c.req.query('token'), { channel: 'email' });
+    switch (outcome.kind) {
+      case 'expired':
+        return c.html(expired(), 410);
+      case 'changed':
+        return c.html(page(title, t('decide.page.changed')));
+      case 'failed':
+        return c.html(page(title, outcome.message), outcome.status);
+      case 'decided': {
+        const done =
+          outcome.decision === 'reject'
+            ? t('decide.done.rejected')
+            : outcome.unknown
+              ? t('decide.done.added')
+              : t('decide.done.sent', { to: outcome.to });
+        return c.html(page(title, done));
       }
-      if (!(e instanceof ApiError)) throw e;
-      return c.html(page(title, e.body.error.message), e.status);
     }
   });
 

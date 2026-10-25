@@ -31,4 +31,5 @@ export {
   sirenFor,
 } from './sirene';
 export { StripeStandIn, type StripeStandInOptions } from './stripe';
+export { type SentMessage, TelegramStandIn, type TelegramStandInOptions } from './telegram';
 export { VIES_CASES, viesStandIn } from './vies';

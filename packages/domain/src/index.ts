@@ -6,7 +6,9 @@ export {
   ApprovalDecision,
   DECISIONS,
   Decision,
+  LINK_CHANNELS,
   LINK_DECISIONS,
+  type LinkChannel,
   type LinkDecision,
   MAX_SNOOZE_DAYS,
 } from './approval';

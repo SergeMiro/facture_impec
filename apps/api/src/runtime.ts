@@ -28,6 +28,7 @@ import { OutboxMailer, SmtpMailer } from './mail';
 import { createMicrosoftClient, MICROSOFT_HOSTS } from './microsoft';
 import { openRunner, type Runner } from './runner';
 import { type Directory, RechercheEntreprises } from './sirene';
+import { relayClient, startTelegram, type Telegram } from './telegram';
 import { RememberingVies, type Vies, ViesClient } from './vies';
 import { startWorkers } from './workers';
 
@@ -56,6 +57,8 @@ export interface ApiOptions {
   google?: GoogleConnector | null;
   /** Default: VIES at VIES_URL, remembering a failure a few minutes. */
   vies?: Vies | null;
+  /** How the runner reaches its relay (tests hand the relay's app); default: global fetch. */
+  relayFetch?: typeof fetch;
   pollingIntervalSeconds?: number;
   /** Chasing timer (real seconds); default COLLECT_EVERY_SECONDS. */
   collectEverySeconds?: number;
@@ -70,6 +73,8 @@ export interface RunningApi {
   deps: ApiDeps;
   /** With VAULT_DIR: the runner, holding the vault (src/runner.ts). */
   runner: Runner | null;
+  /** A runner with RELAY_URL: Telegram through the relay (src/telegram.ts). */
+  telegram: Telegram | null;
   close(): Promise<void>;
 }
 
@@ -339,6 +344,22 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
     fonts: bundledFonts(),
     now,
   };
+  const telegram =
+    runner && env.RELAY_URL && env.RELAY_LICENCE && env.RELAY_RUNNER_KEY
+      ? startTelegram({
+          deps,
+          client: relayClient({
+            url: env.RELAY_URL,
+            licence: env.RELAY_LICENCE,
+            key: env.RELAY_RUNNER_KEY,
+            now,
+            ...(options.relayFetch && { fetcher: options.relayFetch }),
+          }),
+          everyMs: env.RELAY_POLL_SECONDS * 1000,
+          log,
+        })
+      : null;
+  deps.telegram = telegram;
   const stopSweep = env.API_WORKERS
     ? await startWorkers(boss, deps, {
         sweepEverySeconds: env.PDP_SYNC_INTERVAL_SECONDS,
@@ -359,6 +380,7 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
     server = await listen(createApp(deps).fetch, options.port ?? env.API_PORT, env.API_HOST);
   } catch (e) {
     stopSweep();
+    await telegram?.close();
     await boss.stop({ graceful: false });
     await runner?.close();
     if (ownDatabase) await database.close();
@@ -370,8 +392,10 @@ export async function startApi(options: ApiOptions): Promise<RunningApi> {
     boss,
     deps,
     runner,
+    telegram,
     async close() {
       stopSweep();
+      await telegram?.close();
       await server.close();
       await boss.stop({ graceful: true, timeout: 5_000 });
       await runner?.close();

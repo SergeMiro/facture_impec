@@ -1,8 +1,10 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT, ServerEnvSchema } from './env';
 import { isMessageKey, t } from './i18n';
+import { newRunnerKey } from './relay';
 
 describe('ServerEnvSchema', () => {
   it('defaults to the local environment, standard ports and an embedded database', () => {
@@ -27,6 +29,10 @@ describe('ServerEnvSchema', () => {
       VIES_URL: 'https://ec.europa.eu/taxation_customs/vies/rest-api',
       STRIPE_AUTOMATIC_TAX: false,
       MOCK_STRIPE_WEBHOOK_SECRET: 'whsec_local-mock-stripe-secret',
+      RELAY_POLL_SECONDS: 15,
+      RELAY_PORT: 4020,
+      RELAY_PGLITE_DIR: `${REPO_ROOT}.data/relay`,
+      TELEGRAM_API_URL: 'https://api.telegram.org',
     });
   });
 
@@ -105,6 +111,28 @@ describe('ServerEnvSchema', () => {
     });
     expect(boxed.API_HOST).toBe('0.0.0.0');
     expect(ServerEnvSchema.parse({ ...runner, API_HOST: 'localhost' }).API_HOST).toBe('localhost');
+  });
+
+  it('lets a runner only speak to a relay, with its licence and its own Ed25519 key', () => {
+    const relay = {
+      VAULT_DIR: 'vault',
+      RELAY_URL: 'https://relay.example',
+      RELAY_LICENCE: 'l'.repeat(32),
+      RELAY_RUNNER_KEY: newRunnerKey(),
+    };
+    expect(ServerEnvSchema.parse(relay).RELAY_URL).toBe('https://relay.example');
+    const refused = (values: Record<string, string>, message: RegExp) =>
+      expect(() => ServerEnvSchema.parse({ ...relay, ...values })).toThrow(message);
+    refused({ VAULT_DIR: '' }, /only a runner/);
+    refused({ RELAY_LICENCE: '' }, /RELAY_LICENCE/);
+    refused({ RELAY_RUNNER_KEY: '' }, /runner:key/);
+    const rsa = generateKeyPairSync('rsa', { modulusLength: 1024 }).privateKey;
+    refused(
+      { RELAY_RUNNER_KEY: rsa.export({ format: 'der', type: 'pkcs8' }).toString('base64url') },
+      /Ed25519/,
+    );
+    refused({ RELAY_RUNNER_KEY: 'not-a-key' }, /Ed25519/);
+    expect(() => ServerEnvSchema.parse({ TELEGRAM_WEBHOOK_SECRET: 'short' })).toThrow(/16 to 256/);
   });
 
   it('is what .env.example lists, with the variables Vite and Astro read', () => {

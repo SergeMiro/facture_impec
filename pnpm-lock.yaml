@@ -154,6 +154,9 @@ importers:
       '@fi/mock-pdp':
         specifier: workspace:*
         version: link:../mock-pdp
+      '@fi/relay':
+        specifier: workspace:*
+        version: link:../relay
       '@types/node':
         specifier: ^22.19.0
         version: 22.20.5
@@ -179,6 +182,34 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
+      '@types/node':
+        specifier: ^22.19.0
+        version: 22.20.5
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+
+  apps/relay:
+    dependencies:
+      '@fi/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@fi/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@hono/node-server':
+        specifier: ^2.1.5
+        version: 2.1.5(hono@4.13.13)
+      hono:
+        specifier: ^4.13.13
+        version: 4.13.13
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@fi/mock-pdp':
+        specifier: workspace:*
+        version: link:../mock-pdp
       '@types/node':
         specifier: ^22.19.0
         version: 22.20.5

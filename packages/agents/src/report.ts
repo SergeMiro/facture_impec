@@ -113,26 +113,33 @@ export interface ApprovalItem {
   rejectUrl: string;
 }
 
+/**
+ * What one request is, in the e-mail and in Telegram (memory M4): what, to whom, by when; then where
+ * it goes, or that its address is missing. One line for an unknown company.
+ */
+export function approvalSummary(
+  a: Pick<ApprovalItem, 'kind' | 'company' | 'siren' | 'dueOn' | 'to'>,
+): string[] {
+  if (a.kind === 'confirmer_tiers')
+    return [t('report.approvals.unknown', { siren: a.siren ?? '' })];
+  const kind = t(`action.kind.${a.kind}` as MessageKey);
+  const company = a.company ?? '';
+  return [
+    a.dueOn
+      ? t('report.approvals.item', { kind, company, due: frDate(a.dueOn) })
+      : t('report.approvals.itemNoDue', { kind, company }),
+    a.to ? t('report.approvals.to', { to: a.to }) : t('report.approvals.noRecipient'),
+  ];
+}
+
 /** The e-mail's « À valider » part: each request and its links, then how many more wait in the pane. */
 export function approvalLines(items: readonly ApprovalItem[], more = 0): string[] {
   if (items.length === 0) return [];
   const lines = ['', t('report.approvals.title', { count: items.length + more })];
   for (const a of items) {
-    const kind = t(`action.kind.${a.kind}` as MessageKey);
-    lines.push('');
-    if (a.kind === 'confirmer_tiers') {
-      lines.push(`• ${t('report.approvals.unknown', { siren: a.siren ?? '' })}`);
-    } else {
-      const company = a.company ?? '';
-      lines.push(
-        `• ${
-          a.dueOn
-            ? t('report.approvals.item', { kind, company, due: frDate(a.dueOn) })
-            : t('report.approvals.itemNoDue', { kind, company })
-        }`,
-        `  ${a.to ? t('report.approvals.to', { to: a.to }) : t('report.approvals.noRecipient')}`,
-      );
-    }
+    const [what, where] = approvalSummary(a);
+    lines.push('', `• ${what}`);
+    if (where) lines.push(`  ${where}`);
     if (a.approveUrl) {
       const key = a.kind === 'confirmer_tiers' ? 'report.approvals.add' : 'report.approvals.send';
       lines.push(`  ${t(key, { url: a.approveUrl })}`);

@@ -35,6 +35,7 @@ import {
   DOCUMENT_SOURCES,
   DOCUMENT_STAGES,
   type EnvelopeHints,
+  LINK_CHANNELS,
   LINK_DECISIONS,
   OBLIGATION_KINDS,
   OBLIGATION_STATUSES,
@@ -1564,6 +1565,8 @@ export const actionLinks = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     decision: text('decision', { enum: LINK_DECISIONS }).notNull(),
     revision: integer('revision').notNull(),
+    /** Where the secret went: the weekly e-mail, or a button in the person's Telegram (M4). */
+    channel: text('channel', { enum: LINK_CHANNELS }).notNull().default('email'),
     linkHash: text('link_hash').notNull().unique(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     usedAt: timestamp('used_at', { withTimezone: true }),
@@ -1572,6 +1575,7 @@ export const actionLinks = pgTable(
   (t) => [
     index('action_links_action').on(t.actionId),
     check('action_links_decision', oneOf(t.decision, LINK_DECISIONS)),
+    check('action_links_channel', oneOf(t.channel, LINK_CHANNELS)),
   ],
 );
 
@@ -1728,6 +1732,106 @@ export const scheduleRuns = pgTable('schedule_runs', {
   lastRunAt: timestamp('last_run_at', { withTimezone: true }).notNull(),
   runs: integer('runs').notNull().default(0),
 });
+
+/**
+ * A person's Telegram chat (memory M4): the pane gives a one-time code (`telegram_codes`, SHA-256),
+ * `/start <code>` reaches the bot, the relay hands the chat to this runner. Requests waiting for a
+ * decision then reach the chat with buttons, each a one-time link (`action_links`, channel telegram).
+ * A chat answers to one person at a time; revoked, it receives nothing and its buttons decide nothing.
+ */
+export const telegramCodes = pgTable('telegram_codes', {
+  codeHash: text('code_hash').primaryKey(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+export const telegramChats = pgTable(
+  'telegram_chats',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Telegram's id, up to 52 bits: text. */
+    chatId: text('chat_id').notNull(),
+    boundAt: timestamp('bound_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('telegram_chats_live').on(t.chatId).where(sql`${t.revokedAt} is null`),
+    uniqueIndex('telegram_chats_person')
+      .on(t.tenantId, t.userId)
+      .where(sql`${t.revokedAt} is null`),
+  ],
+);
+
+/**
+ * The relay's own tables (apps/relay, memory M4); only the relay's database fills them. A licence the
+ * operator gives a company (its token as SHA-256), and the runner holding it now: its Ed25519 public
+ * key, replaced when the runner moves to another machine. No business data.
+ */
+export const relayLicences = pgTable('relay_licences', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  label: text('label').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  publicKey: text('public_key').unique(),
+  registeredAt: timestamp('registered_at', { withTimezone: true }),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+/** A binding code a runner announced (SHA-256), for minutes: `/start <code>` binds the chat to it. */
+export const relayCodes = pgTable('relay_codes', {
+  codeHash: text('code_hash').primaryKey(),
+  licenceId: uuid('licence_id')
+    .notNull()
+    .references(() => relayLicences.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+});
+
+/** Which runner a Telegram chat answers to. */
+export const relayChats = pgTable('relay_chats', {
+  chatId: text('chat_id').primaryKey(),
+  licenceId: uuid('licence_id')
+    .notNull()
+    .references(() => relayLicences.id, { onDelete: 'cascade' }),
+  boundAt: timestamp('bound_at', { withTimezone: true }).notNull(),
+});
+
+export const RELAY_ITEM_KINDS = ['bound', 'press'] as const;
+
+/**
+ * What waits for a runner that was off, 7 days at most: a chat that sent its code (`data` = the
+ * code), a button pressed (`data` = its callback data, the runner's one-time token).
+ */
+export const relayInbox = pgTable(
+  'relay_inbox',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    licenceId: uuid('licence_id')
+      .notNull()
+      .references(() => relayLicences.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: RELAY_ITEM_KINDS }).notNull(),
+    chatId: text('chat_id').notNull(),
+    data: text('data').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('relay_inbox_licence').on(t.licenceId, t.createdAt),
+    check('relay_inbox_kind', oneOf(t.kind, RELAY_ITEM_KINDS)),
+  ],
+);
 
 export type TenantRow = typeof tenants.$inferSelect;
 export type UploadRow = typeof uploads.$inferSelect;

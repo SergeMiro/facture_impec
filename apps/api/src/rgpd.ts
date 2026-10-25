@@ -58,6 +58,8 @@ import {
   sources,
   sql,
   type TenantRow,
+  telegramChats,
+  telegramCodes,
   tenants,
   uploads,
   users,
@@ -679,6 +681,9 @@ export async function deleteTenant(
     // lists of employees go, their bytes with them, and so do the records an ERP's list gave (the
     // invoice itself is the ERP's, stage 4B). The building sites go: an address can be a home.
     await tx.delete(actionLinks).where(eq(actionLinks.tenantId, tenant.id));
+    // The people's Telegram chats (memory M4) and the codes that bound them.
+    await tx.delete(telegramChats).where(eq(telegramChats.tenantId, tenant.id));
+    await tx.delete(telegramCodes).where(eq(telegramCodes.tenantId, tenant.id));
     await tx.delete(actions).where(eq(actions.tenantId, tenant.id));
     await tx.delete(obligations).where(eq(obligations.tenantId, tenant.id));
     await tx.delete(connectorSyncs).where(eq(connectorSyncs.tenantId, tenant.id));

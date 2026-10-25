@@ -774,6 +774,73 @@ gone from the database (rebuilding them from the vault is `docs/DEFERRED.md`). B
 sent again, look in the platform's account for what left after the dump's time: the database no
 longer knows those sends, so the same invoice sent again is a second invoice.
 
+## The relay (memory M4)
+
+The relay (`apps/relay`) is the vendor's small server between Telegram and the companies' runners,
+which sit behind their routers and are never called from outside (`docs/DECISIONS.md` D12). It
+keeps no business data: licences, each runner's public key, which chat answers to which runner, the
+binding codes announced (their SHA-256, 15 minutes) and the presses waiting for a runner that was
+off, purged after 7 days. Telegram stays paused (D3): until the owner gives a bot, it runs only in
+tests, against the stand-in bot.
+
+**The relay**, on the operator's server, behind the TLS proxy (Telegram calls webhooks over HTTPS):
+
+```bash
+# .env of the relay (chmod 600): TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME (without @),
+# TELEGRAM_WEBHOOK_SECRET (16–256 of A-Z a-z 0-9 _ -), RELAY_ADMIN_TOKEN (24+ characters),
+# RELAY_DATABASE_URL (its own Postgres) or RELAY_PGLITE_DIR; RELAY_PORT (4020).
+pnpm relay        # listens on 127.0.0.1:RELAY_PORT; the proxy forwards /telegram and /runner/*
+```
+
+The proxy publishes `/telegram` and `/runner/*` as they are, never `/admin`. A path prefix in front
+(`https://relay.example/fi/runner/…`) must be stripped by the proxy: a runner signs the path it
+calls relative to `RELAY_URL`, and the relay checks the path it receives. Then, once, Telegram is
+told where to send updates (the token is in the address: type it, never paste it into a log):
+`setWebhook` with `url=https://<relay>/telegram` and `secret_token=<TELEGRAM_WEBHOOK_SECRET>`
+(`docs/TELEGRAM.md`).
+
+**A licence for a company**, on the relay's machine (the licence is shown once; give it to the
+company like a password):
+
+```bash
+curl -s -X POST http://127.0.0.1:4020/admin/licences -H "authorization: Bearer $RELAY_ADMIN_TOKEN" \
+  -H 'content-type: application/json' -d '{"label":"<company>"}'
+curl -s http://127.0.0.1:4020/admin/licences -H "authorization: Bearer $RELAY_ADMIN_TOKEN"
+curl -s -X POST http://127.0.0.1:4020/admin/licences/<id>/revoke -H "authorization: Bearer $RELAY_ADMIN_TOKEN"
+```
+
+Revoking a licence forgets its chats, codes and waiting presses at once.
+
+**The runner's side**, on the company's machine:
+
+```bash
+pnpm runner:key   # prints the public key (stderr) and RELAY_RUNNER_KEY=… (stdout): into .env only
+# .env of the runner: RELAY_URL=https://<relay>, RELAY_LICENCE=<the licence>, RELAY_RUNNER_KEY=…,
+# RELAY_POLL_SECONDS (15). Mode B: the same lines in deploy/runner/.env.
+```
+
+At start the runner registers its key with the licence; a new machine with a new key takes the
+licence over, the old key then gets 403. It fetches what waited at start and every
+`RELAY_POLL_SECONDS`, then shows each request waiting for a decision to each bound person, once per
+revision. The relay refuses a runner whose clock is more than 5 minutes off: check the machine's
+time first when its log says `relay: … answered 401`.
+
+**A person binds their chat**: in the pane (or `POST /telegram/link` with their session), a link
+`https://t.me/<bot>?start=<code>`, valid 15 minutes, opened on their phone in a private chat with
+the bot. `GET /telegram` shows the binding, `DELETE /telegram` ends it. A press decides at once as
+that person, on the Telegram channel (audited `action.decide`, `channel = telegram`).
+
+**The pane pointed at a runner**: build it with `ADDIN_API_URL=http://127.0.0.1:4000` (the runner's
+address) and run the runner with `ADDIN_ORIGINS` set to where the pane is served. Whether Excel
+lets an HTTPS pane call the runner on localhost is `docs/TODO.md` › Memory.
+
+| The runner's log says | What to do |
+|---|---|
+| `relay: … answered 401` | The machine's clock is more than 5 minutes off: set it right (NTP); nothing else to do |
+| `relay: … answered 403` | The licence was revoked, or another machine took it over: a new licence from the operator |
+| `relay: … answered 409` | This key already holds another company's licence: one key per company (`pnpm runner:key`) |
+| `telegram: a request was not shown` | Telegram refused that chat (the person blocked the bot, or Telegram is down): tried again next round |
+
 ## Observability
 
 Prometheus, Alertmanager and Grafana run with `docker compose --profile observability` (`docs/DEPLOY.md`

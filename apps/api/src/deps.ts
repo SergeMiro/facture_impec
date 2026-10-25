@@ -7,6 +7,7 @@ import type { Billing } from './billing';
 import type { GoogleConnector, MicrosoftConnector } from './connectors';
 import type { RequestWindows } from './limits';
 import type { Directory } from './sirene';
+import type { Telegram } from './telegram';
 import type { Vies } from './vies';
 
 /** The adapters this deployment can use; a tenant on a missing provider cannot send yet. */
@@ -132,5 +133,7 @@ export interface ApiDeps {
   vies?: Vies | null;
   /** Request counters (src/limits.ts); default: fresh ones per app. */
   limits?: RequestWindows;
+  /** A runner's Telegram through its relay (src/telegram.ts, memory M4); absent or null: none. */
+  telegram?: Telegram | null;
   now: () => Date;
 }

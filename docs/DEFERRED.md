@@ -338,3 +338,18 @@ Each line says where it came from and what would bring it back.
 | The business tables rebuilt from the vault | The daily dump restores them as of 03:00; what happened since is in the vault's pages but not in the tables (RUNBOOK § The runner) | A pilot loses a machine between two dumps, or the owner wants the vault alone to be enough. |
 | A crashed container's lock | Lapses after 5 minutes; the restarted container waits and starts (`restart: unless-stopped`) | A pilot's restarts show the wait matters: a holder identity that survives the container (a boot id in the data volume). |
 | The vault's owner in mode B | The container writes as uid 1000; the vault's folder must allow it | A pilot's sync client owns the folder as another user: a `user:` setting with the data volume's owner to match. |
+
+## Memory: the relay and Telegram (M4, 2026-10-25)
+
+| What | Smallest version now | When to do the rest |
+|---|---|---|
+| Signatures seen, after a relay restart | Kept in the relay's memory for 10 minutes; a restart forgets them, and a request captured in the 5 minutes before could be played once more | The relay runs on more than one process, or a pilot's threat model counts a captured request: the signatures in its database, 10 minutes. |
+| Telegram sending one update twice | Each delivery is kept; a press delivered twice decides once and the second is answered « déjà traitée » (`telegram.expired`) | People are told twice in a pilot: the relay keeps the `update_id`s of the last day and drops one it has seen. |
+| Telegram unreachable from the relay | `sendMessage` fails, the runner gets 502, the links of that message are deleted and the request is offered again at the next round | Telegram's errors (429 with `retry_after`, 5xx) show in a pilot's logs: wait as told and retry before giving up. |
+| A person who blocked the bot | Telegram refuses the message (403, relayed as 502); the runner logs it, skips that chat for the round and tries again at the next (the others still hear) | Such chats pile up: on 403 « bot was blocked », the runner ends the binding and says so in the pane. |
+| Telegram in the company's export | The bindings are deleted with the company (`deleteTenant`); `GET /tenant/export` does not list them | A pilot asks what the export holds about Telegram: the chat id and binding dates in it. |
+| A binding ended on the runner, on the relay | The relay keeps the chat bound to the licence; its presses reach the runner, which decides nothing and says nothing (no live binding) | A pilot sees a chat that still gets « reçu » after unbinding: the runner tells the relay to forget the chat. |
+| Licences from the command line | `curl` on `/admin/licences` with `RELAY_ADMIN_TOKEN` (RUNBOOK § The relay) | More than a handful of companies: `pnpm relay:licence create | list | revoke`. |
+| The relay's own image and deploy | `pnpm relay` behind the operator's TLS proxy (RUNBOOK § The relay) | The owner gives the bot and a public address (D3): a Dockerfile and its place in `deploy/`. |
+| Other channels (WhatsApp, SMS) | Telegram only; `action_links.channel` takes `email` and `telegram` | A pilot's people do not use Telegram. |
+| « Confirmer / écarter » a guessed link from Telegram | Only requests waiting for a decision reach Telegram; links are confirmed with `reviewLink` (M2) | The pane or a pilot asks for it: a second kind of button, with its own token. |

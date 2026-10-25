@@ -7,7 +7,7 @@ import { audit, CONNECTION_PROVIDERS, eq, PDP_PROVIDERS, type TenantRow, tenants
 import { ApprovalDecision, MAX_DOCUMENT_BYTES } from '@fi/domain';
 import { PdpRequestError } from '@fi/pdp-adapter';
 import { t } from '@fi/shared';
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { cors } from 'hono/cors';
 import { routePath } from 'hono/route';
@@ -155,6 +155,7 @@ import {
   SourceSync,
   syncSource,
 } from './sources';
+import { telegramStatus, unbind } from './telegram';
 import {
   addUpload,
   detectUploadSheet,
@@ -463,6 +464,8 @@ export function createApp(deps: ApiDeps) {
     '/billing',
     '/billing/checkout',
     '/billing/portal',
+    '/telegram',
+    '/telegram/*',
   ]) {
     api.use(path, tenantAuth(deps), limitByTenant(windows));
   }
@@ -775,6 +778,23 @@ export function createApp(deps: ApiDeps) {
     const decision = parse(ApprovalDecision, { ...raw, actionId: id, channel: 'excel' });
     const decider = deciderOf(c.get('principal'), 'excel');
     return c.json(await decideAction(deps, c.get('tenant'), decider, decision));
+  });
+
+  // Telegram (memory M4, src/telegram.ts): the signed-in person binds their own chat through the
+  // runner's relay, and can end it; an API key binds nobody.
+  const person = (c: Context<TenantEnv>) => {
+    const principal = c.get('principal');
+    if (principal.kind !== 'session') throw new ApiError(403, 'telegram_person');
+    return principal.userId;
+  };
+  api.get('/telegram', async (c) => c.json(await telegramStatus(deps, c.get('tenant'), person(c))));
+  api.post('/telegram/link', async (c) => {
+    if (!deps.telegram) throw new ApiError(503, 'telegram_unavailable');
+    return c.json(await deps.telegram.link(c.get('tenant'), person(c)));
+  });
+  api.delete('/telegram', async (c) => {
+    const ended = await unbind(deps.db, c.get('tenant'), person(c), 'person', deps.now());
+    return c.json({ ended });
   });
 
   // « C'est fait » or « Ignorer » on a deadline; its drafts are withdrawn.

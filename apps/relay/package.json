@@ -1,0 +1,26 @@
+{
+  "name": "@fi/relay",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fi/db": "workspace:*",
+    "@fi/shared": "workspace:*",
+    "@hono/node-server": "^2.1.5",
+    "hono": "^4.13.13",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@fi/mock-pdp": "workspace:*",
+    "@types/node": "^22.19.0",
+    "tsx": "^4.23.15"
+  }
+}

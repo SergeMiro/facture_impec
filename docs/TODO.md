@@ -340,6 +340,24 @@ Needs a machine or a pilot:
 - [ ] **« Vos données restent chez vous »** on the site or in the pane only once a pilot runs the
       runner (D12).
 - [ ] **The pane over HTTPS on localhost** when it talks to a runner (Office add-ins need HTTPS).
+      M4 checks the runner lets the pane's origin in (CORS); whether Excel lets an HTTPS pane call
+      `http://127.0.0.1` (mixed content, Private Network Access) is TODO(verify) on a real Excel.
+
+Telegram through the relay (M4, built against a stand-in bot on 2026-10-25):
+
+- [ ] **The owner's bot** (D3): its token and username in the relay's environment, `setWebhook` to
+      the relay's public address with `TELEGRAM_WEBHOOK_SECRET`, and one real round trip: a code
+      from the pane, `/start`, a request, a press, the answer (`docs/TELEGRAM.md` TODO(verify)).
+- [ ] **Where the relay runs**, with TLS (Telegram calls webhooks over HTTPS only): the operator's
+      server behind its proxy (RUNBOOK § The relay), and its database's copy.
+- [ ] **The pane's Telegram block**: a button « Recevoir les demandes sur Telegram » that asks
+      `POST /telegram/link` and shows the link (and a QR code for a phone), the bound chat's date
+      from `GET /telegram`, « Arrêter » for `DELETE /telegram`. The API is there; the pane is
+      Codex's redesign (`apps/addin`), so the block waits for it.
+- [ ] **The owner's terms** say what the relay sees: the text of a request on its way to Telegram
+      (never stored) and the presses, kept 7 days at most (D12).
+- [ ] **Telegram is a third country transfer** for the request's text (a supplier's name and
+      e-mail address): in the RGPD register and the terms before a pilot uses it.
 - [ ] **A vault in a synchronised folder**: the lock's time to live against the real sync delay of
       Drive or OneDrive between two machines (`packages/memory/src/lock.ts`).
 

@@ -2174,3 +2174,77 @@ Evidence (2026-10-25):
       after the start 30 hours later; `sweep`, `chasing`, `watchers`, `weekly`, `purge` and `dump` each
       ran once more, and one more catch-up dumps nothing.
 - [ ] The Windows service and the 48 hours on a PC: `docs/TODO.md` › Memory.
+
+## Memory M4: the relay and the channels (started 2026-10-25)
+
+`docs/plans/memory.md` § M4, memory doc §2 and §10. Criteria, written before the code:
+
+- **A relay without business data** (`apps/relay`): it keeps a licence (its SHA-256), each
+  runner's public key, which Telegram chat answers to which runner, the binding codes a runner
+  announced (their SHA-256, minutes), and the answers waiting for a runner that was off, 7 days at
+  most. No document, amount, name of a client or text of a request is stored on it.
+- **The runner signs**: every request of a runner to its relay is signed with its Ed25519 key
+  (`RELAY_RUNNER_KEY`, kept in the environment, never in the vault or its dumps); the relay knows
+  the public half only, refuses a wrong signature, a time more than 5 minutes off, a signature seen
+  before, a revoked licence.
+- **The runner pulls**: it sits behind the company's router; it fetches its waiting answers at
+  start and every `RELAY_POLL_SECONDS`, and acknowledges each one it handled.
+- **Buttons the relay cannot invent or change**: each button carries a one-time token of the runner
+  (the stage 3C action links, `channel = telegram`) for one request, one revision, one decision and
+  one person; the runner checks it against its own table. An unknown token (forged), a used one
+  (replayed), one for another person or an older revision decides nothing.
+- **A chat bound by its person**: the pane asks the runner for a code; `/start <code>` in Telegram
+  binds that chat to that person; requests waiting for a decision then reach the chat with
+  « Envoyer » / « Ignorer », each request once per revision.
+- **Telegram through a stand-in bot**: the relay speaks the Bot API as `docs/TELEGRAM.md` records
+  it (webhook secret header, `sendMessage` with an inline keyboard, `answerCallbackQuery`); every
+  test runs against a stand-in; Telegram itself stays paused (D3).
+- **The add-in pointed at the runner**: the pane built with `ADDIN_API_URL` set to the runner's
+  local address reaches it (CORS for the add-in's origins); Office's own rules for a local address
+  are TODO(verify) on a real Excel.
+- **Done when**: an approval pressed while the runner is off reaches it when it comes back within 7
+  days and the request is decided once; a forged or replayed token is refused; an answer older than 7
+  days is gone from the relay.
+
+Evidence (2026-10-25):
+
+- [x] A relay without business data: tables `relay_licences` (the licence's SHA-256, the runner's
+      public key), `relay_codes` (SHA-256, an hour at most), `relay_chats`, `relay_inbox` (a chat
+      bound or a button's data), migration `0029`; a message to a chat is forwarded, never stored.
+      `apps/relay/src/relay.test.ts` › « keeps a press for its runner 7 days, then forgets it »,
+      « gives a licence once, lists it without its token, and revokes it », « has no admin routes
+      without RELAY_ADMIN_TOKEN ».
+- [x] The runner signs: `packages/shared/src/relay.test.ts` › « names the runner, for this request at
+      this time only », « differs between two requests alike at the same moment »; `relay.test.ts` ›
+      « is refused unsigned, signed by someone else, replayed, late or revoked », « registers its key
+      with its licence, and a new machine takes the licence over »; `shared.test.ts` › « lets a runner
+      only speak to a relay, with its licence and its own Ed25519 key ».
+- [x] The runner pulls: `apps/api/src/telegram.test.ts` › « starts its Telegram when RELAY_URL is
+      set, and stops it with itself ». By hand on the VPS: `pnpm relay` and a runner
+      (`pnpm --filter @fi/api start` with `VAULT_DIR`, `RELAY_URL`) on 127.0.0.1; the licence listed
+      `registered: true` with its last contact, the webhook without its secret, an unsigned
+      `/runner/inbox` and `/admin` without the token answered 401.
+- [x] Buttons the relay cannot invent or change: `telegram.test.ts` › « decides, once, a request
+      pressed while the runner was off; a forged or replayed token decides nothing », « gives each
+      person their own buttons, and a chat no longer bound decides nothing » (another person's token
+      pressed in one's own chat: « expired »).
+- [x] A chat bound by its person: `telegram.test.ts` › « is bound from the pane by its person only,
+      with a link that serves once » (an API key gets 403 `telegram_person`; `telegram.bind`
+      audited); `relay.test.ts` › « is bound by /start with a code its runner announced, once, in a
+      private chat ». One person blocking the bot does not stop the others: « still reaches the
+      others when one person has blocked the bot » (it failed before the fix: a refused chat stopped
+      the round).
+- [x] Telegram through a stand-in bot: `apps/mock-pdp/src/telegram.ts`, shapes from
+      `docs/TELEGRAM.md` (Bot API 10.3, read 2026-10-25); `relay.test.ts` › « receives a runner's
+      message with its buttons, only from the runner it is bound to ». The real bot is D3
+      (`docs/TODO.md` › Memory).
+- [x] The add-in pointed at the runner: the runner answers the pane's origin with CORS and no other
+      (`telegram.test.ts` › « starts its Telegram… », a preflight from `https://localhost:3000`
+      allowed, one from another origin not); the pane built with `ADDIN_API_URL` at the runner
+      (RUNBOOK § The relay). [ ] Excel's own rules for an HTTPS pane calling localhost: TODO(verify)
+      on a real Excel (`docs/TODO.md` › Memory).
+- [x] Done when: « decides, once, a request pressed while the runner was off… »: « Envoyer » pressed
+      with the runner stopped, the runner back 3 days later: approved once, as that person, on the
+      Telegram channel, one action queued, one `action.decide`; the relay's inbox empty after; the
+      same token pressed again and a forged one decide nothing; « keeps a press for its runner 7
+      days, then forgets it »: gone after 7 days.
