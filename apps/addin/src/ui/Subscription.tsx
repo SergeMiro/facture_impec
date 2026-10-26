@@ -52,7 +52,7 @@ function Status({ billing }: { billing: BillingView }) {
       return (
         <>
           {billing.status === 'past_due' && (
-            <MessageBar intent="warning">
+            <MessageBar layout="multiline" intent="warning">
               <MessageBarBody>{t('addin.billing.pastDue')}</MessageBarBody>
             </MessageBar>
           )}
@@ -78,7 +78,7 @@ function Status({ billing }: { billing: BillingView }) {
       );
     case 'ended':
       return (
-        <MessageBar intent="warning">
+        <MessageBar layout="multiline" intent="warning">
           <MessageBarBody>{t('addin.billing.ended')}</MessageBarBody>
         </MessageBar>
       );

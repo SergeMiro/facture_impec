@@ -19,6 +19,7 @@ import {
 import { type FormEvent, useEffect, useState } from 'react';
 import type { Party, PartyCandidate, PostalAddress } from '../api';
 import { useFi } from './context';
+import { useLayout } from './layout';
 
 const useStyles = makeStyles({
   section: { display: 'flex', flexDirection: 'column', gap: '10px' },
@@ -232,6 +233,7 @@ function Customer({ party }: { party: Party }) {
 
 export function CustomersView() {
   const styles = useStyles();
+  const ui = useLayout();
   const [state, fi] = useFi();
   // The switch's warning reads the mode from Réglages.
   useEffect(() => {
@@ -239,12 +241,14 @@ export function CustomersView() {
   }, [state.settings, fi]);
   const parties = state.customers?.parties ?? [];
   return (
-    <section className={styles.section} aria-labelledby="customers-title">
+    <section className={ui.page} aria-labelledby="customers-title">
       <Subtitle2 as="h2" id="customers-title">
         {t('addin.customers.title')}
       </Subtitle2>
-      <Caption1>{t('addin.customers.intro')}</Caption1>
-      <Search />
+      <Caption1 className={ui.hint}>{t('addin.customers.intro')}</Caption1>
+      <div className={ui.group}>
+        <Search />
+      </div>
       <Subtitle2 as="h3">{t('addin.customers.list', { count: parties.length })}</Subtitle2>
       {state.busy.includes('customers') && !state.customers && (
         <Spinner label={t('addin.loading')} />

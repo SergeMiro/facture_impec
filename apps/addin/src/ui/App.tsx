@@ -1,20 +1,41 @@
 // The task pane: banners on every screen (Mode test, offline, the last notice), then one screen.
 // No router: office.js breaks the history API (docs/OFFICE.md §8), and the pane has eleven screens.
-import { t } from '@fi/shared';
+import { type MessageKey, t } from '@fi/shared';
 import {
   Button,
+  Caption1,
   FluentProvider,
   MessageBar,
   MessageBarActions,
   MessageBarBody,
   makeStyles,
   Spinner,
+  Subtitle1,
   Tab,
   TabList,
   Text,
   Title3,
   tokens,
 } from '@fluentui/react-components';
+import {
+  Book20Filled,
+  Book20Regular,
+  bundleIcon,
+  DocumentFolder20Filled,
+  DocumentFolder20Regular,
+  MailInbox20Filled,
+  MailInbox20Regular,
+  People20Filled,
+  People20Regular,
+  Receipt20Filled,
+  Receipt20Regular,
+  Settings20Filled,
+  Settings20Regular,
+  ShieldCheckmark20Filled,
+  ShieldCheckmark20Regular,
+  TableSettings20Filled,
+  TableSettings20Regular,
+} from '@fluentui/react-icons';
 import type { Controller } from '../controller';
 import { ChatView } from './ChatView';
 import { ChecksView } from './ChecksView';
@@ -39,7 +60,10 @@ const useStyles = makeStyles({
     padding: '12px 14px 24px',
     minHeight: '100vh',
     boxSizing: 'border-box',
-    backgroundColor: tokens.colorNeutralBackground1,
+    backgroundColor: tokens.colorNeutralBackground2,
+    overflowX: 'hidden',
+    // A long option or value never pushes a control past the pane's edge.
+    '& .fui-Select, & .fui-Input, & .fui-Field': { minWidth: 0, maxWidth: '100%' },
   },
   testBanner: {
     backgroundColor: TEST_ORANGE,
@@ -50,17 +74,105 @@ const useStyles = makeStyles({
   },
   header: {
     display: 'flex',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     gap: '8px',
-    paddingBottom: '6px',
-    borderBottom: '3px solid transparent',
+    paddingBottom: '8px',
+    borderBottom: `2px solid ${tokens.colorNeutralStroke2}`,
   },
-  brand: { display: 'flex', flexDirection: 'column' },
+  logo: { width: '24px', height: '24px', flexShrink: 0 },
+  brand: { display: 'flex', flexDirection: 'column', minWidth: 0, flexGrow: 1 },
+  tenant: {
+    color: tokens.colorNeutralForeground3,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
   center: { display: 'flex', justifyContent: 'center', padding: '48px 0' },
-  // Eight tabs are wider than a task pane: they wrap instead of scrolling the pane sideways.
-  tabs: { flexWrap: 'wrap' },
+  tabs: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
+  // Eight screens in a 320 px pane: two rows of four, an icon above each name, all visible at once.
+  nav: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+    gap: '2px',
+    padding: '2px',
+    borderRadius: tokens.borderRadiusLarge,
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  navTab: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '2px',
+    minWidth: 0,
+    padding: '6px 2px 8px',
+    borderRadius: tokens.borderRadiusMedium,
+    fontSize: tokens.fontSizeBase200,
+    '& .fui-Tab__content': {
+      fontSize: tokens.fontSizeBase200,
+      lineHeight: tokens.lineHeightBase200,
+      padding: 0,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+      maxWidth: '100%',
+    },
+    // The bold copy Fluent keeps under each name would push it up: grid cells already fix the width.
+    '& .fui-Tab__content--reserved-space': { display: 'none' },
+    '&[aria-selected="true"]': { backgroundColor: tokens.colorNeutralBackground1 },
+  },
 });
+
+type Nav =
+  | 'dashboard'
+  | 'reception'
+  | 'documents'
+  | 'customers'
+  | 'checks'
+  | 'registry'
+  | 'detect'
+  | 'settings';
+
+/** Daily work first (invoices out, invoices in, documents, customers), then the set-up. */
+const NAV: { value: Nav; label: MessageKey; icon: ReturnType<typeof bundleIcon> }[] = [
+  {
+    value: 'dashboard',
+    label: 'addin.nav.dashboard',
+    icon: bundleIcon(Receipt20Filled, Receipt20Regular),
+  },
+  {
+    value: 'reception',
+    label: 'addin.nav.reception',
+    icon: bundleIcon(MailInbox20Filled, MailInbox20Regular),
+  },
+  {
+    value: 'documents',
+    label: 'addin.nav.documents',
+    icon: bundleIcon(DocumentFolder20Filled, DocumentFolder20Regular),
+  },
+  {
+    value: 'customers',
+    label: 'addin.nav.customers',
+    icon: bundleIcon(People20Filled, People20Regular),
+  },
+  {
+    value: 'checks',
+    label: 'addin.nav.checks',
+    icon: bundleIcon(ShieldCheckmark20Filled, ShieldCheckmark20Regular),
+  },
+  { value: 'registry', label: 'addin.nav.registry', icon: bundleIcon(Book20Filled, Book20Regular) },
+  {
+    value: 'detect',
+    label: 'addin.nav.columns',
+    icon: bundleIcon(TableSettings20Filled, TableSettings20Regular),
+  },
+  {
+    value: 'settings',
+    label: 'addin.nav.settings',
+    icon: bundleIcon(Settings20Filled, Settings20Regular),
+  },
+];
+
+const isNav = (name: unknown): name is Nav => NAV.some((n) => n.value === name);
 
 export function App({
   controller,
@@ -108,13 +220,20 @@ function Pane({ host }: { host: 'excel' | 'sheets' }) {
         className={styles.header}
         style={brand?.accentColor ? { borderBottomColor: brand.accentColor } : undefined}
       >
+        {!brand?.full && <img className={styles.logo} src="assets/icon-32.png" alt="" />}
         <span className={styles.brand}>
-          <Title3 as="h1">{brand?.full ? brand.firmName : t('app.title')}</Title3>
+          <Subtitle1 as="h1">{brand?.full ? brand.firmName : t('app.title')}</Subtitle1>
           {brand && !brand.full && (
-            <Text size={200}>{t('addin.brand.by', { firm: brand.firmName })}</Text>
+            <Caption1 className={styles.tenant}>
+              {t('addin.brand.by', { firm: brand.firmName })}
+            </Caption1>
+          )}
+          {state.me && (
+            <Caption1 className={styles.tenant} title={state.me.tenant.name}>
+              {state.me.tenant.name}
+            </Caption1>
           )}
         </span>
-        {state.me && <Text size={200}>{state.me.tenant.name}</Text>}
       </div>
 
       {host === 'sheets' && signedIn && (
@@ -148,7 +267,7 @@ function Pane({ host }: { host: 'excel' | 'sheets' }) {
       )}
 
       {state.offline && (
-        <MessageBar intent="warning" data-testid="offline-banner">
+        <MessageBar layout="multiline" intent="warning" data-testid="offline-banner">
           <MessageBarBody>
             {state.offline.length > 0
               ? t('addin.offline.banner', { count: state.offline.length })
@@ -175,33 +294,22 @@ function Pane({ host }: { host: 'excel' | 'sheets' }) {
 
       {signedIn && (
         <TabList
-          className={styles.tabs}
+          className={styles.nav}
+          size="small"
           selectedValue={tab}
+          aria-label={t('addin.nav.label')}
           onTabSelect={(_, data) => {
             const name = data.value;
-            if (
-              name === 'dashboard' ||
-              name === 'detect' ||
-              name === 'reception' ||
-              name === 'documents' ||
-              name === 'customers' ||
-              name === 'registry' ||
-              name === 'checks' ||
-              name === 'settings'
-            ) {
-              fi.navigate({ name });
-              if (name === 'detect' && !state.detection) void fi.editMapping();
-            }
+            if (!isNav(name)) return;
+            fi.navigate({ name });
+            if (name === 'detect' && !state.detection) void fi.editMapping();
           }}
         >
-          <Tab value="dashboard">{t('addin.nav.dashboard')}</Tab>
-          <Tab value="detect">{t('addin.nav.columns')}</Tab>
-          <Tab value="reception">{t('addin.nav.reception')}</Tab>
-          <Tab value="documents">{t('addin.nav.documents')}</Tab>
-          <Tab value="customers">{t('addin.nav.customers')}</Tab>
-          <Tab value="registry">{t('addin.nav.registry')}</Tab>
-          <Tab value="checks">{t('addin.nav.checks')}</Tab>
-          <Tab value="settings">{t('addin.nav.settings')}</Tab>
+          {NAV.map(({ value, label, icon: Icon }) => (
+            <Tab key={value} value={value} icon={<Icon />} className={styles.navTab}>
+              {t(label)}
+            </Tab>
+          ))}
         </TabList>
       )}
 

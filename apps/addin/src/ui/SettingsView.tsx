@@ -7,10 +7,10 @@ import {
   Badge,
   Button,
   Caption1,
-  Divider,
   Field,
   Input,
   makeStyles,
+  mergeClasses,
   Radio,
   RadioGroup,
   Select,
@@ -23,10 +23,10 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { AI_PROVIDERS, type AiChoice, type Settings } from '../api';
 import { useFi } from './context';
 import { ErpPart } from './ErpPart';
+import { useLayout } from './layout';
 import { DeleteAccount, Subscription } from './Subscription';
 
 const useStyles = makeStyles({
-  section: { display: 'flex', flexDirection: 'column', gap: '10px' },
   form: { display: 'flex', flexDirection: 'column', gap: '8px' },
   row: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
 });
@@ -69,30 +69,38 @@ export function parseEuros(text: string): number | null {
 }
 
 export function SettingsView() {
-  const styles = useStyles();
+  const ui = useLayout();
   const [state] = useFi();
   const settings = state.settings;
   if (!settings) {
     return state.busy.includes('settings') ? <Spinner label={t('addin.loading')} /> : null;
   }
   return (
-    <section className={styles.section} aria-labelledby="settings-title">
+    <section className={ui.page} aria-labelledby="settings-title">
       <Subtitle2 as="h2" id="settings-title">
         {t('addin.settings.title')}
       </Subtitle2>
       <General settings={settings} />
-      <Divider />
-      <ErpPart />
-      <Divider />
-      <Defaults settings={settings} />
-      <Divider />
-      <Ai settings={settings} />
-      <Divider />
-      <Subscription />
-      {state.billing?.enabled && <Divider />}
-      <Account />
-      <Divider />
-      <DeleteAccount />
+      <div className={ui.group}>
+        <ErpPart />
+      </div>
+      <div className={ui.group}>
+        <Defaults settings={settings} />
+      </div>
+      <div className={ui.group}>
+        <Ai settings={settings} />
+      </div>
+      {state.billing?.enabled && (
+        <div className={ui.group}>
+          <Subscription />
+        </div>
+      )}
+      <div className={ui.group}>
+        <Account />
+      </div>
+      <div className={mergeClasses(ui.group, ui.danger)}>
+        <DeleteAccount />
+      </div>
     </section>
   );
 }
@@ -161,6 +169,7 @@ function Mode({ settings }: { settings: Settings }) {
 
 function General({ settings }: { settings: Settings }) {
   const styles = useStyles();
+  const ui = useLayout();
   const [state, fi] = useFi();
   const [cadence, setCadence] = useState(settings.chaseCadence.join(', '));
   const [cadenceError, setCadenceError] = useState(false);
@@ -185,90 +194,86 @@ function General({ settings }: { settings: Settings }) {
   };
 
   return (
-    <div className={styles.form}>
-      <Mode settings={settings} />
-
-      <Switch
-        checked={state.testMode}
-        onChange={(_, d) => void fi.setTestMode(d.checked)}
-        label={t('addin.settings.workbookTest')}
-        data-testid="workbook-test"
-      />
-      <Switch
-        checked={settings.sandboxEnabled}
-        disabled={saving}
-        onChange={(_, d) => void fi.saveSettings({ sandboxEnabled: d.checked })}
-        label={t('addin.settings.sandbox')}
-      />
-      {!settings.testPlatform && <Caption1>{t('api.error.test_platform_missing')}</Caption1>}
-
-      <form className={styles.form} onSubmit={saveCadence}>
-        <Field
-          label={t('addin.settings.cadence')}
-          hint={t('addin.settings.cadenceHint')}
-          validationState={cadenceError ? 'error' : 'none'}
-          validationMessage={cadenceError ? t('addin.settings.cadenceInvalid') : undefined}
-        >
-          <Input value={cadence} onChange={(_, d) => setCadence(d.value)} />
+    <>
+      <div className={ui.group} data-testid="sending">
+        <Subtitle2 as="h3">{t('addin.settings.group.sending')}</Subtitle2>
+        <Mode settings={settings} />
+        <Switch
+          checked={state.testMode}
+          onChange={(_, d) => void fi.setTestMode(d.checked)}
+          label={t('addin.settings.workbookTest')}
+          data-testid="workbook-test"
+        />
+        <Switch
+          checked={settings.sandboxEnabled}
+          disabled={saving}
+          onChange={(_, d) => void fi.saveSettings({ sandboxEnabled: d.checked })}
+          label={t('addin.settings.sandbox')}
+        />
+        {!settings.testPlatform && <Caption1>{t('api.error.test_platform_missing')}</Caption1>}
+        <Field label={t('addin.settings.pdp')}>
+          <span className={styles.row}>
+            <Text>{label(`addin.pdp.${settings.pdp.provider}`, settings.pdp.provider)}</Text>
+            {settings.pdp.account && <Caption1>{settings.pdp.account}</Caption1>}
+            <Badge appearance="tint" color={settings.pdp.connected ? 'success' : 'warning'}>
+              {settings.pdp.connected
+                ? t('addin.settings.pdpConnected')
+                : t('addin.settings.pdpMissing')}
+            </Badge>
+          </span>
         </Field>
-        <Button type="submit" disabled={saving}>
-          {t('addin.settings.save')}
-        </Button>
-      </form>
+        {settings.pdp.ownKey.available && <PdpKey settings={settings} />}
+      </div>
 
-      <form className={styles.form} onSubmit={saveMargin}>
-        <Field
-          label={t('addin.settings.margin')}
-          hint={t('addin.settings.marginHint')}
-          validationState={marginError ? 'error' : 'none'}
-          validationMessage={marginError ? t('addin.settings.marginInvalid') : undefined}
-        >
-          <Input
-            value={margin}
-            onChange={(_, d) => setMargin(d.value)}
-            contentAfter="%"
-            inputMode="numeric"
-            data-testid="min-margin"
-          />
-        </Field>
-        <Button type="submit" disabled={saving}>
-          {t('addin.settings.save')}
-        </Button>
-      </form>
+      <div className={ui.group} data-testid="rules">
+        <Subtitle2 as="h3">{t('addin.settings.group.rules')}</Subtitle2>
+        <form className={styles.form} onSubmit={saveCadence}>
+          <Field
+            label={t('addin.settings.cadence')}
+            hint={t('addin.settings.cadenceHint')}
+            validationState={cadenceError ? 'error' : 'none'}
+            validationMessage={cadenceError ? t('addin.settings.cadenceInvalid') : undefined}
+          >
+            <Input value={cadence} onChange={(_, d) => setCadence(d.value)} />
+          </Field>
+          <Button type="submit" className={ui.action} disabled={saving}>
+            {t('addin.settings.save')}
+          </Button>
+        </form>
 
-      <Switch
-        checked={settings.btp}
-        disabled={saving}
-        onChange={(_, d) => void fi.saveSettings({ btp: d.checked })}
-        label={t('addin.settings.btp')}
-        data-testid="btp"
-      />
-      <Caption1>{t('addin.settings.btpHint')}</Caption1>
+        <form className={styles.form} onSubmit={saveMargin}>
+          <Field
+            label={t('addin.settings.margin')}
+            hint={t('addin.settings.marginHint')}
+            validationState={marginError ? 'error' : 'none'}
+            validationMessage={marginError ? t('addin.settings.marginInvalid') : undefined}
+          >
+            <Input
+              value={margin}
+              onChange={(_, d) => setMargin(d.value)}
+              contentAfter="%"
+              inputMode="numeric"
+              data-testid="min-margin"
+            />
+          </Field>
+          <Button type="submit" className={ui.action} disabled={saving}>
+            {t('addin.settings.save')}
+          </Button>
+        </form>
 
-      <Switch
-        checked={settings.pseudonymizeLlm}
-        disabled
-        label={t('addin.settings.pseudonymize')}
-      />
-      <Caption1>{t('addin.settings.pseudonymizeHint')}</Caption1>
-
-      <Field label={t('addin.settings.pdp')}>
-        <span className={styles.row}>
-          <Text>{label(`addin.pdp.${settings.pdp.provider}`, settings.pdp.provider)}</Text>
-          {settings.pdp.account && <Caption1>{settings.pdp.account}</Caption1>}
-          <Badge appearance="tint" color={settings.pdp.connected ? 'success' : 'warning'}>
-            {settings.pdp.connected
-              ? t('addin.settings.pdpConnected')
-              : t('addin.settings.pdpMissing')}
-          </Badge>
-        </span>
-      </Field>
-      {settings.pdp.ownKey.available && <PdpKey settings={settings} />}
-    </div>
+        <Switch
+          checked={settings.btp}
+          disabled={saving}
+          onChange={(_, d) => void fi.saveSettings({ btp: d.checked })}
+          label={t('addin.settings.btp')}
+          data-testid="btp"
+        />
+        <Caption1 className={ui.hint}>{t('addin.settings.btpHint')}</Caption1>
+      </div>
+    </>
   );
 }
 
-/** « Votre propre clé B2Brouter »: the server tries it on the account before saving it. */
 function PdpKey({ settings }: { settings: Settings }) {
   const styles = useStyles();
   const [state, fi] = useFi();
@@ -326,6 +331,7 @@ function PdpKey({ settings }: { settings: Settings }) {
 
 function Defaults({ settings }: { settings: Settings }) {
   const styles = useStyles();
+  const ui = useLayout();
   const [state, fi] = useFi();
   const d = settings.invoiceDefaults;
   const [siret, setSiret] = useState(d.siret ?? '');
@@ -360,7 +366,7 @@ function Defaults({ settings }: { settings: Settings }) {
   return (
     <form className={styles.form} onSubmit={save}>
       <Subtitle2 as="h3">{t('addin.settings.defaults')}</Subtitle2>
-      <Caption1>{t('addin.settings.defaultsHint')}</Caption1>
+      <Caption1 className={ui.hint}>{t('addin.settings.defaultsHint')}</Caption1>
       <Field label={t('addin.settings.siret')}>
         <Input value={siret} onChange={(_, v) => setSiret(v.value)} inputMode="numeric" />
       </Field>
@@ -387,7 +393,7 @@ function Defaults({ settings }: { settings: Settings }) {
           ))}
         </Select>
       </Field>
-      <Button type="submit" disabled={state.busy.includes('saveSettings')}>
+      <Button type="submit" className={ui.action} disabled={state.busy.includes('saveSettings')}>
         {t('addin.settings.save')}
       </Button>
     </form>
@@ -396,6 +402,7 @@ function Defaults({ settings }: { settings: Settings }) {
 
 function Ai({ settings }: { settings: Settings }) {
   const styles = useStyles();
+  const ui = useLayout();
   const [state, fi] = useFi();
   const ai = settings.ai;
   const [mode, setMode] = useState(ai.mode);
@@ -427,7 +434,7 @@ function Ai({ settings }: { settings: Settings }) {
   return (
     <form className={styles.form} onSubmit={save}>
       <Subtitle2 as="h3">{t('addin.settings.ai')}</Subtitle2>
-      <Caption1>{t('addin.settings.aiHint')}</Caption1>
+      <Caption1 className={ui.hint}>{t('addin.settings.aiHint')}</Caption1>
       <RadioGroup value={mode} onChange={(_, d) => setMode(d.value as typeof mode)}>
         <Radio
           value="included"
@@ -479,16 +486,24 @@ function Ai({ settings }: { settings: Settings }) {
       )}
       <Button
         type="submit"
+        className={ui.action}
         disabled={state.busy.includes('saveAi') || (mode === 'byok' && !agentModel.trim())}
       >
         {t('addin.settings.save')}
       </Button>
+      <Switch
+        checked={settings.pseudonymizeLlm}
+        disabled
+        label={t('addin.settings.pseudonymize')}
+      />
+      <Caption1 className={ui.hint}>{t('addin.settings.pseudonymizeHint')}</Caption1>
     </form>
   );
 }
 
 function Account() {
   const styles = useStyles();
+  const ui = useLayout();
   const [state, fi] = useFi();
   const [exportUrl, setExportUrl] = useState<string | null>(null);
   useEffect(() => () => void (exportUrl && URL.revokeObjectURL(exportUrl)), [exportUrl]);
@@ -504,7 +519,7 @@ function Account() {
       {state.me?.user && (
         <Text>{t('addin.settings.signedInAs', { email: state.me.user.email })}</Text>
       )}
-      <Caption1>{t('addin.settings.exportHint')}</Caption1>
+      <Caption1 className={ui.hint}>{t('addin.settings.exportHint')}</Caption1>
       <span className={styles.row}>
         <Button onClick={() => void exportData()} disabled={state.busy.includes('export')}>
           {t('addin.settings.export')}
@@ -515,7 +530,7 @@ function Account() {
           </a>
         )}
       </span>
-      <Button appearance="subtle" onClick={() => void fi.signOut()}>
+      <Button appearance="subtle" className={ui.action} onClick={() => void fi.signOut()}>
         {t('addin.settings.signOut')}
       </Button>
     </div>

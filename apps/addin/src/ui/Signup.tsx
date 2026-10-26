@@ -107,7 +107,7 @@ function CompanyStep({ siren, found }: { siren: string; found: DirectoryCompany 
         {found ? t('addin.signup.check', { siren }) : t('addin.signup.typeIn', { siren })}
       </Text>
       {found?.masked && (
-        <MessageBar intent="info">
+        <MessageBar layout="multiline" intent="info">
           <MessageBarBody>{t('addin.signup.masked')}</MessageBarBody>
         </MessageBar>
       )}
@@ -181,7 +181,7 @@ function Waiting({ email }: { email: string }) {
   const [, fi] = useFi();
   return (
     <div className={styles.form}>
-      <MessageBar intent="info" data-testid="signup-waiting">
+      <MessageBar layout="multiline" intent="info" data-testid="signup-waiting">
         <MessageBarBody>
           <Spinner size="tiny" /> {t('addin.signup.waiting', { email })}
         </MessageBarBody>

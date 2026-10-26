@@ -36,9 +36,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { ConnectedFile, FileOwner, Source, UploadView } from '../api';
 import type { Header, Inclusion } from '../controller';
 import { parisDateTime, parisTime, useFi } from './context';
+import { useLayout } from './layout';
 
 const useStyles = makeStyles({
-  section: { display: 'flex', flexDirection: 'column', gap: '10px' },
   list: {
     listStyle: 'none',
     margin: 0,
@@ -119,106 +119,113 @@ const columnLabel = (h: Header) =>
 
 export function RegistryView() {
   const styles = useStyles();
+  const ui = useLayout();
   const [state, fi] = useFi();
   const { registry, inclusion, sources, otherSheets } = state;
 
   return (
-    <section className={styles.section} aria-labelledby="registry-title">
+    <section className={ui.page} aria-labelledby="registry-title">
       <Subtitle2 as="h2" id="registry-title">
         {t('addin.registry.title')}
       </Subtitle2>
-      <Text>{t('addin.registry.intro')}</Text>
+      <Caption1 className={ui.hint}>{t('addin.registry.intro')}</Caption1>
 
       {inclusion && (
         <Confirm key={`${inclusion.file?.id ?? ''}:${inclusion.sheet}`} inclusion={inclusion} />
       )}
 
-      <Text weight="semibold">{t('addin.registry.sources')}</Text>
-      {state.sheet && state.mapping && <InvoiceCard sheet={state.sheet} />}
-      {sources.length === 0 ? (
-        <Caption1 className={styles.muted}>{t('addin.registry.noSources')}</Caption1>
-      ) : (
-        <ul className={styles.list}>
-          {sources.map((s) => (
-            <li key={s.id}>
-              <SourceCard source={s} />
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {otherSheets.length > 0 && (
-        <>
-          <Text weight="semibold">{t('addin.registry.others')}</Text>
+      <div className={ui.group}>
+        <Text weight="semibold">{t('addin.registry.sources')}</Text>
+        {state.sheet && state.mapping && <InvoiceCard sheet={state.sheet} />}
+        {sources.length === 0 ? (
+          <Caption1 className={styles.muted}>{t('addin.registry.noSources')}</Caption1>
+        ) : (
           <ul className={styles.list}>
-            {otherSheets.map((sheet) => (
-              <li key={sheet} className={styles.line} data-testid={`other-${sheet}`}>
-                <Text>{sheet}</Text>
-                <Button
-                  size="small"
-                  onClick={() => void fi.includeSheet(sheet)}
-                  disabled={state.busy.includes(`include:${sheet}`)}
-                >
-                  {t('addin.registry.include')}
-                </Button>
-                {state.busy.includes(`include:${sheet}`) && <Spinner size="tiny" />}
+            {sources.map((s) => (
+              <li key={s.id}>
+                <SourceCard source={s} />
               </li>
             ))}
           </ul>
-        </>
-      )}
+        )}
+
+        {otherSheets.length > 0 && (
+          <>
+            <Text weight="semibold">{t('addin.registry.others')}</Text>
+            <ul className={styles.list}>
+              {otherSheets.map((sheet) => (
+                <li key={sheet} className={styles.line} data-testid={`other-${sheet}`}>
+                  <Text>{sheet}</Text>
+                  <Button
+                    size="small"
+                    onClick={() => void fi.includeSheet(sheet)}
+                    disabled={state.busy.includes(`include:${sheet}`)}
+                  >
+                    {t('addin.registry.include')}
+                  </Button>
+                  {state.busy.includes(`include:${sheet}`) && <Spinner size="tiny" />}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
 
       <ConnectorSection />
       <GoogleSection />
       <UploadSection />
 
-      <Text weight="semibold">{t('addin.registry.totals')}</Text>
-      {!registry ? (
-        state.busy.includes('registry') && (
-          <Spinner size="tiny" label={t('addin.registry.loading')} />
-        )
-      ) : (
-        <>
-          <Caption1>{t('addin.registry.invoices', registry.invoices)}</Caption1>
-          {registry.suppliers > 0 && (
-            <Caption1>{t('addin.registry.suppliers', { count: registry.suppliers })}</Caption1>
-          )}
-          <Text weight="semibold">{t('addin.registry.recent')}</Text>
-          {registry.recent.length === 0 ? (
-            <Caption1 className={styles.muted}>{t('addin.registry.noDocs')}</Caption1>
-          ) : (
-            <ul className={styles.list}>
-              {registry.recent.map((d) => (
-                <li key={d.id} className={styles.doc} data-testid={`doc-${d.id}`}>
-                  <Text weight="semibold">{d.number ?? t('addin.registry.noNumber')}</Text>
-                  <Badge appearance="tint" color="informative">
-                    {t(KIND[d.kind])}
-                  </Badge>
-                  <Caption1>
-                    {[d.partyName, d.issueDate && frDate(d.issueDate)].filter(Boolean).join(' · ')}
-                  </Caption1>
-                  <Caption1>
-                    {d.netTotal !== null &&
-                      t('addin.registry.amount', { amount: frMoney(d.netTotal, 'EUR') })}
-                  </Caption1>
-                  {d.sheet && (
-                    <Caption1 className={styles.muted}>
-                      {d.file
-                        ? t('addin.connector.fromFile', { file: d.file, sheet: d.sheet })
-                        : t('addin.registry.fromSheet', { sheet: d.sheet })}
+      <div className={ui.group}>
+        <Text weight="semibold">{t('addin.registry.totals')}</Text>
+        {!registry ? (
+          state.busy.includes('registry') && (
+            <Spinner size="tiny" label={t('addin.registry.loading')} />
+          )
+        ) : (
+          <>
+            <Caption1>{t('addin.registry.invoices', registry.invoices)}</Caption1>
+            {registry.suppliers > 0 && (
+              <Caption1>{t('addin.registry.suppliers', { count: registry.suppliers })}</Caption1>
+            )}
+            <Text weight="semibold">{t('addin.registry.recent')}</Text>
+            {registry.recent.length === 0 ? (
+              <Caption1 className={styles.muted}>{t('addin.registry.noDocs')}</Caption1>
+            ) : (
+              <ul className={styles.list}>
+                {registry.recent.map((d) => (
+                  <li key={d.id} className={styles.doc} data-testid={`doc-${d.id}`}>
+                    <Text weight="semibold">{d.number ?? t('addin.registry.noNumber')}</Text>
+                    <Badge appearance="tint" color="informative">
+                      {t(KIND[d.kind])}
+                    </Badge>
+                    <Caption1>
+                      {[d.partyName, d.issueDate && frDate(d.issueDate)]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </Caption1>
-                  )}
-                  {d.cell && !d.file && (
-                    <Link onClick={() => d.cell && void fi.fixInSheet(d.cell)}>
-                      {t('addin.registry.showDoc')}
-                    </Link>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
+                    <Caption1>
+                      {d.netTotal !== null &&
+                        t('addin.registry.amount', { amount: frMoney(d.netTotal, 'EUR') })}
+                    </Caption1>
+                    {d.sheet && (
+                      <Caption1 className={styles.muted}>
+                        {d.file
+                          ? t('addin.connector.fromFile', { file: d.file, sheet: d.sheet })
+                          : t('addin.registry.fromSheet', { sheet: d.sheet })}
+                      </Caption1>
+                    )}
+                    {d.cell && !d.file && (
+                      <Link onClick={() => d.cell && void fi.fixInSheet(d.cell)}>
+                        {t('addin.registry.showDoc')}
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+      </div>
     </section>
   );
 }
@@ -334,6 +341,7 @@ function SourceCard({ source: s }: { source: Source }) {
 /** « Fichiers OneDrive »: the account, the files picked in OneDrive's picker and their sheets. */
 function ConnectorSection() {
   const styles = useStyles();
+  const ui = useLayout();
   const [state, fi] = useFi();
   const [confirming, setConfirming] = useState(false);
   const view = state.connector;
@@ -342,7 +350,7 @@ function ConnectorSection() {
   const busy = state.busy.includes('connector');
   const picking = state.busy.includes('connector:pick');
   return (
-    <section className={styles.section} aria-labelledby="connector-title" data-testid="connector">
+    <section className={ui.group} aria-labelledby="connector-title" data-testid="connector">
       <Text weight="semibold" id="connector-title">
         {t('addin.connector.title')}
       </Text>
@@ -453,6 +461,7 @@ function ConnectorSection() {
 /** « Fichiers Google Drive »: the account, the files picked in Google's window and their sheets. */
 function GoogleSection() {
   const styles = useStyles();
+  const ui = useLayout();
   const [state, fi] = useFi();
   const [confirming, setConfirming] = useState(false);
   const view = state.google;
@@ -473,7 +482,7 @@ function GoogleSection() {
     </span>
   );
   return (
-    <section className={styles.section} aria-labelledby="google-title" data-testid="google">
+    <section className={ui.group} aria-labelledby="google-title" data-testid="google">
       <Text weight="semibold" id="google-title">
         {t('addin.google.title')}
       </Text>
@@ -568,13 +577,14 @@ const UPLOAD_ACCEPT = '.xlsx,.xlsm,.csv,.pdf,.xml';
 /** « Fichiers importés » (R6): files uploaded from the pane, workbooks or supplier invoices. */
 function UploadSection() {
   const styles = useStyles();
+  const ui = useLayout();
   const [state, fi] = useFi();
   const input = useRef<HTMLInputElement>(null);
   const uploads = state.uploads;
   if (!uploads) return null;
   const busy = state.busy.includes('upload');
   return (
-    <section className={styles.section} aria-labelledby="upload-title" data-testid="upload">
+    <section className={ui.group} aria-labelledby="upload-title" data-testid="upload">
       <Text weight="semibold" id="upload-title">
         {t('addin.upload.title')}
       </Text>
@@ -932,7 +942,7 @@ function Confirm({ inclusion }: { inclusion: Inclusion }) {
         </MessageBar>
       )}
       {readable && toConfirm > 0 && (
-        <MessageBar intent="info">
+        <MessageBar layout="multiline" intent="info">
           <MessageBarBody>{t('addin.detect.needsConfirm', { count: toConfirm })}</MessageBarBody>
         </MessageBar>
       )}

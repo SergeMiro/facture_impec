@@ -44,7 +44,7 @@ export function Login() {
       <Text>{t('addin.login.intro')}</Text>
 
       {state.link ? (
-        <MessageBar intent="info" data-testid="link-waiting">
+        <MessageBar layout="multiline" intent="info" data-testid="link-waiting">
           <MessageBarBody>
             <Spinner size="tiny" /> {t('addin.login.waiting', { email: state.link.email })}{' '}
             <Button size="small" appearance="transparent" onClick={fi.cancelLink}>

@@ -4,6 +4,7 @@ import { isMessageKey, type MessageKey, t } from '@fi/shared';
 import {
   Badge,
   Button,
+  Caption1,
   Field,
   MessageBar,
   MessageBarBody,
@@ -25,6 +26,7 @@ const useStyles = makeStyles({
   field: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', alignItems: 'center' },
   label: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' },
   actions: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
+  hint: { color: tokens.colorNeutralForeground3 },
   warnings: { margin: 0, paddingLeft: '18px', color: tokens.colorNeutralForeground2 },
 });
 
@@ -65,7 +67,7 @@ export function Detection() {
     return (
       <section className={styles.section}>
         <Subtitle2 as="h2">{t('addin.detect.title', { sheet })}</Subtitle2>
-        <Text>{t('addin.detect.intro')}</Text>
+        <Caption1 className={styles.hint}>{t('addin.detect.intro')}</Caption1>
         {busy ? (
           <Spinner label={t('addin.detect.running')} />
         ) : (
@@ -100,21 +102,25 @@ export function Detection() {
     void fi.confirmMapping({ ...draft, mapping, ...(edited && { source: 'user' }) });
   };
 
+  // The degraded notice is already the bar above: the list does not repeat it.
+  const degraded = proposal?.degraded ? t(DEGRADED[proposal.degraded]) : null;
+  const warnings = draft.warnings.filter((w) => w !== degraded);
+
   return (
     <section className={styles.section} aria-labelledby="detect-title">
       <Subtitle2 as="h2" id="detect-title">
         {t('addin.detect.title', { sheet })}
       </Subtitle2>
-      <Text>{t('addin.detect.intro')}</Text>
+      <Caption1 className={styles.hint}>{t('addin.detect.intro')}</Caption1>
 
       {proposal?.degraded && (
-        <MessageBar intent="warning">
+        <MessageBar layout="multiline" intent="warning">
           <MessageBarBody>{t(DEGRADED[proposal.degraded])}</MessageBarBody>
         </MessageBar>
       )}
-      {draft.warnings.length > 0 && (
+      {warnings.length > 0 && (
         <ul className={styles.warnings}>
-          {draft.warnings.map((w) => (
+          {warnings.map((w) => (
             <li key={w}>
               <Text size={200}>{w}</Text>
             </li>
@@ -183,7 +189,7 @@ export function Detection() {
       </Button>
 
       {toConfirm > 0 && (
-        <MessageBar intent="info">
+        <MessageBar layout="multiline" intent="info">
           <MessageBarBody>{t('addin.detect.needsConfirm', { count: toConfirm })}</MessageBarBody>
         </MessageBar>
       )}

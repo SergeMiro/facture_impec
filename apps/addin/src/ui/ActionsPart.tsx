@@ -144,7 +144,7 @@ function Request({ item, today }: { item: ActionItem; today: string }) {
           </Caption1>
         )}
         {item.error === 'send_unknown' && (
-          <MessageBar intent="warning">
+          <MessageBar layout="multiline" intent="warning">
             <MessageBarBody>{t('addin.actions.sendUnknown')}</MessageBarBody>
           </MessageBar>
         )}

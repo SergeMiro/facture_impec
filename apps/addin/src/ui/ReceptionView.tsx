@@ -31,6 +31,7 @@ import {
   TEST_INBOUND_KINDS,
 } from '../api';
 import { parisDateTime, useFi } from './context';
+import { useLayout } from './layout';
 
 const useStyles = makeStyles({
   section: { display: 'flex', flexDirection: 'column', gap: '10px' },
@@ -251,19 +252,22 @@ function ExportFiles({ item }: { item: InboundExport }) {
 
 export function ReceptionView() {
   const styles = useStyles();
+  const ui = useLayout();
   const [state, fi] = useFi();
   const reception = state.reception;
   if (!reception) return <Spinner label={t('addin.reception.loading')} />;
   const ready = reception.inbound.filter((r) => r.status === 'approved').length;
 
   return (
-    <div className={styles.section}>
+    <div className={ui.page}>
       <Subtitle2 as="h2">
         {t(reception.test ? 'addin.reception.testTitle' : 'addin.reception.title')}
       </Subtitle2>
 
       {reception.inbound.length === 0 ? (
-        <Text>{t(reception.test ? 'addin.reception.emptyTest' : 'addin.reception.empty')}</Text>
+        <div className={ui.group}>
+          <Text>{t(reception.test ? 'addin.reception.emptyTest' : 'addin.reception.empty')}</Text>
+        </div>
       ) : (
         <ul className={styles.list}>
           {reception.inbound.map((row) => (
@@ -276,32 +280,34 @@ export function ReceptionView() {
         </ul>
       )}
 
-      <Subtitle2 as="h3">{t('addin.reception.exportTitle')}</Subtitle2>
-      <Caption1>{t('addin.reception.exportHint', { count: ready })}</Caption1>
-      <span className={styles.line}>
-        <Button
-          appearance="primary"
-          disabled={ready === 0 || state.busy.includes('exportInbound')}
-          onClick={() => void fi.exportInbound()}
-        >
-          {t('addin.reception.export')}
-        </Button>
-      </span>
-      {reception.exports.length > 0 && (
-        <>
-          <Text weight="semibold">{t('addin.reception.exports')}</Text>
-          <ul className={styles.list}>
-            {reception.exports.map((item) => (
-              <ExportFiles key={item.id} item={item} />
-            ))}
-          </ul>
-        </>
-      )}
+      <div className={ui.group}>
+        <Subtitle2 as="h3">{t('addin.reception.exportTitle')}</Subtitle2>
+        <Caption1 className={ui.hint}>{t('addin.reception.exportHint', { count: ready })}</Caption1>
+        <span className={styles.line}>
+          <Button
+            appearance="primary"
+            disabled={ready === 0 || state.busy.includes('exportInbound')}
+            onClick={() => void fi.exportInbound()}
+          >
+            {t('addin.reception.export')}
+          </Button>
+        </span>
+        {reception.exports.length > 0 && (
+          <>
+            <Text weight="semibold">{t('addin.reception.exports')}</Text>
+            <ul className={styles.list}>
+              {reception.exports.map((item) => (
+                <ExportFiles key={item.id} item={item} />
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
 
       {state.testMode && (
-        <>
+        <div className={ui.group}>
           <Subtitle2 as="h3">{t('addin.reception.test')}</Subtitle2>
-          <Caption1>{t('addin.reception.testHint')}</Caption1>
+          <Caption1 className={ui.hint}>{t('addin.reception.testHint')}</Caption1>
           <span className={styles.line}>
             {TEST_INBOUND_KINDS.map((kind) => (
               <Button
@@ -313,7 +319,7 @@ export function ReceptionView() {
               </Button>
             ))}
           </span>
-        </>
+        </div>
       )}
     </div>
   );
