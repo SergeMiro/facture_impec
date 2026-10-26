@@ -28,7 +28,7 @@ API:  each file: metadata (cTag) ─► changed? download (302 → pre-authentic
 | File Picker v8 | `onedrive/developer/controls/file-pickers/` | A form POST of `access_token` into a frame; options in `filePicker` (`sdk: '8.0'`, `entry.oneDrive`, `messaging.channelId`, `selection.mode: multiple`, `typesAndSources` .xlsx .xlsm .csv); `initialize` with a MessagePort → `activate`; commands `authenticate`, `pick`, `close`, each acknowledged then answered. Personal (« OneDrive Consumer Configuration », updated 2024-06-17): `https://onedrive.live.com/picker` with `OneDrive.ReadOnly` from the `consumers` authority (from `common`: AADSTS70011); its `authenticate` names `https://api.onedrive.com` and takes that same token; its command ids are numbers (strings in Learn's samples). Work: `<SharePoint host>/_layouts/15/FilePicker.aspx` with `<host>/.default`. |
 | A file's metadata and content | `graph/api/resources/driveitem`, `graph/api/driveitem-get-content` | `cTag` changes with the content only: an unchanged cTag downloads nothing. `/content` answers 302 to a pre-authenticated URL fetched without our token; we stop at 10 MB. |
 | Change notifications | `graph/change-notifications-overview`, `graph/api/resources/subscription`, `graph/api/subscription-post-subscriptions`, `onedrive/developer/rest-api/concepts/using-webhooks` | `changeType: updated` on `/me/drive/root`; up to 42 300 minutes for a driveItem (we ask 3 days, renewed a day before); the handshake POST `?validationToken=` echoed as text/plain within 10 s; a notification answered within 3 s and carrying no data, only `clientState` (its SHA-256 is stored) and the subscription id. On OneDrive for Business a subscription needs `Files.Read.All`: work accounts are polled. |
-| A folder watched (BTP stage 1D) | `onedrive/developer/controls/file-pickers/v8-schema` (updated 2024-04-09), `graph/api/driveitem-list-children` (updated 2025-11-25), `graph/api/driveitem-delta` (updated 2026-06-06), all read 2026-10-24 | The picker picks folders with `typesAndSources.mode: "folders"` and `selection.mode: "single"`. A folder's files: `GET /drives/{drive-id}/items/{item-id}/children` with `Files.Read` (personal and work), `$select` and `$top`, 200 items a page then `@odata.nextLink`. `delta` is documented on a drive's root only (`/me/drive/root/delta`, `token=latest`): a whole drive's changes to filter, so the folder's listing is read instead at each check and compared with what was seen. TODO(verify): the picker's folder mode and its `pick` answer on a personal and a work account. |
+| A folder watched (BTP stage 1D) | `onedrive/developer/controls/file-pickers/v8-schema` (updated 2024-04-09), `graph/api/driveitem-list-children` (updated 2025-11-25), `graph/api/driveitem-delta` (updated 2026-06-06), all read 2026-10-24 | The picker picks folders with `typesAndSources.mode: "folders"` and `selection.mode: "single"`. A folder's files: `GET /drives/{drive-id}/items/{item-id}/children` with `Files.Read` (personal and work), `$select` and `$top`, 200 items a page then `@odata.nextLink`. `delta` is documented on a drive's root only (`/me/drive/root/delta`, `token=latest`): a whole drive's changes to filter, so the folder's listing is read instead at each check and compared with what was seen. Personal, 2026-10-26: the picker opened with `typesAndSources.mode: "folders"`, listed the folders with the files greyed out (`aria-disabled`, not selectable), and its `pick` answer for « Documents » became a watched folder (« Le dossier « Documents » est surveillé »). TODO(verify): the same on a work account; a PDF dropped into the folder reaching « Documents ». |
 | Throttling | `graph/throttling`; `sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online` | 429 or 503 with `Retry-After`: the check waits that long (capped at an hour) and tries again; nothing is lost. |
 | Inbound mail of Microsoft 365 | `exchange/security-and-compliance/how-dane-secures-email` (reached from `purview/how-smtp-dane-works`, updated 2026-07-21) | Exchange Online's MX ends in `mail.protection.outlook.com`, or `mx.microsoft` for domains with DNSSEC. Outlook.com's ends in `olc.protection.outlook.com` (MX of hotmail.com, outlook.fr, live.fr looked up with `dig` the same day). The Scout (below). |
 | Consent | `entra/identity/enterprise-apps/configure-user-consent` | A company may forbid user consent: its administrator then consents once for the app, or « Connecter OneDrive » is refused (`connector_sign_in`). |
@@ -98,6 +98,24 @@ from `pnpm dev`, the API reached from Microsoft through a temporary public tunne
   (above); a failed exchange answered 401 made the pane sign the person out of Facture Impec — it is now
   409 `connector_sign_in`, with Microsoft's AADSTS number in `details` (the rest of Microsoft's text may
   name the person and is dropped).
+- **Disconnect (2026-10-26).** Again on the web, a fresh database, the same account: « Connecter
+  OneDrive » went through without a screen (the consent of 2026-10-22 stands), « Qté.xlsx » picked and
+  its sheet included (one order); the subscription's handshake through the tunnel at 16:04:18 UTC. E2
+  changed at 16:06:21 → notification at 16:07:21, the file read again. « Déconnecter OneDrive » →
+  « Oui, déconnecter » at 16:07:42: `DELETE /subscriptions/{id}` answered without error (no
+  « subscription not deleted » in the API's log), `GET /connectors/microsoft` → `connection: null`,
+  `GET /registry` → `sources: []` (the file's sheet and documents gone). E2 changed again at 16:07:50:
+  no notification in the next 3 min 30 s (the one before came in 60 s).
+- **A folder watched (2026-10-26).** « Surveiller un dossier » opened OneDrive's picker in folder mode
+  (single selection, French): the folders selectable, the files shown greyed out. « Documents » picked →
+  « Le dossier « Documents » est surveillé », « 0 document(s) reçu(s) de ce dossier ». A PDF dropped into
+  it: not tried (it would write into the owner's OneDrive).
+- **A file uploaded in Excel (2026-10-26).** « Importer un fichier » inside the pane in Excel on the web:
+  the add-in's frame is sandboxed with `allow-scripts allow-forms allow-same-origin allow-popups
+  allow-popups-to-escape-sandbox allow-modals allow-downloads allow-storage-access-by-user-activation`
+  (no token restricts a file input). A CSV of two orders set on the hidden input (CDP
+  `DOM.setFileInputFiles`: the agent's browser takes file choosers itself, so the system's window could
+  not be watched) → « « Commandes-octobre.csv » est importé », its sheet included: 2 documents.
 - **A window left open.** If a previous sign-in window of ours is still open, MSAL reuses it and answers
   `interaction_in_progress`; closing it is enough (`docs/DEFERRED.md`).
 
@@ -117,6 +135,9 @@ from `pnpm dev`, the API reached from Microsoft through a temporary public tunne
 6. ✅ personal, 2026-10-22: `https://account.live.com/consent/Manage` lists « Facture Impec » under
    « Apps and services you've given access »; « Remove these permissions » withdraws it at once,
    without asking again. Open: a work account (My Apps or the administrator).
+7. ✅ personal, 2026-10-26: « Déconnecter OneDrive » deletes the subscription at Microsoft (no
+   notification after it), our token, the file and what was read from it (above). Microsoft's refresh
+   token is not revoked by us: withdrawing the consent is item 6.
 
 A work account needs a Microsoft 365 tenant and its administrator's consent (§ The owner's app
 registration): not tried.

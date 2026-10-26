@@ -8,9 +8,6 @@ back). Strike a line when done and move its evidence to `docs/PROGRESS.md`.
 
 What a real personal account showed and what is still open: `docs/MICROSOFT365.md`.
 
-- [ ] « Déconnecter OneDrive » on a real account: the token, the subscription at Microsoft, the files
-      and their documents gone (proven against the stand-in only). Needs `pnpm dev`, a public tunnel to
-      `:4000` and the add-in sideloaded in Excel on the web (`docs/RUNBOOK.md` § OneDrive connector).
 - [ ] A work account: a Microsoft 365 tenant with OneDrive for Business and its administrator's consent
       (the app's publisher is unverified). Then TODO(verify) 3 (the picker's `resource`) and 4 (work and
       SharePoint addresses) of `docs/MICROSOFT365.md`, and the 2-minute polling.
@@ -42,7 +39,9 @@ What a real personal account showed and what is still open: `docs/MICROSOFT365.m
 ## Files uploaded (R6), built on 2026-10-23
 
 - [ ] In real Excel (Windows, Mac, the web): the hidden file input of « Importer un fichier » opens the
-      system's file chooser inside the task pane (proven in the harness E2E in Chrome only).
+      system's file chooser inside the task pane (proven in the harness E2E in Chrome only). On the web,
+      2026-10-26: the upload itself works in Excel's frame (`docs/MICROSOFT365.md`); the system's window
+      was not watched (the agent's browser takes file choosers itself) — one click by a person settles it.
 - [ ] A Factur-X from a real supplier (not made by our own `toFacturXPdf`), and a UBL from another
       platform, uploaded once: read, the right supplier and number, B2 takes the price.
 
@@ -262,10 +261,9 @@ Left from stage 1 for later (2026-10-24):
 - [x] **OneDrive folders watched** (BTP plan stage 1 `drive` adapter): done 2026-10-24, stage 1D
       (`docs/plans/phase-1.md` › 1D; `apps/api/src/connectors.test.ts` › a watched OneDrive folder).
 - [ ] **OneDrive's picker in folder mode, on real accounts** (owner, with the app registration):
-      « Registre » → « Fichiers OneDrive » → « Surveiller un dossier » on a personal and on a work
-      account; the picker shows folders only and its answer gives the folder (`docs/MICROSOFT365.md`,
-      TODO(verify) in `apps/addin/src/microsoft/office.ts`). Then drop a PDF into the folder and see it
-      under « Documents » within the hour (personal) or two minutes (work).
+      « Registre » → « Fichiers OneDrive » → « Surveiller un dossier » on a work account (personal:
+      done 2026-10-26, files greyed out, the folder taken; `docs/MICROSOFT365.md`). Then drop a PDF into
+      the folder and see it under « Documents » within the hour (personal) or two minutes (work).
 - [ ] **Google Drive folders watched**: check on a real Google account whether a folder picked with
       `setSelectFolderEnabled` lets `drive.file` list and read the files inside it (`docs/GOOGLE.md`
       §2). If yes, the same `checkFolder` over Drive; if no, Google Drive stays files only

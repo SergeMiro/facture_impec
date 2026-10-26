@@ -148,8 +148,9 @@ function microsoftPort(host: 'office' | 'browser'): MicrosoftPort {
         entry: { oneDrive: { files: {} } },
         authentication: {},
         messaging: { origin: window.location.origin, channelId },
-        // Learn (File Picker v8 schema, read 2026-10-24): `folders` lists folders only.
-        // TODO(verify): the folder mode with the owner's app registration (docs/MICROSOFT365.md).
+        // Learn (File Picker v8 schema, read 2026-10-24): `folders` lists folders only. Seen on a
+        // personal account 2026-10-26: files still listed but disabled, a folder's `pick` answer taken.
+        // TODO(verify): the folder mode on a work account (docs/MICROSOFT365.md).
         ...(kind === 'folder'
           ? { selection: { mode: 'single' }, typesAndSources: { mode: 'folders' } }
           : {
