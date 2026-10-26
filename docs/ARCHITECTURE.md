@@ -6,7 +6,7 @@ is the owner's implementation plan (see `CLAUDE.md`). "Plan §N" refers to its s
 ## Shape
 
 ```
-Excel (desktop / web / Mac)                       apps/api  (Hono, Node 22)
+Excel (desktop / web / Mac)                       apps/api  (Hono, Node 24)
 apps/addin — Office.js task pane   ── HTTPS ──►   auth, ingest, validation, agent runs,
 React 18 + Vite, thin client                      PdpAdapter, webhooks + status polling
                                                         │
@@ -1249,7 +1249,7 @@ the `FF-` prefix for our own checks, French messages, and the cell reference car
 
 | Topic | Decision | Why |
 |---|---|---|
-| Workspace | pnpm 11 workspaces + Turborepo 2, Node 22 (`.nvmrc`) | Plan §1. |
+| Workspace | pnpm 11 workspaces + Turborepo 2, Node 24 LTS (`.nvmrc`) | Plan §1. |
 | Internal packages | Export TS source, no build step; apps run via `tsx` and Vite | Fewest moving parts; one source of truth per type. Bundling the API for production is decided in M2. |
 | TypeScript | v7 (native compiler) for type checks; `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, `module: Preserve` + `bundler` resolution | Strict per plan; `Preserve` works for both Vite and `tsx`. If a tool breaks on TS 7, fall back to 6.0. |
 | Lint / format | Biome 2, `recommended` preset, `noExplicitAny` = error | Plan §1; enforces "no `any`". |
@@ -1257,7 +1257,7 @@ the `FF-` prefix for our own checks, French messages, and the cell reference car
 | Ports | add-in 3000, api 4000, mock-pdp 4010 | 4010 is fixed by plan §3; 3000 is the Office add-in convention. |
 | React | 18.3 | Plan §2. Fluent UI v9 (added in M3) supports React ≤ 19. |
 | CI | `pnpm verify` (biome ci + typecheck + test); `ci.yml` runs the same | GitHub Actions is disabled on the account (billing since 2026-09-17), so the local run is the real gate. |
-| Old deployment | `facture-impec.vercel.app` (Next.js MVP) stays up untouched; it is deployed from the CLI, not linked to git | Replaced by the new add-in in M3. |
+| Old deployment | `facture-impec.vercel.app` (Next.js MVP) was deleted on 2026-10-26 with its Vercel project; the code stays on the tag `archive/rust-mvp-v1` | The marketing site `facture-impec-site.vercel.app` is the public address until the add-in ships. |
 
 ## Decisions prepared for later milestones
 

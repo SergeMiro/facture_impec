@@ -118,7 +118,7 @@ function companyOf(found: Result): DirectoryCompany {
   };
 }
 
-const USER_AGENT = 'FactureImpec/1.0 (inscription; +https://facture-impec.vercel.app)';
+const USER_AGENT = 'FactureImpec/1.0 (inscription; +https://facture-impec-site.vercel.app)';
 
 /** GET /search?…&minimal=true&include=siege,tva (docs/ONBOARDING.md §1.1, §1.4). */
 export class RechercheEntreprises implements Directory {

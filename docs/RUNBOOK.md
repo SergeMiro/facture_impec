@@ -2,7 +2,7 @@
 
 ## Fresh machine
 
-Requirements: Node 22 and Git. pnpm comes through corepack.
+Requirements: Node 24 (LTS) and Git. pnpm comes through corepack.
 
 ```bash
 git clone https://github.com/SergeMiro/facture_impec.git facture-impec
@@ -56,11 +56,11 @@ line there. Proof it runs: `select seen_at, hits from public.heartbeat`. If the 
 restore it from the Supabase dashboard; data is kept.
 
 Deploy: Vercel project `facture-impec-site` (team `sergemiros-projects`, created 2026-10-18, framework
-Astro, Node 22), production https://facture-impec-site.vercel.app. It is not linked to git: pushes deploy
+Astro, Node 24), production https://facture-impec-site.vercel.app. It is not linked to git: pushes deploy
 nothing, the CLI does. Link the folder once (`apps/site/.vercel` is ignored), then build with Astro, whose
 Vercel adapter writes `apps/site/.vercel/output`, and upload that output. Remove the old output first:
-`deploy --prebuilt` silently ships whatever it finds. The old project `facture-impec` keeps the
-Next.js MVP and is not touched. The CLI reads `VERCEL_TOKEN` from the environment; never pass
+`deploy --prebuilt` silently ships whatever it finds. The old project `facture-impec` (the Next.js MVP)
+was deleted on 2026-10-26. The CLI reads `VERCEL_TOKEN` from the environment; never pass
 `--token` on the command line, the CLI repeats the command, token included, in its output.
 
 ```bash
@@ -917,5 +917,4 @@ Nothing is lost while they are slow: a deadline is drafted at the next run that 
 ## Legacy MVP
 
 The Rust/Next.js MVP was removed at the end of M1; its code and history stay on the tag
-`archive/rust-mvp-v1`. Its deployment is still live at https://facture-impec.vercel.app until the
-add-in replaces it (M3).
+`archive/rust-mvp-v1`. Its deployment (https://facture-impec.vercel.app) was deleted on 2026-10-26.

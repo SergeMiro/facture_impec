@@ -2,7 +2,7 @@
 # The API and its workers in one process (docs/DEPLOY.md). From the repository root:
 #   docker build -f apps/api/Dockerfile -t facture-impec-api .
 # Internal packages ship TypeScript source run through tsx (CLAUDE.md): there is no build step.
-FROM node:22.23.4-bookworm-slim
+FROM node:24.22.1-bookworm-slim
 ENV CI=true
 # The ingest worker reads PDFs (pdftotext, pdftoppm) and scans (tesseract, French): src/reading.ts.
 RUN apt-get update \

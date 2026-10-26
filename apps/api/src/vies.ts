@@ -36,7 +36,7 @@ export class ViesUnavailable extends Error {
   }
 }
 
-const USER_AGENT = 'FactureImpec/1.0 (verification TVA; +https://facture-impec.vercel.app)';
+const USER_AGENT = 'FactureImpec/1.0 (verification TVA; +https://facture-impec-site.vercel.app)';
 
 /** "---" stands for « nothing to say » in VIES' answers. */
 const text = z

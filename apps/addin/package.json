@@ -29,7 +29,7 @@
   "devDependencies": {
     "@fi/api": "workspace:*",
     "@playwright/test": "^1.64.1",
-    "@types/node": "^22.19.0",
+    "@types/node": "^24.19.2",
     "@types/office-js": "^1.0.612",
     "@types/office-runtime": "^1.0.40",
     "@types/react": "^18.3.27",

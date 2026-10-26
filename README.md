@@ -17,8 +17,8 @@ peut proposer le complément sous son nom. Tout est prouvé par des tests contre
 Marketplace sont prêts. Rien n'est encore hébergé ni publié, sauf le site de présentation
 (https://facture-impec-site.vercel.app) : le pilote attend l'hébergement, les clés B2Brouter et Stripe,
 un service d'e-mail et les conditions générales du propriétaire (voir `docs/RUNBOOK.md` § Pilot).
-L'ancien prototype (Rust + Next.js) reste consultable dans le tag `archive/rust-mvp-v1` et sur
-https://facture-impec.vercel.app jusqu'à son remplacement.
+L'ancien prototype (Rust + Next.js) reste consultable dans le tag `archive/rust-mvp-v1` ; son déploiement
+a été supprimé le 26.10.2026.
 
 ## Pour les développeurs
 

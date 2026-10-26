@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "@fi/mock-pdp": "workspace:*",
-    "@types/node": "^22.19.0",
+    "@types/node": "^24.19.2",
     "tsx": "^4.23.15"
   }
 }
