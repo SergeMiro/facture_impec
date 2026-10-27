@@ -25,18 +25,40 @@ import { InvoiceSearch } from './InvoiceSearch';
 const useStyles = makeStyles({
   section: { display: 'flex', flexDirection: 'column', gap: '10px' },
   bar: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' },
-  list: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column' },
+  list: {
+    listStyle: 'none',
+    margin: 0,
+    padding: '0 12px',
+    display: 'flex',
+    flexDirection: 'column',
+    borderRadius: tokens.borderRadiusXLarge,
+    border: `1px solid ${tokens.colorNeutralStroke3}`,
+    boxShadow: tokens.shadow2,
+    backgroundColor: tokens.colorNeutralBackground1,
+    ':empty': { display: 'none' },
+  },
   row: {
     display: 'grid',
     gridTemplateColumns: '1fr auto',
     gap: '4px 8px',
-    padding: '8px 0',
+    padding: '10px 0',
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    ':last-child': { borderBottom: 'none' },
   },
   detail: { gridColumn: '1 / -1', color: tokens.colorNeutralForeground2 },
   muted: { color: tokens.colorNeutralForeground3 },
-  card: { display: 'flex', flexDirection: 'column', gap: '4px', padding: '10px' },
-  todo: { margin: 0, paddingLeft: '20px' },
+  card: { display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px' },
+  tiles: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' },
+  tile: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    padding: '8px 10px',
+    borderRadius: tokens.borderRadiusLarge,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  todo: { margin: 0, paddingLeft: '18px', color: tokens.colorNeutralForeground2 },
+  view: { justifySelf: 'end' },
 });
 
 function Week({ report }: { report: WeeklyReport }) {
@@ -44,9 +66,20 @@ function Week({ report }: { report: WeeklyReport }) {
   return (
     <Card className={styles.card} data-testid="weekly">
       <Text weight="semibold">{report.title}</Text>
-      {report.numbers.map((n) => (
-        <Caption1 key={n}>{n}</Caption1>
-      ))}
+      <div className={styles.tiles}>
+        {report.numbers.map((n) => {
+          // « Envoyées : 2 facture(s), 300,00 € »: the label above, the figures in bold.
+          const [label, value] = n.includes(' : ') ? n.split(' : ', 2) : ['', n];
+          return (
+            <div key={n} className={styles.tile}>
+              {label && <Caption1 className={styles.muted}>{label}</Caption1>}
+              <Text size={200} weight="semibold">
+                {value}
+              </Text>
+            </div>
+          );
+        })}
+      </div>
       {report.actions.length > 0 ? (
         <>
           <Text weight="semibold">{t('report.todo')}</Text>
@@ -142,8 +175,6 @@ export function Dashboard() {
         state.busy.includes('report') && <Spinner size="tiny" label={t('addin.report.loading')} />
       )}
 
-      <InvoiceSearch />
-
       {sync && (
         <Text weight="semibold" data-testid="counts">
           {t('addin.dash.counts', { total: rows.length, errors, ready })}
@@ -165,13 +196,18 @@ export function Dashboard() {
               {t('addin.dash.rows', { rows: r.rows.join(', ') })}
             </Caption1>
             {r.invoiceId && (
-              <Link onClick={() => r.invoiceId && void fi.openInvoice(r.invoiceId)}>
+              <Link
+                className={styles.view}
+                onClick={() => r.invoiceId && void fi.openInvoice(r.invoiceId)}
+              >
                 {t('addin.dash.view')}
               </Link>
             )}
           </li>
         ))}
       </ul>
+
+      <InvoiceSearch />
 
       {sync && sync.result.ignoredRows.length > 0 && (
         <Caption1 className={styles.muted}>

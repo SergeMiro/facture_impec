@@ -25,6 +25,16 @@ export const theme: Theme = {
   colorCompoundBrandStrokeHover: leaf[700],
   colorNeutralForeground2BrandHover: leaf[700],
   colorNeutralForeground2BrandSelected: leaf[700],
+  // A task pane is ~320 px: one step smaller type and softer corners than Fluent's web defaults.
+  fontSizeBase300: '13px',
+  lineHeightBase300: '18px',
+  fontSizeBase400: '15px',
+  lineHeightBase400: '20px',
+  borderRadiusMedium: '6px',
+  borderRadiusLarge: '10px',
+  borderRadiusXLarge: '14px',
+  colorNeutralBackground2: brand.cream,
+  colorNeutralForeground1: brand.ink,
 };
 
 /** Plan §3: test mode is orange on every screen. */

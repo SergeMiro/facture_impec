@@ -16,6 +16,7 @@ import {
   Text,
   tokens,
 } from '@fluentui/react-components';
+import { CalendarLtr20Regular, Search20Regular } from '@fluentui/react-icons';
 import { useState } from 'react';
 import { type InvoiceSummary, SEARCH_STAGES, type SearchStage } from '../api';
 import { useFi } from './context';
@@ -23,6 +24,7 @@ import { useFi } from './context';
 const useStyles = makeStyles({
   card: { display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px' },
   form: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  line: { display: 'flex', gap: '6px', '& > :first-child': { flexGrow: 1, minWidth: 0 } },
   dates: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' },
   list: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column' },
   row: {
@@ -67,6 +69,7 @@ export function InvoiceSearch() {
   const [from, setFrom] = useState(found?.query.from ?? '');
   const [to, setTo] = useState(found?.query.to ?? '');
   const busy = state.busy.includes('search');
+  const [dates, setDates] = useState(Boolean(from || to));
 
   return (
     <Card className={styles.card} data-testid="invoice-search">
@@ -83,18 +86,24 @@ export function InvoiceSearch() {
           });
         }}
       >
-        <Field label={t('addin.search.text')}>
+        <div className={styles.line}>
           <Input
             type="search"
             value={text}
+            aria-label={t('addin.search.text')}
             placeholder={t('addin.search.placeholder')}
+            contentBefore={<Search20Regular />}
             onChange={(_, d) => setText(d.value)}
             data-testid="search-text"
           />
-        </Field>
-        <Field label={t('addin.search.stage')}>
+          <Button type="submit" appearance="primary" disabled={busy}>
+            {t('addin.search.go')}
+          </Button>
+        </div>
+        <div className={styles.line}>
           <Select
             value={stage}
+            aria-label={t('addin.search.stage')}
             onChange={(_, d) => {
               const picked = SEARCH_STAGES.find((s) => s === d.value);
               setStage(picked ?? '');
@@ -108,18 +117,24 @@ export function InvoiceSearch() {
               </option>
             ))}
           </Select>
-        </Field>
-        <div className={styles.dates}>
-          <Field label={t('addin.search.from')}>
-            <Input type="date" value={from} onChange={(_, d) => setFrom(d.value)} />
-          </Field>
-          <Field label={t('addin.search.to')}>
-            <Input type="date" value={to} onChange={(_, d) => setTo(d.value)} />
-          </Field>
+          <Button
+            icon={<CalendarLtr20Regular />}
+            aria-expanded={dates}
+            title={t('addin.search.dates')}
+            aria-label={t('addin.search.dates')}
+            onClick={() => setDates(!dates)}
+          />
         </div>
-        <Button type="submit" appearance="primary" disabled={busy}>
-          {t('addin.search.go')}
-        </Button>
+        {dates && (
+          <div className={styles.dates}>
+            <Field label={t('addin.search.from')} size="small">
+              <Input type="date" value={from} onChange={(_, d) => setFrom(d.value)} />
+            </Field>
+            <Field label={t('addin.search.to')} size="small">
+              <Input type="date" value={to} onChange={(_, d) => setTo(d.value)} />
+            </Field>
+          </div>
+        )}
       </form>
 
       {found &&

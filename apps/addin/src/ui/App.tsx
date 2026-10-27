@@ -1,6 +1,6 @@
 // The task pane: banners on every screen (Mode test, offline, the last notice), then one screen.
 // No router: office.js breaks the history API (docs/OFFICE.md §8), and the pane has eleven screens.
-import { type MessageKey, t } from '@fi/shared';
+import { type MessageKey, brand as palette, t } from '@fi/shared';
 import {
   Button,
   Caption1,
@@ -15,6 +15,7 @@ import {
   TabList,
   Text,
   Title3,
+  Tooltip,
   tokens,
 } from '@fluentui/react-components';
 import {
@@ -64,61 +65,93 @@ const useStyles = makeStyles({
     overflowX: 'hidden',
     // A long option or value never pushes a control past the pane's edge.
     '& .fui-Select, & .fui-Input, & .fui-Field': { minWidth: 0, maxWidth: '100%' },
+    '& h2, & h3': { margin: 0 },
+    // A screen's own tabs (Documents: À valider, Échéances…) wrap instead of running off the pane.
+    '& .fui-TabList': { flexWrap: 'wrap' },
+    // Fluent's Card matches the pane's own cards (layout.ts group).
+    '& .fui-Card': {
+      borderRadius: tokens.borderRadiusXLarge,
+      border: `1px solid ${tokens.colorNeutralStroke3}`,
+      boxShadow: tokens.shadow2,
+    },
   },
   testBanner: {
     backgroundColor: TEST_ORANGE,
     color: '#1f1300',
-    padding: '8px 12px',
+    padding: '6px 10px',
     borderRadius: tokens.borderRadiusMedium,
+    fontSize: tokens.fontSizeBase200,
     fontWeight: tokens.fontWeightSemibold,
   },
+  // The brand band runs edge to edge over the root's padding.
   header: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    paddingBottom: '8px',
-    borderBottom: `2px solid ${tokens.colorNeutralStroke2}`,
+    gap: '10px',
+    margin: '-12px -14px 0',
+    padding: '12px 14px',
+    color: '#fff',
+    background: `linear-gradient(135deg, ${palette.leaf[800]}, ${palette.leaf[600]})`,
   },
-  logo: { width: '24px', height: '24px', flexShrink: 0 },
+  logo: {
+    width: '22px',
+    height: '22px',
+    flexShrink: 0,
+    padding: '4px',
+    borderRadius: tokens.borderRadiusLarge,
+    backgroundColor: '#fff',
+  },
   brand: { display: 'flex', flexDirection: 'column', minWidth: 0, flexGrow: 1 },
+  title: { color: '#fff', lineHeight: '20px' },
   tenant: {
-    color: tokens.colorNeutralForeground3,
+    color: 'rgba(255, 255, 255, 0.8)',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
   center: { display: 'flex', justifyContent: 'center', padding: '48px 0' },
   tabs: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
-  // Eight screens in a 320 px pane: two rows of four, an icon above each name, all visible at once.
+  // One row of icons that stays on top while the screen scrolls; names in tooltips and the screen's title.
   nav: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+    position: 'sticky',
+    top: 0,
+    zIndex: 1,
+    display: 'flex',
+    justifyContent: 'space-between',
     gap: '2px',
-    padding: '2px',
-    borderRadius: tokens.borderRadiusLarge,
-    backgroundColor: tokens.colorNeutralBackground3,
+    margin: '-12px -14px 0',
+    padding: '6px 8px',
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    boxShadow: tokens.shadow2,
   },
   navTab: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '2px',
-    minWidth: 0,
-    padding: '6px 2px 8px',
-    borderRadius: tokens.borderRadiusMedium,
-    fontSize: tokens.fontSizeBase200,
-    '& .fui-Tab__content': {
-      fontSize: tokens.fontSizeBase200,
-      lineHeight: tokens.lineHeightBase200,
-      padding: 0,
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      whiteSpace: 'nowrap',
-      maxWidth: '100%',
-    },
-    // The bold copy Fluent keeps under each name would push it up: grid cells already fix the width.
+    minWidth: '32px',
+    height: '32px',
+    padding: 0,
+    justifyContent: 'center',
+    borderRadius: tokens.borderRadiusCircular,
+    color: tokens.colorNeutralForeground3,
+    '& .fui-Tab__content': { padding: 0, whiteSpace: 'nowrap' },
     '& .fui-Tab__content--reserved-space': { display: 'none' },
-    '&[aria-selected="true"]': { backgroundColor: tokens.colorNeutralBackground1 },
+    // Fluent's underline indicator: the pill replaces it.
+    '::after': { display: 'none' },
+    '::before': { display: 'none' },
+    ':hover': { backgroundColor: tokens.colorNeutralBackground3 },
+    '&[aria-selected="true"], &[aria-selected="true"]:hover': {
+      backgroundColor: palette.leaf[600],
+    },
+    '&[aria-selected="true"] .fui-Tab__icon, &[aria-selected="true"]:hover .fui-Tab__icon': {
+      color: '#fff',
+    },
+  },
+  hidden: {
+    position: 'absolute',
+    width: '1px',
+    height: '1px',
+    overflow: 'hidden',
+    clip: 'rect(0 0 0 0)',
+    whiteSpace: 'nowrap',
   },
 });
 
@@ -218,11 +251,13 @@ function Pane({ host }: { host: 'excel' | 'sheets' }) {
     <main className={styles.root}>
       <div
         className={styles.header}
-        style={brand?.accentColor ? { borderBottomColor: brand.accentColor } : undefined}
+        style={brand?.accentColor ? { background: brand.accentColor } : undefined}
       >
         {!brand?.full && <img className={styles.logo} src="assets/icon-32.png" alt="" />}
         <span className={styles.brand}>
-          <Subtitle1 as="h1">{brand?.full ? brand.firmName : t('app.title')}</Subtitle1>
+          <Subtitle1 as="h1" className={styles.title}>
+            {brand?.full ? brand.firmName : t('app.title')}
+          </Subtitle1>
           {brand && !brand.full && (
             <Caption1 className={styles.tenant}>
               {t('addin.brand.by', { firm: brand.firmName })}
@@ -235,6 +270,29 @@ function Pane({ host }: { host: 'excel' | 'sheets' }) {
           )}
         </span>
       </div>
+
+      {signedIn && (
+        <TabList
+          className={styles.nav}
+          size="small"
+          selectedValue={tab}
+          aria-label={t('addin.nav.label')}
+          onTabSelect={(_, data) => {
+            const name = data.value;
+            if (!isNav(name)) return;
+            fi.navigate({ name });
+            if (name === 'detect' && !state.detection) void fi.editMapping();
+          }}
+        >
+          {NAV.map(({ value, label, icon: Icon }) => (
+            <Tooltip key={value} content={t(label)} relationship="inaccessible" withArrow>
+              <Tab value={value} icon={<Icon />} className={styles.navTab}>
+                <span className={styles.hidden}>{t(label)}</span>
+              </Tab>
+            </Tooltip>
+          ))}
+        </TabList>
+      )}
 
       {host === 'sheets' && signedIn && (
         <div role="toolbar" aria-label={t('sheets.toolbar')} className={styles.tabs}>
@@ -290,27 +348,6 @@ function Pane({ host }: { host: 'excel' | 'sheets' }) {
             </Button>
           </MessageBarActions>
         </MessageBar>
-      )}
-
-      {signedIn && (
-        <TabList
-          className={styles.nav}
-          size="small"
-          selectedValue={tab}
-          aria-label={t('addin.nav.label')}
-          onTabSelect={(_, data) => {
-            const name = data.value;
-            if (!isNav(name)) return;
-            fi.navigate({ name });
-            if (name === 'detect' && !state.detection) void fi.editMapping();
-          }}
-        >
-          {NAV.map(({ value, label, icon: Icon }) => (
-            <Tab key={value} value={value} icon={<Icon />} className={styles.navTab}>
-              {t(label)}
-            </Tab>
-          ))}
-        </TabList>
       )}
 
       {!state.booted ? (
