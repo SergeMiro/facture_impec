@@ -23,10 +23,11 @@ import { applyInboundTransition, applyTransition } from './transition';
 let database: Database;
 const db = () => database.db;
 
+// Thirty-odd migrations on PGlite take over 10 s when the machine is busy (the full gate).
 beforeAll(async () => {
   database = await openDatabase();
   await database.migrate();
-});
+}, 60_000);
 afterAll(() => database.close());
 
 async function tenant() {

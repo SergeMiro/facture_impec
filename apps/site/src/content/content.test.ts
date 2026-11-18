@@ -1,18 +1,19 @@
 import { TrialRequestSchema } from '@fi/shared';
 import { describe, expect, it } from 'vitest';
-import { plans } from './site';
-import { fieldErrors, planOptions } from './trial-form';
+import { faqs, offer } from './site';
+import { fieldErrors } from './trial-form';
 
-describe('plans', () => {
-  it('gives two months free on the yearly price, give or take rounding', () => {
-    for (const plan of plans) {
-      expect(plan.yearlyPerMonth).toBeLessThan(plan.monthly);
-      expect(Math.abs(plan.yearlyPerMonth * 12 - plan.monthly * 10)).toBeLessThanOrEqual(12);
-    }
+describe('the offer', () => {
+  it('is the price the owner set, and the FAQ quotes the same one', () => {
+    expect(offer.price).toBe(2.99);
+    const quoted = faqs.filter((f) => f.a.includes('€ HT par mois'));
+    expect(quoted.length).toBeGreaterThan(0);
+    for (const f of quoted) expect(f.a).toContain('2,99 € HT par mois');
   });
 
-  it('offers exactly the plans the trial form accepts', () => {
-    expect(plans.map((p) => p.id)).toEqual(planOptions.map((o) => o.value));
+  it('no longer names the old plans', () => {
+    const copy = JSON.stringify({ offer, faqs });
+    expect(copy).not.toMatch(/Essentiel|Croissance|offre Cabinet|IA est incluse/);
   });
 });
 

@@ -404,7 +404,9 @@ describe('a new user on the demo sheet', () => {
     const id = row(2)?.invoiceId;
     if (!id) throw new Error('row 2 has no invoice');
     // The CollectAgent's sweep gives the accepted invoice its plan (the company's cadence).
-    expect(await runCollect(api.deps)).toMatchObject({ planned: 1 });
+    // Before the demo sheet's due dates (October 2026): on the real clock it would turn overdue.
+    const beforeDue = { ...api.deps, now: () => new Date('2026-10-20T09:00:00Z') };
+    expect(await runCollect(beforeDue)).toMatchObject({ planned: 1 });
     await controller.openInvoice(id);
     expect(state().invoice?.detail.chase?.cadence).toEqual([-3, 7, 15]);
 
@@ -820,6 +822,21 @@ describe('the other sheets of the workbook (R1)', () => {
     await controller.showSheet('Commandes');
     expect(book.active).toEqual({ sheet: 'Commandes', cell: 'A1' });
     book.active = { sheet: DEMO_SHEET, cell: 'A1' };
+  });
+
+  it('« Vérifier la feuille » checks the sheet the person switched to, not the one opened first', async () => {
+    book.sheets.set('Octobre', new Map());
+    book.active = { sheet: 'Octobre', cell: 'A1' };
+    await controller.verifySheet();
+    await settle();
+    expect(state().sheet).toBe('Octobre');
+    expect(state().screen.name).toBe('detect');
+    book.active = { sheet: DEMO_SHEET, cell: 'A1' };
+    await controller.verifySheet();
+    await until(() => !state().busy.includes('sync'), 'the invoice check');
+    expect(state().sheet).toBe(DEMO_SHEET);
+    expect(state().screen.name).toBe('dashboard');
+    book.sheets.delete('Octobre');
   });
 
   it('stops listening at sign-out; the next pane reads what changed meanwhile, then follows it', async () => {

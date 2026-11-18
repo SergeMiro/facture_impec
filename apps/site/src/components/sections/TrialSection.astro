@@ -1,12 +1,12 @@
 ---
-import { cabinetTrialDays, trialDays, trialRealSends } from '../../content/site';
+import { offer, trialDays, trialRealSends } from '../../content/site';
 import { Icon, type IconName } from '../Icon';
 import TrialForm from '../islands/TrialForm';
 
 const perks: { icon: IconName; text: string }[] = [
   {
     icon: 'calendar',
-    text: `${trialDays} jours avec toutes les fonctionnalités Croissance (${cabinetTrialDays} jours pour les cabinets)`,
+    text: `${trialDays} jours avec toutes les fonctionnalités, puis ${offer.price.toLocaleString('fr-FR')} € HT par mois sans engagement`,
   },
   {
     icon: 'flask',

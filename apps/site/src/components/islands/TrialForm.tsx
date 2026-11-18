@@ -1,16 +1,9 @@
 import type { TrialRequest } from '@fi/shared';
-import { type FormEvent, useEffect, useRef, useState } from 'react';
-import {
-  excelOptions,
-  messages,
-  planOptions,
-  type TrialField,
-  volumeOptions,
-} from '../../content/trial-form';
+import { type FormEvent, useRef, useState } from 'react';
+import { excelOptions, messages, type TrialField, volumeOptions } from '../../content/trial-form';
 import { Icon } from '../Icon';
 
 type Profile = TrialRequest['profile'];
-type Plan = NonNullable<TrialRequest['plan']>;
 type State =
   | { kind: 'idle' }
   | { kind: 'sending' }
@@ -55,22 +48,7 @@ function Field({
 export default function TrialForm() {
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [profile, setProfile] = useState<Profile>('company');
-  const [plan, setPlan] = useState<Plan | ''>('');
   const startedAt = useRef(Date.now());
-
-  // A plan comes from a pricing card (fi:plan event) or a deep link such as /?offre=cabinet#essai.
-  useEffect(() => {
-    const choose = (id: string | null) => {
-      const match = planOptions.find((p) => p.value === id);
-      if (!match) return;
-      setPlan(match.value);
-      if (match.value === 'cabinet') setProfile('accountant');
-    };
-    choose(new URLSearchParams(window.location.search).get('offre'));
-    const onPlan = (e: Event) => choose((e as CustomEvent<string>).detail);
-    window.addEventListener('fi:plan', onPlan);
-    return () => window.removeEventListener('fi:plan', onPlan);
-  }, []);
 
   const fieldError = (f: TrialField) => (state.kind === 'error' ? state.fields[f] : undefined);
   const aria = (f: TrialField) =>
@@ -82,7 +60,6 @@ export default function TrialForm() {
     const payload = {
       ...data,
       profile,
-      plan: plan || undefined,
       consent: data.consent === 'on',
       startedAt: startedAt.current,
     };
@@ -293,27 +270,6 @@ export default function TrialForm() {
           </select>
         </Field>
       </div>
-
-      <Field
-        id="trial-plan"
-        label="Offre qui vous intéresse"
-        hint="facultatif"
-        error={fieldError('plan')}
-      >
-        <select
-          id="trial-plan"
-          value={plan}
-          onChange={(e) => setPlan(e.target.value as Plan | '')}
-          className={input}
-        >
-          <option value="">Je ne sais pas encore</option>
-          {planOptions.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </Field>
 
       <Field
         id="trial-message"

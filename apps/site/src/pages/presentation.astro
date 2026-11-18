@@ -1,7 +1,7 @@
 ---
 import { Icon, type IconName } from '../components/Icon';
 import Logo from '../components/Logo.astro';
-import { deadlines, plans, providers, trialDays } from '../content/site';
+import { deadlines, offer, providers, trialDays, trialRealSends } from '../content/site';
 import Base from '../layouts/Base.astro';
 
 const steps: { icon: IconName; title: string; text: string }[] = [
@@ -120,7 +120,7 @@ const price = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
           <ul class="space-y-5 text-lg">
             <li class="flex gap-3"><Icon name="eye" size={22} className="mt-1 shrink-0 text-leaf-500" /> Données anonymisées avant chaque appel</li>
             <li class="flex gap-3"><Icon name="shield" size={22} className="mt-1 shrink-0 text-leaf-500" /> Validité vérifiée par un moteur de règles déterministe</li>
-            <li class="flex gap-3"><Icon name="key" size={22} className="mt-1 shrink-0 text-leaf-500" /> IA incluse, ou votre propre clé chiffrée</li>
+            <li class="flex gap-3"><Icon name="key" size={22} className="mt-1 shrink-0 text-leaf-500" /> IA facultative, avec votre propre clé chiffrée</li>
             <li class="flex gap-3"><Icon name="plug" size={22} className="mt-1 shrink-0 text-leaf-500" /> Tout service compatible OpenAI, même sur votre serveur</li>
           </ul>
           <ul class="grid grid-cols-2 gap-3">
@@ -158,23 +158,21 @@ const price = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
     <!-- 8 -->
     <section class="slide">
       <div class="slide-inner">
-        <p class="eyebrow">07 · Tarifs de lancement</p>
-        <h2 class="mt-5 text-4xl font-medium text-leaf-950 sm:text-6xl">Trois offres. {trialDays} jours d’essai.</h2>
-        <ul class="mt-12 grid gap-5 lg:grid-cols-3">
-          {
-            plans.map((p) => (
-              <li class:list={['rounded-3xl p-8', p.highlight ? 'bg-leaf-950 text-white' : 'card']}>
-                <p class:list={['font-display text-2xl', p.highlight ? 'text-white' : 'text-leaf-950']}>{p.name}</p>
-                <p class="mt-4 flex items-baseline gap-1.5">
-                  <span class:list={['font-display text-5xl', p.highlight ? 'text-white' : 'text-leaf-950']}>{price.format(p.yearlyPerMonth)} €</span>
-                  <span class:list={['text-sm', p.highlight ? 'text-leaf-100/70' : 'text-muted']}>HT {p.unit}</span>
-                </p>
-                <p class:list={['mt-1 text-sm', p.highlight ? 'text-leaf-100/60' : 'text-muted']}>en annuel · {price.format(p.monthly)} € en mensuel{p.priceNote ? ` · ${p.priceNote}` : ''}</p>
-                <p class:list={['mt-5 text-sm', p.highlight ? 'text-leaf-50/85' : 'text-ink/80']}>{p.quota}</p>
-              </li>
-            ))
-          }
-        </ul>
+        <p class="eyebrow">07 · Tarif</p>
+        <h2 class="mt-5 text-4xl font-medium text-leaf-950 sm:text-6xl">Un seul prix. {trialDays} jours d’essai.</h2>
+        <div class="mt-12 grid gap-8 rounded-3xl bg-leaf-950 p-10 text-white lg:grid-cols-[0.8fr_1.2fr]">
+          <div>
+            <p class="font-display text-2xl text-white">{offer.name}</p>
+            <p class="mt-4 flex items-baseline gap-2">
+              <span class="font-display text-7xl text-white">{price.format(offer.price)} €</span>
+              <span class="text-lg text-leaf-100/70">HT {offer.unit}</span>
+            </p>
+            <p class="mt-2 text-leaf-100/60">Sans engagement · mode test illimité · {trialRealSends} envois réels pendant l’essai</p>
+          </div>
+          <ul class="grid gap-3 text-leaf-50/85 sm:grid-cols-2">
+            {offer.features.map((f) => <li class="flex gap-3"><Icon name="check" size={20} className="mt-1 shrink-0 text-leaf-300" /> {f}</li>)}
+          </ul>
+        </div>
       </div>
     </section>
 

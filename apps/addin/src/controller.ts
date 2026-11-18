@@ -987,6 +987,11 @@ export class Controller {
     return this.#syncing;
   };
 
+  /** « Vérifier la feuille »: the sheet in front of the person, opened first if they switched to it. */
+  verifySheet = async (): Promise<void> => {
+    if (await this.#activeSheet()) await this.sync();
+  };
+
   async #syncOnce(): Promise<void> {
     const { sheet, mapping, workbookId, testMode } = this.#state;
     if (!sheet || !mapping || !workbookId || !this.#state.me) return;

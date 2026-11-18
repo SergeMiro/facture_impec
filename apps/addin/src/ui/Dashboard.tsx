@@ -126,7 +126,7 @@ export function Dashboard() {
         {t('addin.dash.sheet', { sheet: state.sheet ?? '' })}
       </Subtitle2>
       <div className={styles.bar}>
-        <Button appearance="primary" onClick={() => void fi.sync()} disabled={busy}>
+        <Button appearance="primary" onClick={() => void fi.verifySheet()} disabled={busy}>
           {t('addin.dash.verify')}
         </Button>
         {busy ? (

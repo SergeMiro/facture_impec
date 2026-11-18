@@ -32,12 +32,6 @@ export const excelOptions: { value: TrialRequest['excel']; label: string }[] = [
   { value: 'unknown', label: 'Je ne sais pas' },
 ];
 
-export const planOptions: { value: NonNullable<TrialRequest['plan']>; label: string }[] = [
-  { value: 'essentiel', label: 'Essentiel' },
-  { value: 'croissance', label: 'Croissance' },
-  { value: 'cabinet', label: 'Cabinet' },
-];
-
 export const messages = {
   unavailable:
     'Les demandes d’essai ouvrent très bientôt. Votre demande n’a pas été enregistrée : réessayez dans quelques jours.',

@@ -11,82 +11,34 @@ export const deadlines = {
 export const trialDays = 30;
 // Real sends to the platform during the trial are capped; Mode test is unlimited (PRICING.md §3.2).
 export const trialRealSends = 10;
-export const cabinetTrialDays = 60;
 
-export interface Plan {
-  id: 'essentiel' | 'croissance' | 'cabinet';
+export interface Offer {
   name: string;
   pitch: string;
-  monthly: number;
-  yearlyPerMonth: number;
+  price: number;
   unit: string;
-  priceNote?: string;
-  quota: string;
   features: string[];
   cta: string;
-  highlight?: boolean;
 }
 
-// Launch prices from docs/research/PRICING.md §3.2 — a proposal until the owner validates it and the
-// B2Brouter quote is known. Prices are HT; the yearly price gives two months free.
-export const plans: Plan[] = [
-  {
-    id: 'essentiel',
-    name: 'Essentiel',
-    pitch: 'Pour l’artisan, l’indépendant, la petite structure.',
-    monthly: 18,
-    yearlyPerMonth: 15,
-    unit: '/ mois',
-    quota: '30 factures émises par mois, puis 0,30 € l’unité',
-    features: [
-      'Vérification avant envoi dans Excel',
-      'Conversion Factur-X et envoi par plateforme agréée',
-      'Suivi des statuts jusqu’au paiement',
-      'Factures fournisseurs reçues dans Excel',
-      'Relance prête à envoyer en un clic',
-      'Accès lecture offert à votre comptable',
-    ],
-    cta: 'Commencer l’essai',
-  },
-  {
-    id: 'croissance',
-    name: 'Croissance',
-    pitch: 'Pour la PME qui veut être payée plus vite.',
-    monthly: 47,
-    yearlyPerMonth: 39,
-    unit: '/ mois',
-    quota: '100 factures émises par mois, puis 0,20 € l’unité',
-    features: [
-      'Tout Essentiel, plus :',
-      'Relances automatiques J+1, J+7, J+15 (vous validez)',
-      'Pénalités de retard et indemnité de 40 € calculées',
-      'Rapport hebdomadaire : encaissé, en retard, délai moyen',
-      'Validation des factures fournisseurs',
-      '3 utilisateurs · support prioritaire',
-    ],
-    cta: 'Commencer l’essai',
-    highlight: true,
-  },
-  {
-    id: 'cabinet',
-    name: 'Cabinet',
-    pitch: 'Pour les experts-comptables et leurs clients.',
-    monthly: 11,
-    yearlyPerMonth: 9,
-    unit: '/ dossier / mois',
-    priceNote: 'dès 10 dossiers',
-    quota: '30 factures par dossier, mutualisées sur le cabinet',
-    features: [
-      'Tout Essentiel, pour chaque dossier',
-      'Tableau de bord multi-dossiers',
-      'Contrôles et alertes groupés',
-      'Le nom et le logo du cabinet sur les relances',
-      'Dégressif : 7,50 € dès 50 dossiers, 6 € dès 200',
-      'Essai de 60 jours',
-    ],
-    cta: 'Parler à un conseiller',
-  },
-];
+// The single price the owner set on 2026-11-18: 2,99 € HT a month, no commitment, after the trial.
+// It replaces the three plans proposed in docs/research/PRICING.md §3.2.
+export const offer: Offer = {
+  name: 'Facture Impec',
+  pitch: 'Pour l’artisan, l’indépendant, la TPE et la PME qui facturent dans Excel.',
+  price: 2.99,
+  unit: '/ mois',
+  features: [
+    'Vérification avant envoi dans Excel : EN 16931 et mentions françaises',
+    'Conversion Factur-X et envoi par une plateforme agréée',
+    'Suivi des statuts jusqu’au paiement, directement dans votre feuille',
+    'Factures fournisseurs reçues et contrôlées dans Excel',
+    'Relances prêtes à envoyer, pénalités de retard calculées',
+    'Rapport hebdomadaire et export pour votre comptable',
+    'Assistant IA facultatif, avec votre propre clé',
+  ],
+  cta: 'Commencer l’essai gratuit',
+};
 
 export interface Provider {
   name: string;
@@ -97,7 +49,7 @@ export interface Provider {
 export const providers: Provider[] = [
   { name: 'Mistral AI', note: 'Modèles européens, hébergés en UE', eu: true },
   { name: 'Anthropic Claude', note: 'Raisonnement et explications de haut niveau' },
-  { name: 'OpenAI', note: 'GPT, via votre clé ou la nôtre' },
+  { name: 'OpenAI', note: 'GPT, avec votre clé' },
   { name: 'Google Gemini', note: 'Modèles rapides et économiques' },
   { name: 'Azure OpenAI', note: 'Déploiement dans une région UE', eu: true },
   { name: 'Scaleway · OVHcloud', note: 'Fournisseurs français compatibles OpenAI', eu: true },
@@ -181,12 +133,12 @@ export const faqs: Faq[] = [
     a: 'Vos données sont hébergées dans l’Union européenne. Avant tout appel à une IA, les noms, SIREN, IBAN et adresses sont remplacés par des jetons anonymes. L’IA explique et propose ; elle ne décide jamais si une facture est valide.',
   },
   {
-    q: 'Puis-je utiliser mon propre fournisseur d’IA ?',
-    a: 'Oui. L’IA est incluse, mais vous pouvez brancher votre propre clé : Mistral, OpenAI, Anthropic, Gemini, Azure OpenAI ou tout service compatible OpenAI, y compris un modèle hébergé chez vous.',
+    q: 'L’IA est-elle obligatoire ?',
+    a: 'Non. Toutes les vérifications reposent sur des règles et fonctionnent sans IA. L’assistant IA (explications, reconnaissance des colonnes, relances rédigées) est facultatif : vous branchez votre propre clé Mistral, OpenAI, Anthropic, Gemini, Azure OpenAI ou de tout service compatible OpenAI, y compris un modèle hébergé chez vous.',
   },
   {
     q: 'Comment fonctionne l’essai gratuit ?',
-    a: '30 jours avec toutes les fonctionnalités Croissance, sans carte bancaire. Le mode test est illimité ; jusqu’à 10 factures peuvent être envoyées pour de vrai pendant l’essai. Les cabinets disposent de 60 jours.',
+    a: '30 jours avec toutes les fonctionnalités, sans carte bancaire. Le mode test est illimité ; jusqu’à 10 factures peuvent être envoyées pour de vrai pendant l’essai. Ensuite, 2,99 € HT par mois, sans engagement.',
   },
   {
     q: 'Combien de temps pour démarrer ?',
@@ -194,7 +146,7 @@ export const faqs: Faq[] = [
   },
   {
     q: 'Je suis expert-comptable. Puis-je l’utiliser pour mes clients ?',
-    a: 'Oui, c’est l’offre Cabinet : tableau de bord multi-dossiers, déploiement centralisé et complément à votre marque.',
+    a: 'Oui : chaque dossier client a son propre abonnement à 2,99 € HT par mois, et le complément se déploie de façon centralisée dans votre cabinet, à votre marque.',
   },
 ];
 
